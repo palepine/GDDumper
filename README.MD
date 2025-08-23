@@ -24,7 +24,7 @@ It's not an out of the box solution and might be quite complex for beginners. It
 4. Hook any routine that handles the root viewport address or find a static pointer to it in the target process and store it inside a symbol called 'ptVP'
 5. A `GDumper` menu item will appear, click `Create Script`
 6. Run the `Dumper` letting it try to assume the offsets or define them on your own and call `initDumper` with values and offsets corresponding to the following arguments: `bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize`
-7. *(optional)* call `DumpAllNodesToAddr()` to dump all nodes of the root viewport to the address list or `DumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false)` for a specific node (both can be called asynchronically).
+7. *(optional)* call `DumpAllNodesToAddr()` to dump all nodes of the root viewport to the address list (can make the GUI thread of CE unresponsive if overloaded) or `DumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false)` for a specific node (both can be called asynchronically).
 8. Use `nodeMonitor()` to enable/disable automatic monitoring of nodes.
 9. In the 'GDumper' menu, enable `GD Dissector` and click `VP Struct` to build a viewport children structure
 
@@ -37,3 +37,4 @@ I'd appreciate any help/ideas with features I haven't implemented or that can be
 ## License
 
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
+
