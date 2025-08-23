@@ -1,6 +1,6 @@
 -- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens | https://www.patreon.com/c/palepine
 -- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
--- Github: https://github.com/palepine/GDumper
+-- Github: https://github.com/palepine/GDDumper
 -- tested on 50+ applications
 
 -- to keep the code more organized in a single file, it's split into foldable sections
@@ -4239,3 +4239,4 @@
 
 
     buildGDGUI()
+
