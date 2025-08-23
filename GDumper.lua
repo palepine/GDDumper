@@ -1,9 +1,10 @@
 -- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens | https://www.patreon.com/c/palepine
--- I'd like to thank cfmen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
--- My github: https://github.com/palepine
+-- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
+-- Github: https://github.com/palepine/GDumper
 -- tested on 50+ applications
 
 -- to keep the code more organized in a single file, it's split into foldable sections
+-- script can be documented better though
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
     --#TODO add support for vectors and other complex structures
@@ -4232,6 +4233,7 @@
 
         defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oFuncDictVal, oGDFunctionString, oGDFunctionCode)
     end
+
 
 
 
