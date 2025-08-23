@@ -29,10 +29,11 @@ It's not an out of the box solution and might be quite complex for beginners. It
 9. In the 'GDumper' menu, enable `GD Dissector` and click `VP Struct` to build a viewport children structure
 
 ## Support
-If you find the script useful, [consider supporting me](https://ko-fi.com/vesperpallens)
+If you find the script useful, [consider supporting me here](https://ko-fi.com/vesperpallens) or [here](https://www.patreon.com/c/palepine)
 
 ## Contributing
 I'd appreciate any help/ideas with features I haven't implemented or that can be implemented more efficiently.
 
 ## License
+
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
