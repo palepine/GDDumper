@@ -11,7 +11,7 @@
     --#TODO implement godot version detection
     --#TODO probably implement UTF-16 read string function to substitute CE's one
     --#TODO investigate packedArray size (at least 3.x)
-
+    --#TODO make a switch function for iterators if that's feasible
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
@@ -2521,7 +2521,7 @@
                         keyName = tostring( readPointer( keyValueAddr ) )
                     elseif ( keyTypeName == 'INT' ) then
                         keyName = tostring( readInteger( keyValueAddr, true ) )
-                    else -- bool, int | might need separate for Vector2, Vector3, Color, etc
+                    else
                         keyName = readInteger( keyValueAddr )
                     end
 
@@ -3246,11 +3246,11 @@
                 if packedVectorSize > 150 then
                     if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr: Packed Array is quite big ("..tostring(packedVectorSize).."), truncating...") end
 
-                    synchronize(function(packedDataArrAddr, packedVectorSize, Owner)
-                                addMemRecTo( 'This array\'s size is '..tostring(packedVectorSize)..': dumping 150', packedDataArrAddr , vtPointer , Owner )
-                                addMemRecTo( 'Calculate next indices: base of this addr + sizeof(type)*index', packedDataArrAddr , vtPointer , Owner )
-                            end, packedDataArrAddr, packedVectorSize, Owner
-                        )
+                    -- synchronize(function(packedDataArrAddr, packedVectorSize, Owner)
+                    --             addMemRecTo( 'This array\'s size is '..tostring(packedVectorSize)..': dumping 150', packedDataArrAddr , vtPointer , Owner )
+                    --             addMemRecTo( 'Calculate next indices: base of this addr + sizeof(type)*index', packedDataArrAddr , vtPointer , Owner )
+                    --         end, packedDataArrAddr, packedVectorSize, Owner
+                    --     )
 
                     packedVectorSize = 150 -- truncate to 150 elements
                 end
@@ -4517,7 +4517,7 @@
 
                         -- 2-byte | 0xC0–0xDF
                         if byte1 < 0xE0 then
-                            if i + 1 > n then i = n + 1; return 0xFFFD end
+                            if i + 1 > strSize then i = strSize + 1; return 0xFFFD end
 
                             local byte2 = str:byte( i + 1 )
                             if ( byte2 & 0xC0 ) ~= 0x80 then i = i + 1; return 0xFFFD end -- lead
@@ -4528,7 +4528,7 @@
 
                         -- 3-byte | 0xE0–0xEF
                         elseif byte1 < 0xF0 then
-                            if i + 2 > n then i = n + 1; return 0xFFFD end
+                            if i + 2 > strSize then i = strSize + 1; return 0xFFFD end
 
                             local byte2, byte3 = str:byte( i + 1 ), str:byte( i + 2 )
                             if ( byte2 & 0xC0 ) ~= 0x80 or ( byte3 & 0xC0 ) ~= 0x80 then i = i + 1; return 0xFFFD end -- lead
@@ -4541,7 +4541,7 @@
 
                         -- 4-byte | 0xF0–0xF7
                         elseif byte1 < 0xF5 then
-                            if i + 3 > n then i = n + 1; return 0xFFFD end
+                            if i + 3 > strSize then i = strSize + 1; return 0xFFFD end
 
                             local byte2, byte3, byte4 = str:byte(i+1), str:byte(i+2), str:byte(i+3)
                             if ( byte2 & 0xC0 ) ~= 0x80 or ( byte3 & 0xC0 ) ~= 0x80 or ( byte4 & 0xC0 ) ~= 0x80 then i = i + 1; return 0xFFFD end
@@ -4587,9 +4587,11 @@
                     -- null terminator
                     writeInteger(address + idx * 4, 0x0)
 
-                    return string.byte( str, 1 ) -- bullshit, from what I suggest, CE stores the last 8bytes (?) of the orig memory in advance and after the callback it writes
-                                                    --those 8 bytes replacing the first byte with a null terminator (if returned nothing here)
+                    return readByte( address ) or 0x0
+                    --return string.byte( str, 1 ) -- bullshit, from what I suggest, CE stores the last 8bytes (?) of the orig memory in advance and after the callback it writes
+                                                    --those 8 bytes replacing the first byte with a 0x0 (if returned nothing here)
                 end
+
 
                 if GDSOf.MAJOR_VER >= 4 then
                     if getCustomType("GD4 String") then
