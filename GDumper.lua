@@ -6,7 +6,6 @@
 -- to keep the code more organized in a single file, it's split into foldable sections
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
-    --#TODO add support for vectors and other complex structures
     --#TODO add more functionality for function overriding
     --#TODO create a plugin injecting routines to catch the root VP - this one is big
     --#TODO implement godot version detection
