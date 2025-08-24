@@ -35,6 +35,8 @@
                 end
 
                 if CEType == vtQword then newMemRec.ShowAsHex = true; end
+                if CEType == vtDword then newMemRec.ShowAsSigned = true; end -- color and int
+
                 newMemRec.DontSave=true
                 newMemRec.appendToEntry(Owner)
                 return newMemRec
@@ -205,81 +207,81 @@
 
         --///---///--///---///--///---/// GUI
 
-        --- creates a menu button in the main menu
-        function buildGDGUI()
+            --- creates a menu button in the main menu
+            function buildGDGUI()
 
-            -- creates and adds button to parent with callback on click
-            local function addCustomMenuButtonTo(ownerParent, captionName, customCallback)
-                local newMenuItem = createMenuItem( ownerParent )
-                newMenuItem.Caption = captionName
-                ownerParent.add( newMenuItem )
-                newMenuItem.OnClick = customCallback
-                return newMenuItem
+                -- creates and adds button to parent with callback on click
+                local function addCustomMenuButtonTo(ownerParent, captionName, customCallback)
+                    local newMenuItem = createMenuItem( ownerParent )
+                    newMenuItem.Caption = captionName
+                    ownerParent.add( newMenuItem )
+                    newMenuItem.OnClick = customCallback
+                    return newMenuItem
+                end
+
+                local menuItemCaption = 'GDDumper'
+                local mainMenu = getMainForm().Menu
+                local gdMenuItem = nil
+
+                for i=0, mainMenu.Items.Count-1 do
+                    if mainMenu.Items.Item[i].Caption == menuItemCaption then
+                        gdMenuItem = mainMenu.Items.Item[i]
+                        break
+                    end
+                end
+
+                if not gdMenuItem then
+                    gdMenuItem = createMenuItem( mainMenu )
+                    gdMenuItem.Caption = menuItemCaption
+                    mainMenu.Items.add( gdMenuItem )
+                    addCustomMenuButtonTo( gdMenuItem, 'VP Struct', createVPStructForm )
+                    addCustomMenuButtonTo( gdMenuItem, 'GD Dissector', GDDissectorSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Create Script', addGDMemrecToTable )
+                end
+
             end
 
-            local menuItemCaption = 'GDDumper'
-            local mainMenu = getMainForm().Menu
-            local gdMenuItem = nil
-
-            for i=0, mainMenu.Items.Count-1 do
-                if mainMenu.Items.Item[i].Caption == menuItemCaption then
-                    gdMenuItem = mainMenu.Items.Item[i]
-                    break
+            --- toggling dissector override
+            function GDDissectorSwitch(sender)
+                if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+                sender.Checked = not sender.Checked
+                if sender.Checked then
+                    enableGDDissect()
+                else
+                    disableGDDissect()
                 end
             end
 
-            if not gdMenuItem then
-                gdMenuItem = createMenuItem( mainMenu )
-                gdMenuItem.Caption = menuItemCaption
-                mainMenu.Items.add( gdMenuItem )
-                addCustomMenuButtonTo( gdMenuItem, 'VP Struct', createVPStructForm )
-                addCustomMenuButtonTo( gdMenuItem, 'GD Dissector', GDDissectorSwitch )
-                addCustomMenuButtonTo( gdMenuItem, 'Create Script', addGDMemrecToTable )
+            function addGDMemrecToTable(sender)
+                local addrList = getAddressList()
+                local mainMemrec = addrList.createMemoryRecord()
+                mainMemrec.Description = "Dumper"
+                mainMemrec.Type = vtAutoAssembler
+                mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
+                
+                local dumpMemrec = addrList.createMemoryRecord()
+                dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
+                dumpMemrec.Type = vtAutoAssembler
+                dumpMemrec.Async = true
+                dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+                dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
+                dumpMemrec.appendToEntry(mainMemrec)
+
+                local dumpMemrec = addrList.createMemoryRecord()
+                dumpMemrec.Description = 'Dump All Nodes'
+                dumpMemrec.Type = vtAutoAssembler
+                dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+                dumpMemrec.Async = true
+                dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpAllNodesToAddr()\n[DISABLE]'
+                dumpMemrec.appendToEntry(mainMemrec)
+
+                local supportPalique = addrList.createMemoryRecord()
+                supportPalique.Description = 'Support the author'
+                supportPalique.Type = vtAutoAssembler
+                supportPalique.Color = 0x8F379F
+                supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
             end
-
-        end
-
-        --- toggling dissector override
-        function GDDissectorSwitch(sender)
-            if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
-            sender.Checked = not sender.Checked
-            if sender.Checked then
-                enableGDDissect()
-            else
-                disableGDDissect()
-            end
-        end
-
-        function addGDMemrecToTable(sender)
-            local addrList = getAddressList()
-            local mainMemrec = addrList.createMemoryRecord()
-            mainMemrec.Description = "Dumper"
-            mainMemrec.Type = vtAutoAssembler
-            mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-            mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
-            
-            local dumpMemrec = addrList.createMemoryRecord()
-            dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
-            dumpMemrec.Type = vtAutoAssembler
-            dumpMemrec.Async = true
-            dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-            dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
-            dumpMemrec.appendToEntry(mainMemrec)
-
-            local dumpMemrec = addrList.createMemoryRecord()
-            dumpMemrec.Description = 'Dump All Nodes'
-            dumpMemrec.Type = vtAutoAssembler
-            dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-            dumpMemrec.Async = true
-            dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpAllNodesToAddr()\n[DISABLE]'
-            dumpMemrec.appendToEntry(mainMemrec)
-
-            local supportPalique = addrList.createMemoryRecord()
-            supportPalique.Description = 'Support the author'
-            supportPalique.Type = vtAutoAssembler
-            supportPalique.Color = 0x8F379F
-            supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
-        end
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
 
@@ -1494,6 +1496,8 @@
                     if storedNode == nodeAddr then return end
                 end
                 table.insert( dumpedMonitorNodes , nodeAddr )
+                registerSymbol( tostring( getNodeName( nodeAddr ) ), nodeAddr )
+
                 iterateVecVarForNodes( nodeAddr )
             end
 
@@ -1897,11 +1901,95 @@
                             iteratePackedArrayToAddr(  arrayAddr , constTypeName, newParentMemrec )
                         end
 
+                    elseif ( TYPENAME == 'COLOR' ) then
+                        suffixStr = 'color: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..' R' , constPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..' G' , constPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..' B' , constPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..' A' , constPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'VECTOR2' ) then
+                        suffixStr = 'vec2: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'VECTOR2I' ) then
+                        suffixStr = 'vec2i: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'RECT2' ) then
+                        suffixStr = 'rect2: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': h' , constPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'RECT2I' ) then
+                        suffixStr = 'rect2i: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': h' , constPtr+0xC , vtDword , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'VECTOR3' ) then
+                        suffixStr = 'vec3: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtSingle , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'VECTOR3I' ) then
+                        suffixStr = 'vec3i: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtDword , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'VECTOR4' ) then
+                        suffixStr = 'vec4: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
+                    elseif ( TYPENAME == 'VECTOR4I' ) then
+                        suffixStr = 'vec4i: '
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0xC , vtDword , Owner )
+                                end, prefixStr, suffixStr, constName, constPtr, Owner
+                            )
+
                     else
 
-                        synchronize(function( prefixStr, constName, constPtr, constType, Owner)
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
                                     addMemRecTo( prefixStr..constName , constPtr , getCETypeFromGD( constType ) , Owner ) 
-                                end, prefixStr, constName, constPtr, constType, Owner
+                                end, prefixStr, suffixStr, constName, constPtr, constType, Owner
                             )
 
                     end
@@ -2010,21 +2098,78 @@
 
                         local arrayAddr = readPointer( constPtr )
                         if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then -- when there are no elements in an array, its pointer shuld be 0 ?
-                            prefixStr = 'pck_arr (empty): '
-                            addStructureElem( constStructElement, prefixStr..constName.. ' T: '..tostring(constTypeName), offsetToValue, getCETypeFromGD( constType ) )
+                            suffixStr = 'pck_arr (empty): '
+                            addStructureElem( constStructElement, prefixStr..suffixStr..constName.. ' T: '..tostring(constTypeName), offsetToValue, getCETypeFromGD( constType ) )
                         else
-                            prefixStr = 'pck_arr: '
-                            local newParentStructElem = addStructureElem( constStructElement, prefixStr..constName.. ' T: '..tostring(constTypeName), offsetToValue, getCETypeFromGD( constType ) )
+                            suffixStr = 'pck_arr: '
+                            local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName.. ' T: '..tostring(constTypeName), offsetToValue, getCETypeFromGD( constType ) )
                             newParentStructElem.ChildStruct = createStructure('P_Array')
                             iteratePackedArrayToStruct(  arrayAddr , constTypeName, newParentStructElem )
                         end
 
                     elseif ( constTypeName == 'STRING' ) then
-                            prefixStr = 'String: '
+                            suffixStr = 'String: '
                             local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, vtPointer )
                             newParentStructElem.ChildStruct = createStructure('String')
-                            local stringElement = addStructureElem(newParentStructElem, prefixStr..suffixStr..constName, 0x0, vtUnicodeString )
-                            --stringElement.Bytesize = 100*4
+                            addStructureElem(newParentStructElem, prefixStr..suffixStr..constName, 0x0, vtUnicodeString )
+
+                    elseif ( TYPENAME == 'COLOR' ) then
+                        suffixStr = 'color: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0x4, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0x8, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0xC, vtSingle )
+
+                    elseif ( TYPENAME == 'VECTOR2' ) then
+                        suffixStr = 'vec2: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
+
+                    elseif ( TYPENAME == 'VECTOR2I' ) then
+                        suffixStr = 'vec2i: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
+
+                    elseif ( TYPENAME == 'RECT2' ) then
+                        suffixStr = 'rect2: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': h' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( TYPENAME == 'RECT2I' ) then
+                        suffixStr = 'rect2i: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0x8, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': h' , offsetToValue+0xC, vtDword )
+
+                    elseif ( TYPENAME == 'VECTOR3' ) then
+                        suffixStr = 'vec3: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtSingle )
+
+                    elseif ( TYPENAME == 'VECTOR3I' ) then
+                        suffixStr = 'vec3i: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtDword )
+
+                    elseif ( TYPENAME == 'VECTOR4' ) then
+                        suffixStr = 'vec4: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( TYPENAME == 'VECTOR4I' ) then
+                        suffixStr = 'vec4i: '
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtDword )
+                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0xC, vtDword )
+
 
                     else
                         addStructureElem( constStructElement, prefixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
@@ -2094,7 +2239,9 @@
                         keyName = tostring( readDouble( keyValueAddr ) ) -- in godot 3.x real is 4 byte float or not?
                     elseif ( keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' ) then
                         keyName = tostring( readPointer( keyValueAddr ) )
-                    else -- bool, int | might need separate for Vector2, Vector3, Color, etc
+                    elseif ( keyTypeName == 'INT' ) then
+                        keyName = tostring( readInteger( keyValueAddr, true ) )
+                    else -- bool | might need separate for Vector2, Vector3, Color, etc
                         keyName = readInteger( keyValueAddr )
                     end
 
@@ -2214,6 +2361,90 @@
                                 iteratePackedArrayToAddr(  valueValue , valueTypeName, newParentMemrec )
                             end
 
+                    elseif ( valueTypeName == 'COLOR' ) then
+                        prefixStr = 'color: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..' R' , valueValuePtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..' G' , valueValuePtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..' B' , valueValuePtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..' A' , valueValuePtr+0xC , vtSingle , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'VECTOR2' ) then
+                        prefixStr = 'vec2: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'VECTOR2I' ) then
+                        prefixStr = 'vec2i: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'RECT2' ) then
+                        prefixStr = 'rect2: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': h' , valueValuePtr+0xC , vtSingle , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'RECT2I' ) then
+                        prefixStr = 'rect2i: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': h' , valueValuePtr+0xC , vtDword , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'VECTOR3' ) then
+                        prefixStr = 'vec3: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtSingle , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'VECTOR3I' ) then
+                        prefixStr = 'vec3i: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtDword , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'VECTOR4' ) then
+                        prefixStr = 'vec4: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0xC , vtSingle , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
+                    elseif ( valueTypeName == 'VECTOR4I' ) then
+                        prefixStr = 'vec4i: '
+                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
+                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0xC , vtDword , Owner )
+                                end, prefixStr, keyName, valueValuePtr, Owner
+                            )
+
                     else
                         valueValue = valueValuePtr -- getAddress( mapElement + GDSOf.DICTELEM_VALTYPE + offsetToValue )
                         if valueValue == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToAddr: ValueValue is 0: uninitialized?") end end
@@ -2289,6 +2520,8 @@
                         keyName = tostring( readDouble( keyValueAddr ) ) -- in godot 3.x real is 4 byte float or not?
                     elseif ( keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' ) then
                         keyName = tostring( readPointer( keyValueAddr ) )
+                    elseif ( keyTypeName == 'INT' ) then
+                        keyName = tostring( readInteger( keyValueAddr, true ) )
                     else -- bool, int | might need separate for Vector2, Vector3, Color, etc
                         keyName = readInteger( keyValueAddr )
                     end
@@ -2378,8 +2611,64 @@
                             prefixStr = 'String: '
                             local newParentStructElem = addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, vtPointer )
                             newParentStructElem.ChildStruct = createStructure('String')
-                            local stringElement = addStructureElem(newParentStructElem, prefixStr..keyName, 0x0, vtUnicodeString )
-                            --stringElement.Bytesize = 100*4
+                            addStructureElem(newParentStructElem, prefixStr..keyName, 0x0, vtUnicodeString )
+
+                    elseif ( valueTypeName == 'COLOR' ) then
+                        prefixStr = 'color: '
+                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue+0x4, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue+0x8, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue+0xC, vtSingle )
+
+                    elseif ( valueTypeName == 'VECTOR2' ) then
+                        prefixStr = 'vec2: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
+
+                    elseif ( valueTypeName == 'VECTOR2I' ) then
+                        prefixStr = 'vec2i: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
+
+                    elseif ( valueTypeName == 'RECT2' ) then
+                        prefixStr = 'rect2: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': h' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( valueTypeName == 'RECT2I' ) then
+                        prefixStr = 'rect2i: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0x8, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': h' , offsetToValue+0xC, vtDword )
+
+                    elseif ( valueTypeName == 'VECTOR3' ) then
+                        prefixStr = 'vec3: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtSingle )
+
+                    elseif ( valueTypeName == 'VECTOR3I' ) then
+                        prefixStr = 'vec3i: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtDword )
+
+                    elseif ( valueTypeName == 'VECTOR4' ) then
+                        prefixStr = 'vec4: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( valueTypeName == 'VECTOR4I' ) then
+                        prefixStr = 'vec4i: '
+                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtDword )
+                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0xC, vtDword )
 
                     else
                         valueValue = valueValuePtr -- getAddress( mapElement + GDSOf.DICTELEM_VALTYPE + offsetToValue )
@@ -2605,6 +2894,90 @@
                                 iteratePackedArrayToAddr(  arrayAddr , variantTypeName, newParentMemrec )
                             end
 
+                    elseif ( variantTypeName == 'COLOR' ) then
+                        prefixStr = 'mcolor['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']:'..' R' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']:'..' G' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']:'..' B' , variantPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']:'..' A' , variantPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'VECTOR2' ) then
+                        prefixStr = 'mvec2['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'VECTOR2I' ) then
+                        prefixStr = 'mvec2i['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'RECT2' ) then
+                        prefixStr = 'mrect2['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': h' , variantPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'RECT2I' ) then
+                        prefixStr = 'mrect2i['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': h' , variantPtr+0xC , vtDword , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'VECTOR3' ) then
+                        prefixStr = 'mvec3['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtSingle , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'VECTOR3I' ) then
+                        prefixStr = 'mvec3i['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtDword , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'VECTOR4' ) then
+                        prefixStr = 'mvec4['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
+                    elseif ( variantTypeName == 'VECTOR4I' ) then
+                        prefixStr = 'mvec4i['
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0xC , vtDword , Owner )
+                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                            )
+
                     else
                         prefixStr = 'array['
 
@@ -2730,8 +3103,65 @@
                             prefixStr = 'string['
                             local newParentStructElem = addStructureElem( arrayStructElement, prefixStr..varIndex..']', offsetToValue, vtPointer )
                             newParentStructElem.ChildStruct = createStructure('String')
-                            local stringElement = addStructureElem(newParentStructElem, prefixStr..varIndex..']', 0x0, vtUnicodeString )
-                            --stringElement.Bytesize = 100*4
+                            addStructureElem(newParentStructElem, prefixStr..varIndex..']', 0x0, vtUnicodeString )
+
+                    elseif ( variantTypeName == 'COLOR' ) then
+                        prefixStr = 'mcolor['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': R', offsetToValue, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': G', offsetToValue+0x4, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': B', offsetToValue+0x8, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': A', offsetToValue+0xC, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR2' ) then
+                        prefixStr = 'mvec2['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR2I' ) then
+                        prefixStr = 'mvec2i['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
+
+                    elseif ( variantTypeName == 'RECT2' ) then
+                        prefixStr = 'mrect2['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': h' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( variantTypeName == 'RECT2I' ) then
+                        prefixStr = 'mrect2i['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0x8, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': h' , offsetToValue+0xC, vtDword )
+
+                    elseif ( variantTypeName == 'VECTOR3' ) then
+                        prefixStr = 'mvec3['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR3I' ) then
+                        prefixStr = 'mvec3i['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtDword )
+
+                    elseif ( variantTypeName == 'VECTOR4' ) then
+                        prefixStr = 'mvec4['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR4I' ) then
+                        prefixStr = 'mvec4i:['
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtDword )
+                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0xC, vtDword )
+
 
                     else
                         prefixStr = 'array['
@@ -2884,7 +3314,60 @@
                                 end, prefixStr, elemIndex, arrElement, Owner
                             )
                     end
-                -- PACKED_VECTOR2_ARRAY PACKED_VECTOR3_ARRAY PACKED_COLOR_ARRAY PACKED_VECTOR4_ARRAY are not handled
+
+                elseif ( packedTypeName == 'PACKED_VECTOR2_ARRAY' ) then -- 8 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR2" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x8 )
+                        prefixStr = 'pck_mvec2['
+                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
+                                    addMemRecTo( prefixStr..elemIndex..']: x' , arrElement , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: y' , arrElement+0x4 , vtSingle , Owner )
+                                end, prefixStr, elemIndex, arrElement, Owner
+                            )
+                    end
+
+                elseif ( packedTypeName == 'PACKED_VECTOR3_ARRAY' ) then -- 12 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR3" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0xC ) -- is it  0x10-byte aligned or not?
+                        prefixStr = 'pck_mvec3['
+                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
+                                    addMemRecTo( prefixStr..elemIndex..']: x' , arrElement , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: y' , arrElement+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: z' , arrElement+0x8 , vtSingle , Owner )
+                                end, prefixStr, elemIndex, arrElement, Owner
+                            )
+                    end
+
+                elseif ( packedTypeName == 'PACKED_VECTOR4_ARRAY' ) then -- 16 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR4" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
+                        prefixStr = 'pck_mvec4['
+                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
+                                    addMemRecTo( prefixStr..elemIndex..']: x' , arrElement , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: y' , arrElement+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: z' , arrElement+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: w' , arrElement+0xC , vtSingle , Owner )
+                                end, prefixStr, elemIndex, arrElement, Owner
+                            )
+                    end
+
+                elseif ( packedTypeName == 'PACKED_COLOR_ARRAY' ) then -- 16 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): COLOR" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
+                        prefixStr = 'pck_color['
+                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
+                                    addMemRecTo( prefixStr..elemIndex..']: R' , arrElement , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: G' , arrElement+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: B' , arrElement+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..elemIndex..']: A' , arrElement+0xC , vtSingle , Owner )
+                                end, prefixStr, elemIndex, arrElement, Owner
+                            )
+                    end
+
                 else
                     if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr: Unhandled Packed Array type: "..tostring(packedTypeName) ) end
                     for elemIndex=0, packedVectorSize-1 do
@@ -2968,6 +3451,48 @@
                     for elemIndex=0, packedVectorSize-1 do
                         offsetToValue = elemIndex * 0x1
                         addStructureElem( pArrayStructElement, prefixStr..elemIndex..']', offsetToValue, vtByte)
+                    end
+
+                elseif ( packedTypeName == 'PACKED_VECTOR2_ARRAY' ) then -- 8 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR2" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x8 )
+                        prefixStr = 'pck_mvec2['
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: x', offsetToValue, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: y', offsetToValue+0x4, vtSingle)
+                    end
+
+                elseif ( packedTypeName == 'PACKED_VECTOR3_ARRAY' ) then -- 12 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR3" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0xC ) -- is it  0x10-byte aligned or not?
+                        prefixStr = 'pck_mvec3['
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: x', offsetToValue, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: y', offsetToValue+0x4, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: z', offsetToValue+0x8, vtSingle)
+                    end
+
+                elseif ( packedTypeName == 'PACKED_VECTOR4_ARRAY' ) then -- 16 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR4" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
+                        prefixStr = 'pck_mvec4['
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: x', offsetToValue, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: y', offsetToValue+0x4, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: z', offsetToValue+0x8, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: w', offsetToValue+0xC, vtSingle)
+                        
+                    end
+
+                elseif ( packedTypeName == 'PACKED_COLOR_ARRAY' ) then -- 16 bytes
+                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): COLOR" ) end
+                    for elemIndex=0, packedVectorSize-1 do
+                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
+                        prefixStr = 'pck_color['
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: R', offsetToValue, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: G', offsetToValue+0x4, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: B', offsetToValue+0x8, vtSingle)
+                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: A', offsetToValue+0xC, vtSingle)
                     end
 
                 else
@@ -3149,6 +3674,91 @@
                                 iteratePackedArrayToAddr(  arrayAddr , testedVarName, newParentMemrec )
                             end
 
+                    elseif ( testedVarName == 'COLOR' ) then
+                        prefixStr = 'color: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': R' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': G' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': B' , variantPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': A' , variantPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'VECTOR2' ) then
+                        prefixStr = 'vec2: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'VECTOR2I' ) then
+                        prefixStr = 'vec2i: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'RECT2' ) then
+                        prefixStr = 'rect2: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': h' , variantPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'RECT2I' ) then
+                        prefixStr = 'rect2i: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': h' , variantPtr+0xC , vtDword , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'VECTOR3' ) then
+                        prefixStr = 'vec3: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtSingle , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'VECTOR3I' ) then
+                        prefixStr = 'vec3i: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtDword , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'VECTOR4' ) then
+                        prefixStr = 'vec4: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtSingle , Owner )
+                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0xC , vtSingle , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+                    elseif ( testedVarName == 'VECTOR4I' ) then
+                        prefixStr = 'vec4i: '
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtDword , Owner )
+                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0xC , vtDword , Owner )
+                                end, prefixStr, variantName, variantPtr, Owner
+                            )
+
+
                     else
                         prefixStr = 'var: '
 
@@ -3301,8 +3911,64 @@
                             prefixStr = 'String: '
                             local newParentStructElem = addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, vtPointer )
                             newParentStructElem.ChildStruct = createStructure('String')
-                            local stringElement = addStructureElem(newParentStructElem, prefixStr..variantName, 0x0, vtUnicodeString )
-                            stringElement.Bytesize = 100*4
+                            addStructureElem(newParentStructElem, prefixStr..variantName, 0x0, vtUnicodeString )
+
+                    elseif ( testedVarName == 'COLOR' ) then
+                        prefixStr = 'color: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': R' , offsetToValue, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': G' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': B' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': A' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( testedVarName == 'VECTOR2' ) then
+                        prefixStr = 'vec2: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
+
+                    elseif ( testedVarName == 'VECTOR2I' ) then
+                        prefixStr = 'vec2i: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
+
+                    elseif ( testedVarName == 'RECT2' ) then
+                        prefixStr = 'rect2: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': h' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( testedVarName == 'RECT2I' ) then
+                        prefixStr = 'rect2i: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0x8, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': h' , offsetToValue+0xC, vtDword )
+
+                    elseif ( testedVarName == 'VECTOR3' ) then
+                        prefixStr = 'vec3: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtSingle )
+
+                    elseif ( testedVarName == 'VECTOR3I' ) then
+                        prefixStr = 'vec3i: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtDword )
+
+                    elseif ( testedVarName == 'VECTOR4' ) then
+                        prefixStr = 'vec4: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( testedVarName == 'VECTOR4I' ) then
+                        prefixStr = 'vec4i: '
+                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtDword )
+                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0xC, vtDword )
 
                     else
                         prefixStr = 'var: '
@@ -3659,7 +4325,7 @@
                     if (gdType == 17) then return vtPointer end
                     if (gdType == 18) then return vtPointer end
                     if (gdType == 19) then return vtPointer end
-                    if (gdType == 20) then return vtDword end 
+                    if (gdType == 20) then return vtSingle end
                     if (gdType == 22) then return vtPointer end
                     if (gdType == 23) then return vtPointer end
                     if (gdType == 25) then return vtPointer end
@@ -3741,22 +4407,22 @@
                     if (typeInt == 21) then return "STRING_NAME" end
                     if (typeInt == 0) then return "NIL" end
 
-                    if (typeInt == 5) then return "VECTOR2" end
-                    if (typeInt == 6) then return "VECTOR2I" end
-                    if (typeInt == 7) then return "RECT2" end
-                    if (typeInt == 8) then return "RECT2I" end
-                    if (typeInt == 9) then return "VECTOR3" end
-                    if (typeInt == 10) then return "VECTOR3I" end
+                    if (typeInt == 5) then return "VECTOR2" end -- (x,y)
+                    if (typeInt == 6) then return "VECTOR2I" end -- (x,y): int
+                    if (typeInt == 7) then return "RECT2" end -- (vector2,vector2)
+                    if (typeInt == 8) then return "RECT2I" end -- (vector2i,vector2i)
+                    if (typeInt == 9) then return "VECTOR3" end -- (x,y,z)
+                    if (typeInt == 10) then return "VECTOR3I" end -- (x,y,z): int
                     if (typeInt == 11) then return "TRANSFORM2D" end
-                    if (typeInt == 12) then return "VECTOR4" end
-                    if (typeInt == 13) then return "VECTOR4I" end
+                    if (typeInt == 12) then return "VECTOR4" end -- (x,y,z,w)
+                    if (typeInt == 13) then return "VECTOR4I" end -- (x,y,z,w): int
                     if (typeInt == 14) then return "PLANE" end
                     if (typeInt == 15) then return "QUATERNION" end
                     if (typeInt == 16) then return "AABB" end
                     if (typeInt == 17) then return "BASIS" end
-                    if (typeInt == 18) then return "TRANSFORM3D" end
+                    if (typeInt == 18) then return "TRANSFORM3D" end -- basis: 3x3 matix, origin: vector3
                     if (typeInt == 19) then return "PROJECTION" end
-                    if (typeInt == 20) then return "COLOR" end
+                    if (typeInt == 20) then return "COLOR" end -- color is 4 floats (r,g,b,a)
                     if (typeInt == 22) then return "NODE_PATH" end
                     if (typeInt == 23) then return "RID" end
                     if (typeInt == 25) then return "CALLABLE" end
