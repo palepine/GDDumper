@@ -1,10 +1,9 @@
 -- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens | https://www.patreon.com/c/palepine
--- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
--- Github: https://github.com/palepine/GDDumper
+-- I'd like to thank cfmen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
+-- My github: https://github.com/palepine
 -- tested on 50+ applications
 
 -- to keep the code more organized in a single file, it's split into foldable sections
--- script can be documented better though
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
     --#TODO add support for vectors and other complex structures
@@ -296,25 +295,24 @@
 
                 local debugPrefixStr ='>';
                 if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
-                local MAX_CHARS_TO_READ =  500 * 2
+                local MAX_CHARS_TO_READ =  1500 * 2
 
                 if strSize and (strSize > MAX_CHARS_TO_READ) then if bDEBUGMode then print( debugPrefixStr..' readUTFString: chars to read is bigger than MAX_CHARS_TO_READ'); decDebugStep(); end; return "ain\'t reading this" end -- we aren't gonna read novels
                 if GDSOf.MAJOR_VER >= 4 then if readInteger(strAddress) == 0 then if bDEBUGMode then print( debugPrefixStr..' readUTFString: empty string'); decDebugStep(); end; return "empt str" end else if readSmallInteger(strAddress) == 0 then if bDEBUGMode then print( debugPrefixStr..' readUTFString: empty string'); decDebugStep(); end; return "empt str" end end
 
                 local charTable = {}
                 local buff = 0
-                
+
                 if GDSOf.MAJOR_VER == 3 and (strSize and strSize > 0) then
                     if bDEBUGMode then decDebugStep(); end;
-                    local retString = readString( strAddress, strSize , true ) or '???_INVALID_MEM_CAUGHT_WSIZE'
-                    return retString
+                    return readString( strAddress, strSize * 2 , true ) or '???_INVALID_MEM_CAUGHT_WSIZE'
+
                 elseif GDSOf.MAJOR_VER == 3 then
                     if bDEBUGMode then decDebugStep(); end;
-
                     local retString = readString( strAddress, MAX_CHARS_TO_READ , true )
-                    
+
                     while MAX_CHARS_TO_READ > 0 and retString == nil do     -- https://github.com/cheat-engine/cheat-engine/issues/2602
-                        MAX_CHARS_TO_READ = MAX_CHARS_TO_READ-100 -- quite a big stride
+                        MAX_CHARS_TO_READ = MAX_CHARS_TO_READ-100 -- quite a stride
                         retString = readString( strAddress, MAX_CHARS_TO_READ , true )
                     end
                     return retString or '???_INVALID_MEM_CAUGHT'
@@ -880,7 +878,7 @@
                         GDSCRIPTNAME = 0x120 + i * 8
                         local gdScriptNameAddr = readPointer( gdScriptAddr + GDSCRIPTNAME )
                         if gdScriptNameAddr ~= nil and gdScriptNameAddr ~= 0 then
-                            if readUTFString( gdScriptNameAddr, 4*2 ) == 'res:' then
+                            if readUTFString( gdScriptNameAddr, 4 ) == 'res:' then
                                 if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid GDSCRIPTNAME offset: "..string.format('0x%x', GDSCRIPTNAME) ) end
                                 bOK = true
                                 break;
@@ -1001,7 +999,7 @@
                         GDSCRIPTNAME = 0x100 + i * 8 -- 0x100 is the earliest offset for GDScriptName I've seen
                         local gdScriptNameAddr = readPointer( gdScriptAddr + GDSCRIPTNAME )
                         if gdScriptNameAddr ~= nil and gdScriptNameAddr ~= 0 then
-                            if readUTFString( gdScriptNameAddr, 4*2 ) == 'res:' then
+                            if readUTFString( gdScriptNameAddr, 4 ) == 'res:' then
                                 if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid GDSCRIPTNAME offset: "..string.format('0x%x', GDSCRIPTNAME) ) end
                                 bOK = true
                                 break;
@@ -4237,6 +4235,4 @@
 
 
 
-
     buildGDGUI()
-
