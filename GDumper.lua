@@ -1,5 +1,5 @@
 -- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens | https://www.patreon.com/c/palepine
--- I'd like to thank cfmen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
+-- I'd like to thank cefmen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
 -- My github: https://github.com/palepine
 -- tested on 50+ applications
 
@@ -253,7 +253,7 @@
         function addGDMemrecToTable(sender)
             local addrList = getAddressList()
             local mainMemrec = addrList.createMemoryRecord()
-            mainMemrec.Description = "Dumper by palepine"
+            mainMemrec.Description = "Dumper"
             mainMemrec.Type = vtAutoAssembler
             mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
             mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
@@ -1374,7 +1374,7 @@
 
                 if isValidPointer( gdscript ) and isValidPointer( scriptInstance ) then
 
-                    if getGDResName( nodeAddr, 4*2 ) == 'res:'  then
+                    if getGDResName( nodeAddr, 4 ) == 'res:'  then
 
                         if bDEBUGMode and inMainThread() then decDebugStep(); end;
                         return true;
