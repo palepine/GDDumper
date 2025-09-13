@@ -338,7 +338,7 @@
                 end
 
                 if bDEBUGMode then decDebugStep(); end;
-                return table.concat( charTable )
+                return table.concat( charTable ) or '???_UNKNSTR'
             end
 
             function codePointToUTF8(codePoint)
@@ -1334,26 +1334,50 @@
                 assert(type(nodeAddr) == 'number',"getNodeName: Node Addr has to be a number, instead got: "..type(nodeAddr))
 
                 local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end;
+                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end;
 
                 local nodeNamePtr = readPointer( nodeAddr + GDSOf.OBJ_STRING_NAME )
-                if nodeNamePtr == nil or nodeNamePtr == 0 or ( not isValidPointer( nodeNamePtr ) ) then if bDEBUGMode then print( debugPrefixStr..' getNodeName: nodeName invalid or not a pointer (?)'); decDebugStep(); end; return end
+                if nodeNamePtr == nil or nodeNamePtr == 0 or ( not isValidPointer( nodeNamePtr ) ) then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeName: nodeName invalid or not a pointer (?)'); decDebugStep(); end; return 'N??' end
 
                 nodeNamePtr = readPointer( nodeNamePtr + GDSOf.STRING )
                 if nodeNamePtr == 0 or nodeNamePtr == nil then
-                    if bDEBUGMode then print( debugPrefixStr..' getNodeName: string address invalid, trying ASCII'); end;
+                    if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeName: string address invalid, trying ASCII'); end;
 
                     nodeNamePtr = readPointer( nodeAddr + GDSOf.OBJ_STRING_NAME )
                     nodeNamePtr = readPointer( nodeNamePtr + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
-                    if nodeNamePtr == 0 or nodeNamePtr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeName: string address invalid, not ASCII either'); decDebugStep(); end; return 'N??' end  -- return empty string if no string was found
-                    if bDEBUGMode then decDebugStep(); end;
+                    if nodeNamePtr == 0 or nodeNamePtr == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeName: string address invalid, not ASCII either'); decDebugStep(); end; return 'N??' end  -- return empty string if no string was found
+                    if bDEBUGMode and inMainThread() then decDebugStep(); end;
 
                     return readString( nodeNamePtr, 100 )
 
                 end
-                if bDEBUGMode then decDebugStep(); end;
+                if bDEBUGMode and inMainThread() then decDebugStep(); end;
 
                 return readUTFString( nodeNamePtr )
+            end
+
+            function getNodeNameFromGDScript( nodeAddr )
+                assert(type(nodeAddr) == 'number',"getNodeNameFromGDScript: Node Addr has to be a number, instead got: "..type(nodeAddr))
+
+                local debugPrefixStr ='>';
+                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end;
+
+                local GDScriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local GDScriptAddr = readPointer( GDScriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                local GDScriptNameAddr = readPointer( GDScriptAddr + GDSOf.GDSCRIPTNAME )
+
+
+                if GDScriptNameAddr == nil or GDScriptNameAddr == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: nodeName invalid or not a pointer (?)'); decDebugStep(); end; return 'N??' end
+
+                local GDScriptName = readUTFString( GDScriptNameAddr )
+                if GDScriptName == nil or GDScriptName == '' then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: GDScriptName is nil/empty'); decDebugStep(); end; return 'N??' end
+
+                GDScriptName = string.match( GDScriptName, "([^/]+)%.gd$" )
+                if GDScriptName == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: GDScriptName is nil/empty'); decDebugStep(); end; return 'N??' end
+
+                if bDEBUGMode and inMainThread() then decDebugStep(); end;
+
+                return GDScriptName
             end
 
             --- Used to validate an object as a Node, returns true if valid
@@ -1495,7 +1519,9 @@
                     if storedNode == nodeAddr then return end
                 end
                 table.insert( dumpedMonitorNodes , nodeAddr )
-                registerSymbol( tostring( getNodeName( nodeAddr ) ), nodeAddr )
+                local name = getNodeName( nodeAddr )
+                if name == nil or name == "N??" then name = getNodeNameFromGDScript( nodeAddr ) end
+                registerSymbol( tostring( name ), nodeAddr )
 
                 iterateVecVarForNodes( nodeAddr )
             end
@@ -4560,7 +4586,7 @@
 
 
                 function gd4string_bytestovalue(b1,address)
-                    local MAX_CHARS_TO_READ = 32768
+                    local MAX_CHARS_TO_READ = 15000
                     local charTable = {}
                     local buff = 0;
 
@@ -4578,7 +4604,7 @@
                     local idx = 0
                     for codePoint in UTF8Codepoints( str ) do
                         -- clamping invalid/surrogate range
-                        if ( codePoint < 0 or codePoint > 0x10FFFF ) or ( codePoint >= 0xD800 and codePoint <= 0xDFFF ) then codePoint = 0xFFFD end
+                        if codePoint < 0 or codePoint > 0x10FFFF or codePoint >= 0xD800 and codePoint <= 0xDFFF then codePoint = 0xFFFD end
 
                         writeInteger( address + idx * 0x4, codePoint )
                         idx = idx + 1
