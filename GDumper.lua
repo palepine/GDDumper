@@ -12,6 +12,7 @@
     --#TODO probably implement UTF-16 read string function to substitute CE's one
     --#TODO investigate packedArray size (at least 3.x)
     --#TODO make a switch function for iterators if that's feasible
+    --#TODO dump nodes as a schema that will be saves | Or how feasible it is to dump that into the addresslist
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
@@ -1521,7 +1522,7 @@
                 table.insert( dumpedMonitorNodes , nodeAddr )
                 local name = getNodeName( nodeAddr )
                 if name == nil or name == "N??" then name = getNodeNameFromGDScript( nodeAddr ) end
-                registerSymbol( tostring( name ), nodeAddr )
+                registerSymbol( tostring( name ), nodeAddr , true )
 
                 iterateVecVarForNodes( nodeAddr )
             end
@@ -4647,7 +4648,7 @@
 
                     local nodeNameStr = getNodeName(nodePtr)
                     nodeNameStr = tostring(nodeNameStr)
-                    registerSymbol( nodeNameStr , nodePtr) -- let's have them registered
+                    registerSymbol( nodeNameStr , nodePtr , true) -- let's have them registered
 
                     if GDSOf.MAJOR_VER >= 4 then
 
@@ -4684,7 +4685,7 @@
 
                     local nodeNameStr = getNodeName( nodeAddr )
                     nodeNameStr = tostring( nodeNameStr )
-                    registerSymbol( nodeNameStr , nodeAddr) -- let's have them registered when we do structs
+                    registerSymbol( nodeNameStr , nodeAddr , true) -- let's have them registered when we do structs
                     table.insert( nodeTable, nodeAddr)
                 end
                 return nodeTable
