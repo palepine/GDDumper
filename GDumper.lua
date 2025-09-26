@@ -7,12 +7,10 @@
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
     --#TODO add more functionality for function overriding
-    --#TODO create a plugin injecting routines to catch the root VP - this one is big
+    --#TODO a plugin injecting routines?
     --#TODO implement godot version detection
-    --#TODO probably implement UTF-16 read string function to substitute CE's one
     --#TODO investigate packedArray size (at least 3.x)
-    --#TODO make a switch function for iterators if that's feasible
-    --#TODO dump nodes as a schema that will be saves | Or how feasible it is to dump that into the addresslist
+    --#TODO dump nodes schema with the addresslist?
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
@@ -1927,7 +1925,7 @@
                             iteratePackedArrayToAddr(  arrayAddr , constTypeName, newParentMemrec )
                         end
 
-                    elseif ( TYPENAME == 'COLOR' ) then
+                    elseif ( constTypeName == 'COLOR' ) then
                         suffixStr = 'color: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..' R' , constPtr , vtSingle , Owner )
@@ -1937,7 +1935,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'VECTOR2' ) then
+                    elseif ( constTypeName == 'VECTOR2' ) then
                         suffixStr = 'vec2: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
@@ -1945,7 +1943,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'VECTOR2I' ) then
+                    elseif ( constTypeName == 'VECTOR2I' ) then
                         suffixStr = 'vec2i: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
@@ -1953,7 +1951,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'RECT2' ) then
+                    elseif ( constTypeName == 'RECT2' ) then
                         suffixStr = 'rect2: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
@@ -1963,7 +1961,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'RECT2I' ) then
+                    elseif ( constTypeName == 'RECT2I' ) then
                         suffixStr = 'rect2i: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
@@ -1973,7 +1971,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'VECTOR3' ) then
+                    elseif ( constTypeName == 'VECTOR3' ) then
                         suffixStr = 'vec3: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
@@ -1982,7 +1980,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'VECTOR3I' ) then
+                    elseif ( constTypeName == 'VECTOR3I' ) then
                         suffixStr = 'vec3i: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
@@ -1991,7 +1989,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'VECTOR4' ) then
+                    elseif ( constTypeName == 'VECTOR4' ) then
                         suffixStr = 'vec4: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
@@ -2001,7 +1999,7 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    elseif ( TYPENAME == 'VECTOR4I' ) then
+                    elseif ( constTypeName == 'VECTOR4I' ) then
                         suffixStr = 'vec4i: '
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
                                     addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
@@ -2011,8 +2009,16 @@
                                 end, prefixStr, suffixStr, constName, constPtr, Owner
                             )
 
-                    else
+                    elseif ( constTypeName == 'STRING_NAME' ) then
+                        suffixStr = 'StringName: '
+                        constPtr = readPointer( constPtr ) + GDSOf.STRING
 
+                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
+                                addMemRecTo( prefixStr..suffixStr..constName , constPtr , vtString , Owner )
+                            end, prefixStr, suffixStr, constName, constPtr, Owner
+                        )
+
+                    else
                         synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
                                     addMemRecTo( prefixStr..constName , constPtr , getCETypeFromGD( constType ) , Owner ) 
                                 end, prefixStr, suffixStr, constName, constPtr, constType, Owner
@@ -2139,63 +2145,70 @@
                             newParentStructElem.ChildStruct = createStructure('String')
                             addStructureElem(newParentStructElem, prefixStr..suffixStr..constName, 0x0, vtUnicodeString )
 
-                    elseif ( TYPENAME == 'COLOR' ) then
+                    elseif ( constTypeName == 'COLOR' ) then
                         suffixStr = 'color: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0x4, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0x8, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0xC, vtSingle )
 
-                    elseif ( TYPENAME == 'VECTOR2' ) then
+                    elseif ( constTypeName == 'VECTOR2' ) then
                         suffixStr = 'vec2: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
 
-                    elseif ( TYPENAME == 'VECTOR2I' ) then
+                    elseif ( constTypeName == 'VECTOR2I' ) then
                         suffixStr = 'vec2i: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
 
-                    elseif ( TYPENAME == 'RECT2' ) then
+                    elseif ( constTypeName == 'RECT2' ) then
                         suffixStr = 'rect2: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0x8, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': h' , offsetToValue+0xC, vtSingle )
 
-                    elseif ( TYPENAME == 'RECT2I' ) then
+                    elseif ( constTypeName == 'RECT2I' ) then
                         suffixStr = 'rect2i: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0x8, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': h' , offsetToValue+0xC, vtDword )
 
-                    elseif ( TYPENAME == 'VECTOR3' ) then
+                    elseif ( constTypeName == 'VECTOR3' ) then
                         suffixStr = 'vec3: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtSingle )
 
-                    elseif ( TYPENAME == 'VECTOR3I' ) then
+                    elseif ( constTypeName == 'VECTOR3I' ) then
                         suffixStr = 'vec3i: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtDword )
 
-                    elseif ( TYPENAME == 'VECTOR4' ) then
+                    elseif ( constTypeName == 'VECTOR4' ) then
                         suffixStr = 'vec4: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtSingle )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0xC, vtSingle )
 
-                    elseif ( TYPENAME == 'VECTOR4I' ) then
+                    elseif ( constTypeName == 'VECTOR4I' ) then
                         suffixStr = 'vec4i: '
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtDword )
                         addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0xC, vtDword )
 
+                    elseif ( constTypeName == 'STRING_NAME' ) then
+                        suffixStr = 'StringName: '
+                        local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('StringName')
+                        local newParentStructElem = addStructureElem( newParentStructElem, prefixStr..suffixStr..constName, 0x10, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('stringy')
+                        addStructureElem( newParentStructElem, prefixStr..'String: '..constName, 0x0, vtUnicodeString )
 
                     else
                         addStructureElem( constStructElement, prefixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
@@ -2471,6 +2484,15 @@
                                 end, prefixStr, keyName, valueValuePtr, Owner
                             )
 
+                    elseif ( valueTypeName == 'STRING_NAME' ) then
+                        prefixStr = 'StringName: '
+                        valueValuePtr = readPointer( valueValuePtr ) + GDSOf.STRING
+
+                        synchronize(function( prefixStr, keyName, valueValuePtr, valueType, Owner)
+                                        addMemRecTo( prefixStr..keyName , valueValuePtr , vtString  , Owner )
+                                    end, prefixStr, keyName, valueValuePtr, valueType, Owner
+                                )
+
                     else
                         valueValue = valueValuePtr -- getAddress( mapElement + GDSOf.DICTELEM_VALTYPE + offsetToValue )
                         if valueValue == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToAddr: ValueValue is 0: uninitialized?") end end
@@ -2695,6 +2717,14 @@
                         addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
                         addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtDword )
                         addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0xC, vtDword )
+
+                    elseif ( valueTypeName == 'STRING_NAME' ) then
+                        prefixStr = 'StringName: '
+                        local newParentStructElem = addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('StringName')
+                        local newParentStructElem = addStructureElem( newParentStructElem, prefixStr..keyName, 0x10, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('stringy')
+                        addStructureElem( newParentStructElem, 'String: '..keyName, 0x0, vtUnicodeString )
 
                     else
                         valueValue = valueValuePtr -- getAddress( mapElement + GDSOf.DICTELEM_VALTYPE + offsetToValue )
@@ -3004,6 +3034,14 @@
                                 end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
                             )
 
+                    elseif ( variantTypeName == 'STRING_NAME' ) then
+                        prefixStr = 'mStrName['
+                        variantPtr = readPointer( variantPtr ) + GDSOf.STRING
+                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
+                                        addMemRecTo( prefixStr..varIndex..']' , variantPtr , vtString  , Owner )
+                                    end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
+                                )
+
                     else
                         prefixStr = 'array['
 
@@ -3188,7 +3226,13 @@
                         addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtDword )
                         addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0xC, vtDword )
 
-
+                    elseif ( variantTypeName == 'STRING_NAME' ) then
+                        prefixStr = 'mStrName['
+                        local newParentStructElem = addStructureElem( arrayStructElement, prefixStr..varIndex..']', offsetToValue, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('StringName')
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..varIndex..']', 0x10, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('stringy')
+                        addStructureElem( newParentStructElem, 'String['..varIndex..']', 0x0, vtUnicodeString )
                     else
                         prefixStr = 'array['
                         addStructureElem( arrayStructElement, prefixStr..varIndex..']', offsetToValue, getCETypeFromGD( variantType ) )
@@ -3702,7 +3746,7 @@
 
                     elseif ( testedVarName == 'COLOR' ) then
                         prefixStr = 'color: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner )
                                     addMemRecTo( prefixStr..variantName..': R' , variantPtr , vtSingle , Owner )
                                     addMemRecTo( prefixStr..variantName..': G' , variantPtr+0x4 , vtSingle , Owner )
                                     addMemRecTo( prefixStr..variantName..': B' , variantPtr+0x8 , vtSingle , Owner )
@@ -3776,7 +3820,7 @@
 
                     elseif ( testedVarName == 'VECTOR4I' ) then
                         prefixStr = 'vec4i: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
+                        synchronize(function( prefixStr, variantName, variantPtr, Owner )
                                     addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
                                     addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
                                     addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtDword , Owner )
@@ -3784,11 +3828,18 @@
                                 end, prefixStr, variantName, variantPtr, Owner
                             )
 
+                    elseif ( testedVarName == 'STRING_NAME' ) then
+                        prefixStr = 'StringName: '
+                        variantPtr = readPointer( variantPtr ) + GDSOf.STRING
+                        synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner )
+                                        addMemRecTo( prefixStr..variantName , variantPtr , vtString  , Owner )
+                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
+                                )
 
                     else
                         prefixStr = 'var: '
 
-                        synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner)
+                        synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner )
                                         addMemRecTo( prefixStr..variantName , variantPtr , getCETypeFromGD( testedVarT ) , Owner )
                                     end, prefixStr, variantName, variantPtr, testedVarT, Owner
                                 )
@@ -3996,6 +4047,13 @@
                         addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtDword )
                         addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0xC, vtDword )
 
+                    elseif ( testedVarName == 'STRING_NAME' ) then
+                        prefixStr = 'StringName: '
+                        local newParentStructElem = addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('StringName')
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..variantName, 0x10, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('stringy')
+                        addStructureElem( newParentStructElem, 'String: '..variantName, 0x0, vtUnicodeString )
                     else
                         prefixStr = 'var: '
                         addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
