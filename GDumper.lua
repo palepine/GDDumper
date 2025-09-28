@@ -50,6 +50,13 @@
                 return success and result ~= nil
             end
 
+            --- checks if the value is a valid pointer and not nullptr
+            ---@param addr number
+            ---@return boolean
+            function isPointerNotNull(addr)
+                return isValidPointer(addr) and readPointer(addr) ~= 0
+            end
+
         --///---///--///---///--///---/// MISC
 
             --- turns off showOnPrint
@@ -183,7 +190,7 @@
                 struct.beginUpdate()
 
                 if checkForGDScript( baseaddr ) then
-                    dumpedDissectorNodes = {}
+                    dumpedDissectorNodes = {} -- redundant?
                     -- safe to assume, that's a starting point
                     local nodeName = getNodeName( baseaddr )
                     nodeName = nodeName and nodeName or 'Anon Node'
@@ -193,6 +200,17 @@
                     scriptInstStructElem.BackgroundColor = 0xFF0080
                     scriptInstStructElem.Offset = GDSOf.GDSCRIPTINSTANCE
                     scriptInstStructElem.VarType = vtPointer
+
+                    if isPointerNotNull( baseaddr + GDSOf.CHILDREN ) then
+                        local childrenStructElem = struct.addElement()
+                        childrenStructElem.Name = 'Children'
+                        childrenStructElem.BackgroundColor = 0xFF0080
+                        childrenStructElem.Offset = GDSOf.CHILDREN
+                        childrenStructElem.VarType = vtPointer
+                        childrenStructElem.ChildStruct = createStructure( 'Children' )
+                        iterateNodeChildrenToStruct( childrenStructElem, baseaddr )
+                    end
+
                     iterateNodeToStruct( baseaddr, scriptInstStructElem )
                 else
                     -- otherwise just let CE decide, btw why the hell the base address should be a fucking hex string?
@@ -1418,6 +1436,35 @@
                 end
             end
 
+            --- builds a structure layout for a node's children array
+            ---@param childrenArrStruct userdata
+            ---@param nodeAddr number
+            function iterateNodeChildrenToStruct( childrenArrStructElem, baseAddress )
+
+                local childrenAddr = readPointer( baseAddress + GDSOf.CHILDREN )
+
+                local childrenSize;
+                if GDSOf.MAJOR_VER == 4 then
+                    childrenSize = readInteger( baseAddress + GDSOf.CHILDREN - GDSOf.CHILDREN_SIZE ) -- size is 8 bytes behind
+                elseif GDSOf.MAJOR_VER > 4 then
+                    childrenSize = readInteger( childrenAddr - GDSOf.CHILDREN_SIZE ) -- versions before ~4.2 have size inside the array 4 bytes behind
+                else
+                    childrenSize = readInteger( childrenAddr - GDSOf.CHILDREN_SIZE )
+                end
+                if childrenSize == 0 or childrenSize == nil then return; end
+
+                for i=0,(childrenSize-1) do
+                    local nodeAddr = readPointer( childrenAddr + (i*GDSOf.PTRSIZE) )
+                    local nodeName = getNodeName( nodeAddr )
+                    if nodeName == nil or nodeName == 'N??' then nodeName = getNodeNameFromGDScript( nodeAddr ) end
+                    if checkForGDScript( nodeAddr ) then
+                        addLayoutStructElem( childrenArrStructElem, 'Ch Node: '..nodeName, 0xFF8080, (i*GDSOf.PTRSIZE), vtPointer)
+                    else
+                        addStructureElem( childrenArrStructElem, 'Ch Obj: '..nodeName, (i*GDSOf.PTRSIZE), vtPointer)
+                    end
+                end
+            end
+
             --- go over child nodes in the main nodes
             ---@param nodeAddr number
             ---@param Owner userdata
@@ -2113,7 +2160,7 @@
 
                         if checkForGDScript( readPointer( constPtr ) ) then  -- is it even possible to have const nodes?
                             suffixStr = 'mNode: '
-                            addStructureElem( newParentStructElem, prefixStr..suffixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
+                            addLayoutStructElem( newParentStructElem, prefixStr..suffixStr..constName, 0xFF8080, offsetToValue, vtPointer)
                         else
                             if bDEBUGMode then print( debugPrefixStr..' iterateNodeConstToStruct: OBJ doesn\'t have GDScript/Inst'); end;
                             suffixStr = 'obj: '
@@ -2630,7 +2677,7 @@
                         if checkForGDScript( valueValue ) then
                             if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToStruct loop: NODE case: "..string.format('%x ', valueValue)..tostring(keyName)) end
                             prefixStr = 'mNode: '
-                            addStructureElem( newParentStructElem, prefixStr..keyName, offsetToValue, getCETypeFromGD( valueType ) )
+                            addLayoutStructElem( newParentStructElem, prefixStr..keyName, 0xFF8080, offsetToValue, vtPointer)
                         else
                             if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct: OBJ doesn\'t have GDScript/Inst'); end
                             prefixStr = 'obj: '
@@ -3137,7 +3184,7 @@
 
                         if checkForGDScript( valueAddr ) then
                             prefixStr = 'mNode: '
-                            addStructureElem( newParentStructElem, prefixStr..tostring(nodeName), offsetToValue, getCETypeFromGD( variantType ) )
+                            addLayoutStructElem( newParentStructElem, prefixStr..tostring(nodeName), 0xFF8080, offsetToValue, vtPointer)
                         else
                             if bDEBUGMode then print( debugPrefixStr..' iterateArrayToStruct: OBJ doesn\'t have GDScript/Inst'); end
                             prefixStr = 'obj: '
@@ -3958,7 +4005,7 @@
 
                         if checkForGDScript( readPointer( variantPtr ) ) then
                             if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct loop: NODE DETECTED, SKIP: "..string.format('%x ', variantPtr)..tostring(variantName)) end 
-                            addStructureElem( newParentStructElem, prefixStr..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
+                            addLayoutStructElem( newParentStructElem, prefixStr..variantName, 0xFF8080, offsetToValue, vtPointer)
                         else
                             if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToStruct: OBJ doesn\'t have GDScript/Inst'); end
                             prefixStr = 'obj: '
