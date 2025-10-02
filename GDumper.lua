@@ -40,6 +40,69 @@
                 return newMemRec
             end
 
+        --///---///--///---///--///---/// GD preinit
+            --- heuristic to identify whether the process is godot
+            function godotOnProcessOpened(processid, processhandle, caption)
+                -- similar to monoscript.lua in implementation
+                if GD_OldOnProcessOpened~=nil then
+                    GD_OldOnProcessOpened(processid, processhandle, caption)
+                end
+
+                if godot_ProcessMonitorThread == nil then
+                    godot_ProcessMonitorThread = createThread(function(thr)
+                        thr.Name = 'GDDumper_ProcessMonitorThread'
+                        targetIsGodot = false
+                        -- first check via PE -- https://wiki.osdev.org/PE
+                        local base = getAddress(process)
+                        if (base) and base ~= 0 then
+                            local PE = base + readInteger( base + 0x3C ) -- MZ.e_lfanew has an offset to PE
+                            local optPE = PE + 0x18 -- just skip to optional header
+                            local magic = readSmallInteger(optPE) -- Pe32OptionalHeader.mMagic
+                            local dataDirOffset = (magic == 0x10B) and 0x60 or 0x70 -- 32/64 bit
+                            local exportRVA = readInteger( optPE + dataDirOffset ) -- skip directly to DataDirectory
+                            if (exportRVA) and exportRVA ~= 0 then 
+                                local exportVA  = base + exportRVA -- jump to exportRVA (.edata)
+                                local nameRVA = readInteger(exportVA + 0xC) -- 12 is PEExportsTableHeader.mNameRVA, offset to name's virtual address
+                                local exportTablename = readString( (base + nameRVA), 60 ) or ""
+                                if (exportTablename):match("([gG][oO][Dd][Oo][Tt])") then targetIsGodot = true; end
+                            end
+                        end
+                        -- secondly, check if there's a package file, many apps do
+                        if not targetIsGodot then
+                            local pathToExe = enumModules()[1].PathToFile
+                            local gameDir , exeName = extractFilePath(pathToExe) , string.match(extractFileName(pathToExe) , "([^/]+)%.exe$")
+                            local pathList = getFileList(gameDir)
+                            local pckName = exeName..'.pck'
+
+                            for _, path in ipairs(pathList) do
+                                if (extractFileName(path) == pckName) then targetIsGodot = true; end
+                            end
+                        end
+
+                        -- -- via powershell, which also isn't reliable and kinda slow
+                        -- if not targetIsGodot then
+                        --     local out, code = runCommand("cmd.exe", { "/c", ([[powershell -NoProfile -Command "(Get-Item '%s').VersionInfo.FileDescription"]]):format(pathToExe) })
+                        --     if code ~= 0 then targetIsGodot = false
+                        --     else
+                        --         if (out or ""):match("([gG][oO][Dd][Oo][Tt])") then targetIsGodot = true; end
+                        --     end
+                        -- end
+
+                        if targetIsGodot then synchronize(buildGDGUI()) end
+                    end
+                    )
+                    godot_ProcessMonitorThread = nil
+                end
+
+
+
+                return nil
+            end
+
+            function godotRegisterPreinit()
+                GD_OldOnProcessOpened = MainForm.OnProcessOpened
+                MainForm.OnProcessOpened = godotOnProcessOpened
+            end
         --///---///--///---///--///---/// POINTER HANDLERS
 
             --- checks if the value is a valid pointer
@@ -225,6 +288,8 @@
 
             --- creates a menu button in the main menu
             function buildGDGUI()
+                if GDGUIInit then return end
+                GDGUIInit = true
 
                 -- creates and adds button to parent with callback on click
                 local function addCustomMenuButtonTo(ownerParent, captionName, customCallback)
@@ -5027,11 +5092,9 @@
             end
 
 
-
+        if not (targetIsGodot) then --[[print('target is not godot')]] return end
         defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oFuncDictVal, oGDFunctionString, oGDFunctionCode)
     end
 
 
-
-
-    buildGDGUI()
+    godotRegisterPreinit()
