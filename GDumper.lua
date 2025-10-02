@@ -88,7 +88,22 @@
                         --     end
                         -- end
 
-                        if targetIsGodot then synchronize(buildGDGUI()) end
+                        if targetIsGodot then synchronize(buildGDGUI())
+                        
+                        elseif targetIsGodot == false and GDGUIInit == true then
+                                synchronize(function()
+                                    disableGDDissect()
+                                    local mainMenu = getMainForm().Menu
+                                    for i=0, mainMenu.Items.Count-1 do
+                                        if mainMenu.Items.Item[i].Caption == 'GDDumper' then
+                                            mainMenu.Items.Item[i].Destroy()
+                                            break
+                                        end
+                                    end
+                                    GDGUIInit = false
+                                end)
+                        end
+
                     end
                     )
                     godot_ProcessMonitorThread = nil
@@ -239,7 +254,9 @@
             --- unregister our structure dissector callback
             function disableGDDissect()
                 -- restore CE's callback
-                unregisterStructureDissectOverride( structDissectID )
+                if structDissectID ~= nil then
+                    unregisterStructureDissectOverride( structDissectID )
+                end
                 structDissectID = nil;
             end
 
