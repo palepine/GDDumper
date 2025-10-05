@@ -10,6 +10,7 @@ THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY
 - Create Cheat Engine structures from a root viewport.
 - Optionally monitors nodes and updates the Symbol List.
 - Basic API functions
+- GDScriptFunction disassembler (structure-based)
 
 ## Making it work
 The script works only with GD applications where `GDScript` was used.
@@ -37,4 +38,5 @@ I'd appreciate any help/ideas with features I haven't implemented or that can be
 ## License
 
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
+
 
