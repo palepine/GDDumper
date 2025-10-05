@@ -292,6 +292,9 @@
                     end
 
                     iterateNodeToStruct( baseaddr, scriptInstStructElem )
+
+                elseif GDSOf.MAJOR_VER ~= 3 and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+                    disassembleGDFunctionCodeToStruct( baseaddr, struct )
                 else
                     -- otherwise just let CE decide, btw why the hell the base address should be a fucking hex string?
                     struct.autoGuess( ("%x"):format(baseaddr), 0x0, 0x200) -- 512 bytes
@@ -384,7 +387,7 @@
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
 
 
-    function initDumper(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oFuncDictVal, oGDFunctionString, oGDFunctionCode)
+    function initDumper(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// STRING
 
             --- reads GD strings (1-4 bytes)
@@ -485,8 +488,7 @@
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// DEFINE
 
             --- initializes and assigns offsets
-            function defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex,
-                                        oFuncDictVal, oGDFunctionString, oGDFunctionCode)
+            function defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
 
                 bMonitorNodes = false;
                 bDEBUGMode = bDEBUGMode and true or nil
@@ -518,10 +520,11 @@
 
                     GDSOf.GDSCRIPT_REF = 0x18
                     GDSOf.MAXTYPE = 39
-                    GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x60
-                    GDSOf.FUNC_MAPVAL = oFuncDictVal or 0x18
-                    GDSOf.FUNC_CODE = oGDFunctionCode or 0x178
-
+                    --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x60
+                    GDSOf.FUNC_MAPVAL = 0x18
+                    GDSOf.FUNC_CODE = oGDFunctionCode or 0x178 -- #TODO make it DEADBEEF by default?
+                    GDSOf.FUNC_CONST = oGDFunctionConsts or (GDSOf.FUNC_CODE+0x20) -- and these ones; 0x198
+                    GDSOf.FUNC_GLOBNAMEPTR = oGDFunctionGlobName or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
 
                     GDSOf.STRING = 0x10
                     GDSOf.CHILDREN_SIZE = 0x8
@@ -562,11 +565,11 @@
                     GDSOf.VAR_NAMEINDEX_I = oVariantHMIndex or 0x38
 
                     GDSOf.MAXTYPE = 27
-                    GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+                    --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
 
                     GDSOf.GDSCRIPT_REF = 0x10
 
-                    GDSOf.FUNC_MAPVAL = oFuncDictVal or 0x38
+                    GDSOf.FUNC_MAPVAL = 0x38
                     GDSOf.FUNC_CODE = oGDFunctionCode or 0x50
 
                     GDSOf.STRING = 0x10
@@ -723,7 +726,7 @@
                         GDSOf.SIZE_VECTOR = VAR_VECTOR_SIZE
 
                         GDSOf.SCRIPTFUNC_STRING = 0x80
-                        GDSOf.FUNC_MAPVAL = oFuncDictVal or 0x38
+                        GDSOf.FUNC_MAPVAL = 0x38
                         GDSOf.FUNC_CODE = oGDFunctionCode or 0x50
 
                         if bASSUMPTIONLOG then
@@ -735,14 +738,8 @@
 
                 gdOffsetsDefined = true
                 checkGDStringType()
+                defineGDFunctionEmums()
                 fuckoffPrint()
-            end
-
-            --- not implemented
-            function defineGDOpcodes()
-                GDOP = {
-                OPCODE_OPERATOR = 0,
-                }
             end
 
             -- will use the VP pointer and try to assume the game version and the root offsets
@@ -1230,7 +1227,7 @@
 
             end
 
-            function assumeGDScriptOffset(nodeAddr)    
+            function assumeGDScriptOffset(nodeAddr)
                 local GDSCRIPTINSTANCE, VAR_VECTOR, VAR_VECTOR_SIZE, scriptInstanceAddr, gdScriptAddr, nodeRefAddr;
 
                 for i=0, 5 do
@@ -1462,7 +1459,9 @@
                 if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end;
 
                 local GDScriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                if GDScriptInstanceAddr == nil or GDScriptInstanceAddr == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: ScriptInstance is 0/nil'); decDebugStep(); end; return 'N??' end
                 local GDScriptAddr = readPointer( GDScriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                if GDScriptAddr == nil or GDScriptAddr == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: GDScript is 0/nil'); decDebugStep(); end; return 'N??' end
                 local GDScriptNameAddr = readPointer( GDScriptAddr + GDSOf.GDSCRIPTNAME )
 
 
@@ -1625,6 +1624,7 @@
                 local varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', 0x000080, GDSOf.VAR_VECTOR, vtPointer )
                 local scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', 0x008080, GDSOf.GDSCRIPT_REF, vtPointer )
                 local constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', 0x400000, GDSOf.CONST_MAP, vtPointer )
+                local functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', 0x400000, GDSOf.FUNC_MAP, vtPointer )
 
                 if bDEBUGMode then print( debugPrefixStr..' iterateNodeToStruct: STEP: VARIANTS for: '..tostring(nodeName) ) end
                 varVectorStructElem.ChildStruct = createStructure( 'Vars' )
@@ -1633,6 +1633,10 @@
                 if bDEBUGMode then print( debugPrefixStr..' iterateNodeToStruct: STEP: Constants for: '..tostring(nodeName) ) end
                 constMapStructElem.ChildStruct = createStructure( 'Consts' )
                 iterateNodeConstToStruct( nodeAddr , constMapStructElem )
+
+                if bDEBUGMode then print( debugPrefixStr..' iterateNodeToStruct: STEP: Functions for: '..tostring(nodeName) ) end
+                functMapStructElem.ChildStruct = createStructure( 'Funcs' )
+                iterateNodeFuncMapToStruct( nodeAddr , functMapStructElem )
 
                 if bDEBUGMode then decDebugStep(); end;
                 return
@@ -1800,15 +1804,6 @@
                 end
             end
 
-            --- returns a lua string for function name
-            ---@param mapElement number
-            function getGDFunctionName(mapElement)
-                local mapElementValue = readPointer( mapElement + GDSOf.GDSCRIPT_REF ) -- #TODO wtf the offset isn't correct I guess
-                local functionNameAddr = readPointer( mapElementValue + GDSOf.SCRIPTFUNC_STRING )
-                if functionNameAddr == 0 or functionNameAddr == nil then if bDEBUGMode then print('getGDFunctionName: functionname invalid') end return 'F??' end
-                return readUTFString( functionNameAddr )
-            end
-
             --- gets a functionPtr by nodename and funcname
             ---@param nodeName string
             ---@param funcName string
@@ -1836,6 +1831,1793 @@
                         mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
                     end
                 until (mapElement == 0)
+            end
+
+            --- never implemented or tested; accepts a pointer to the GDScriptFunction and an array of ints to replace. Each opcode is 4 bytes, Godot opcodes can vary in arguments; didn't explore GD VM
+            ---@param gdFunctionPtr number
+            ---@param opsToReplace table
+            ---@param opsToStore table
+            function OverrideFunctionOps(gdFunctionPtr, opsToReplace, opsToStore)
+                assert( (type(gdFunctionPtr) == 'number') and (gdFunctionPtr ~= 0),'OverrideFunctionOps: GD function has to be a valid pointer, instead got: '..type(gdFunctionPtr)..' '..tostring(gdFunctionPtr) )
+                assert( #opsToReplace > 0, 'opcode arr should have elements')
+
+                if opsToStore == nil then local opsToStore = {}; end
+
+                local codePtr = readPointer( gdFunctionPtr + GDSOf.FUNC_CODE )
+                for i=0, #opsToReplace do
+                    --implement switch table via function below, but you have to learn what arguments each opcode has and consider polymorphic implementation if possible
+                    opsToStore[i] = readInteger(codePtr + i*0x4)
+                    writeInteger(codePtr + i*0x4,opsToReplace[i])
+                end
+                return opsToStore
+            end
+
+            --- iterates a function map and adds it to a struct
+            ---@param nodeAddr number
+            ---@param funcStructElement userdata
+            function iterateNodeFuncMapToStruct(nodeAddr, funcStructElement)
+                assert( type(nodeAddr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: '..type(nodeAddr))
+
+                local debugPrefixStr ='>';
+                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+
+                local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                if scriptInstanceAddr == 0 or scriptInstanceAddr == nil then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: scriptInstance is invalid'); decDebugStep(); end; return; end
+                local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                if gdScriptAddr == 0 or gdScriptAddr == nil then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: GDScript is invalid'); decDebugStep(); end; return; end
+                local funcAddr = readPointer( gdScriptAddr + GDSOf.FUNC_MAP )
+
+                if (not (funcAddr > 0)) then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: funcAddr was 0'); decDebugStep(); end; return; end
+                if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: funcAddr'..string.format(' at %x', funcAddr)) end
+
+                -- if GDSOf.MAJOR_VER == 3 then
+                --     funcAddr = readPointer( funcAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
+                -- end
+                -- local dictSize = readInteger( funcAddr + GDSOf.DICT_SIZE )
+                -- if (dictSize == 0 or dictSize == nil) then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct Dict: dictSize was 0'); decDebugStep(); end return; end
+                
+                -- if GDSOf.MAJOR_VER == 3 then -- dot it when the size is correct
+                --     funcStructElement = addStructureElem( funcStructElement, 'dictList', GDSOf.DICT_LIST, vtPointer )
+                --     funcStructElement.ChildStruct = createStructure('dictList')
+                -- end
+                -- local funcStructElement = addStructureElem( funcStructElement, 'dictHead', GDSOf.DICT_HEAD, vtPointer )
+                -- funcStructElement.ChildStruct = createStructure('dictHead')
+
+                local mapElement = funcAddr
+                local prefixStr = 'func: '
+                repeat
+                    if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: Loop Map start'..string.format(' hashElemAddr: %x', mapElement)) end
+
+                    local keyName = getStringNameStr( readPointer( mapElement + 0x10 ) ) or "UNKNOWN"
+
+                    addStructureElem( funcStructElement, prefixStr..keyName, GDSOf.FUNC_MAPVAL, vtPointer )
+
+                    if GDSOf.MAJOR_VER >= 4 then
+                        mapElement = readPointer( mapElement )
+                        funcStructElement = addStructureElem( funcStructElement, 'Next', 0x0, vtPointer )
+                        funcStructElement.ChildStruct = createStructure('DictNext')
+                    else
+                        -- funcStructElement = addStructureElem( funcStructElement, 'Next',  GDSOf.DICTELEM_PAIR_NEXT, vtPointer )
+                        -- funcStructElement.ChildStruct = createStructure('DictNext')
+                        -- mapElement = readPointer(mapElement + GDSOf.DICTELEM_PAIR_NEXT)
+                    end
+
+                until (mapElement == 0)
+
+                if bDEBUGMode then decDebugStep(); end;
+                return
+            end
+
+            function defineGDFunctionEmums()
+                GDF = {}
+
+                local function buildReverseTable( tab )
+                    local reversedTable = {}
+                    for i, v in ipairs( tab ) do
+                        reversedTable[v] = i-1
+                    end
+                    return reversedTable
+                end
+
+                
+                if GDSOf.MAJOR_VER >= 4 then
+
+                -- keep in mind that enums start a 0, lua's at 1
+                GDF.OP_NAME =
+                {
+                    "OPCODE_OPERATOR",
+                    "OPCODE_OPERATOR_VALIDATED",
+                    "OPCODE_TYPE_TEST_BUILTIN",
+                    "OPCODE_TYPE_TEST_ARRAY",
+                    "OPCODE_TYPE_TEST_DICTIONARY",
+                    "OPCODE_TYPE_TEST_NATIVE",
+                    "OPCODE_TYPE_TEST_SCRIPT",
+                    "OPCODE_SET_KEYED",
+                    "OPCODE_SET_KEYED_VALIDATED",
+                    "OPCODE_SET_INDEXED_VALIDATED",
+                    "OPCODE_GET_KEYED",
+                    "OPCODE_GET_KEYED_VALIDATED",
+                    "OPCODE_GET_INDEXED_VALIDATED",
+                    "OPCODE_SET_NAMED",
+                    "OPCODE_SET_NAMED_VALIDATED",
+                    "OPCODE_GET_NAMED",
+                    "OPCODE_GET_NAMED_VALIDATED",
+                    "OPCODE_SET_MEMBER",
+                    "OPCODE_GET_MEMBER",
+                    "OPCODE_SET_STATIC_VARIABLE",
+                    "OPCODE_GET_STATIC_VARIABLE",
+                    "OPCODE_ASSIGN",
+                    "OPCODE_ASSIGN_NULL",
+                    "OPCODE_ASSIGN_TRUE",
+                    "OPCODE_ASSIGN_FALSE",
+                    "OPCODE_ASSIGN_TYPED_BUILTIN",
+                    "OPCODE_ASSIGN_TYPED_ARRAY",
+                    "OPCODE_ASSIGN_TYPED_DICTIONARY",
+                    "OPCODE_ASSIGN_TYPED_NATIVE",
+                    "OPCODE_ASSIGN_TYPED_SCRIPT",
+                    "OPCODE_CAST_TO_BUILTIN",
+                    "OPCODE_CAST_TO_NATIVE",
+                    "OPCODE_CAST_TO_SCRIPT",
+                    "OPCODE_CONSTRUCT",
+                    "OPCODE_CONSTRUCT_VALIDATED",
+                    "OPCODE_CONSTRUCT_ARRAY",
+                    "OPCODE_CONSTRUCT_TYPED_ARRAY",
+                    "OPCODE_CONSTRUCT_DICTIONARY",
+                    "OPCODE_CONSTRUCT_TYPED_DICTIONARY",
+                    "OPCODE_CALL",
+                    "OPCODE_CALL_RETURN",
+                    "OPCODE_CALL_ASYNC",
+                    "OPCODE_CALL_UTILITY",
+                    "OPCODE_CALL_UTILITY_VALIDATED",
+                    "OPCODE_CALL_GDSCRIPT_UTILITY",
+                    "OPCODE_CALL_BUILTIN_TYPE_VALIDATED",
+                    "OPCODE_CALL_SELF_BASE",
+                    "OPCODE_CALL_METHOD_BIND",
+                    "OPCODE_CALL_METHOD_BIND_RET",
+                    "OPCODE_CALL_BUILTIN_STATIC",
+                    "OPCODE_CALL_NATIVE_STATIC",
+                    "OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN",
+                    "OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN",
+                    "OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN",
+                    "OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN",
+                    "OPCODE_AWAIT",
+                    "OPCODE_AWAIT_RESUME",
+                    "OPCODE_CREATE_LAMBDA",
+                    "OPCODE_CREATE_SELF_LAMBDA",
+                    "OPCODE_JUMP",
+                    "OPCODE_JUMP_IF",
+                    "OPCODE_JUMP_IF_NOT",
+                    "OPCODE_JUMP_TO_DEF_ARGUMENT",
+                    "OPCODE_JUMP_IF_SHARED",
+                    "OPCODE_RETURN",
+                    "OPCODE_RETURN_TYPED_BUILTIN",
+                    "OPCODE_RETURN_TYPED_ARRAY",
+                    "OPCODE_RETURN_TYPED_DICTIONARY",
+                    "OPCODE_RETURN_TYPED_NATIVE",
+                    "OPCODE_RETURN_TYPED_SCRIPT",
+                    "OPCODE_ITERATE_BEGIN",
+                    "OPCODE_ITERATE_BEGIN_INT",
+                    "OPCODE_ITERATE_BEGIN_FLOAT",
+                    "OPCODE_ITERATE_BEGIN_VECTOR2",
+                    "OPCODE_ITERATE_BEGIN_VECTOR2I",
+                    "OPCODE_ITERATE_BEGIN_VECTOR3",
+                    "OPCODE_ITERATE_BEGIN_VECTOR3I",
+                    "OPCODE_ITERATE_BEGIN_STRING",
+                    "OPCODE_ITERATE_BEGIN_DICTIONARY",
+                    "OPCODE_ITERATE_BEGIN_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY",
+                    "OPCODE_ITERATE_BEGIN_OBJECT",
+                    "OPCODE_ITERATE",
+                    "OPCODE_ITERATE_INT",
+                    "OPCODE_ITERATE_FLOAT",
+                    "OPCODE_ITERATE_VECTOR2",
+                    "OPCODE_ITERATE_VECTOR2I",
+                    "OPCODE_ITERATE_VECTOR3",
+                    "OPCODE_ITERATE_VECTOR3I",
+                    "OPCODE_ITERATE_STRING",
+                    "OPCODE_ITERATE_DICTIONARY",
+                    "OPCODE_ITERATE_ARRAY",
+                    "OPCODE_ITERATE_PACKED_BYTE_ARRAY",
+                    "OPCODE_ITERATE_PACKED_INT32_ARRAY",
+                    "OPCODE_ITERATE_PACKED_INT64_ARRAY",
+                    "OPCODE_ITERATE_PACKED_FLOAT32_ARRAY",
+                    "OPCODE_ITERATE_PACKED_FLOAT64_ARRAY",
+                    "OPCODE_ITERATE_PACKED_STRING_ARRAY",
+                    "OPCODE_ITERATE_PACKED_VECTOR2_ARRAY",
+                    "OPCODE_ITERATE_PACKED_VECTOR3_ARRAY",
+                    "OPCODE_ITERATE_PACKED_COLOR_ARRAY",
+                    "OPCODE_ITERATE_PACKED_VECTOR4_ARRAY",
+                    "OPCODE_ITERATE_OBJECT",
+                    "OPCODE_STORE_GLOBAL",
+                    "OPCODE_STORE_NAMED_GLOBAL",
+                    "OPCODE_TYPE_ADJUST_BOOL",
+                    "OPCODE_TYPE_ADJUST_INT",
+                    "OPCODE_TYPE_ADJUST_FLOAT",
+                    "OPCODE_TYPE_ADJUST_STRING",
+                    "OPCODE_TYPE_ADJUST_VECTOR2",
+                    "OPCODE_TYPE_ADJUST_VECTOR2I",
+                    "OPCODE_TYPE_ADJUST_RECT2",
+                    "OPCODE_TYPE_ADJUST_RECT2I",
+                    "OPCODE_TYPE_ADJUST_VECTOR3",
+                    "OPCODE_TYPE_ADJUST_VECTOR3I",
+                    "OPCODE_TYPE_ADJUST_TRANSFORM2D",
+                    "OPCODE_TYPE_ADJUST_VECTOR4",
+                    "OPCODE_TYPE_ADJUST_VECTOR4I",
+                    "OPCODE_TYPE_ADJUST_PLANE",
+                    "OPCODE_TYPE_ADJUST_QUATERNION",
+                    "OPCODE_TYPE_ADJUST_AABB",
+                    "OPCODE_TYPE_ADJUST_BASIS",
+                    "OPCODE_TYPE_ADJUST_TRANSFORM3D",
+                    "OPCODE_TYPE_ADJUST_PROJECTION",
+                    "OPCODE_TYPE_ADJUST_COLOR",
+                    "OPCODE_TYPE_ADJUST_STRING_NAME",
+                    "OPCODE_TYPE_ADJUST_NODE_PATH",
+                    "OPCODE_TYPE_ADJUST_RID",
+                    "OPCODE_TYPE_ADJUST_OBJECT",
+                    "OPCODE_TYPE_ADJUST_CALLABLE",
+                    "OPCODE_TYPE_ADJUST_SIGNAL",
+                    "OPCODE_TYPE_ADJUST_DICTIONARY",
+                    "OPCODE_TYPE_ADJUST_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY",
+                    "OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY",
+                    "OPCODE_ASSERT",
+                    "OPCODE_BREAKPOINT",
+                    "OPCODE_LINE",
+                    "OPCODE_END" -- 155
+                }
+
+                -- enum is correct here
+                GDF.OP_ENUM = buildReverseTable( GDF.OP_NAME )
+
+                GDF.EADDRESS = 
+                {
+                    ['ADDR_BITS'] = 24,
+                    ['ADDR_MASK'] = ((1 << 24) - 1),
+                    ['ADDR_TYPE_MASK'] = ~((1 << 24) - 1),
+                    ['ADDR_TYPE_STACK'] = 0,
+                    ['ADDR_TYPE_CONSTANT'] = 1,
+                    ['ADDR_TYPE_MEMBER'] = 2,
+                    ['ADDR_TYPE_MAX'] = 3
+                }
+
+                GDF.EFIXEDADDRESSES =
+                {
+                    ['ADDR_STACK_SELF'] = 0,
+                    ['ADDR_STACK_CLASS'] = 1,
+                    ['ADDR_STACK_NIL'] = 2,
+                    ['FIXED_ADDRESSES_MAX'] = 3,
+                    ['ADDR_SELF'] = 0 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS'],
+                    ['ADDR_CLASS' ] = 1 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS'],
+                    ['ADDR_NIL' ] = 2 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS']
+                }
+
+                -- keep in mind that enums start a 0, lua's at 1
+                GDF.OPERATOR_NAME =
+                {
+                    --comparison
+                    "OP_EQUAL",
+                    "OP_NOT_EQUAL",
+                    "OP_LESS",
+                    "OP_LESS_EQUAL",
+                    "OP_GREATER",
+                    "OP_GREATER_EQUAL",
+                    --mathematic
+                    "OP_ADD",
+                    "OP_SUBTRACT",
+                    "OP_MULTIPLY",
+                    "OP_DIVIDE",
+                    "OP_NEGATE",
+                    "OP_POSITIVE",
+                    "OP_MODULE",
+                    "OP_POWER",
+                    --bitwise
+                    "OP_SHIFT_LEFT",
+                    "OP_SHIFT_RIGHT",
+                    "OP_BIT_AND",
+                    "OP_BIT_OR",
+                    "OP_BIT_XOR",
+                    "OP_BIT_NEGATE",
+                    --logic
+                    "OP_AND",
+                    "OP_OR",
+                    "OP_XOR",
+                    "OP_NOT",
+                    --containment
+                    "OP_IN",
+                    "OP_MAX" -- 25
+                }
+
+                -- enum is correct here
+                GDF.OPERATOR_ENUM = buildReverseTable( GDF.OPERATOR_NAME )
+
+                -- disassembler switch
+                GDF.OPSWITCH = function ( codeInts, codeStructElement, instrPointer )
+                    local increment = 0
+                    local opcode = codeInts[instrPointer]
+                    local opcodeName = ''
+
+                    -- https://github.com/godotengine/godot/blob/master/modules/gdscript/gdscript_disassembler.cpp
+                    if opcode == GDF.OP_ENUM['OPCODE_OPERATOR'] then
+                        local _pointer_size = GDSOf.PTRSIZE / 0x4
+
+                        local operation = codeInts[instrPointer + 4 ] -- operator is 4*0x4 after
+                        addStructureElem( codeStructElement, 'Operator: ', (instrPointer-1 +4)*0x4, vtDword )
+
+                        local operationName = GDF.OPERATOR_NAME[ operation + 1 ] or 'UNKNOWN_OPERATOR'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] ) -- where to store
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+
+                        opcodeName = opcodeName..' '..operand3..' = '..operand1..' '..operationName..' '..operand2
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 7 + _pointer_size
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_OPERATOR_VALIDATED'] then
+
+                        local operation = codeInts[instrPointer + 4 ] -- operator is 4*0x4 after
+                        addStructureElem( codeStructElement, 'Operator: ', (instrPointer-1 +4)*0x4, vtDword )
+
+                        local operationName = GDF.OPERATOR_NAME[ operation + 1 ] or 'UNKNOWN_OPERATOR' -- #TODO not sure, is that the same thing: operator_names[_code_ptr[ip + 4]];
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] ) -- where to store
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand3..' = '..operand1..' '..operationName..' '..operand2
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 5
+                        
+                    elseif opcode == GDF.OP_ENUM['OPCODE_TYPE_TEST_BUILTIN'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = getGDTypeName( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2..' is '..operand3
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_TYPE_TEST_ARRAY'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        --#TODO create function constants lookup for disassembling
+                        local operand3 = getGDTypeName( codeInts[instrPointer + 4] )
+                        -- Ref<Script> script_type = get_constant(_code_ptr[ip + 3] & ADDR_MASK);
+                        -- Variant::Type builtin_type = (Variant::Type)_code_ptr[ip + 4];
+                        -- StringName native_type = get_global_name(_code_ptr[ip + 5]);
+
+                        -- if (script_type.is_valid() && script_type->is_valid()) {
+                        --     text += "script(";
+                        --     text += GDScript::debug_get_script_name(script_type);
+                        --     text += ")";
+                        -- } else if (native_type != StringName()) {
+                        --     text += native_type;
+                        -- } else {
+                        --     text += Variant::get_type_name(builtin_type);
+                        -- }
+                        addStructureElem( codeStructElement, 'script_type', (instrPointer-1 +3)*0x4, vtDword )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +4)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'native_type', (instrPointer-1 +5)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2..' is Dictionary['..operand3..']'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        
+                        increment = 6
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_TYPE_TEST_DICTIONARY'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        local operand5 = getGDTypeName( codeInts[instrPointer + 5] )
+                        local operand7 = getGDTypeName( codeInts[instrPointer + 7] )
+                        -- Ref<Script> key_script_type = get_constant(_code_ptr[ip + 3] & ADDR_MASK);
+                        -- Variant::Type key_builtin_type = (Variant::Type)_code_ptr[ip + 5];
+                        -- StringName key_native_type = get_global_name(_code_ptr[ip + 6]);
+
+                        -- if (key_script_type.is_valid() && key_script_type->is_valid()) {
+                        --                 text += "script(";
+                        --                 text += GDScript::debug_get_script_name(key_script_type);
+                        --                 text += ")";
+                        -- } else if (key_native_type != StringName()) {
+                        --                 text += key_native_type;
+                        -- } else {
+                        --                 text += Variant::get_type_name(key_builtin_type);
+                        -- }
+
+                        -- Ref<Script> value_script_type = get_constant(_code_ptr[ip + 4] & ADDR_MASK);
+                        -- Variant::Type value_builtin_type = (Variant::Type)_code_ptr[ip + 7];
+                        -- StringName value_native_type = get_global_name(_code_ptr[ip + 8]);
+
+                        -- if (value_script_type.is_valid() && value_script_type->is_valid()) {
+                        --     text += "script(";
+                        --     text += GDScript::debug_get_script_name(value_script_type);
+                        --     text += ")";
+                        -- } else if (value_native_type != StringName()) {
+                        --     text += value_native_type;
+                        -- } else {
+                        --     text += Variant::get_type_name(value_builtin_type);
+                        -- }
+
+                        addStructureElem( codeStructElement, 'key_script_type', (instrPointer-1 +3)*0x4, vtDword )
+                        addStructureElem( codeStructElement, operand5, (instrPointer-1 +5)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'value_script_type', (instrPointer-1 +4)*0x4, vtDword )
+                        addStructureElem( codeStructElement, operand7, (instrPointer-1 +7)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'value_native_type', (instrPointer-1 +8)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2..' is Dictionary['..operand5..']'..', '..operand7..']'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 9
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_TYPE_TEST_NATIVE'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        local operand3 = 'get_global_name(operand3)' -- #TODO get_global_name(_code_ptr[ip + 3]);
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2..' is '..operand3
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 4
+                    elseif opcode == GDF.OP_ENUM['OPCODE_TYPE_TEST_SCRIPT'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2..' is '..operand3
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_SET_KEYED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..'['..operand2..'] = '..operand3
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_SET_KEYED_VALIDATED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..'['..operand2..'] = '..operand3
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_SET_INDEXED_VALIDATED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..'['..operand2..'] = '..operand3
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_GET_KEYED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand3..'['..operand1..'] = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_GET_KEYED_VALIDATED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand3..'['..operand1..'] = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_GET_INDEXED_VALIDATED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand3..'['..operand1..'] = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_SET_NAMED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = '_global_names_ptr[operand2]' -- #TODO _global_names_ptr[operand3]]
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..'["'..operand3..'"] = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_SET_NAMED_VALIDATED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = 'setter_names[operand3]' -- #TODO setter_names[_code_ptr[ip + 3]];
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..'["'..operand3..'"] = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_GET_NAMED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = '_global_names_ptr[operand2]' --#TODO
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand2..' = '..operand1..'["'..operand3..'"]'
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_GET_NAMED_VALIDATED'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = 'getter_names[operand3]' --#TODO
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand2..' = '..operand1..'["'..operand3..'"]'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_SET_MEMBER'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = '_global_names_ptr[operand3]' --#TODO
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..'["'..operand2..'"] = '..operand1
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_GET_MEMBER'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = '_global_names_ptr[operand2]' --#TODO
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = ["'..operand2..'"]'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_SET_STATIC_VARIABLE'] then
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = 'gdscript' -- #TODO
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = 'debug_get_static_var_by_index(operand3)'
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' script(scriptname)['..operand3..'] = '..operand1
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_GET_STATIC_VARIABLE'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = 'gdscript' -- #TODO
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = 'debug_get_static_var_by_index(operand3)'
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = script(scriptname)['..operand3..']'
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_NULL'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = NULL'
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_TRUE'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = TRUE'
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_FALSE'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = FALSE'
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_TYPED_BUILTIN'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = getGDTypeName( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' ('..operand3..') '..operand1..'] = '..operand2
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_TYPED_ARRAY'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 6
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_TYPED_DICTIONARY'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 9
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_TYPED_NATIVE'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' ('..operand3..')'..operand1..' = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSIGN_TYPED_SCRIPT'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = 'debug_get_script_name(get_constant(operand3))' --#TODO
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' ('..operand3..') '..operand1..' = '..operand2
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CAST_TO_BUILTIN'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand1_n = getGDTypeName( codeInts[instrPointer + 1] )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand2..' = '..operand1..' as '..operand1_n
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CAST_TO_NATIVE'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand2..' = '..operand1..' as '..operand3
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CAST_TO_SCRIPT'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand2..' = '..operand1..' as '..operand3
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 4
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CONSTRUCT'] then
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+
+                        local typeName = getGDTypeName( codeInts[instrPointer + 3 + instr_var_args] )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+                        
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE' -- type test
+                        opcodeName = opcodeName..' '..operand1..' = '..typeName..'('..operandArg..')'
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 3 + instr_var_args
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CONSTRUCT_VALIDATED'] then
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+                        
+                        local operand3 = 'constructors_names[_code_ptr[ip + 3 + argc]]'
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 + 3+argc)*0x4, vtDword )
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..operand3..'('..operandArg..')'
+                        
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 3 + instr_var_args
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CONSTRUCT_ARRAY'] then
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'['..operandArg..']'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 3 + instr_var_args
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CONSTRUCT_TYPED_ARRAY'] then
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+
+                        local operand4 = getGDTypeName( codeInts[instrPointer + argc+4] ) --#TODO
+                        addStructureElem( codeStructElement, 'get_constant(_code_ptr[ip + argc + 2] & ADDR_MASK)', (instrPointer-1 + argc+2)*0x4, vtDword )
+                        addStructureElem( codeStructElement, operand4, (instrPointer-1 + argc+4)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'get_global_name(_code_ptr[ip + argc + 5])', (instrPointer-1 + argc+5)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' ('..operand4..') '..operand1..' = '..'['..operandArg..']'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 6 + instr_var_args
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CONSTRUCT_DICTIONARY'] then
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc * 2] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 + 1+argc*2)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 0] )
+                            addStructureElem( codeStructElement, 'argK: '..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 0] ) , (instrPointer-1 + 1 + i * 2 + 0)*0x4, vtDword )
+                            operandArg = operandArg..': '..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 1] )
+                            addStructureElem( codeStructElement, 'argV: '..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 1] ) , (instrPointer-1 + 1 + i * 2 + 1)*0x4, vtDword )
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand3..' = {'..operandArg..'}'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 3 + argc * 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CONSTRUCT_TYPED_DICTIONARY'] then
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+                        
+                        
+                        local operand5 = getGDTypeName( codeInts[instrPointer +  argc*2+5] ) --#TODO
+                        addStructureElem( codeStructElement, 'get_constant(_code_ptr[ip + argc * 2 + 2] & ADDR_MASK)', (instrPointer-1 + argc*2+2)*0x4, vtDword )
+                        addStructureElem( codeStructElement, operand4, (instrPointer-1 + argc*2+5)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'get_global_name(_code_ptr[ip + argc * 2 + 6])', (instrPointer-1 + argc*2+6)*0x4, vtDword )
+
+                        local operand7 = getGDTypeName( codeInts[instrPointer +  argc*2+7] )
+                        addStructureElem( codeStructElement, 'get_constant(_code_ptr[ip + argc * 2 + 3] & ADDR_MASK)', (instrPointer-1 + argc*2+3)*0x4, vtDword )
+                        addStructureElem( codeStructElement, operand7, (instrPointer-1 + argc*2+7)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'get_global_name(_code_ptr[ip + argc * 2 + 8])', (instrPointer-1 + argc*2+8)*0x4, vtDword )
+
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 1+argc*2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 + 1+argc*2)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 0] )
+                            addStructureElem( codeStructElement, 'argK: '..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 0] ) , (instrPointer-1 + 1 + i * 2 + 0)*0x4, vtDword )
+                            operandArg = operandArg..': '..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 1] )
+                            addStructureElem( codeStructElement, 'argV: '..formatDisassembledAddress( codeInts[instrPointer + 1 + i * 2 + 1] ) , (instrPointer-1 + 1 + i * 2 + 1)*0x4, vtDword )
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' ('..operand5..', '..operand7..') '..operand2..' = {'..operandArg..'}'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 9 + argc * 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL'] or opcode == GDF.OP_ENUM['OPCODE_CALL_RETURN'] or opcode == GDF.OP_ENUM['OPCODE_CALL_ASYNC'] then
+                        local ret = codeInts[instrPointer] == GDF.OP_ENUM['OPCODE_CALL']
+                        local async = codeInts[instrPointer] == GDF.OP_ENUM['OPCODE_CALL_ASYNC']
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand2 = '';
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        if (ret or async) then
+                            operand2 = formatDisassembledAddress( codeInts[instrPointer + argc+2] )
+                            addStructureElem( codeStructElement, operand2, (instrPointer-1 + argc+2)*0x4, vtDword )
+                            operand2 = operand2..' = '
+                        end
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        operand1 = operand1..'.'
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i+1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+
+                        opcodeName = opcodeName..' '..operand2..operand1..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]]'..'('..operandArg..')' --#TODO retrieve the funciton name
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 5 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_METHOD_BIND'] or opcode == GDF.OP_ENUM['OPCODE_CALL_METHOD_BIND_RET'] then
+
+                        local ret = codeInts[instrPointer] == GDF.OP_ENUM['OPCODE_CALL_METHOD_BIND_RET']
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        -- '_methods_ptr[_code_ptr[ip + 2 + instr_var_args]]'
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand2 = '';
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        if (ret) then
+                            operand2 = formatDisassembledAddress( codeInts[instrPointer + argc+2] )
+                            addStructureElem( codeStructElement, operand2, (instrPointer-1 + argc+2)*0x4, vtDword )
+                            operand2 = operand2..' = '
+                        end
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        operand1 = operand1..'.'
+                        operand1 = operand1..'method->get_name()' --#TODO
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i+1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = opcodeName..' '..operand2..operand1..'('..operandArg..')' --#TODO retrieve the funciton name
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 5 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_BUILTIN_STATIC'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local typeName = getGDTypeName( codeInts[instrPointer + 1 + instr_var_args] )
+                        addStructureElem( codeStructElement, 'typeName:', (instrPointer-1 + 3+instr_var_args)*0x4, vtDword )
+
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..typeName..'.'..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]].operator String()'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 5 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_NATIVE_STATIC'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 2 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'method->get_instance_class()'..'.'..'method->get_name()'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + argc
+
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN'] then
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'method->get_instance_class()'..'.'..'method->get_name()'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'method->get_instance_class()'..'.'..'method->get_name()'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        -- MethodBind *method = _methods_ptr[_code_ptr[ip + 2 + instr_var_args]];
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2 + argc] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 + 2+argc)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand2..' = '..operand1..'method->get_name()'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 5 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        -- MethodBind *method = _methods_ptr[_code_ptr[ip + 2 + instr_var_args]];
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1 + argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..'.'..'method->get_name()'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 5 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_BUILTIN_TYPE_VALIDATED'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2 + argc] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 + 2+argc)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand2..' = '..operand1..'.'..'builtin_methods_names[_code_ptr[ip + 4 + argc]]'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 5 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_UTILITY'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]]'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + argc
+
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_UTILITY_VALIDATED'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'utilities_names[_code_ptr[ip + 3 + argc]]'..'('..operandArg..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_GDSCRIPT_UTILITY'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+argc] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+argc)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'gds_utilities_names[_code_ptr[ip + 3 + argc]]'..'('..operandArg..')'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + argc
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CALL_SELF_BASE'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        local argc = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2+argc] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 + 2+argc)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, argc-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'arg: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand2..' = '..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]]'..'('..operandArg..')'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + argc
+
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_AWAIT'] or opcode == GDF.OP_ENUM['OPCODE_AWAIT_RESUME'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1)*0x4, vtDword )
+                        opcodeName = opcodeName..' '..operand1
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CREATE_LAMBDA'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        -- GDScriptFunction *lambda = _lambdas_ptr[_code_ptr[ip + 2 + instr_var_args]];
+                        local captures_count = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+captures_count] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+captures_count)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, captures_count-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'captures_count: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' create lambda from '..'lambda->name.operator String()'..' function, captures ('..operandArg..')'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + captures_count
+
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_CREATE_SELF_LAMBDA'] then
+
+                        instrPointer = instrPointer + 1
+                        local instr_var_args = codeInts[instrPointer]
+                        addStructureElem( codeStructElement, 'instr_var_args:', (instrPointer-1)*0x4, vtDword )
+                        -- GDScriptFunction *lambda = _lambdas_ptr[_code_ptr[ip + 2 + instr_var_args]];
+                        local captures_count = codeInts[instrPointer + 1 + instr_var_args]
+                        addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+captures_count] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+captures_count)*0x4, vtDword )
+
+                        local operandArg = '';
+
+                        for i=0, captures_count-1 do
+                            if i>0 then operandArg = operandArg..', ' end
+                            operandArg = operandArg..formatDisassembledAddress( codeInts[instrPointer + i + 1] )
+                            addStructureElem( codeStructElement, 'captures_count: '..formatDisassembledAddress( codeInts[instrPointer + i + 1] ) , (instrPointer-1 + i+1)*0x4, vtDword )    
+                        end
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' create lambda from '..'lambda->name.operator String()'..' function, captures ('..operandArg..')'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1-1 )*0x4, vtDword )
+
+                        increment = 4 + captures_count
+
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_JUMP'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+
+                        local operand1 = tostring(codeInts[instrPointer + 1])
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1)*0x4, vtDword )
+                        opcodeName = opcodeName..' '..operand1
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_JUMP_IF'] or opcode == GDF.OP_ENUM['OPCODE_JUMP_IF_NOT'] or opcode == GDF.OP_ENUM['OPCODE_JUMP_IF_SHARED'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+
+                        local operand2 = tostring(codeInts[instrPointer + 2])
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 + 2)*0x4, vtDword )
+                        opcodeName = opcodeName..' '..operand1..' to '..operand1
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_JUMP_TO_DEF_ARGUMENT'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 1
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_RETURN'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        opcodeName = opcodeName..' '..operand1
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_RETURN_TYPED_BUILTIN'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = getGDTypeName( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        opcodeName = opcodeName..' ('..operand2..')'..' '..operand1
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_RETURN_TYPED_ARRAY'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+
+                        opcodeName = opcodeName..' '..operand1
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_RETURN_TYPED_DICTIONARY'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+
+                        opcodeName = opcodeName..' '..operand1
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 8
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_RETURN_TYPED_NATIVE'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+
+                        opcodeName = opcodeName..' ('..operand2..') '..operand1
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_RETURN_TYPED_SCRIPT'] then
+                        -- Ref<Script> script = get_constant(_code_ptr[ip + 2] & ADDR_MASK);
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+
+                        opcodeName = opcodeName..' ('..'GDScript::debug_get_script_name(script)'..') '..operand1
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'end: ', (instrPointer-1 +4)*0x4, vtDword )
+
+                        opcodeName = opcodeName..' for-init '..operand3..' in '..operand2..' counter '..operand1..' end '..tostring(codeInts[instrPointer + 4])
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_INT'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_FLOAT'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_VECTOR2']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_VECTOR2I'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_VECTOR3'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_VECTOR3I']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_STRING'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_DICTIONARY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_BEGIN_OBJECT'] then
+
+                            opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                            local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                            addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                            local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                            addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                            local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                            addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                            addStructureElem( codeStructElement, 'end: ', (instrPointer-1 +4)*0x4, vtDword )
+
+                            local opcodeType = opcodeName:gsub('OPCODE_ITERATE_BEGIN_','')
+                            opcodeName = opcodeName..' for-init (typed '..opcodeType..') '..operand3..' in '..operand2..' counter '..operand1..' end '..tostring(codeInts[instrPointer + 4])
+                            addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                            increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ITERATE'] then
+
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                        addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'end: ', (instrPointer-1 +4)*0x4, vtDword )
+
+                        opcodeName = opcodeName..' for-loop '..operand2..' in '..operand2..' counter '..operand1..' end '..tostring(codeInts[instrPointer + 4])
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 5
+
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ITERATE_INT'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_FLOAT'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_VECTOR2'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_VECTOR2I']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_VECTOR3'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_VECTOR3I'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_STRING'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_DICTIONARY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_BYTE_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_INT32_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_INT64_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_FLOAT32_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_FLOAT64_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_STRING_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_VECTOR2_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_VECTOR3_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_COLOR_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_PACKED_VECTOR4_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_ITERATE_OBJECT'] then
+
+                            opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                            local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                            addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                            local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                            addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                            local operand3 = formatDisassembledAddress( codeInts[instrPointer + 3] )
+                            addStructureElem( codeStructElement, operand3, (instrPointer-1 +3)*0x4, vtDword )
+                            addStructureElem( codeStructElement, 'end: ', (instrPointer-1 +4)*0x4, vtDword )
+
+                            local opcodeType = opcodeName:gsub('OPCODE_ITERATE_','')
+                            opcodeName = opcodeName..' for-init (typed '..opcodeType..') '..operand3..' in '..operand2..' counter '..operand1..' end '..tostring(codeInts[instrPointer + 4])
+                            addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                            increment = 5
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_STORE_GLOBAL'] then
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        addStructureElem( codeStructElement, 'String::num_int64(_code_ptr[ip + 2])', (instrPointer-1 +2)*0x4, vtDword )
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'String::num_int64(_code_ptr[ip + 2])'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_STORE_NAMED_GLOBAL'] then
+
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        addStructureElem( codeStructElement, '_global_names_ptr[_code_ptr[ip + 2]]', (instrPointer-1 +2)*0x4, vtDword )
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' '..operand1..' = '..'_global_names_ptr[_code_ptr[ip + 2]]'
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_LINE'] then
+                        local line = codeInts[instrPointer + 1] - 1
+                        if line > 0 --[[and line < p_code_lines.size()]] then
+                            opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                            opcodeName = opcodeName..' '..tostring(line + 1)..': '
+                        else
+                            opcodeName = ''
+                        end
+                        addStructureElem( codeStructElement, 'line: ', (instrPointer-1 + 1)*0x4, vtDword )
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_BOOL'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_INT'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_FLOAT']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_STRING'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_VECTOR2'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_VECTOR2I']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_RECT2'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_RECT2I'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_VECTOR3']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_VECTOR3I'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_TRANSFORM2D'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_VECTOR4']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_VECTOR4I'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PLANE'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_QUATERNION']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_AABB'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_BASIS'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_TRANSFORM3D']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PROJECTION'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_COLOR'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_STRING_NAME']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_NODE_PATH'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_RID'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_OBJECT']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_CALLABLE'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_SIGNAL'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_DICTIONARY']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY']
+                        or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY'] or opcode == GDF.OP_ENUM['OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY'] then
+
+                            opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                            local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                            addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                            local opcodeType = opcodeName:gsub('OPCODE_TYPE_ADJUST_','')
+                            opcodeName = opcodeName..' ('..opcodeType..') '..operand1
+                            addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                            increment = 2
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_ASSERT'] then
+                        local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1] )
+                        addStructureElem( codeStructElement, operand1, (instrPointer-1 +1)*0x4, vtDword )
+                        local operand2 = formatDisassembledAddress( codeInts[instrPointer + 2] )
+                        addStructureElem( codeStructElement, operand2, (instrPointer-1 +2)*0x4, vtDword )
+                        
+                        opcodeName = GDF.OP_NAME[ opcode + 1 ] or 'UNKNOWN_OPCODE'
+                        opcodeName = opcodeName..' ('..operand1..', '..operand2..')'
+
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1 )*0x4, vtDword )
+                        increment = 3
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_BREAKPOINT'] then
+                        addLayoutStructElem( codeStructElement, opcodeName, 0x808040, (instrPointer-1)*0x4, vtDword )
+                        increment = 1
+
+                    elseif opcode == GDF.OP_ENUM['OPCODE_END'] then
+                        addLayoutStructElem( codeStructElement, '>>>END.', 0x808040, (instrPointer-1)*0x4, vtDword )
+                        increment = 1
+                    end
+
+                    return instrPointer + increment
+                end
+
+                else
+
+                    --#TODO for 3.x
+                end
+            end
+
+            function disassembleGDFunctionCodeToStruct( funcAddr, funcStruct )
+                -- disassemble the address
+
+                assert( (type(funcAddr) == 'number') and (funcAddr ~= 0),'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: '..type(funcAddr) )
+                if GDF == nil then defineGDFunctionEmums() end
+
+                local debugPrefixStr ='>';
+                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+
+                local codeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
+                funcStruct.Name = 'ScriptFunc'
+                local codeStructElement = funcStruct.addElement()
+                codeStructElement.Name = 'FuncCode'
+                --codeStructElement.BackgroundColor = 0x
+                codeStructElement.Offset = GDSOf.FUNC_CODE
+                codeStructElement.VarType = vtPointer
+                codeStructElement.ChildStruct = createStructure( 'FuncCode' )
+
+                local codeInts = {}
+                local codeSize, currIndx, currOpcode = 0,0,0
+                while true do
+                    codeSize = codeSize + 1
+                    currOpcode = readInteger( codeAddr + currIndx*0x4 )
+                    table.insert( codeInts, currOpcode )
+
+                    if currOpcode == GDF.OP_ENUM['OPCODE_END'] then
+                        break
+                    end
+                    currIndx = currIndx+1
+                end
+                if bDEBUGMode then print( debugPrefixStr..' disassembleGDFunctionCode: codeSize: '..tostring(codeSize) ) end
+
+                local operandCount = 0
+                local opcodeName = 'UNKNOWN_OPCODE'
+                local opcode = 0;
+                local instrPointer = 1
+
+                while instrPointer <= #codeInts do
+                    instrPointer = GDF.OPSWITCH( codeInts, codeStructElement, instrPointer )
+                end
+            end
+
+            function formatDisassembledAddress( addrInt )
+                local addrIndex  = addrInt & (GDF.EADDRESS['ADDR_MASK']) -- lower 24 bits are indices
+                local addrType = (addrInt >> GDF.EADDRESS['ADDR_BITS']) -- the higher 8 would be types: shift to the beginning and mask
+
+                if addrType == 0 and (addrIndex >= 0 and addrIndex <= 2)  then
+                    if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_SELF'] then return "stack(self)" end
+                    if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_CLASS'] then return "stack(class)" end
+                    if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_NIL'] then return "stack(nil)" end
+                    return 'stack['..tostring(addrIndex)..']'
+                end
+
+                if     ( addrType == GDF.EADDRESS['ADDR_TYPE_STACK'] )    then return ("stack[%d]"):format(addrIndex)
+                elseif ( addrType == GDF.EADDRESS['ADDR_TYPE_CONSTANT'] ) then return ("const[%d]"):format(addrIndex)
+                elseif ( addrType == GDF.EADDRESS['ADDR_TYPE_MEMBER'] )   then return ("member[%d]"):format(addrIndex)
+                else                                                           return ("addr?(0x%08X)"):format(addrInt)
+                end
+            end
+
+            function checkIfGDFunction( funcAddr )
+
+                local funcStringNameAddr = readPointer( funcAddr ) -- StringName name;
+                local funcResStringNameAddr = readPointer( funcAddr + GDSOf.PTRSIZE ) -- StringName source;
+                local funcCodeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
+
+                if (funcStringNameAddr ~= nil and funcStringNameAddr ~=0) and (funcResStringNameAddr ~= nil and funcResStringNameAddr ~=0) and isPointerNotNull( funcAddr + GDSOf.FUNC_CODE ) then
+
+                    local funcStringAddr = readPointer(funcStringNameAddr + GDSOf.STRING)
+                    if (funcStringAddr == nil or funcStringAddr == 0) then
+                        funcStringAddr = readPointer( funcStringNameAddr + 0x8 )
+                        if funcStringAddr == nil or funcStringAddr == 0 then return false end
+                    end
+
+                    local resStringAddr = readPointer( funcResStringNameAddr + GDSOf.STRING )
+                    if resStringAddr == 0 or resStringAddr == nil then return false end
+                    if readUTFString( resStringAddr, 4 ) ~= 'res:' then return false end
+
+                    return true
+                end
+
+                return false
             end
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
@@ -4554,6 +6336,7 @@
                     if (gdType == 37) then return vtPointer end
                     if (gdType == 38) then return vtPointer end
                     if (gdType == 39) then return vtDword end
+                    return vtPointer -- whatever
                 else
                     if (gdType == 2) then return vtDword end
                     if (gdType == 1) then return vtByte end
@@ -4584,6 +6367,7 @@
                     if (gdType == 25) then return vtPointer end
                     if (gdType == 26) then return vtPointer end
                     if (gdType == 27) then return vtPointer end
+                    return vtPointer -- whatever
                 end
                 --[[
                 vtByte=0
@@ -4651,6 +6435,7 @@
                     if (typeInt == 37) then return "PACKED_COLOR_ARRAY" end
                     if (typeInt == 38) then return "PACKED_VECTOR4_ARRAY" end
                     if (typeInt == 39) then return "VARIANT_MAX" end
+                    return "BEYOND_VARIANT_MAX"
                 else -- 3.x
                     if (typeInt == 2) then return "INT" end -- these go first
                     if (typeInt == 1) then return "BOOL" end
@@ -4681,6 +6466,7 @@
                     if (typeInt == 25) then return "PACKED_VECTOR3_ARRAY" end
                     if (typeInt == 26) then return "PACKED_COLOR_ARRAY" end
                     if (typeInt == 27) then return "VARIANT_MAX" end
+                    return "BEYOND_VARIANT_MAX"
                 end
 
                 return false; -- nil
@@ -5087,30 +6873,9 @@
 
             end
 
-        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Setter
-
-            --- never implemented or tested; accepts a pointer to the GDScriptFunction and an array of ints to replace. Each opcode is 4 bytes, Godot opcodes can vary in arguments; didn't explore GD VM
-            ---@param gdFunctionPtr number
-            ---@param opsToReplace table
-            ---@param opsToStore table
-            function OverrideFunctionOps(gdFunctionPtr, opsToReplace, opsToStore)
-                assert( (type(gdFunctionPtr) == 'number') and (gdFunctionPtr ~= 0),'OverrideFunctionOps: GD function has to be a valid pointer, instead got: '..type(gdFunctionPtr)..' '..tostring(gdFunctionPtr) )
-                assert( #opsToReplace > 0, 'opcode arr should have elements')
-
-                if opsToStore == nil then local opsToStore = {}; end
-
-                local codePtr = readPointer( gdFunctionPtr + GDSOf.FUNC_CODE )
-                for i=0, #opsToReplace do
-                    --implement switch table via function below, but you have to learn what arguments each opcode has and consider polymorphic implementation if possible
-                    opsToStore[i] = readInteger(codePtr + i*0x4)
-                    writeInteger(codePtr + i*0x4,opsToReplace[i])
-                end
-                return opsToStore
-            end
-
 
         if not (targetIsGodot) then --[[print('target is not godot')]] return end
-        defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oFuncDictVal, oGDFunctionString, oGDFunctionCode)
+        defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
     end
 
 
