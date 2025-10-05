@@ -293,7 +293,7 @@
 
                     iterateNodeToStruct( baseaddr, scriptInstStructElem )
 
-                elseif GDSOf.MAJOR_VER ~= 3 and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+                elseif bDESASSEMBLEFUNCTIONS and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
                     disassembleGDFunctionCodeToStruct( baseaddr, struct )
                 else
                     -- otherwise just let CE decide, btw why the hell the base address should be a fucking hex string?
@@ -359,7 +359,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
+                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\nbDESASSEMBLEFUNCTIONS=false\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -493,6 +493,7 @@
                 bMonitorNodes = false;
                 bDEBUGMode = bDEBUGMode and true or nil
                 bASSUMPTIONLOG = bASSUMPTIONLOG and true or nil
+                bDESASSEMBLEFUNCTIONS = bDESASSEMBLEFUNCTIONS and true or false
                 dumpedMonitorNodes = {};
                 debugPrefix = 1;
 
@@ -1833,7 +1834,7 @@
                 until (mapElement == 0)
             end
 
-            --- never implemented or tested; accepts a pointer to the GDScriptFunction and an array of ints to replace. Each opcode is 4 bytes, Godot opcodes can vary in arguments; didn't explore GD VM
+            --- never implemented or tested;
             ---@param gdFunctionPtr number
             ---@param opsToReplace table
             ---@param opsToStore table
@@ -1882,6 +1883,7 @@
                 -- end
                 -- local funcStructElement = addStructureElem( funcStructElement, 'dictHead', GDSOf.DICT_HEAD, vtPointer )
                 -- funcStructElement.ChildStruct = createStructure('dictHead')
+                
 
                 local mapElement = funcAddr
                 local prefixStr = 'func: '
@@ -1890,7 +1892,15 @@
 
                     local keyName = getStringNameStr( readPointer( mapElement + 0x10 ) ) or "UNKNOWN"
 
-                    addStructureElem( funcStructElement, prefixStr..keyName, GDSOf.FUNC_MAPVAL, vtPointer )
+                    local newParentStructElem = addStructureElem( funcStructElement, prefixStr..keyName, GDSOf.FUNC_MAPVAL, vtPointer )
+
+                    if not bDESASSEMBLEFUNCTIONS then
+                        newParentStructElem.ChildStruct = createStructure('GDFunction')
+                        addStructureElem( newParentStructElem, 'Code: '..keyName, GDSOf.FUNC_CODE, vtPointer )
+                        local funcConstantStructElem = addStructureElem( newParentStructElem, 'Constants: '..keyName, GDSOf.FUNC_CONST, vtPointer )
+                        local funcGlobalNameStructElem = addStructureElem( newParentStructElem, 'GlobalNames: '..keyName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer )
+                        --#TODO process these 2 Vectors to make them indexed
+                    end
 
                     if GDSOf.MAJOR_VER >= 4 then
                         mapElement = readPointer( mapElement )
@@ -3249,7 +3259,6 @@
                         -- GDScriptFunction *lambda = _lambdas_ptr[_code_ptr[ip + 2 + instr_var_args]];
                         local captures_count = codeInts[instrPointer + 1 + instr_var_args]
                         addStructureElem( codeStructElement, 'argc:', (instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
-
                         local operand1 = formatDisassembledAddress( codeInts[instrPointer + 1+captures_count] )
                         addStructureElem( codeStructElement, operand1, (instrPointer-1 + 1+captures_count)*0x4, vtDword )
 
@@ -3549,10 +3558,18 @@
                 funcStruct.Name = 'ScriptFunc'
                 local codeStructElement = funcStruct.addElement()
                 codeStructElement.Name = 'FuncCode'
-                --codeStructElement.BackgroundColor = 0x
                 codeStructElement.Offset = GDSOf.FUNC_CODE
                 codeStructElement.VarType = vtPointer
                 codeStructElement.ChildStruct = createStructure( 'FuncCode' )
+                
+                local funcConstantStructElem = funcStruct.addElement()
+                funcConstantStructElem.Name = 'Constants'
+                codeStructElement.Offset = GDSOf.FUNC_CONST
+                codeStructElement.VarType = vtPointer
+                local funcGlobalNameStructElem = funcStruct.addElement()
+                funcGlobalNameStructElem.Name = 'GlobalNames'
+                funcGlobalNameStructElem.Offset = GDSOf.FUNC_GLOBNAMEPTR
+                funcGlobalNameStructElem.VarType = vtPointer
 
                 local codeInts = {}
                 local codeSize, currIndx, currOpcode = 0,0,0
