@@ -523,8 +523,8 @@
                     GDSOf.MAXTYPE = 39
                     --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x60
                     GDSOf.FUNC_MAPVAL = 0x18
-                    GDSOf.FUNC_CODE = oGDFunctionCode or 0x178 -- #TODO make it DEADBEEF by default?
-                    GDSOf.FUNC_CONST = oGDFunctionConsts or (GDSOf.FUNC_CODE+0x20) -- and these ones; 0x198
+                    GDSOf.FUNC_CODE = oGDFunctionCode or 0x178
+                    GDSOf.FUNC_CONST = oGDFunctionConsts or (GDSOf.FUNC_CODE+0x20) -- 0x198
                     GDSOf.FUNC_GLOBNAMEPTR = oGDFunctionGlobName or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
 
                     GDSOf.STRING = 0x10
@@ -765,7 +765,6 @@
                             childrenSize = readInteger( viewport + CHILDREN - 0x8 ) -- size is 8 bytes behind for ~4.2+
 
                             if childrenSize ~= nil and ( childrenSize > 0 and childrenSize < 100 ) then -- let 100 be an arbitrary node num limit
-                                if bASSUMPTIONLOG then print( "assumeVPOffsets: NODECNT: "..childrenSize ) end
                                 for j=0, childrenSize-1 do
                                     nodeAddr = readPointer( childrenAddr + j * GDSOf.PTRSIZE )
                                     if nodeAddr == nil or nodeAddr == 0 or ( not isValidPointer( nodeAddr ) ) or ( not isValidPointer( readPointer( nodeAddr ) ) ) then bOK = false; break; end  -- check for ptr, it's vtable
@@ -779,7 +778,6 @@
                             else -- trying 3.x but also might be <4.2
                                 childrenSize = readInteger( childrenAddr - 0x4 ) -- size is 4 bytes behind the 1st item in the array
                                 if childrenSize ~= nil and childrenSize > 0 and childrenSize < 60 then
-                                    if bASSUMPTIONLOG then print( "assumeVPOffsets: NODECNT: "..childrenSize ) end
                                     for i=0, childrenSize-1 do
                                         nodeAddr = readPointer(childrenAddr + i * 8)
                                         if nodeAddr == nil or nodeAddr == 0 or (not isValidPointer( nodeAddr) ) then bOK = false; break; end  -- if a node is invalid, that's a wrong offset
@@ -803,8 +801,8 @@
                     -- object name is always after the children array
                     local OBJ_STRING_NAME, nodeNamePtr;
 
-                    for i=0, 30 do
-                        OBJ_STRING_NAME = CHILDREN + i * 8 -- 0x218 is the first offset for object name, 0x2A0 is the last known offset
+                    for i=1, 30 do
+                        OBJ_STRING_NAME = CHILDREN + i * 8
 
                         nodeNamePtr = readPointer( viewport + OBJ_STRING_NAME )
                         if nodeNamePtr ~= 0 and nodeNamePtr ~= nil then
@@ -812,7 +810,13 @@
                                 if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset: "..string.format('0x%x', OBJ_STRING_NAME) ) end
                                 return true, OBJ_STRING_NAME;
                             else
-                                
+                                local stringAddr = readPointer( nodeNamePtr + 0x8 ) -- for debug builds that have a UTF16 string
+                                if stringAddr ~= 0 and stringAddr ~= nil then
+                                    if readString( stringAddr ) == 'root' then
+                                        if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset: "..string.format('0x%x', OBJ_STRING_NAME) ) end
+                                        return true, OBJ_STRING_NAME;
+                                    end
+                                end
                             end
                         end
                     end
