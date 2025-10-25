@@ -293,7 +293,7 @@
 
                     iterateNodeToStruct( baseaddr, scriptInstStructElem )
 
-                elseif bDESASSEMBLEFUNCTIONS and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+                elseif bDISASSEMBLEFUNCTIONS and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
                     disassembleGDFunctionCodeToStruct( baseaddr, struct )
                 else
                     -- otherwise just let CE decide, btw why the hell the base address should be a fucking hex string?
@@ -359,7 +359,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\nbDESASSEMBLEFUNCTIONS=false\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
+                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\nbDISASSEMBLEFUNCTIONS=false\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -493,7 +493,7 @@
                 bMonitorNodes = false;
                 bDEBUGMode = bDEBUGMode and true or nil
                 bASSUMPTIONLOG = bASSUMPTIONLOG and true or nil
-                bDESASSEMBLEFUNCTIONS = bDESASSEMBLEFUNCTIONS and true or false
+                bDISASSEMBLEFUNCTIONS = bDISASSEMBLEFUNCTIONS and true or false
                 dumpedMonitorNodes = {};
                 debugPrefix = 1;
 
@@ -527,7 +527,7 @@
                     GDSOf.FUNC_CONST = oGDFunctionConsts or (GDSOf.FUNC_CODE+0x20) -- 0x198
                     GDSOf.FUNC_GLOBNAMEPTR = oGDFunctionGlobName or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
 
-                    GDSOf.STRING = 0x10
+                    GDSOf.STRING = GDSOf.STRING or 0x10
                     GDSOf.CHILDREN_SIZE = 0x8
 
                     GDSOf.MAP_SIZE = 0x14
@@ -572,8 +572,9 @@
 
                     GDSOf.FUNC_MAPVAL = 0x38
                     GDSOf.FUNC_CODE = oGDFunctionCode or 0x50
-
-                    GDSOf.STRING = 0x10
+                    GDSOf.FUNC_GLOBNAMEPTR = oGDFunctionGlobName or (GDSOf.FUNC_CODE-0x20) -- (GDSOf.FUNC_CODE+0x30)
+                    GDSOf.FUNC_CONST = oGDFunctionConsts or (GDSOf.FUNC_GLOBNAMEPTR-0x10) -- (GDSOf.FUNC_CONST+0x50)
+                    GDSOf.STRING = GDSOf.STRING or 0x10
                     GDSOf.CHILDREN_SIZE = 0x4
 
                     GDSOf.MAP_SIZE = 0x10
@@ -602,7 +603,7 @@
                 elseif ( not bOverrideAssumption ) and majorVersion >= 4 then -- that semi-manual check might be avoided if assumption functions handle versions before 4.2
                         
                         GDSOf.DEBUGVER = false;
-                        GDSOf.STRING = 0x10
+                        GDSOf.STRING = GDSOf.STRING or 0x10
                     local MAJOR_VER, CHILDREN, OBJ_STRING_NAME = assumeVPOffsets()
                         GDSOf.CHILDREN = CHILDREN
                         GDSOf.OBJ_STRING_NAME = OBJ_STRING_NAME
@@ -610,7 +611,7 @@
 
                         GDSOf.GDSCRIPT_REF = 0x18
                         GDSOf.MAXTYPE = 39
-                        GDSOf.STRING = 0x10 
+                        GDSOf.STRING = GDSOf.STRING or 0x10
                         GDSOf.CHILDREN_SIZE = 0x8 
                         GDSOf.MAP_SIZE = 0x14
                         GDSOf.ARRAY_TOVECTOR = 0x10 
@@ -647,7 +648,7 @@
 
                 else
                         GDSOf.DEBUGVER = false;
-                        GDSOf.STRING = 0x10
+                        GDSOf.STRING = GDSOf.STRING or 0x10
                     local MAJOR_VER, CHILDREN, OBJ_STRING_NAME = assumeVPOffsets()
                         GDSOf.CHILDREN = CHILDREN
                         GDSOf.OBJ_STRING_NAME = OBJ_STRING_NAME
@@ -739,7 +740,7 @@
 
                 gdOffsetsDefined = true
                 checkGDStringType()
-                defineGDFunctionEmums()
+                defineGDFunctionEnums()
                 fuckoffPrint()
             end
 
@@ -813,7 +814,10 @@
                                 local stringAddr = readPointer( nodeNamePtr + 0x8 ) -- for debug builds that have a UTF16 string
                                 if stringAddr ~= 0 and stringAddr ~= nil then
                                     if readString( stringAddr ) == 'root' then
-                                        if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset: "..string.format('0x%x', OBJ_STRING_NAME) ) end
+                                        if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset (debug?): "..string.format('0x%x', OBJ_STRING_NAME) ) end
+                                        return true, OBJ_STRING_NAME;
+                                    elseif readUTFString( stringAddr, 4 ) == 'root' then
+                                        if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset (debug?): "..string.format('0x%x', OBJ_STRING_NAME) ) end
                                         return true, OBJ_STRING_NAME;
                                     end
                                 end
@@ -1809,6 +1813,38 @@
                 end
             end
 
+            --- returns a head element, tail element and (hash)Map size
+            ---@param nodeAddr number
+            function getNodeFuncMap(nodeAddr, funcStructElement)
+                assert(type(nodeAddr) == 'number',"getNodeFuncMap: NodePtr should be a number, instead got: "..type(nodeAddr))
+                local debugPrefixStr ='>';
+                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+
+                local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                if scriptInstanceAddr == 0 or scriptInstanceAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeFuncMap: scriptInstance is invalid'); decDebugStep(); end; return; end
+
+                local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                if gdScriptAddr == 0 or gdScriptAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeFuncMap: GDScript is invalid'); decDebugStep(); end; return; end
+
+                local mainElement = readPointer( gdScriptAddr + GDSOf.FUNC_MAP ) -- head or root depending on the version
+                local lastElement = readPointer( gdScriptAddr + GDSOf.FUNC_MAP + GDSOf.PTRSIZE ) -- tail or end
+                local mapSize = readInteger( gdScriptAddr + GDSOf.FUNC_MAP + GDSOf.MAP_SIZE ) -- hashmap or map
+                if (mainElement == 0 or mainElement == nil) or
+                    (lastElement == 0 or lastElement == nil) or
+                    (mapSize == 0 or mapSize == nil) then
+                        if bDEBUGMode then print( debugPrefixStr..' getNodeFuncMap: Const: (hash)map is not found'); decDebugStep(); end
+                        return;-- return to skip if the const map is absent
+                end
+                if bDEBUGMode then decDebugStep(); end;
+                
+                if GDSOf.MAJOR_VER >= 4 then
+                    return mainElement, lastElement, mapSize, funcStructElement
+                else
+                    if funcStructElement then funcStructElement.ChildStruct = createStructure('ConstMapRes') end
+                    return getLeftmostMapElem( mainElement, lastElement, mapSize, funcStructElement )
+                end
+            end
+
             --- gets a functionPtr by nodename and funcname
             ---@param nodeName string
             ---@param funcName string
@@ -1838,25 +1874,6 @@
                 until (mapElement == 0)
             end
 
-            --- never implemented or tested;
-            ---@param gdFunctionPtr number
-            ---@param opsToReplace table
-            ---@param opsToStore table
-            function OverrideFunctionOps(gdFunctionPtr, opsToReplace, opsToStore)
-                assert( (type(gdFunctionPtr) == 'number') and (gdFunctionPtr ~= 0),'OverrideFunctionOps: GD function has to be a valid pointer, instead got: '..type(gdFunctionPtr)..' '..tostring(gdFunctionPtr) )
-                assert( #opsToReplace > 0, 'opcode arr should have elements')
-
-                if opsToStore == nil then local opsToStore = {}; end
-
-                local codePtr = readPointer( gdFunctionPtr + GDSOf.FUNC_CODE )
-                for i=0, #opsToReplace do
-                    --implement switch table via function below, but you have to learn what arguments each opcode has and consider polymorphic implementation if possible
-                    opsToStore[i] = readInteger(codePtr + i*0x4)
-                    writeInteger(codePtr + i*0x4,opsToReplace[i])
-                end
-                return opsToStore
-            end
-
             --- iterates a function map and adds it to a struct
             ---@param nodeAddr number
             ---@param funcStructElement userdata
@@ -1864,65 +1881,276 @@
                 assert( type(nodeAddr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: '..type(nodeAddr))
 
                 local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
-
-                local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if scriptInstanceAddr == 0 or scriptInstanceAddr == nil then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: scriptInstance is invalid'); decDebugStep(); end; return; end
-                local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
-                if gdScriptAddr == 0 or gdScriptAddr == nil then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: GDScript is invalid'); decDebugStep(); end; return; end
-                local funcAddr = readPointer( gdScriptAddr + GDSOf.FUNC_MAP )
-
-                if (not (funcAddr > 0)) then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: funcAddr was 0'); decDebugStep(); end; return; end
-                if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: funcAddr'..string.format(' at %x', funcAddr)) end
-
-                -- if GDSOf.MAJOR_VER == 3 then
-                --     funcAddr = readPointer( funcAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
-                -- end
-                -- local dictSize = readInteger( funcAddr + GDSOf.DICT_SIZE )
-                -- if (dictSize == 0 or dictSize == nil) then if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct Dict: dictSize was 0'); decDebugStep(); end return; end
+                if bDEBUGMode then debugPrefixStr = incDebugStep() end;
                 
-                -- if GDSOf.MAJOR_VER == 3 then -- dot it when the size is correct
-                --     funcStructElement = addStructureElem( funcStructElement, 'dictList', GDSOf.DICT_LIST, vtPointer )
-                --     funcStructElement.ChildStruct = createStructure('dictList')
-                -- end
-                -- local funcStructElement = addStructureElem( funcStructElement, 'dictHead', GDSOf.DICT_HEAD, vtPointer )
-                -- funcStructElement.ChildStruct = createStructure('dictHead')
-                
+                local headElement, tailElement, mapSize, funcStructElement = getNodeFuncMap( nodeAddr, funcStructElement)
+                if (headElement==0 or headElement==nil) or (mapSize==0 or mapSize==nil) then
+                    if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct (hash)map empty?: '..string.format( 'Address: %x ', tonumber(nodeAddr) ) ); decDebugStep(); end
+                    return;
+                end
 
-                local mapElement = funcAddr
+                local mapElement = headElement
                 local prefixStr = 'func: '
+                local index = 0;
                 repeat
                     if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: Loop Map start'..string.format(' hashElemAddr: %x', mapElement)) end
 
-                    local keyName = getStringNameStr( readPointer( mapElement + 0x10 ) ) or "UNKNOWN"
+                    local funcName = getNodeConstName( mapElement ) or "UNKNOWN" -- the layout is similar to constant map's
+                    local newParentStructElem = addStructureElem( funcStructElement, prefixStr..funcName, GDSOf.FUNC_MAPVAL, vtPointer )
 
-                    local newParentStructElem = addStructureElem( funcStructElement, prefixStr..keyName, GDSOf.FUNC_MAPVAL, vtPointer )
+                    if not bDISASSEMBLEFUNCTIONS then
+                        local funcValueAddr = readPointer( mapElement + GDSOf.FUNC_MAPVAL)
 
-                    if not bDESASSEMBLEFUNCTIONS then
                         newParentStructElem.ChildStruct = createStructure('GDFunction')
-                        addStructureElem( newParentStructElem, 'Code: '..keyName, GDSOf.FUNC_CODE, vtPointer )
-                        local funcConstantStructElem = addStructureElem( newParentStructElem, 'Constants: '..keyName, GDSOf.FUNC_CONST, vtPointer )
-                        local funcGlobalNameStructElem = addStructureElem( newParentStructElem, 'GlobalNames: '..keyName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer )
-                        --#TODO process these 2 Vectors to make them indexed
+                        addStructureElem( newParentStructElem, 'Code: '..funcName, GDSOf.FUNC_CODE, vtPointer )
+                        local funcConstantStructElem = addStructureElem( newParentStructElem, 'Constants: '..funcName, GDSOf.FUNC_CONST, vtPointer )
+                        funcConstantStructElem.ChildStruct = createStructure('GDFConst')
+                        local funcConstAddr = readPointer( funcValueAddr + GDSOf.FUNC_CONST )
+                        iterateFuncConstantsToStruct( funcConstAddr, funcConstantStructElem )
+
+                        local funcGlobalNameStructElem = addStructureElem( newParentStructElem, 'GlobalNames: '..funcName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer )
+                        funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
+                        local funcGlobalAddr = readPointer( funcValueAddr + GDSOf.FUNC_GLOBNAMEPTR )
+                        iterateFuncGlobalsToStruct( funcGlobalAddr, funcGlobalNameStructElem )
+
                     end
 
+                    index = index+1
                     if GDSOf.MAJOR_VER >= 4 then
                         mapElement = readPointer( mapElement )
-                        funcStructElement = addStructureElem( funcStructElement, 'Next', 0x0, vtPointer )
-                        funcStructElement.ChildStruct = createStructure('DictNext')
+                        funcStructElement = addStructureElem( funcStructElement, 'Next['..index..']', 0x0, vtPointer )
+                        funcStructElement.ChildStruct = createStructure('FuncNext')
                     else
-                        -- funcStructElement = addStructureElem( funcStructElement, 'Next',  GDSOf.DICTELEM_PAIR_NEXT, vtPointer )
-                        -- funcStructElement.ChildStruct = createStructure('DictNext')
-                        -- mapElement = readPointer(mapElement + GDSOf.DICTELEM_PAIR_NEXT)
+                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
+                        funcStructElement = addStructureElem( funcStructElement, 'Next', GDSOf.MAP_NEXTELEM, vtPointer )
+                        funcStructElement.ChildStruct = createStructure('FuncNext')
                     end
-
                 until (mapElement == 0)
 
                 if bDEBUGMode then decDebugStep(); end;
                 return
             end
 
-            function defineGDFunctionEmums()
+            function iterateFuncConstantsToStruct( funcConstantVect, funcConstantStructElem )
+                if funcConstantVect == 0 or funcConstantVect == nil then return; end
+
+                local vectorSize = readInteger( funcConstantVect - GDSOf.SIZE_VECTOR )
+                if vectorSize == 0 or vectorSize == nil then return; end
+                local variantSize, bSuccess = redefineVariantSizeByVector( funcConstantVect, vectorSize )
+
+                if not bSuccess then if bDEBUGMode then print( debugPrefixStr.." iterateFuncConstantsToStruct: Variant resize failed"); decDebugStep(); end return; end
+                local variantPtr, variantType, offsetToValue, variantTypeName
+                local prefixStr = 'Const['
+                local postfixStr = ''
+
+                for variantIndex=0, (vectorSize-1) do
+                    variantPtr, variantType, offsetToValue = getVariantByIndex( funcConstantVect, variantIndex, variantSize, true )
+                    local variantTypeName = getGDTypeName( variantType ) 
+
+                    if ( variantTypeName == 'DICTIONARY' ) then
+                        if bDEBUGMode then print( debugPrefixStr.." iterateFuncConstantsToStruct loop: DICT case" ) end
+                        postfixStr = ' dict'
+                        local dictSize
+                        if GDSOf.MAJOR_VER >= 4 then
+                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
+                        else
+                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
+                        end
+
+                        if dictSize == nil or dictSize == 0 then
+                            postfixStr = ' dict (empty)'
+                            addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
+                        else
+                            local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
+                            newParentStructElem.ChildStruct = createStructure('Dict')
+                            iterateDictionaryToStruct( readPointer( variantPtr ) , newParentStructElem )
+                        end
+
+                    elseif variantTypeName == 'ARRAY' then
+                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct: ARRAY case" ) end
+                        postfixStr = ' array'
+
+                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) == 0 then
+                            postfixStr = ' array(empty)'
+                            addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
+                        else
+                            local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
+                            newParentStructElem.ChildStruct = createStructure('Array')
+                            iterateArrayToStruct( readPointer( variantPtr ) , newParentStructElem )
+                        end
+
+                    elseif ( variantTypeName == 'OBJECT' ) then
+                        if bDEBUGMode then print( debugPrefixStr.." iterateFuncConstantsToStruct loop: OBJ case" ) end
+                        local bShifted, newParentStructElem;
+                        variantPtr, bShifted = checkForVT( variantPtr ) -- check if the pointer is valid, if not, shift it back 0x8 bytes
+                        if bShifted then
+                            offsetToValue = offsetToValue - GDSOf.PTRSIZE
+                            newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..' Wrapper', offsetToValue, vtPointer )
+                            newParentStructElem.ChildStruct = createStructure('Wrapper')
+                            offsetToValue = 0x0 -- the object lies at 0x0 now
+                        else
+                            newParentStructElem = funcConstantStructElem
+                        end
+                        postfixStr = ' mNode'
+
+                        if checkForGDScript( readPointer( variantPtr ) ) then
+                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct loop: NODE SKIPPED" ) end 
+                            addLayoutStructElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0xFF8080, offsetToValue, vtPointer)
+                        else
+                            if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToStruct: OBJ doesn\'t have GDScript/Inst'); end
+                            postfixStr = ' obj'
+                            addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
+                        end
+
+                    elseif ( variantTypeName == 'PACKED_STRING_ARRAY' ) or ( variantTypeName == 'PACKED_BYTE_ARRAY' )
+                        or ( variantTypeName == 'PACKED_INT32_ARRAY' ) or ( variantTypeName == 'PACKED_INT64_ARRAY' )
+                        or ( variantTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( variantTypeName == 'PACKED_FLOAT64_ARRAY' )
+                        or ( variantTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR3_ARRAY' )
+                        or ( variantTypeName == 'PACKED_COLOR_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR4_ARRAY' ) then -- packed arrays are a simple arrays of ptr
+
+                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct loop: "..tostring(variantType).." case" ) end
+                            local arrayAddr = readPointer( variantPtr )
+
+                            if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then
+                                postfixStr = ' pck_arr(empty)'
+                                addStructureElem( funcConstantStructElem, prefixStr..variantName..' of '..variantTypeName, offsetToValue, getCETypeFromGD( variantType ) )
+                            else
+                                postfixStr = ' pck_arr'
+                                local newParentStructElem = addStructureElem(funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..' of '..variantTypeName, offsetToValue, getCETypeFromGD( variantType ) )
+                                newParentStructElem.ChildStruct = createStructure('P_Array')
+                                iteratePackedArrayToStruct( arrayAddr, variantTypeName, newParentStructElem )
+                            end
+
+                    elseif ( variantTypeName == 'STRING' ) then
+                            postfixStr = ' string'
+                            local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, vtPointer )
+                            newParentStructElem.ChildStruct = createStructure('String')
+                            addStructureElem(newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x0, vtUnicodeString )
+
+                    elseif ( variantTypeName == 'COLOR' ) then
+                        postfixStr = ' color'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': R' , offsetToValue, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': G' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': B' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': A' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR2' ) then
+                        postfixStr = ' vec2'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR2I' ) then
+                        postfixStr = ' vec2i'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
+
+                    elseif ( variantTypeName == 'RECT2' ) then
+                        postfixStr = ' rect2'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': h' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( variantTypeName == 'RECT2I' ) then
+                        postfixStr = ' rect2i'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0x8, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': h' , offsetToValue+0xC, vtDword )
+
+                    elseif ( variantTypeName == 'VECTOR3' ) then
+                        postfixStr = ' vec3'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR3I' ) then
+                        postfixStr = ' vec3i'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtDword )
+
+                    elseif ( variantTypeName == 'VECTOR4' ) then
+                        postfixStr = ' vec4'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtSingle )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0xC, vtSingle )
+
+                    elseif ( variantTypeName == 'VECTOR4I' ) then
+                        postfixStr = ' vec4i'
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtDword )
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0xC, vtDword )
+
+                    elseif ( variantTypeName == 'STRING_NAME' ) then
+                        postfixStr = ' StringName'
+                        local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('StringName')
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x10, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('stringy')
+                        addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtUnicodeString )
+
+                    elseif ( variantTypeName == 'NODE_PATH' ) then
+                        postfixStr = ' NodePath'
+                        local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('NodePath')
+                        local nodePathVect = readPointer( readPointer( funcConstantVect + offsetToValue ) + 0x10 )
+                        local pathVectSize = readInteger( nodePathVect - GDSOf.SIZE_VECTOR )
+
+                        if (nodePathVect ~= nil and nodePathVect ~= 0) and (pathVectSize ~= nil and pathVectSize > 0 and pathVectSize <= 1000) then
+                            local newPathStructElem = addStructureElem( newParentStructElem, 'NodePathVect', 0x10, vtPointer )
+                            newPathStructElem.ChildStruct = createStructure('Paths')
+
+                            for pathIndex=0, (pathVectSize-1) do 
+                                newParentStructElem = addStructureElem( newPathStructElem, 'Sub'..prefixStr..tostring(pathIndex)..']'..postfixStr, (pathIndex*GDSOf.PTRSIZE) , vtPointer )
+                                newParentStructElem.ChildStruct = createStructure('StringName')
+                                newParentStructElem = addStructureElem( newParentStructElem, 'StringName '..prefixStr..tostring(pathIndex)..']'..postfixStr, 0x10, vtPointer )
+                                newParentStructElem.ChildStruct = createStructure('stringy')
+                                addStructureElem( newParentStructElem, 'Sub'..prefixStr..tostring(pathIndex)..']'..' NodePathString', 0x0, vtUnicodeString )
+                            end
+                        end
+
+                    else
+                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..'] '..variantTypeName, offsetToValue, getCETypeFromGD( variantType ) )
+                    end
+
+                end
+
+                return;
+            end
+
+            function iterateFuncGlobalsToStruct( funcGlobalVect, funcGlobalNameStructElem )
+                if funcGlobalVect == 0 or funcGlobalVect == nil then return; end
+
+                local vectorSize = readInteger( funcGlobalVect - GDSOf.SIZE_VECTOR )
+                if vectorSize == 0 or vectorSize == nil then return; end
+
+                local newParentStructElem
+                local prefixStr = 'GlobName['
+                local postfixStr = ' stringName'
+
+                for variantIndex=0, (vectorSize-1) do
+                    newParentStructElem = addStructureElem( funcGlobalNameStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, (variantIndex*GDSOf.PTRSIZE) , vtPointer )
+                    newParentStructElem.ChildStruct = createStructure('StringName')
+                    if isPointerNotNull( readPointer( funcGlobalVect + (variantIndex*GDSOf.PTRSIZE) ) + 0x10 ) then
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x10, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('stringy')
+                        addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtUnicodeString )
+                    else
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x10-GDSOf.PTRSIZE, vtPointer )
+                        newParentStructElem.ChildStruct = createStructure('stringy')
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtString )
+                        newParentStructElem.Bytesize = 100;
+                    end
+
+                end
+
+                return;
+            end
+
+            function defineGDFunctionEnums()
                 GDF = {}
 
                 local function buildReverseTable( tab )
@@ -3553,7 +3781,7 @@
                 -- disassemble the address
 
                 assert( (type(funcAddr) == 'number') and (funcAddr ~= 0),'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: '..type(funcAddr) )
-                if GDF == nil then defineGDFunctionEmums() end
+                if GDF == nil then defineGDFunctionEnums() end
 
                 local debugPrefixStr ='>';
                 if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
@@ -3568,12 +3796,19 @@
                 
                 local funcConstantStructElem = funcStruct.addElement()
                 funcConstantStructElem.Name = 'Constants'
-                codeStructElement.Offset = GDSOf.FUNC_CONST
-                codeStructElement.VarType = vtPointer
+                funcConstantStructElem.Offset = GDSOf.FUNC_CONST
+                funcConstantStructElem.VarType = vtPointer
+                funcConstantStructElem.ChildStruct = createStructure('GDFConst')
+                local funcConstAddr = readPointer( funcAddr + GDSOf.FUNC_CONST )
+                iterateFuncConstantsToStruct( funcConstAddr, funcConstantStructElem )
+
                 local funcGlobalNameStructElem = funcStruct.addElement()
                 funcGlobalNameStructElem.Name = 'GlobalNames'
                 funcGlobalNameStructElem.Offset = GDSOf.FUNC_GLOBNAMEPTR
                 funcGlobalNameStructElem.VarType = vtPointer
+                funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
+                local funcGlobalAddr = readPointer( funcAddr + GDSOf.FUNC_GLOBNAMEPTR )
+                iterateFuncGlobalsToStruct( funcGlobalAddr, funcGlobalNameStructElem )
 
                 local codeInts = {}
                 local codeSize, currIndx, currOpcode = 0,0,0
@@ -4148,7 +4383,7 @@
 
                     index = index+1
                     if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer(mapElement)
+                        mapElement = readPointer( mapElement )
                         constStructElement = addStructureElem( constStructElement, 'Next['..index..']', 0x0, vtPointer )
                         constStructElement.ChildStruct = createStructure('ConstNext')
                     else
