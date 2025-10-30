@@ -227,6 +227,8 @@
                     else
                         element.Bytesize = 100;
                     end
+                elseif CEType == vtDword then
+                    element.DisplayMethod = 'dtSignedInteger'
                 end
 
                 return element
@@ -5778,7 +5780,7 @@
                     local variantPtr, variantType = getVariantByIndex( variantVector, variantIndex, variantSize ) -- let's do that first to avoid several ver blocks
                     
                     if GDSOf.MAJOR_VER >= 4 then -- 4.x versions have type in the memberinfo which 3.x does not (or i'm not aware of)
-                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.STRING ) )
+                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.CONSTELEM_KEYVAL ) ) -- at 0x10
                         local variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE )
                         if variantTypeScr > GDSOf.MAXTYPE then variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE - 0x8 ) end; -- 4.2.2 had the issue with type offset being different for different memberinfos
 
@@ -6054,7 +6056,7 @@
                     local variantPtr, variantType, offsetToValue = getVariantByIndex( variantVector, variantIndex, variantSize, true )
 
                     if GDSOf.MAJOR_VER >= 4 then -- 4.x versions have type in the memberinfo which 3.x does not (or i'm not aware of)
-                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.STRING ) )
+                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.CONSTELEM_KEYVAL ) ) -- at 0x10
                         local variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE )
                         if variantTypeScr > GDSOf.MAXTYPE then variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE - 0x8 ) end; -- 4.2.2 had the issue with type offset being different for different memberinfos
 
