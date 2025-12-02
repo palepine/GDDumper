@@ -1533,6 +1533,7 @@
             ---@param nodeAddr number
             function iterateNodeChildrenToStruct( childrenArrStructElem, baseAddress )
 
+                if not isPointerNotNull( readPointer( baseAddress + GDSOf.CHILDREN ) ) then return; end -- check if the children array points to something
                 local childrenAddr = readPointer( baseAddress + GDSOf.CHILDREN )
 
                 local childrenSize;
