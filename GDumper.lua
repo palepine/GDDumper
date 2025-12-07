@@ -2099,7 +2099,7 @@
                         postfixStr = ' NodePath'
                         local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, vtPointer )
                         newParentStructElem.ChildStruct = createStructure('NodePath')
-                        local nodePathVect = readPointer( readPointer( funcConstantVect + offsetToValue ) + 0x10 )
+                        local nodePathVect = readPointer( readPointer( funcConstantVect + offsetToValue ) + 0x10 ) or 0x0 -- #TODO a more clear fallback
                         local pathVectSize = readInteger( nodePathVect - GDSOf.SIZE_VECTOR )
 
                         if (nodePathVect ~= nil and nodePathVect ~= 0) and (pathVectSize ~= nil and pathVectSize > 0 and pathVectSize <= 1000) then
@@ -2109,7 +2109,7 @@
                             for pathIndex=0, (pathVectSize-1) do 
                                 newParentStructElem = addStructureElem( newPathStructElem, 'Sub'..prefixStr..tostring(pathIndex)..']'..postfixStr, (pathIndex*GDSOf.PTRSIZE) , vtPointer )
                                 newParentStructElem.ChildStruct = createStructure('StringName')
-                                newParentStructElem = addStructureElem( newParentStructElem, 'StringName '..prefixStr..tostring(pathIndex)..']'..postfixStr, 0x10, vtPointer )
+                                newParentStructElem = addStructureElem( newParentStructElem, 'StringName '..prefixStr..tostring(pathIndex)..']'..postfixStr, GDSOf.STRING, vtPointer )
                                 newParentStructElem.ChildStruct = createStructure('stringy')
                                 addStructureElem( newParentStructElem, 'Sub'..prefixStr..tostring(pathIndex)..']'..' NodePathString', 0x0, vtUnicodeString )
                             end
@@ -2137,12 +2137,12 @@
                 for variantIndex=0, (vectorSize-1) do
                     newParentStructElem = addStructureElem( funcGlobalNameStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, (variantIndex*GDSOf.PTRSIZE) , vtPointer )
                     newParentStructElem.ChildStruct = createStructure('StringName')
-                    if isPointerNotNull( readPointer( funcGlobalVect + (variantIndex*GDSOf.PTRSIZE) ) + 0x10 ) then
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x10, vtPointer )
+                    if isPointerNotNull( readPointer( funcGlobalVect + (variantIndex*GDSOf.PTRSIZE) ) + GDSOf.STRING ) then
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, GDSOf.STRING, vtPointer )
                         newParentStructElem.ChildStruct = createStructure('stringy')
                         addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtUnicodeString )
                     else
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x10-GDSOf.PTRSIZE, vtPointer )
+                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, GDSOf.STRING-GDSOf.PTRSIZE, vtPointer )
                         newParentStructElem.ChildStruct = createStructure('stringy')
                         newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtString )
                         newParentStructElem.Bytesize = 100;
