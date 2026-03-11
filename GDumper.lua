@@ -15,13 +15,13 @@
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
         --///---///--///---///--///---/// MEMRECS
-            --- adds a memrec to Owner
+            --- adds a memrec to parent
             ---@param memRecName string
             ---@param gdPtr number
             ---@param CEType number
-            ---@param Owner userdata -- to append to
+            ---@param parent userdata -- to append to
             ---@return userdata
-            function addMemRecTo(memRecName, gdPtr, CEType, Owner)
+            function addMemRecTo(memRecName, gdPtr, CEType, parent)
                 local newMemRec = getAddressList().createMemoryRecord()
                 newMemRec.setDescription(memRecName)
                 newMemRec.setType(CEType)
@@ -36,7 +36,7 @@
                 if CEType == vtDword then newMemRec.ShowAsSigned = true; end -- color and int
 
                 newMemRec.DontSave=true
-                newMemRec.appendToEntry(Owner)
+                newMemRec.appendToEntry(parent)
                 return newMemRec
             end
 
@@ -68,18 +68,18 @@
                             end
                         end
                         -- secondly, check if there's a package file, many apps do
-                        if not targetIsGodot then
-                            local pathToExe = enumModules()[1].PathToFile
-                            local gameDir , exeName = extractFilePath(pathToExe) , string.match(extractFileName(pathToExe) , "([^/]+)%.exe$")
-                            local pathList = getFileList(gameDir)
-                            local pckName = exeName..'.pck'
+                        -- if not targetIsGodot then
+                        --     local pathToExe = enumModules()[1].PathToFile
+                        --     local gameDir , exeName = extractFilePath(pathToExe) , string.match(extractFileName(pathToExe) , "([^/]+)%.exe$")
+                        --     local pathList = getFileList(gameDir)
+                        --     local pckName = exeName..'.pck'
 
-                            for _, path in ipairs(pathList) do
-                                if (extractFileName(path) == pckName) then targetIsGodot = true; end
-                            end
-                        end
+                        --     for _, path in ipairs(pathList) do
+                        --         if (extractFileName(path) == pckName) then targetIsGodot = true; end
+                        --     end
+                        -- end
 
-                        -- -- via powershell, which also isn't reliable and kinda slow
+                        -- -- via powershell, which also isn't reliable and slow
                         -- if not targetIsGodot then
                         --     local out, code = runCommand("cmd.exe", { "/c", ([[powershell -NoProfile -Command "(Get-Item '%s').VersionInfo.FileDescription"]]):format(pathToExe) })
                         --     if code ~= 0 then targetIsGodot = false
@@ -118,6 +118,13 @@
                 GD_OldOnProcessOpened = MainForm.OnProcessOpened
                 MainForm.OnProcessOpened = godotOnProcessOpened
             end
+
+            function defineGDVersion()
+                local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV](0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
+                local godotVersionString = lregexScan( reStr, "+W-E-C", true, false, false, 15 )
+            end
+
+
         --///---///--///---///--///---/// POINTER HANDLERS
 
             --- checks if the value is a valid pointer
@@ -142,6 +149,14 @@
                 GetLuaEngine().cbShowOnPrint.Checked = false
             end
 
+            function isNullOrNil(toCheck)
+                return toCheck == nil or toCheck == 0
+            end
+
+            function isNotNullOrNil(toCheck)
+                return not isNullOrNil(toCheck)
+            end
+
         --///---///--///---///--///---/// DEBUG
 
             --- multiplies a string by a number for more neat debug
@@ -152,13 +167,29 @@
                 return string.rep(str, times)
             end
 
-            function incDebugStep()
-                debugPrefix = debugPrefix+1
-                return string.rep('>', debugPrefix)
+            function debugStepIn()
+                if bDEBUGMode and inMainThread() then debugPrefix = debugPrefix+1 end
             end
 
-            function decDebugStep()
-                debugPrefix = debugPrefix-1
+            function debugStepOut()
+                if bDEBUGMode and inMainThread() then debugPrefix = debugPrefix-1 end
+            end
+
+            function getDebugPrefix()
+                return strMul('>', debugPrefix)
+            end
+
+            function sendDebugMessage(msg)
+                if bDEBUGMode and isNotNullOrNil( msg ) and inMainThread()  then
+                    print( getDebugPrefix().. " " .. tostring( msg ) )
+                end
+            end
+
+            function sendDebugMessageAndStepOut(msg)
+                if bDEBUGMode and isNotNullOrNil( msg ) and inMainThread()  then
+                    print( getDebugPrefix().. " " .. tostring( msg ) )
+                    debugStepOut()
+                end
             end
 
         --///---///--///---///--///---/// STRUCTURES
@@ -236,13 +267,19 @@
 
             --- for node layout creation
             function addLayoutStructElem(parentStructElement, childName, backgroundColor, offset, CEType)
-                parentStructElement.ChildStruct = parentStructElement.ChildStruct and parentStructElement.ChildStruct or createStructure( parentStructElement.Owner.Name or 'ChStructure' )
+                parentStructElement.ChildStruct = parentStructElement.ChildStruct and parentStructElement.ChildStruct or createStructure( parentStructElement.parent.Name or 'ChStructure' )
                 local childStructElement = parentStructElement.ChildStruct.addElement()
                 childStructElement.Name = childName
                 if backgroundColor ~= nil then childStructElement.BackgroundColor = backgroundColor end
                 childStructElement.Offset = offset or 0x0
                 childStructElement.VarType = CEType
                 return childStructElement
+            end
+
+            local function createChildStructElem(parent, label, offset, ceType, structName)
+                local elem = addStructureElem(parent, label, offset, ceType)
+                elem.ChildStruct = createStructure(structName)
+                return elem
             end
 
             --- register our own structure dissector callback
@@ -267,7 +304,7 @@
             ---@param baseaddr number  @the address form the parent pointer
             function GDStructureDissect(struct, baseaddr)
 
-                if baseaddr == nil or baseaddr == 0 then return false end
+                if isNullOrNil(baseaddr) then return false end
                 struct = struct and struct or createStructure('') -- should not happen though?
                 struct.beginUpdate()
 
@@ -398,22 +435,33 @@
             function readUTFString(strAddress, strSize)
                 assert(type(strAddress) == 'number',"string address should be a number, instead got: "..type(strAddress));
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                --debugStepIn()
                 local MAX_CHARS_TO_READ =  1500 * 2
 
-                if strSize and (strSize > MAX_CHARS_TO_READ) then if bDEBUGMode then print( debugPrefixStr..' readUTFString: chars to read is bigger than MAX_CHARS_TO_READ'); decDebugStep(); end; return "ain\'t reading this" end -- we aren't gonna read novels
-                if GDSOf.MAJOR_VER >= 4 then if readInteger(strAddress) == 0 then if bDEBUGMode then print( debugPrefixStr..' readUTFString: empty string'); decDebugStep(); end; return "empt str" end else if readSmallInteger(strAddress) == 0 then if bDEBUGMode then print( debugPrefixStr..' readUTFString: empty string'); decDebugStep(); end; return "empt str" end end
+                if strSize and (strSize > MAX_CHARS_TO_READ) then
+                    --sendDebugMessageAndStepOut('readUTFString: chars to read is bigger than MAX_CHARS_TO_READ')
+                    return "ain\'t reading this"
+                end -- we aren't gonna read novels
+                
+                if GDSOf.MAJOR_VER >= 4 then
+                    if readInteger(strAddress) == 0 then
+                        --sendDebugMessageAndStepOut('readUTFString: empty string');
+                        return "empt str"
+                    end
+                elseif readSmallInteger(strAddress) == 0 then
+                    --sendDebugMessageAndStepOut(' readUTFString: empty string')
+                    return "empt str"
+                end
 
                 local charTable = {}
                 local buff = 0
 
                 if GDSOf.MAJOR_VER == 3 and (strSize and strSize > 0) then
-                    if bDEBUGMode then decDebugStep(); end;
+                    --debugStepOut()
                     return readString( strAddress, strSize * 2 , true ) or '???_INVALID_MEM_CAUGHT_WSIZE'
 
                 elseif GDSOf.MAJOR_VER == 3 then
-                    if bDEBUGMode then decDebugStep(); end;
+                    --debugStepOut()
                     local retString = readString( strAddress, MAX_CHARS_TO_READ , true )
 
                     while MAX_CHARS_TO_READ > 0 and retString == nil do     -- https://github.com/cheat-engine/cheat-engine/issues/2602
@@ -441,7 +489,7 @@
                     end
                 end
 
-                if bDEBUGMode then decDebugStep(); end;
+                --debugStepOut()
                 return table.concat( charTable ) or '???_UNKNSTR'
             end
 
@@ -470,20 +518,22 @@
             function getStringNameStr(stringNamePtr)
                 assert((type(stringNamePtr) == 'number'),"string address should be a number, instead got: "..type(stringNamePtr));
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
                 local retStringAddr = readPointer(stringNamePtr + GDSOf.STRING)
-                if retStringAddr == 0 or retStringAddr == nil then
-                    if bDEBUGMode then print( debugPrefixStr..' getStringNameStr: string address invalid, trying ASCII'); end;
+                if isNullOrNil(retStringAddr) then
+                    sendDebugMessage('getStringNameStr: string address invalid, trying ASCII')
                     retStringAddr = readPointer( stringNamePtr + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
-                    if retStringAddr == 0 or retStringAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getStringNameStr: string address invalid, not ASCII either'); decDebugStep(); end; return '??' end  -- return an empty string if no string was found
-                    if bDEBUGMode then decDebugStep(); end;
+                    if isNullOrNil(retStringAddr) then
+                        sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
+                        return '??'
+                    end  -- return an empty string if no string was found
 
+                    debugStepOut()
                     return readString( retStringAddr, 100 )
                 end
 
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
                 return readUTFString( retStringAddr )
             end
 
@@ -491,6 +541,11 @@
 
             --- initializes and assigns offsets
             function defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
+
+                if lregexScan and type(lregexScan) == "function" then
+                    defineGDVersion()
+                    return;
+                end
 
                 bMonitorNodes = false;
                 bDEBUGMode = bDEBUGMode and true or nil
@@ -762,15 +817,15 @@
 
                         local bOK = true;
 
-                        if childrenAddr ~= 0 and childrenAddr ~= nil then
+                        if isNotNullOrNil(childrenAddr) then
 
                             -- let's try 4.x first
                             childrenSize = readInteger( viewport + CHILDREN - 0x8 ) -- size is 8 bytes behind for ~4.2+
 
-                            if childrenSize ~= nil and ( childrenSize > 0 and childrenSize < 100 ) then -- let 100 be an arbitrary node num limit
+                            if isNotNullOrNil(childrenSize) and ( childrenSize > 0 and childrenSize < 100 ) then -- let 100 be an arbitrary node num limit
                                 for j=0, childrenSize-1 do
                                     nodeAddr = readPointer( childrenAddr + j * GDSOf.PTRSIZE )
-                                    if nodeAddr == nil or nodeAddr == 0 or ( not isValidPointer( nodeAddr ) ) or ( not isValidPointer( readPointer( nodeAddr ) ) ) then bOK = false; break; end  -- check for ptr, it's vtable
+                                    if isNullOrNil(nodeAddr) or ( not isValidPointer( nodeAddr ) ) or ( not isValidPointer( readPointer( nodeAddr ) ) ) then bOK = false; break; end  -- check for ptr, it's vtable
                                 end
 
                                 if bOK then
@@ -780,10 +835,10 @@
 
                             else -- trying 3.x but also might be <4.2
                                 childrenSize = readInteger( childrenAddr - 0x4 ) -- size is 4 bytes behind the 1st item in the array
-                                if childrenSize ~= nil and childrenSize > 0 and childrenSize < 60 then
+                                if isNotNullOrNil(childrenSize) and childrenSize > 0 and childrenSize < 60 then
                                     for i=0, childrenSize-1 do
                                         nodeAddr = readPointer(childrenAddr + i * 8)
-                                        if nodeAddr == nil or nodeAddr == 0 or (not isValidPointer( nodeAddr) ) then bOK = false; break; end  -- if a node is invalid, that's a wrong offset
+                                        if isNullOrNil(nodeAddr) or (not isValidPointer( nodeAddr) ) then bOK = false; break; end  -- if a node is invalid, that's a wrong offset
                                     end
 
                                     if bOK then
@@ -808,13 +863,13 @@
                         OBJ_STRING_NAME = CHILDREN + i * 8
 
                         nodeNamePtr = readPointer( viewport + OBJ_STRING_NAME )
-                        if nodeNamePtr ~= 0 and nodeNamePtr ~= nil then
+                        if isNotNullOrNil(nodeNamePtr) then
                             if getStringNameStr(nodeNamePtr) == 'root' then -- check for root
                                 if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset: "..string.format('0x%x', OBJ_STRING_NAME) ) end
                                 return true, OBJ_STRING_NAME;
                             else
                                 local stringAddr = readPointer( nodeNamePtr + 0x8 ) -- for debug builds that have a UTF16 string
-                                if stringAddr ~= 0 and stringAddr ~= nil then
+                                if isNotNullOrNil(stringAddr) then
                                     if readString( stringAddr ) == 'root' then
                                         if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset (debug?): "..string.format('0x%x', OBJ_STRING_NAME) ) end
                                         return true, OBJ_STRING_NAME;
@@ -831,7 +886,7 @@
                 end
 
                 local viewport = getViewport()
-                if viewport == 0 or viewport == nil then if bASSUMPTIONLOG then print( "assumeOffsetsByVP: viewport pointer is invalid" ); end error('viewport pointer is invalid') end
+                if isNullOrNil(viewport) then if bASSUMPTIONLOG then print( "assumeOffsetsByVP: viewport pointer is invalid" ); end error('viewport pointer is invalid') end
 
                 local bSuccess, MAJOR_VER, CHILDREN = assumeChildrenOffset( viewport )
                 if not bSuccess then
@@ -871,7 +926,7 @@
                     local bSuccess, GDSCRIPTINSTANCE, gdScriptAddr, VAR_VECTOR, VAR_VECTOR_SIZE = assumeGDScriptOffset( value.PTR ) -- try to assume GDScriptInstance offset
                     if not bSuccess then goto continue end -- if we failed to assume GDScriptInstance, skip this node
 
-                    if GDSCRIPTINSTANCE ~= nil and GDSCRIPTINSTANCE > 0 then
+                    if isNotNullOrNil(GDSCRIPTINSTANCE) and GDSCRIPTINSTANCE > 0 then
                         if offsets['GDSCRIPTINSTANCE']['offset'] ~= GDSCRIPTINSTANCE and offsets['GDSCRIPTINSTANCE']['checkedTimes'] == 0 then
                             offsets['GDSCRIPTINSTANCE']['offset'] = GDSCRIPTINSTANCE
                             offsets['GDSCRIPTINSTANCE']['checkedTimes'] = offsets['GDSCRIPTINSTANCE']['checkedTimes'] + 1
@@ -882,7 +937,7 @@
                         end
                     end
 
-                    if VAR_VECTOR ~= nil and VAR_VECTOR > 0 then
+                    if isNotNullOrNil(VAR_VECTOR) and VAR_VECTOR > 0 then
                         if offsets['VAR_VECTOR']['offset'] ~= VAR_VECTOR and offsets['VAR_VECTOR']['checkedTimes'] == 0 then
                             offsets['VAR_VECTOR']['offset'] = VAR_VECTOR
                             offsets['VAR_VECTOR']['checkedTimes'] = offsets['VAR_VECTOR']['checkedTimes'] + 1
@@ -893,7 +948,7 @@
                         end
                     end
 
-                    if VAR_VECTOR_SIZE ~= nil and VAR_VECTOR_SIZE > 0 then
+                    if isNotNullOrNil(VAR_VECTOR_SIZE) and VAR_VECTOR_SIZE > 0 then
                         if offsets['VAR_VECTOR_SIZE']['offset'] ~= VAR_VECTOR_SIZE and offsets['VAR_VECTOR_SIZE']['checkedTimes'] == 0 then
                             offsets['VAR_VECTOR_SIZE']['offset'] = VAR_VECTOR_SIZE
                             offsets['VAR_VECTOR_SIZE']['checkedTimes'] = offsets['VAR_VECTOR_SIZE']['checkedTimes'] + 1
@@ -907,7 +962,7 @@
                     local bSuccess, GDSCRIPTNAME, VAR_MAP, CONST_MAP, FUNC_MAP = assumeGDScriptMaps( gdScriptAddr )
                     if not bSuccess then goto continue end
 
-                    if GDSCRIPTNAME ~= nil and GDSCRIPTNAME > 0 then
+                    if isNotNullOrNil(GDSCRIPTNAME) and GDSCRIPTNAME > 0 then
                         if offsets['GDSCRIPTNAME']['offset'] ~= GDSCRIPTNAME and offsets['GDSCRIPTNAME']['checkedTimes'] == 0 then
                             offsets['GDSCRIPTNAME']['offset'] = GDSCRIPTNAME
                             offsets['GDSCRIPTNAME']['checkedTimes'] = offsets['GDSCRIPTNAME']['checkedTimes'] + 1
@@ -918,7 +973,7 @@
                         end
                     end
 
-                    if VAR_MAP ~= nil and VAR_MAP > 0 then
+                    if isNotNullOrNil(VAR_MAP) and VAR_MAP > 0 then
                         if offsets['VAR_MAP']['offset'] ~= VAR_MAP and offsets['VAR_MAP']['checkedTimes'] == 0 then
                             offsets['VAR_MAP']['offset'] = VAR_MAP
                             offsets['VAR_MAP']['checkedTimes'] = offsets['VAR_MAP']['checkedTimes'] + 1
@@ -929,7 +984,7 @@
                         end
                     end
 
-                    if CONST_MAP ~= nil and CONST_MAP > 0 then
+                    if isNotNullOrNil(CONST_MAP) and CONST_MAP > 0 then
                         if offsets['CONST_MAP']['offset'] ~= CONST_MAP and offsets['CONST_MAP']['checkedTimes'] == 0 then
                             offsets['CONST_MAP']['offset'] = CONST_MAP
                             offsets['CONST_MAP']['checkedTimes'] = offsets['CONST_MAP']['checkedTimes'] + 1
@@ -940,7 +995,7 @@
                         end
                     end
 
-                    if FUNC_MAP ~= nil and FUNC_MAP > 0 then
+                    if isNotNullOrNil(FUNC_MAP) and FUNC_MAP > 0 then
                         if offsets['FUNC_MAP']['offset'] ~= FUNC_MAP and offsets['FUNC_MAP']['checkedTimes'] == 0 then
                             offsets['FUNC_MAP']['offset'] = FUNC_MAP
                             offsets['FUNC_MAP']['checkedTimes'] = offsets['FUNC_MAP']['checkedTimes'] + 1
@@ -985,7 +1040,7 @@
                     for i=0, 30 do
                         GDSCRIPTNAME = 0x120 + i * 8
                         local gdScriptNameAddr = readPointer( gdScriptAddr + GDSCRIPTNAME )
-                        if gdScriptNameAddr ~= nil and gdScriptNameAddr ~= 0 then
+                        if isNotNullOrNil(gdScriptNameAddr) then
                             if readUTFString( gdScriptNameAddr, 4 ) == 'res:' then
                                 if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid GDSCRIPTNAME offset: "..string.format('0x%x', GDSCRIPTNAME) ) end
                                 bOK = true
@@ -1001,21 +1056,21 @@
                     for i=0,40 do
                         VAR_MAP = GDSCRIPTNAME + i * 8
                         mapAddr = readPointer( gdScriptAddr + VAR_MAP )
-                        if mapAddr ~= nil and mapAddr ~= 0 then
+                        if isNotNullOrNil(mapAddr) then
                             hashAddr = readPointer( gdScriptAddr + VAR_MAP+0x8 ) -- the whole hashmap
                             headAddr = readPointer( gdScriptAddr + VAR_MAP+0x10 )
                             tailAddr = readPointer( gdScriptAddr + VAR_MAP+0x18 )
                             mapSize = readInteger( gdScriptAddr + VAR_MAP+0x24 )
 
-                            if ( hashAddr ~= nil and isValidPointer( hashAddr ) )
-                            and ( headAddr ~= nil and isValidPointer( headAddr ) )
-                            and ( tailAddr ~= nil and isValidPointer( tailAddr ) )
+                            if ( isNotNullOrNil(hashAddr) and isValidPointer( hashAddr ) )
+                            and ( isNotNullOrNil(headAddr) and isValidPointer( headAddr ) )
+                            and ( isNotNullOrNil(tailAddr) and isValidPointer( tailAddr ) )
                             and mapSize > 0 and mapSize < 900 then
 
                                 nextAddr = readPointer( headAddr )
                                 namePtr = readPointer( headAddr + 0x10 )
 
-                                if ( nextAddr ~= nil and isValidPointer( nextAddr ) ) and ( namePtr ~= nil and isValidPointer( namePtr ) ) then
+                                if ( isNotNullOrNil(nextAddr) and isValidPointer( nextAddr ) ) and ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) then
                                     if readInteger( nextAddr + 0x18 ) == 1 then -- check the index
                                         VAR_MAP = VAR_MAP + 0x10
                                         if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #3 VAR_MAP offset: "..string.format('0x%x', VAR_MAP) ) end
@@ -1035,21 +1090,21 @@
 
                         CONST_MAP = 0x1F0 + i * 8 -- 4.x version are usually sequential, starts from 0x1F0
                         mapAddr = readPointer( gdScriptAddr + CONST_MAP )
-                        if mapAddr ~= nil and mapAddr ~= 0 then
+                        if isNotNullOrNil(mapAddr) then
                             hashAddr = readPointer( gdScriptAddr + CONST_MAP+0x8 ) -- the whole hashmap
                             headAddr = readPointer( gdScriptAddr + CONST_MAP+0x10 )
                             tailAddr = readPointer( gdScriptAddr + CONST_MAP+0x18 )
                             mapSize = readInteger( gdScriptAddr + CONST_MAP+0x24 )
 
-                            if ( hashAddr ~= nil and isValidPointer( hashAddr ) )
-                            and ( headAddr ~= nil and isValidPointer( headAddr ) )
-                            and ( tailAddr ~= nil and isValidPointer( tailAddr ))
+                            if ( isNotNullOrNil(hashAddr) and isValidPointer( hashAddr ) )
+                            and ( isNotNullOrNil(headAddr) and isValidPointer( headAddr ) )
+                            and ( isNotNullOrNil(tailAddr) and isValidPointer( tailAddr ))
                             and mapSize > 0 and mapSize < 900 then
                                 local nextPtr = readPointer( headAddr )
                                 local namePtr = readPointer( headAddr + 0x10 )
                                 local elementType = readInteger( headAddr + 0x18 ) -- element type is at 0x18
 
-                                if ( nextPtr ~= nil and isValidPointer( nextPtr ) ) and ( namePtr ~= nil and isValidPointer( namePtr ) ) and ( elementType > 0 and elementType < GDSOf.MAXTYPE ) then
+                                if ( isNotNullOrNil(nextPtr) and isValidPointer( nextPtr ) ) and ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) and ( elementType > 0 and elementType < GDSOf.MAXTYPE ) then
                                     CONST_MAP = CONST_MAP + 0x10
                                     if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #2 CONST_MAP offset: "..string.format('0x%x', CONST_MAP) ) end
                                     bConstPresent = true;
@@ -1072,22 +1127,22 @@
                         end
 
                         mapAddr = readPointer( gdScriptAddr + FUNC_MAP )
-                        if mapAddr ~= nil and mapAddr ~= 0 then
+                        if isNotNullOrNil(mapAddr) then
                             hashAddr = readPointer( gdScriptAddr + FUNC_MAP+0x8 ) -- the whole hashmap
                             headAddr = readPointer( gdScriptAddr + FUNC_MAP+0x10 )
                             tailAddr = readPointer( gdScriptAddr + FUNC_MAP+0x18 )
                             mapSize = readInteger( gdScriptAddr + FUNC_MAP+0x24 )
 
-                            if ( hashAddr ~= nil and isValidPointer( hashAddr ) )
-                            and ( headAddr ~= nil and isValidPointer( headAddr ) ) 
-                            and ( tailAddr ~= nil and isValidPointer( tailAddr ) )
+                            if ( isNotNullOrNil(hashAddr) and isValidPointer( hashAddr ) )
+                            and ( isNotNullOrNil(headAddr) and isValidPointer( headAddr ) ) 
+                            and ( isNotNullOrNil(tailAddr) and isValidPointer( tailAddr ) )
                             and mapSize > 0 and mapSize < 900 then
                                 local nextPtr = readPointer( headAddr )
                                 local prevPtr = readInteger( headAddr + 0x8 )
                                 local namePtr = readPointer( headAddr + 0x10 )
                                 local funcPtr = readPointer( headAddr + 0x18 )
 
-                                if ( nextPtr ~= nil and isValidPointer( nextPtr ) ) and ( namePtr ~= nil and isValidPointer( namePtr ) ) and ( funcPtr ~= nil and isValidPointer( funcPtr ) ) then
+                                if ( isNotNullOrNil(nextPtr) and isValidPointer( nextPtr ) ) and ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) and ( isNotNullOrNil(funcPtr) and isValidPointer( funcPtr ) ) then
                                     FUNC_MAP = FUNC_MAP + 0x10
                                     if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #1 FUNC_MAP offset: "..string.format('0x%x', FUNC_MAP) ) end
                                     bOK = true;
@@ -1106,7 +1161,7 @@
                     for i=0, 20 do
                         GDSCRIPTNAME = 0x100 + i * 8 -- 0x100 is the earliest offset for GDScriptName I've seen
                         local gdScriptNameAddr = readPointer( gdScriptAddr + GDSCRIPTNAME )
-                        if gdScriptNameAddr ~= nil and gdScriptNameAddr ~= 0 then
+                        if isNotNullOrNil(gdScriptNameAddr) then
                             if readUTFString( gdScriptNameAddr, 4 ) == 'res:' then
                                 if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid GDSCRIPTNAME offset: "..string.format('0x%x', GDSCRIPTNAME) ) end
                                 bOK = true
@@ -1126,21 +1181,21 @@
                         endmapAddr = readPointer( gdScriptAddr + CONST_MAP+0x8 )
                         mapSize = readInteger( gdScriptAddr + CONST_MAP+0x10 )
 
-                        if ( mapAddr ~= nil and mapAddr ~= 0 ) and ( endmapAddr ~= nil and endmapAddr ~= 0 ) and mapSize > 0 and mapSize < 900  then
+                        if isNotNullOrNil(mapAddr) and isNotNullOrNil(endmapAddr) and mapSize > 0 and mapSize < 900  then
                             color = readInteger( mapAddr )
                             leftAddr = readPointer( mapAddr + 0x8 ) -- RedBlack-map
                             rightAddr = readPointer( mapAddr + 0x10 )
                             nextAddr = readPointer( mapAddr + 0x18 )
 
                             if ( color == 1 )
-                            and ( leftAddr ~= nil and isValidPointer( leftAddr ) )
-                            and ( rightAddr ~= nil and isValidPointer( rightAddr ) )
-                            and ( nextAddr ~= nil and isValidPointer( nextAddr ) )
+                            and ( isNotNullOrNil(leftAddr) and isValidPointer( leftAddr ) )
+                            and ( isNotNullOrNil(rightAddr) and isValidPointer( rightAddr ) )
+                            and ( isNotNullOrNil(nextAddr)  and isValidPointer( nextAddr ) )
                             and ( nextAddr == leftAddr and rightAddr ~= endmapAddr ) then
 
                                 namePtr = readPointer( rightAddr + 0x30 )
                                 local elementType = readInteger( rightAddr + 0x38 ) -- element type is at 0x18
-                                if ( namePtr ~= nil and isValidPointer( namePtr ) ) and ( elementType > 0 and elementType < GDSOf.MAXTYPE ) then
+                                if ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) and ( elementType > 0 and elementType < GDSOf.MAXTYPE ) then
                                     if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #2 CONST_MAP offset: "..string.format('0x%x', CONST_MAP) ) end
                                     bConstPresent = true;
                                     break;
@@ -1165,23 +1220,23 @@
                         endmapAddr = readPointer( gdScriptAddr + FUNC_MAP+0x8 )
                         mapSize = readInteger( gdScriptAddr + FUNC_MAP+0x10 )
 
-                        if ( mapAddr ~= nil and mapAddr ~= 0 ) and ( endmapAddr ~= nil and endmapAddr ~= 0 ) and mapSize > 0 and mapSize < 900  then
+                        if isNotNullOrNil(mapAddr) and isNotNullOrNil(endmapAddr) and mapSize > 0 and mapSize < 900  then
                             color = readInteger( mapAddr )
                             leftAddr = readPointer( mapAddr + 0x8 ) -- RedBlack-map
                             rightAddr = readPointer( mapAddr + 0x10 )
                             nextAddr = readPointer( mapAddr + 0x18 )
 
                             if ( color == 1 )
-                            and ( leftAddr ~= nil and isValidPointer( leftAddr ) )
-                            and ( rightAddr ~= nil and isValidPointer( rightAddr ) )
-                            and ( nextAddr ~= nil and isValidPointer( nextAddr ) )
+                            and ( isNotNullOrNil(leftAddr) and isValidPointer( leftAddr ) )
+                            and ( isNotNullOrNil(rightAddr) and isValidPointer( rightAddr ) )
+                            and ( isNotNullOrNil(nextAddr) and isValidPointer( nextAddr ) )
                             and ( nextAddr == leftAddr and rightAddr ~= endmapAddr ) then
 
                                 namePtr = readPointer( rightAddr + 0x30 )
                                 local funcPtr = readPointer( rightAddr + 0x38 ) -- it's 0x0 offset is a gdscriptName ptr
                                 local funcData = readPointer( rightAddr + 0x40 ) -- not sure what's that actually
 
-                                if ( namePtr ~= nil and isValidPointer( namePtr ) ) and ( funcPtr ~= nil and isValidPointer( funcPtr ) ) and ( funcData ~= nil and isValidPointer( funcData ) ) then
+                                if isNotNullOrNil(namePtr) and isValidPointer( namePtr ) and isNotNullOrNil(funcPtr) and isValidPointer( funcPtr ) and isNotNullOrNil(funcData) and isValidPointer( funcData ) then
                                     if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #1 FUNC_MAP offset: "..string.format('0x%x', FUNC_MAP) ) end
                                     bOK = true;
                                     break;
@@ -1207,7 +1262,7 @@
                         endmapAddr = readPointer( gdScriptAddr + VAR_MAP+0x8 )
                         mapSize = readInteger( gdScriptAddr + VAR_MAP+0x10 )
 
-                        if ( mapAddr ~= nil and mapAddr ~= 0 ) and ( endmapAddr ~= nil and endmapAddr ~= 0 ) and mapSize > 0 and mapSize < 900  then
+                        if isNotNullOrNil(mapAddr) and isNotNullOrNil(endmapAddr) and mapSize > 0 and mapSize < 900  then
                             color = readInteger( mapAddr )
                             leftAddr = readPointer( mapAddr + 0x8 ) -- RedBlack-map
                             rightAddr = readPointer( mapAddr + 0x10 )
@@ -1215,14 +1270,14 @@
                             elementIndex = readInteger( mapAddr + 0x38 )
 
                             if ( color == 1 )
-                            and ( leftAddr ~= nil and isValidPointer( leftAddr ) )
-                            and ( rightAddr ~= nil and isValidPointer( rightAddr ) )
-                            and ( nextAddr ~= nil and isValidPointer( nextAddr ) )
+                            and ( isNotNullOrNil(leftAddr) and isValidPointer( leftAddr ) )
+                            and ( isNotNullOrNil(rightAddr) and isValidPointer( rightAddr ) )
+                            and ( isNotNullOrNil(nextAddr) and isValidPointer( nextAddr ) )
                             and ( nextAddr == leftAddr and rightAddr ~= endmapAddr )
                             and elementIndex >= 0 and elementIndex < mapSize then
 
                                 namePtr = readPointer( rightAddr + 0x30 )
-                                if ( namePtr ~= nil and isValidPointer( namePtr ) ) then
+                                if ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) then
                                     if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #3 VAR_MAP offset: "..string.format('0x%x', VAR_MAP) ) end
                                     bOK = true;
                                     break;
@@ -1244,13 +1299,13 @@
                 for i=0, 5 do
                     GDSCRIPTINSTANCE = 0x50 + i * 8 -- 0x50 is the first offset for GDScriptInstance, 0x70 is the last known offset
                     scriptInstanceAddr = readPointer( nodeAddr + GDSCRIPTINSTANCE )
-                    if scriptInstanceAddr ~= nil and isValidPointer( scriptInstanceAddr ) then
+                    if isNotNullOrNil(scriptInstanceAddr) and isValidPointer( scriptInstanceAddr ) then
 
                         if GDSOf.MAJOR_VER >= 4 then
                             gdScriptAddr = readPointer( scriptInstanceAddr + 0x18 ) -- gdscript ref is after the owner (node)
                             nodeRefAddr = readPointer( scriptInstanceAddr + 0x10 ) -- node reference
 
-                            if ( gdScriptAddr ~= nil and gdScriptAddr ~= 0 ) and nodeRefAddr == nodeAddr then -- check for a valid script reference
+                            if isNotNullOrNil(gdScriptAddr) and nodeRefAddr == nodeAddr then -- check for a valid script reference
                                 if GDSCRIPTINSTANCE == 0x70 then
                                     VAR_VECTOR, VAR_VECTOR_SIZE = assumeVarVectorOffset( scriptInstanceAddr, true )
                                 else
@@ -1265,7 +1320,7 @@
                             gdScriptAddr = readPointer( scriptInstanceAddr + 0x10 ) -- gdscript ref is after the owner (node)
                             nodeRefAddr = readPointer( scriptInstanceAddr + 0x08 ) -- node reference
 
-                            if ( gdScriptAddr ~= nil and gdScriptAddr ~= 0 ) and nodeRefAddr == nodeAddr then -- check for a valid script reference
+                            if isNotNullOrNil(gdScriptAddr) and nodeRefAddr == nodeAddr then -- check for a valid script reference
                                 if GDSCRIPTINSTANCE == 0x60 then
                                     VAR_VECTOR, VAR_VECTOR_SIZE = assumeVarVectorOffset( scriptInstanceAddr, true )
                                 else
@@ -1290,10 +1345,10 @@
                 if GDSOf.MAJOR_VER >= 4 then
                     if bDEBUG then
                         vectorAddr = readPointer( gdScriptInstanceAddr + 0x58 )
-                        if vectorAddr ~= nil and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
+                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
                     else
                         vectorAddr = readPointer( gdScriptInstanceAddr + 0x28 )
-                        if vectorAddr ~= nil and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
+                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
                     end
 
                     if ( firstType >= 0 and firstType < GDSOf.MAXTYPE ) then
@@ -1333,10 +1388,10 @@
                 else
                     if bDEBUG then
                         local vectorAddr = readPointer( gdScriptInstanceAddr + 0x38 )
-                        if vectorAddr ~= nil and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
+                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
                     else
                         local vectorAddr = readPointer( gdScriptInstanceAddr + 0x20 )
-                        if vectorAddr ~= nil and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
+                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
                     end
 
                     if ( firstType >= 0 and firstType < GDSOf.MAXTYPE ) then
@@ -1372,7 +1427,7 @@
             function getViewport()
 
                 local viewport = readPointer("ptVP")
-                if viewport == 0 or viewport == nil then print("Viewport pointer is invalid; something's wrong"); error('viewport pointer is invalid, couldn\'t read') end
+                if isNullOrNil(viewport) then print("Viewport pointer is invalid; something's wrong"); error('viewport pointer is invalid, couldn\'t read') end
                 return viewport
             end
 
@@ -1381,11 +1436,13 @@
             function getVPChildren()
                 local viewport = getViewport()
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end;
+                debugStepIn()
 
                 local childrenPtr = readPointer( viewport + GDSOf.CHILDREN ) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
-                if childrenPtr == 0 or childrenPtr == nil then if bDEBUGMode then print( debugPrefixStr..' getVPChildren: failed to get VP children'); decDebugStep(); end; return; end
+                if isNullOrNil(childrenPtr) then
+                    sendDebugMessageAndStepOut('getVPChildren: failed to get VP children')
+                    return;
+                end
 
                 local childrenSize;
                 if GDSOf.MAJOR_VER == 4 then
@@ -1396,11 +1453,1001 @@
                     childrenSize = readInteger( childrenPtr - GDSOf.CHILDREN_SIZE )
                 end
 
-                if childrenSize == 0 or childrenSize == nil then if bDEBUGMode then print( debugPrefixStr..' getVPChildren: ChildSize is invalid'); decDebugStep(); end; return; end
+                if isNullOrNil(childrenSize) then
+                    sendDebugMessageAndStepOut('getVPChildren: ChildSize is invalid')
+                    return;
+                end
 
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut();
                 return childrenPtr, childrenSize
             end
+
+        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// VISITORS
+            
+            local NodeVisitor = {}
+
+            function NodeVisitor.recurseDictionary(dictPtr)
+                iterateDictionaryForNodes(dictPtr)
+            end
+
+            function NodeVisitor.recurseArray(arrPtr)
+                iterateArrayForNodes(arrPtr)
+            end
+
+            function NodeVisitor.visitObject(objPtr)
+                local realPtr, bShifted = checkForVT( objPtr )
+                local nodePtr = readPointer(realPtr)
+                if checkForGDScript( nodePtr ) then iterateMNode( nodePtr ) end
+            end
+
+        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// EMITTERS
+            -- local Emitter = {};
+            -- Emitter.__index = Emitter;
+
+            -- function Emitter:new(root)
+            --     return setmetatable({ root = root }, self);
+            -- end
+
+            -- leaves just add an entries
+            -- layouts are basically leaves with colors (where it makes sense)
+            -- branches are developing tree structures/recursion
+            
+            ---------------------------------------------------------------------------------
+            local StructEmitter = {}
+
+            local function rootOffset(entry, emitter)
+                if emitter == StructEmitter then
+                    return entry.offsetToValue
+                end
+                return 0x0
+            end
+
+            local function fieldOffset(entry, emitter, rel)
+                if emitter == StructEmitter then
+                    return entry.offsetToValue + rel
+                end
+                return rel
+            end
+
+            function StructEmitter.leaf(contextTable, parent, label, offset, ceType)
+                return addStructureElem(parent, label, offset, ceType)
+            end
+
+            function StructEmitter.layout(contextTable, parent, label, color, offset, ceType)
+                return addLayoutStructElem(parent, label, color, offset, ceType)
+            end
+
+            function StructEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
+                local elem = addStructureElem(parent, label, offset, ceType)
+                elem.ChildStruct = createStructure(childStructName)
+                return elem
+            end
+
+            function StructEmitter.recurseDictionary(contextTable, parent, dictPtr)
+                iterateDictionaryToStruct(dictPtr, parent)
+            end
+
+            function StructEmitter.recurseArray(contextTable, parent, arrPtr)
+                iterateArrayToStruct(arrPtr, parent)
+            end
+
+            function StructEmitter.recurseNode(contextTable, parent, nodePtr)
+                -- DISABLED
+            end
+
+            function StructEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
+                iteratePackedArrayToStruct(arrayAddr, typeName, parent)
+            end
+            ---------------------------------------------------------------------------------
+            local AddrEmitter = {}
+
+            local function makeAddr(base, offset)
+                return (base or 0) + (offset or 0)
+            end
+
+            function AddrEmitter.leaf(contextTable, parent, label, offset, ceType)
+                local created
+                synchronize(function(label, addr, ceType, parent)
+                                created = addMemRecTo(label, addr, ceType, parent)
+                            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
+                        )
+                return created
+            end
+
+            function AddrEmitter.layout(contextTable, parent, label, color, offset, ceType)
+                local created
+                synchronize(function(label, addr, ceType, parent)
+                                created = addMemRecTo(label, addr, ceType, parent)
+                            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
+                        )
+                return created
+            end
+
+            function AddrEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
+                local created
+                synchronize(function(label, addr, ceType, parent)
+                                created = addMemRecTo(label, addr, ceType, parent)
+                                created.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+                            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
+                        )
+                return created
+            end
+
+            function AddrEmitter.recurseDictionary(contextTable, parent, dictPtr)
+                iterateDictionaryToAddr(dictPtr, parent)
+            end
+
+            function AddrEmitter.recurseArray(contextTable, parent, arrPtr)
+                iterateArrayToAddr(arrPtr, parent)
+            end
+
+            function AddrEmitter.recurseNode(contextTable, parent, nodePtr)
+                iterateMNodeToAddr(nodePtr, parent)
+            end
+
+            function AddrEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
+                iteratePackedArrayToAddr(arrayAddr, typeName, parent)
+            end
+
+            ---------------------------------------------------------------------------------
+
+            local function emitStringNameStruct(parent, label, offset, stringFieldLabel, bUniShift)
+                local outer = addStructureElem(parent, label, offset, vtPointer)
+                outer.ChildStruct = createStructure("StringName")
+
+                local innerOffset = bUniShift and GDSOf.STRING or (GDSOf.STRING - GDSOf.PTRSIZE)
+                local inner = addStructureElem(outer, label, innerOffset, vtPointer)
+                inner.ChildStruct = createStructure("stringy")
+                local stringElem = addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0, bUniShift and vtUnicodeString or vtString)
+
+                if not bUniShift then
+                    stringElem.Bytesize = 100
+                end
+
+                return outer, inner, stringElem
+            end
+
+            local function emitFunctionCodeStruct(funcParent, funcName)
+                return addStructureElem(funcParent, 'Code: ' .. funcName, GDSOf.FUNC_CODE, vtPointer)
+            end
+
+            local function emitFunctionConstantsStruct(funcParent, funcName, funcValueAddr)
+
+                local constantsElem = createChildStructElem( funcParent, "Constants: " .. funcName, GDSOf.FUNC_CONST, vtPointer, "GDFConst")
+                local funcConstAddr = readPointer(funcValueAddr + GDSOf.FUNC_CONST)
+                iterateFuncConstantsToStruct(funcConstAddr, constantsElem)
+                return constantsElem
+            end
+
+            local function emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
+
+                local globalsElem = createChildStructElem( funcParent, "GlobalNames: "..funcName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals" )
+                local funcGlobalAddr = readPointer(funcValueAddr + GDSOf.FUNC_GLOBNAMEPTR)
+                iterateFuncGlobalsToStruct(funcGlobalAddr, globalsElem)
+                return globalsElem
+            end
+
+            local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
+
+                local funcRoot = createChildStructElem( funcStructElement, "func: " .. funcName, GDSOf.FUNC_MAPVAL, vtPointer, "GDFunction" )
+                local funcValueAddr = readPointer(mapElement + GDSOf.FUNC_MAPVAL)
+                emitFunctionCodeStruct(funcRoot, funcName)
+                emitFunctionConstantsStruct(funcRoot, funcName, funcValueAddr)
+                emitFunctionGlobalsStruct(funcRoot, funcName, funcValueAddr)
+                return funcRoot
+            end
+
+            local function advanceFunctionMapElement(mapElement)
+                if GDSOf.MAJOR_VER >= 4 then
+                    return readPointer(mapElement)
+                end
+                return readPointer(mapElement + GDSOf.MAP_NEXTELEM)
+            end
+
+            local function createNextFunctionContainer(currentContainer, index)
+                if GDSOf.MAJOR_VER >= 4 then
+                    local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
+                    nextElem.ChildStruct = createStructure("FuncNext")
+                    return nextElem
+                end
+
+                local nextElem = addStructureElem(currentContainer, "Next", GDSOf.MAP_NEXTELEM, vtPointer)
+                nextElem.ChildStruct = createStructure('FuncNext')
+                return nextElem
+            end
+
+            ---------------------------------------------------------------------------------
+
+            local PackedStructEmitter = {}
+
+            function PackedStructEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+                local stringPtrElement = addStructureElem(parent, ('strElem[%d]'):format(elemIndex), offsetToValue, vtPointer)
+                stringPtrElement.ChildStruct = createStructure('StringItem')
+                addStructureElem(stringPtrElement, 'String', 0x0, vtUnicodeString)
+            end
+
+            function PackedStructEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']', offsetToValue, ceType)
+            end
+
+            function PackedStructEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
+            end
+
+            function PackedStructEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: z', offsetToValue + 0x8, vtSingle)
+            end
+
+            function PackedStructEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: R', offsetToValue, vtSingle)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: G', offsetToValue + 0x4, vtSingle)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: B', offsetToValue + 0x8, vtSingle)
+                addStructureElem(parent, prefixStr .. elemIndex .. ']: A', offsetToValue + 0xC, vtSingle)
+            end
+
+            local PackedAddrEmitter = {}
+
+            function PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+                synchronize(function(elemIndex, arrElement, parent)
+                    addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent)
+                end, elemIndex, arrElement, parent)
+            end
+
+            function PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType)
+                synchronize(function(prefixStr, elemIndex, arrElement, ceType, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent)
+                end, prefixStr, elemIndex, arrElement, ceType, parent)
+            end
+
+            function PackedAddrEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+                synchronize(function(prefixStr, elemIndex, arrElement, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
+                end, prefixStr, elemIndex, arrElement, parent)
+            end
+
+            function PackedAddrEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+                synchronize(function(prefixStr, elemIndex, arrElement, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: z', arrElement + 0x8, vtSingle, parent)
+                end, prefixStr, elemIndex, arrElement, parent)
+            end
+
+            function PackedAddrEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+                synchronize(function(prefixStr, elemIndex, arrElement, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: B', arrElement + 0x8, vtSingle, parent)
+                    addMemRecTo(prefixStr .. elemIndex .. ']: A', arrElement + 0xC, vtSingle, parent)
+                end, prefixStr, elemIndex, arrElement, parent)
+            end
+
+
+        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS / SHARED HELPERS
+
+            -- TODO: make magic dereferences more obvious
+
+            local function getNextMapElement(mapElement)
+                if GDSOf.MAJOR_VER >= 4 then
+                    return readPointer(mapElement)
+                else
+                    return readPointer(mapElement + GDSOf.MAP_NEXTELEM)
+                end
+            end
+
+            local function getDictElemPairNext(mapElement)
+                if GDSOf.MAJOR_VER >= 4 then
+                    return readPointer(mapElement)
+                else
+                    return readPointer(mapElement + GDSOf.DICTELEM_PAIR_NEXT)
+                end
+            end
+
+            local function getDictionarySizeFromVariantPtr(variantPtr)
+                if GDSOf.MAJOR_VER >= 4 then
+                    return readInteger(readPointer(variantPtr) + GDSOf.DICT_SIZE)
+                else
+                    return readInteger(readPointer(readPointer(variantPtr) + GDSOf.DICT_LIST) + GDSOf.DICT_SIZE)
+                end
+            end
+
+            local function isArrayEmptyFromVariantPtr(variantPtr)
+                return readPointer(readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR) == 0
+            end
+
+            local function resolveScriptVariantType(mapElement, runtimeVariantType)
+                
+                -- debugStepIn()
+
+                if GDSOf.MAJOR_VER < 4 then
+                    -- debugStepOut()
+                    return runtimeVariantType
+                end
+
+                local scriptType = readInteger(mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE)
+                
+                -- 4.2.2 may differ TODO: make it version dependent
+                if scriptType > GDSOf.MAXTYPE then
+                    scriptType = readInteger(mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE - 0x8)
+                end
+
+                if scriptType == runtimeVariantType then
+                    -- debugStepOut()
+                    return scriptType
+                elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDSOf.MAXTYPE) then
+                    -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback1, cached type is used') -- if the source is incorrect
+                    return scriptType
+                else
+                    -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback2, cached type is used') -- let's have cached if everything is wrong
+                    return runtimeVariantType
+                end
+            end
+
+            local function getVariantNameFromMapElement(mapElement)
+                if GDSOf.MAJOR_VER >= 4 then
+                    return getStringNameStr(readPointer(mapElement + GDSOf.CONSTELEM_KEYVAL))
+                else
+                    return getStringNameStr(readPointer(mapElement + GDSOf.MAP_KVALUE))
+                end
+            end
+
+            local function prepareObjectParent(entry, emitter, parent, contextTable)
+                debugStepIn()
+
+                local shifted
+                local ptr = entry.variantPtr
+                local offset = rootOffset(entry, emitter)
+                local currentParent = parent
+                local currentContext = contextTable
+
+                ptr, shifted = checkForVT(ptr)
+
+                if shifted then
+                    offset = offset - GDSOf.PTRSIZE
+                    currentContext = { nodeAddr = contextTable.nodeAddr, nodeName = contextTable.nodeName, baseAddress = ptr }
+                    currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer, "Wrapper")
+                    offset = 0x0
+                end
+
+                sendDebugMessageAndStepOut("prepareObjectParent: "..("%x"):format(ptr or -1).." Object: "..entry.name)
+                return currentParent, ptr, offset, currentContext
+            end
+
+            local function getFunctionMapName(mapElement)
+                if isNullOrNil(mapElement) then return nil end
+
+                if GDSOf.MAJOR_VER >= 4 then
+                    return getGDFunctionName(mapElement)
+                end
+                return getStringNameStr(readPointer(mapElement + GDSOf.MAP_KVALUE))
+            end
+
+            local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
+                if isNullOrNil(mapHead) then return nil end
+
+                local mapElement = mapHead
+
+                repeat
+                    local currentName = getNameFn(mapElement)
+                    if currentName == targetName then
+                        return getResultCallback(mapElement)
+                    end
+
+                    mapElement = goAdvanceCallback(mapElement)
+                until (mapElement == 0)
+
+                return nil
+            end
+
+            local function getConstMapLookupResult(mapElement)
+                if GDSOf.MAJOR_VER >= 4 then
+                    local constType = readInteger(mapElement + GDSOf.CONSTELEM_VALTYPE)
+                    local offsetToValue = getVariantValueOffset(constType)
+                    return
+                        getAddress(mapElement + GDSOf.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
+                else
+                    local constType = readInteger(mapElement + GDSOf.CONSTELEM_VALTYPE)
+                    return
+                        getAddress(mapElement + GDSOf.CONSTELEM_VALVAL), getCETypeFromGD(constType)
+                end
+            end
+
+            local function getFunctionMapLookupResult(mapElement)
+                return readPointer(mapElement + GDSOf.FUNC_MAPVAL)
+            end
+
+            local function createNextConstContainer(currentContainer, index)
+                if GDSOf.MAJOR_VER >= 4 then
+                    local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
+                    nextElem.ChildStruct = createStructure('ConstNext')
+                    return nextElem
+                end
+
+                local nextElem = addStructureElem(currentContainer, 'Next', GDSOf.MAP_NEXTELEM, vtPointer)
+                nextElem.ChildStruct = createStructure('ConstNext')
+                return nextElem
+            end
+
+            local function formatArrayEntry(entry)
+                local cloned = {}
+                for k, v in pairs(entry) do cloned[k] = v end
+                cloned.name = "array[" .. tostring(entry.index) .. "]"
+                return cloned
+            end
+
+            local function getArrayVectorInfo(arrayAddr)
+                debugStepIn()
+
+                if not isValidPointer(arrayAddr) then
+                    sendDebugMessageAndStepOut('getArrayVectorInfo: arrayAddr invalid')
+                    return nil
+                end
+
+                local arrVectorAddr = readPointer(arrayAddr + GDSOf.ARRAY_TOVECTOR)
+                if isNullOrNil(arrVectorAddr) then
+                    sendDebugMessageAndStepOut('getArrayVectorInfo: arrVectorAddr uninitialized')
+                    return nil
+                end
+
+                local arrVectorSize = readInteger(arrVectorAddr - GDSOf.SIZE_VECTOR)
+                if isNullOrNil(arrVectorSize) then
+                    sendDebugMessageAndStepOut('getArrayVectorInfo: vector size is invalid')
+                    return nil
+                end
+
+                local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
+                if not ok then
+                    debugStepOut()
+                    return nil
+                end
+                debugStepOut()
+                return arrVectorAddr, arrVectorSize, variantArrSize
+            end
+
+            local function formatDictionaryEntry(entry)
+                local cloned = {}
+                for k, v in pairs(entry) do cloned[k] = v end
+                cloned.name = "dict[" .. tostring(entry.name) .. "]"
+                return cloned
+            end
+
+            local function decodeDictionaryKeyName(mapElement)
+                local keyType, keyValueAddr
+
+                if GDSOf.MAJOR_VER == 3 then
+                    local keyPtr = readPointer(mapElement) -- key is a ptr
+                    keyType = readInteger(keyPtr + GDSOf.DICTELEM_KEYTYPE)
+                    keyValueAddr = getAddress(keyPtr + GDSOf.DICTELEM_KEYVAL)
+                else
+                    keyType = readInteger(mapElement + GDSOf.DICTELEM_KEYTYPE)  -- those can be a key , NodePath, Callable, StringName, etc
+                    keyValueAddr = getAddress(mapElement + GDSOf.DICTELEM_KEYVAL)
+                end
+
+                local keyTypeName = getGDTypeName(keyType)
+                local keyName = "UNKNOWN"
+
+                if keyTypeName == 'STRING' then
+                    keyName = readUTFString(readPointer(keyValueAddr))
+                elseif keyTypeName == 'STRING_NAME' then
+                    keyName = getStringNameStr(readPointer(keyValueAddr))
+                elseif keyTypeName == 'FLOAT' then
+                    keyName = tostring(readDouble(keyValueAddr)) -- in godot 3.x real is 4 byte float or not?
+                elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' then
+                    keyName = tostring(readPointer(keyValueAddr))
+                elseif keyTypeName == 'INT' then
+                    keyName = tostring(readInteger(keyValueAddr, true))
+                else -- bool | might need separate for Vector2, Vector3, Color, etc
+                    keyName = tostring(readInteger(keyValueAddr))
+                end
+
+                return keyType, keyValueAddr, keyName
+            end
+
+            local function getDictionaryInfo(dictAddr)
+                debugStepIn()
+
+                if not isValidPointer(dictAddr) then
+                    sendDebugMessageAndStepOut('getDictionaryInfo: dictAddr isnt pointer')
+                    return nil
+                end 
+
+                local dictRoot = dictAddr
+                if GDSOf.MAJOR_VER == 3 then
+                    dictRoot = readPointer(dictAddr + GDSOf.DICT_LIST)
+                    if isNullOrNil(dictRoot) then
+                        sendDebugMessageAndStepOut('getDictionaryInfo: dictRoot isnt valid')
+                        return nil
+                    end
+                end
+
+                local dictSize = readInteger(dictRoot + GDSOf.DICT_SIZE)
+                if isNullOrNil(dictSize) then
+                    sendDebugMessageAndStepOut('getDictionaryInfo: dictSize isnt valid')
+                    return nil
+                end
+
+                local dictHead = readPointer(dictRoot + GDSOf.DICT_HEAD)
+                if isNullOrNil(dictHead) then
+                    sendDebugMessageAndStepOut('getDictionaryInfo: dictHead isnt valid')
+                    return nil
+                end
+
+                local dictTail = readPointer(dictRoot + GDSOf.DICT_TAIL)
+
+                debugStepOut()
+                return dictRoot, dictSize, dictHead, dictTail
+            end
+
+            local function createNextDictContainer(currentContainer, index)
+                if GDSOf.MAJOR_VER >= 4 then
+                    return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
+                end
+
+                return createChildStructElem(currentContainer, 'Next', GDSOf.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+            end
+
+            local function getPackedArrayInfo(packedArrayAddr)
+                debugStepIn()
+
+                if not isValidPointer(packedArrayAddr) then
+                    sendDebugMessageAndStepOut('getPackedArrayInfo: packedArrayAddr isnt pointer')
+                    return nil
+                end
+
+                local packedDataArrAddr = readPointer(packedArrayAddr + GDSOf.P_ARRAY_TOARR)
+                if isNullOrNil(packedDataArrAddr) then
+                    sendDebugMessageAndStepOut('getPackedArrayInfo: packedDataArrAddr isnt pointer')
+                    return nil
+                end
+
+                local packedVectorSize = readInteger(packedDataArrAddr - GDSOf.SIZE_VECTOR)
+                if isNullOrNil(packedVectorSize) then
+                    sendDebugMessageAndStepOut('getPackedArrayInfo: packedVectorSize isnt pointer')
+                    return nil
+                end
+
+                debugStepOut()
+                return packedDataArrAddr, packedVectorSize
+            end
+
+            local function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter)
+                if packedVectorSize > 256 then
+                    packedVectorSize = 256
+                end
+
+                local handler = PackedArrayHandlers[packedTypeName] or PackedArrayHandlers.DEFAULT
+                handler(packedDataArrAddr, packedVectorSize, parent, emitter)
+            end
+
+        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
+
+            local function readNodeVariantEntry(mapElement, variantVector, variantSize, bNeedStructOffset)
+                -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
+                local variantIndex = readInteger(mapElement + GDSOf.VAR_NAMEINDEX_I);
+                local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize, bNeedStructOffset);
+                
+                local name = getVariantNameFromMapElement(mapElement);
+                local finalType = resolveScriptVariantType(mapElement, runtimeType);
+
+                local entry = {
+                        index = variantIndex,
+                        name = name or "UNKNOWN",
+                        runtimeType = runtimeType,
+                        typeId = finalType,
+                        typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
+                        variantPtr = variantPtr,
+                        offsetToValue = offsetToValue or 0,
+                        ceType = getCETypeFromGD(finalType)
+                        }
+
+                debugStepIn()
+                sendDebugMessageAndStepOut("readNodeVariantEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+
+                return entry
+            end
+
+            local function readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
+                local variantPtr, runtimeType, offsetToValue = getVariantByIndex(funcConstantVect, variantIndex, variantSize, true)
+
+                local finalType = runtimeType
+                local typeName = getGDTypeName(finalType) or "UNKNOWNTYPE"
+
+                local entry = {
+                        index = variantIndex,
+                        name = "Const[" .. tostring(variantIndex) .. "]",
+                        runtimeType = runtimeType,
+                        typeId = finalType,
+                        typeName = typeName,
+                        variantPtr = variantPtr,
+                        offsetToValue = offsetToValue,
+                        ceType = getCETypeFromGD(finalType)
+                        }
+
+                debugStepIn()
+                sendDebugMessageAndStepOut("readFunctionConstantEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+
+                return entry
+            end
+
+            local function readNodeConstEntry(mapElement)
+                local constName = getNodeConstName(mapElement)
+                local constType = readInteger(mapElement + GDSOf.CONSTELEM_VALTYPE)
+                local offsetToValue = GDSOf.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
+                local constPtr = getAddress(mapElement + offsetToValue)
+
+                local entry = {
+                        index = 0,
+                        name = constName or "UNKNOWN_CONST",
+                        runtimeType = constType,
+                        typeId = constType,
+                        typeName = getGDTypeName(constType) or "UNKNOWNTYPE",
+                        variantPtr = constPtr,
+                        offsetToValue = offsetToValue,
+                        ceType = getCETypeFromGD(constType)
+                        }
+
+                debugStepIn()
+                sendDebugMessageAndStepOut("readNodeConstEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+
+                return entry
+            end
+
+            -- for node search
+            local function readVectorVariantEntry(variantVector, variantIndex, variantSize)
+                local variantPtr, variantType = getVariantByIndex(variantVector, variantIndex, variantSize)
+
+                return {
+                    index = variantIndex,
+                    typeId = variantType,
+                    typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
+                    variantPtr = variantPtr
+                }
+            end
+
+            -- for node search
+            local function readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
+                local variantPtr, variantType = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize)
+
+                return {
+                    index = varIndex,
+                    typeId = variantType,
+                    typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
+                    variantPtr = variantPtr
+                }
+            end
+
+            local function readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
+                local variantPtr, runtimeType, offsetToValue = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
+
+                local entry = {
+                        index = varIndex,
+                        name = "array[" .. tostring(varIndex) .. "]",
+                        runtimeType = runtimeType,
+                        typeId = runtimeType,
+                        typeName = getGDTypeName(runtimeType) or "UNKNOWNTYPE",
+                        variantPtr = variantPtr,
+                        offsetToValue = offsetToValue,
+                        ceType = getCETypeFromGD(runtimeType)
+                        }
+
+                debugStepIn()
+                sendDebugMessageAndStepOut("readArrayContainerEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+
+                return entry
+
+            end
+
+            local function readDictionaryContainerEntry(mapElement)
+
+                local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
+                local valueType = readInteger(mapElement + GDSOf.DICTELEM_VALTYPE)
+                local offsetToValue = GDSOf.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+                local valueValuePtr = getAddress(mapElement + offsetToValue)
+
+                local entry = {
+                        index = 0,
+                        name = keyName or ("key@" .. ("%x"):format(mapElement)),
+                        runtimeType = valueType,
+                        typeId = valueType,
+                        typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
+                        variantPtr = valueValuePtr,
+                        offsetToValue = offsetToValue,
+                        ceType = getCETypeFromGD(valueType),
+                        keyType = keyType,
+                        keyValueAddr = keyValueAddr
+                        }
+
+                debugStepIn()
+                sendDebugMessageAndStepOut("readDictionaryContainerEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+
+                return entry
+            end
+
+            -- for node search
+            local function readDictionaryValueEntry(mapElement)
+                local valueType = readInteger(mapElement + GDSOf.DICTELEM_VALTYPE)
+                local offsetToValue = GDSOf.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+                return {
+                    typeId = valueType,
+                    typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
+                    variantPtr = getAddress(mapElement + offsetToValue)
+                }
+            end
+
+        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// TYPE HANDLERS
+
+            local VariantHandlers = {}
+
+            VariantHandlers.DICTIONARY = function(entry, emitter, parent, contextTable)
+                --sendDebugMessage("DICTIONARY case for name: "..entry.name..(" address: %x"):format(entry.variantPtr)..(" offset: %x"):format(entry.offsetToValue))
+                local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+
+                if isNullOrNil(dictSize) then
+                    emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType)
+                    return;
+                end
+
+                local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, rootOffset(entry, emitter), entry.ceType, "Dict")
+                emitter.recurseDictionary(contextTable, child, readPointer(entry.variantPtr) ) -- we pass the actual base addr
+
+            end
+
+            VariantHandlers.ARRAY = function(entry, emitter, parent, contextTable)
+                --sendDebugMessage("ARRAY case for name: "..entry.name )
+                if isArrayEmptyFromVariantPtr(entry.variantPtr) then
+                    emitter.leaf(contextTable, parent, "array (empty): "..entry.name, rootOffset(entry, emitter), entry.ceType);
+                    return;
+                end
+
+                local child = emitter.branch(contextTable, parent, "array: " .. entry.name, rootOffset(entry, emitter), entry.ceType, "Array");
+                emitter.recurseArray(contextTable, child, readPointer(entry.variantPtr))
+            end
+
+            VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
+                --sendDebugMessage("OBJECT case: name: "..entry.name..(" addr: %x "):format(entry.variantPtr) )
+                local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable);
+
+                if checkForGDScript(readPointer(realPtr)) then
+                    local nodeChild = emitter.branch(objectContext, objectParent, "mNode: "..entry.name, realOffset, vtPointer, "Node");
+                    nodeChild.BackgroundColor = 0xFF8080
+                    if emitter.recurseNode then
+                        emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) -- 
+                    end
+                else
+                    emitter.leaf(objectContext, objectParent, "obj: " .. entry.name, realOffset, vtPointer);
+                end
+            end
+
+            VariantHandlers.STRING = function(entry, emitter, parent, contextTable)
+                if emitter == StructEmitter then
+                    local outer = emitter.branch( contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtPointer, "String" )
+                    local inner = emitter.branch( contextTable, outer, "StringData: " .. entry.name, 0x0, vtUnicodeString, "stringy" )
+                    --emitter.leaf( contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString )
+                else
+                    emitter.leaf( contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtString )
+                end
+            end
+
+            VariantHandlers.STRING_NAME = function(entry, emitter, parent, contextTable)
+                if emitter == StructEmitter then
+                    local outer = emitter.branch(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
+                    local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDSOf.STRING, vtPointer, "stringy")
+                    emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString)
+                else
+                    local stringNameAddr = readPointer(entry.variantPtr)
+                    if isNullOrNil(stringNameAddr) then
+                        emitter.leaf(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer)
+                        return
+                    end
+
+                    local stringContext = { nodeAddr = contextTable.nodeAddr, nodeName = contextTable.nodeName, baseAddress = stringNameAddr + GDSOf.STRING }
+                    emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
+                end
+                
+            end
+
+            VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
+                --sendDebugMessage("handlePackedArray: "..entry.typeName.." case for name: "..entry.name)
+                local arrayAddr = readPointer( entry.variantPtr )
+
+                if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then
+                    emitter.leaf( contextTable, parent, entry.typeName..' (empty): '..entry.name, rootOffset(entry, emitter), entry.ceType )
+                else
+                    local child = emitter.branch( contextTable, parent, entry.typeName..entry.name, rootOffset(entry, emitter), entry.ceType, "P_Array" )
+                    emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
+                end
+            end
+
+            VariantHandlers.PACKED_BYTE_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_INT32_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_INT64_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_FLOAT32_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_FLOAT64_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_VECTOR2_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_VECTOR3_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_COLOR_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+            VariantHandlers.PACKED_VECTOR4_ARRAY = VariantHandlers.PACKED_STRING_ARRAY
+
+            VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
+                local typeName = "Color: "
+                emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
+                emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
+                emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
+                emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
+            end
+
+            VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
+                local typeName = "Vec2: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+            end
+
+            VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
+                local typeName = "vec2I: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtDword)
+            end
+
+            VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
+                local typeName = "Rect2: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': w', fieldOffset(entry, emitter, 0x8), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': h', fieldOffset(entry, emitter, 0xC), vtSingle)
+            end
+
+            VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
+                local typeName = "Rect2I: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': w', fieldOffset(entry, emitter, 0x8), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': h', fieldOffset(entry, emitter, 0xC), vtDword)
+            end
+
+            VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
+                local typeName = "Vec3: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+            end
+
+            VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
+                local typeName = "Vec3I: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': z', fieldOffset(entry, emitter, 0x8), vtDword)
+            end
+
+            VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
+                local typeName = "Vec4: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': w', fieldOffset(entry, emitter, 0xC), vtSingle)
+            end
+
+            VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
+                local typeName = "Vec4I: "
+                emitter.leaf(contextTable, parent, typeName..entry.name..': x', fieldOffset(entry, emitter, 0x0), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': y', fieldOffset(entry, emitter, 0x4), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': z', fieldOffset(entry, emitter, 0x8), vtDword)
+                emitter.leaf(contextTable, parent, typeName..entry.name..': w', fieldOffset(entry, emitter, 0xC), vtDword)
+            end
+            
+            VariantHandlers.DEFAULT = function(entry, emitter, parent, contextTable)
+                emitter.leaf(contextTable, parent, "var: "..entry.name.." ("..entry.typeName..")", rootOffset(entry, emitter), entry.ceType)
+            end
+
+
+            local NodeDiscoveryHandlers = {}
+
+            NodeDiscoveryHandlers.DICTIONARY = function(entry, visitor)
+                local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+                if isNotNullOrNil(dictSize) then
+                    visitor.recurseDictionary(readPointer(entry.variantPtr))
+                end
+            end
+
+            NodeDiscoveryHandlers.ARRAY = function(entry, visitor)
+                if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
+                    visitor.recurseArray(readPointer(entry.variantPtr))
+                end
+            end
+
+            NodeDiscoveryHandlers.OBJECT = function(entry, visitor)
+                visitor.visitObject(entry.variantPtr)
+            end
+
+
+            local PackedArrayHandlers = {}
+
+            PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+
+                    if readPointer(arrElement) ~= 0 then
+                        emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+                    end
+                end
+            end
+
+            PackedArrayHandlers.PACKED_INT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * 0x4
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword)
+                end
+            end
+
+            PackedArrayHandlers.PACKED_FLOAT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * 0x4
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle)
+                end
+            end
+
+            PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword)
+                end
+            end
+
+            PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble)
+                end
+            end
+
+            PackedArrayHandlers.PACKED_BYTE_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * 0x1
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte)
+                end
+            end
+
+            PackedArrayHandlers.PACKED_VECTOR2_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * 0x8
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement)
+                end
+            end
+
+            PackedArrayHandlers.PACKED_VECTOR3_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * 0xC
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement)
+                end
+            end
+
+            PackedArrayHandlers.PACKED_COLOR_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * 0x10
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement)
+                end
+            end
+
+            PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+                for elemIndex = 0, packedVectorSize - 1 do
+                    local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                    local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                    emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer)
+                end
+            end
+
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
 
@@ -1408,30 +2455,32 @@
             ---@param nodeName string
             function getNodeWithGDScriptInstance(nodeName)
                 assert(type(nodeName) == "string",'Node name should be a string, instead got: '..type(nodeName))
+                --debugStepIn()
 
                 local childrenPtr, childrenSize = getVPChildren()
-                if childrenPtr == nil or childrenSize == nil then return end
-
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                if isNullOrNil(childrenPtr) then return end
 
                 for i=0,( childrenSize-1 ) do
 
                     local nodeAddr = readPointer( childrenPtr + i* GDSOf.PTRSIZE )
-                    if nodeAddr == 0 or nodeAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeWithGDScriptInstance: nodeAddr invalid'); decDebugStep(); end; return end
+                    if isNullOrNil(nodeAddr) then
+                        --sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: nodeAddr invalid')
+                        return
+                    end
 
                     local nodeNameStr = getNodeName(nodeAddr)
                     local gdScriptInsance = readQword( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                    if gdScriptInsance == nil or gdScriptInsance == 0 then if bDEBUGMode then print( debugPrefixStr..' getNodeWithGDScriptInstance: ScriptInstance is 0/nil'); decDebugStep(); end; return end
+                    if isNullOrNil(gdScriptInsance) then
+                        --sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: ScriptInstance is 0/nil')
+                        return
+                    end
 
                     if nodeNameStr == nodeName then
-                        if bDEBUGMode then decDebugStep(); end;
-
+                        --debugStepOut()
                         return nodeAddr
                     end
                 end
-                if bDEBUGMode then decDebugStep(); end;
-
+                --debugStepOut()
                 return
             end
 
@@ -1440,25 +2489,30 @@
             function getNodeName( nodeAddr )
                 assert(type(nodeAddr) == 'number',"getNodeName: Node Addr has to be a number, instead got: "..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end;
+                debugStepIn()
 
                 local nodeNamePtr = readPointer( nodeAddr + GDSOf.OBJ_STRING_NAME )
-                if nodeNamePtr == nil or nodeNamePtr == 0 or ( not isValidPointer( nodeNamePtr ) ) then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeName: nodeName invalid or not a pointer (?)'); decDebugStep(); end; return 'N??' end
+                if isNullOrNil(nodeNamePtr) or ( not isValidPointer( nodeNamePtr ) ) then
+                    --sendDebugMessageAndStepOut('getNodeName: nodeName invalid or not a pointer (?)')
+                    return 'N??'
+                end
 
                 nodeNamePtr = readPointer( nodeNamePtr + GDSOf.STRING )
-                if nodeNamePtr == 0 or nodeNamePtr == nil then
-                    if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeName: string address invalid, trying ASCII'); end;
+                if isNullOrNil(nodeNamePtr) then
+                    sendDebugMessage('getNodeName: string address invalid, trying ASCII')
 
                     nodeNamePtr = readPointer( nodeAddr + GDSOf.OBJ_STRING_NAME )
                     nodeNamePtr = readPointer( nodeNamePtr + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
-                    if nodeNamePtr == 0 or nodeNamePtr == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeName: string address invalid, not ASCII either'); decDebugStep(); end; return 'N??' end  -- return empty string if no string was found
-                    if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                    if isNullOrNil(nodeNamePtr) then
+                        sendDebugMessageAndStepOut('getNodeName: string address invalid, not ASCII either');
+                        return 'N??'
+                    end 
+                    debugStepOut()
 
                     return readString( nodeNamePtr, 100 )
 
                 end
-                if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                debugStepOut()
 
                 return readUTFString( nodeNamePtr )
             end
@@ -1466,25 +2520,39 @@
             function getNodeNameFromGDScript( nodeAddr )
                 assert(type(nodeAddr) == 'number',"getNodeNameFromGDScript: Node Addr has to be a number, instead got: "..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end;
+                --debugStepIn()
 
                 local GDScriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if GDScriptInstanceAddr == nil or GDScriptInstanceAddr == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: ScriptInstance is 0/nil'); decDebugStep(); end; return 'N??' end
+                if isNullOrNil(GDScriptInstanceAddr) then
+                    --sendDebugMessageAndStepOut('getNodeNameFromGDScript: ScriptInstance is 0/nil')
+                    return 'N??'
+                end
                 local GDScriptAddr = readPointer( GDScriptInstanceAddr + GDSOf.GDSCRIPT_REF )
-                if GDScriptAddr == nil or GDScriptAddr == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: GDScript is 0/nil'); decDebugStep(); end; return 'N??' end
+                if isNullOrNil(GDScriptAddr) then
+                    --sendDebugMessageAndStepOut(' getNodeNameFromGDScript: GDScript is 0/nil')
+                    return 'N??'
+                end
                 local GDScriptNameAddr = readPointer( GDScriptAddr + GDSOf.GDSCRIPTNAME )
 
 
-                if GDScriptNameAddr == nil or GDScriptNameAddr == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: nodeName invalid or not a pointer (?)'); decDebugStep(); end; return 'N??' end
+                if isNullOrNil(GDScriptNameAddr) then
+                    --sendDebugMessageAndStepOut('getNodeNameFromGDScript: nodeName invalid or not a pointer (?)')
+                    return 'N??'
+                end
 
                 local GDScriptName = readUTFString( GDScriptNameAddr )
-                if GDScriptName == nil or GDScriptName == '' then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: GDScriptName is nil/empty'); decDebugStep(); end; return 'N??' end
+                if GDScriptName == nil or GDScriptName == '' then
+                    --sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+                    return 'N??'
+                end
 
                 GDScriptName = string.match( GDScriptName, "([^/]+)%.gd$" )
-                if GDScriptName == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeNameFromGDScript: GDScriptName is nil/empty'); decDebugStep(); end; return 'N??' end
+                if GDScriptName == nil then
+                    --sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+                    return 'N??'
+                end
 
-                if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                --debugStepOut()
 
                 return GDScriptName
             end
@@ -1493,35 +2561,44 @@
             ---@param nodeAddr number
             function checkForGDScript(nodeAddr)
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end; 
+                --debugStepIn()
 
-                if nodeAddr == 0 or nodeAddr == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForGDScript: nodeAddr invalid'); decDebugStep(); end; return false end
+                if isNullOrNil(nodeAddr) then
+                    --sendDebugMessageAndStepOut('checkForGDScript: nodeAddr invalid')
+                    return false
+                end
 
-                if (not isValidPointer( readPointer( nodeAddr ) ) ) then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForGDScript: Node vTable invalid'); decDebugStep(); end; return false end
+                if (not isValidPointer( readPointer( nodeAddr ) ) ) then
+                    --sendDebugMessageAndStepOut('checkForGDScript: Node vTable invalid')
+                    return false
+                end
 
                 local scriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if scriptInstance == nil or scriptInstance == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForGDScript: ScriptInstance is 0/nil'); decDebugStep(); end; return false end
+                if isNullOrNil(scriptInstance) then
+                    --sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance is 0/nil')
+                    return false
+                end
                 
                 local gdscript = readPointer( scriptInstance + GDSOf.GDSCRIPT_REF )
-                if ( (gdscript == nil) or (gdscript == 0) ) then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForGDScript: GDScript is 0/nil'); decDebugStep(); end; return false end;
+                if isNullOrNil(gdscript) then
+                    --sendDebugMessageAndStepOut('checkForGDScript: GDScript is 0/nil')
+                    return false
+                end;
 
                 if isValidPointer( gdscript ) and isValidPointer( scriptInstance ) then
 
                     if getGDResName( nodeAddr, 4 ) == 'res:'  then
-
-                        if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                        --debugStepOut()
                         return true;
-
                     else
 
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForGDScript: getGDResName returned false for res://'); decDebugStep(); end
+                        --sendDebugMessageAndStepOut('checkForGDScript: getGDResName returned false for res://')
                         return false;
 
                     end
 
                 else
-                    if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForGDScript: Script/Instance probably not a pointer: '..string.format('gdScript %x ', gdscript)..string.format('ScriptInstance %x ', scriptInstance)); decDebugStep(); end
+                    --sendDebugMessageAndStepOut('checkForGDScript: Script/Instance probably not a pointer: '..string.format('gdScript %x ', gdscript)..string.format('ScriptInstance %x ', scriptInstance))
 
                     return false;
 
@@ -1544,7 +2621,7 @@
                 else
                     childrenSize = readInteger( childrenAddr - GDSOf.CHILDREN_SIZE )
                 end
-                if childrenSize == 0 or childrenSize == nil then return; end
+                if isNullOrNil(childrenSize) then return; end
 
                 for i=0,(childrenSize-1) do
                     local nodeAddr = readPointer( childrenAddr + (i*GDSOf.PTRSIZE) )
@@ -1560,24 +2637,23 @@
 
             --- go over child nodes in the main nodes
             ---@param nodeAddr number
-            ---@param Owner userdata
-            function iterateMNodeToAddr(nodeAddr, Owner)
+            ---@param parent userdata
+            function iterateMNodeToAddr(nodeAddr, parent)
                 assert( type(nodeAddr) == 'number',"iterateMNodeToAddr: node addr has to be a number, instead got: "..type(nodeAddr))
-                assert( type(Owner) == "userdata" ,"iterateMNodeToAddr: Owner has to exist")
+                assert( type(parent) == "userdata" ,"iterateMNodeToAddr: parent has to exist")
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                --debugStepIn()
 
                 local nodeName = getNodeName( nodeAddr )
-                if bDEBUGMode then print( debugPrefixStr..' iterateMNodeToAddr: MemberNode: '..tostring(nodeName) ) end
+                --sendDebugMessage(' iterateMNodeToAddr: MemberNode: '..tostring(nodeName) )
                 for i, storedNode in ipairs(dumpedNodes) do -- check if a node was already dumped
                     if storedNode == nodeAddr then
-                        if bDEBUGMode then print( debugPrefixStr..' iterateMNodeToAddr: NODE '..tostring(nodeName)..' ALREADY DUMPED' ); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut('iterateMNodeToAddr: NODE '..tostring(nodeName)..' ALREADY DUMPED' )
 
-                        synchronize(function(Owner)
-                                Owner.setDescription( Owner.Description .. ' /D/' ) -- let's note what nodes are copies
-                                Owner.Options = '[moHideChildren]'
-                            end, Owner
+                        synchronize(function(parent)
+                                parent.setDescription( parent.Description .. ' /D/' ) -- let's note what nodes are copies
+                                parent.Options = '[moHideChildren]'
+                            end, parent
                         )
 
                         return
@@ -1585,32 +2661,33 @@
                 end
                 table.insert( dumpedNodes , nodeAddr )
 
-                synchronize(function( nodeName , Owner )
-                        Owner.setDescription( Owner.Description .. ' : '..tostring( nodeName ) ) -- append node name
-                    end, nodeName, Owner
+                synchronize(function( nodeName , parent )
+                        parent.setDescription( parent.Description .. ' : '..tostring( nodeName ) ) -- append node name
+                    end, nodeName, parent
                 )
 
-                if bDEBUGMode then print( debugPrefixStr..' iterateMNodeToAddr: STEP: Constants for: '..tostring(nodeName) ) end
+                --sendDebugMessage('iterateMNodeToAddr: STEP: Constants for: '..tostring(nodeName) )
 
-                local newConstRec = synchronize(function(Owner)
-                            local addrList = getAddressList()
-                            local newConstRec = addrList.createMemoryRecord()
-                            newConstRec.setDescription( "Consts:" )
-                            newConstRec.setAddress( 0xBABE )
-                            newConstRec.setType( vtPointer )
-                            newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                            newConstRec.DontSave = true
-                            newConstRec.appendToEntry( Owner )
-                            return newConstRec
-                        end, Owner
-                    )
+                if GDSOf.CONST_MAP ~= 0 then
+                    local newConstRec = synchronize(function(parent)
+                                local addrList = getAddressList()
+                                local newConstRec = addrList.createMemoryRecord()
+                                newConstRec.setDescription( "Consts:" )
+                                newConstRec.setAddress( 0xBABE )
+                                newConstRec.setType( vtPointer )
+                                newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+                                newConstRec.DontSave = true
+                                newConstRec.appendToEntry( parent )
+                                return newConstRec
+                            end, parent
+                        )
+                        iterateNodeConstToAddr( nodeAddr , newConstRec )
+                end
 
-                iterateNodeConstToAddr( nodeAddr , newConstRec )
+                --sendDebugMessage('iterateMNodeToAddr: STEP: VARIANTS for: '..tostring(nodeName) )
+                iterateVecVarToAddr( nodeAddr , parent)
 
-                if bDEBUGMode then print( debugPrefixStr..' iterateMNodeToAddr: STEP: VARIANTS for: '..tostring(nodeName) ) end
-                iterateVecVarToAddr( nodeAddr , Owner)
-
-                if bDEBUGMode then decDebugStep(); end;
+                --debugStepOut()
                 return
             end
 
@@ -1618,16 +2695,16 @@
             ---@param nodeAddr number
             ---@param scriptInstStructElement userdata
             function iterateNodeToStruct(nodeAddr, scriptInstStructElement)
+                debugStepIn()
 
-                local debugPrefixStr ='>';
-                local nodeName;
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end;         
-                if bDEBUGMode then nodeName = getNodeName( nodeAddr ); print( debugPrefixStr..' iterateNodeToStruct: Node: '..tostring(nodeName) ) end
+                local nodeName = getNodeName( nodeAddr ) or 'NIL';
+                
+                sendDebugMessage('iterateNodeToStruct: Node: '..tostring(nodeName) )
 
                 for i, storedNode in ipairs(dumpedDissectorNodes) do -- check if a node was already dumped
                     if storedNode == nodeAddr then
-                        if bDEBUGMode then print( debugPrefixStr..' iterateNodeToStruct: NODE '..tostring(nodeName)..' ALREADY DUMPED' ); decDebugStep(); end;
-                        Owner.Name = Owner.Name..' /D/'
+                        sendDebugMessageAndStepOut('iterateNodeToStruct: NODE '..tostring(nodeName)..' ALREADY DUMPED' )
+                        parent.Name = parent.Name..' /D/'
                         return
                     end
                 end
@@ -1638,19 +2715,21 @@
                 local constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', 0x400000, GDSOf.CONST_MAP, vtPointer )
                 local functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', 0x400000, GDSOf.FUNC_MAP, vtPointer )
 
-                if bDEBUGMode then print( debugPrefixStr..' iterateNodeToStruct: STEP: VARIANTS for: '..tostring(nodeName) ) end
+                sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: '..tostring(nodeName) )
                 varVectorStructElem.ChildStruct = createStructure( 'Vars' )
                 iterateVecVarToStruct( nodeAddr , varVectorStructElem )        
 
-                if bDEBUGMode then print( debugPrefixStr..' iterateNodeToStruct: STEP: Constants for: '..tostring(nodeName) ) end
-                constMapStructElem.ChildStruct = createStructure( 'Consts' )
-                iterateNodeConstToStruct( nodeAddr , constMapStructElem )
+                if GDSOf.CONST_MAP ~= 0 then
+                    sendDebugMessage('iterateNodeToStruct: STEP: Constants for: '..tostring(nodeName) )
+                    constMapStructElem.ChildStruct = createStructure( 'Consts' )
+                    iterateNodeConstToStruct( nodeAddr , constMapStructElem )
+                end
 
-                if bDEBUGMode then print( debugPrefixStr..' iterateNodeToStruct: STEP: Functions for: '..tostring(nodeName) ) end
+                sendDebugMessage('iterateNodeToStruct: STEP: Functions for: '..tostring(nodeName) )
                 functMapStructElem.ChildStruct = createStructure( 'Funcs' )
                 iterateNodeFuncMapToStruct( nodeAddr , functMapStructElem )
 
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
                 return
             end
 
@@ -1676,19 +2755,27 @@
             function getGDResName(nodeAddr, strSize)
                 assert(type(nodeAddr) == 'number',"getGDResName: nodeAddr should be a number, instead got: "..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end; 
+                --debugStepIn()
 
                 local gdScriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if gdScriptInstance == 0 or gdScriptInstance == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getGDResName: gdScriptInstance invalid'); decDebugStep(); end; return end
+                if isNullOrNil(gdScriptInstance) then
+                    --sendDebugMessageAndStepOut(' getGDResName: gdScriptInstance invalid')
+                    return
+                end
 
                 local gdScript = readPointer( gdScriptInstance + GDSOf.GDSCRIPT_REF )
-                if gdScript == 0 or gdScript == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getGDResName: gdScript invalid'); decDebugStep(); end; return end
+                if isNullOrNil(gdScript) then
+                    --sendDebugMessageAndStepOut('getGDResName: gdScript invalid')
+                    return
+                end
 
                 local gdScriptName = readPointer( gdScript + GDSOf.GDSCRIPTNAME )
-                if gdScriptName == 0 or gdScriptName == nil then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getGDResName: gdScriptName invalid'); decDebugStep(); end; return end
+                if isNullOrNil(gdScriptName) then
+                    --sendDebugMessageAndStepOut('getGDResName: gdScriptName invalid')
+                    return
+                end
 
-                if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                --debugStepOut()
 
                 return readUTFString( gdScriptName, strSize )
             end
@@ -1701,25 +2788,24 @@
                 local objectAddr = readPointer( objectPtr ) -- it's either an obj ptr or zero
 
                 if (not isValidPointer( objectAddr ) ) and ( not isValidPointer(  readPointer( objectAddr ) ) ) then -- check for vtable and 1st vmethod
-                    local debugPrefixStr ='>';
-                    if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end; 
+                    -- debugStepIn()
 
-                    if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) ); end;
+                    -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
                     local adjustedObjectPtr = objectPtr - GDSOf.PTRSIZE; -- shift back to get a ptr
                     local wrapperAddr = readPointer( adjustedObjectPtr ) -- this will be a wrapped obj ptr
                     objectAddr = readPointer( wrapperAddr )
 
                     if ( wrapperAddr == 0 ) or ( not isValidPointer( wrapperAddr ) )  then -- check the wrapper, obj and its vtable
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForVT: OBJ addr still not an obj  ptr, leave it be'); decDebugStep(); end;
+                        -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not an obj  ptr, leave it be')
                         return objectPtr, false; -- revert the value, whatever
                     end
 
                     if isValidPointer( objectAddr ) then -- check for vtable to be safe
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForVT: shifted OBJ addr is a ptr, returning it'); decDebugStep(); end;
+                        -- sendDebugMessageAndStepOut('checkForVT: shifted OBJ addr is a ptr, returning it')
                         return readPointer( adjustedObjectPtr ), true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
 
                     else
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr..' checkForVT: OBJ addr still not a ptr, leave it be'); decDebugStep() end;
+                        -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not a ptr, leave it be')
                         return objectPtr, false; -- revert the value, whatever
                     end
                 else
@@ -1734,12 +2820,15 @@
                 if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
                 local childrenPtr, childrenSize = getVPChildren()
-                if childrenPtr == nil or childrenSize == nil then return end
+                if isNullOrNil(childrenPtr) then return end
 
                 for i=0,( childrenSize-1 ) do
 
                     local nodeAddr = readPointer( childrenPtr + i * GDSOf.PTRSIZE )
-                    if nodeAddr == 0 then if bDEBUGMode then print( 'getNode: nodeAddr invalid' ); end; return end
+                    if isNullOrNil(nodeAddr) then
+                        --sendDebugMessage('getNode: nodeAddr invalid' )
+                        return
+                    end
 
                     local nodeNameStr = getNodeName(nodeAddr)
                     if nodeNameStr == nodeName then
@@ -1757,26 +2846,14 @@
                 assert(type(constName) == 'string',"Constant name has to be a string, instead got: "..type(constName))
 
                 local nodePtr = getNodeWithGDScriptInstance(nodeName)
-                if nodePtr == nil then if bDEBUGMode then print( " getNodeConstPtr: Node + GDSI: "..tostring(nodeName).." wasn't found") end; return; end
+                if isNullOrNil(nodePtr) then
+                    --sendDebugMessage("getNodeConstPtr: Node + GDSI: "..tostring(nodeName).." wasn't found")
+                    return
+                end
 
-                local mapElement = getNodeConstantMap(nodePtr)
-                repeat
-                    if getNodeConstName( mapElement ) == constName then
-                        if GDSOf.MAJOR_VER >= 4 then
-                            local constType = readInteger( mapElement + GDSOf.CONSTELEM_VALTYPE ) 
-                            local offsetToValue = getVariantValueOffset( constType )
-                            return getAddress( mapElement + GDSOf.CONSTELEM_VALTYPE + offsetToValue ), getCETypeFromGD( readInteger( mapElement + GDSOf.CONSTELEM_VALTYPE ) )
-                        else
-                            return getAddress( mapElement + GDSOf.CONSTELEM_VALVAL ), getCETypeFromGD( readInteger( mapElement + GDSOf.CONSTELEM_VALTYPE ) )
-                        end
-                    end
+                local mapHead = getNodeConstantMap(nodePtr)
+                return findMapEntryByName( mapHead, constName, getNodeConstName, getConstMapLookupResult, getNextMapElement )
 
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                    end
-                until (mapElement == 0)
             end
 
 
@@ -1788,27 +2865,30 @@
             function getNodeFunctionMap(nodeAddr)
                 assert(type(nodeAddr) == 'number',"nodeAddr should be a number, instead got: "..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end;
+                --debugStepIn()
 
                 local gdScriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if gdScriptInstance == 0 or gdScriptInstance == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeFunctionMap: gdScriptInstance is invalid'); decDebugStep(); end; return; end
+                if isNullOrNil(gdScriptInstance) then
+                    --sendDebugMessageAndStepOut('getNodeFunctionMap: gdScriptInstance is invalid');
+                    return;
+                end
 
                 local scriptPtr = readPointer( gdScriptInstance + GDSOf.GDSCRIPT_REF )
-                if scriptPtr == 0 or scriptPtr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeFunctionMap: scriptPtr is invalid'); decDebugStep(); end; return; end
+                if isNullOrNil(scriptPtr) then
+                    --sendDebugMessageAndStepOut('getNodeFunctionMap: scriptPtr is invalid')
+                    return;
+                end
 
                 local mainElement = readPointer( scriptPtr + GDSOf.FUNC_MAP )
                 local lastElement = readPointer( scriptPtr + GDSOf.FUNC_MAP + GDSOf.PTRSIZE )
                 local mapSize = readInteger( scriptPtr + GDSOf.FUNC_MAP + GDSOf.MAP_SIZE )
 
-                if (mainElement == 0 or mainElement == nil) or
-                    (lastElement == 0 or lastElement == nil) or
-                    (mapSize == 0 or mapSize == nil) then
-                    if bDEBUGMode then print(  debugPrefixStr..'getNodeFunctionMap: (hash)map is not found'); decDebugStep(); end;
+                if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
+                    --sendDebugMessageAndStepOut('getNodeFunctionMap: (hash)map is not found')
                     return;
                 end
 
-                if bDEBUGMode then decDebugStep(); end;
+                --debugStepOut()
                 if GDSOf.MAJOR_VER >= 4 then
                     return mainElement, lastElement, mapSize
                 else
@@ -1820,25 +2900,28 @@
             ---@param nodeAddr number
             function getNodeFuncMap(nodeAddr, funcStructElement)
                 assert(type(nodeAddr) == 'number',"getNodeFuncMap: NodePtr should be a number, instead got: "..type(nodeAddr))
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                --debugStepIn()
 
                 local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if scriptInstanceAddr == 0 or scriptInstanceAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeFuncMap: scriptInstance is invalid'); decDebugStep(); end; return; end
+                if isNullOrNil(scriptInstanceAddr) then
+                    --sendDebugMessageAndStepOut('getNodeFuncMap: scriptInstance is invalid')
+                    return
+                end
 
                 local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
-                if gdScriptAddr == 0 or gdScriptAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeFuncMap: GDScript is invalid'); decDebugStep(); end; return; end
+                if isNullOrNil(gdScriptAddr) then
+                    --sendDebugMessageAndStepOut(' getNodeFuncMap: GDScript is invalid');
+                    return;
+                end
 
                 local mainElement = readPointer( gdScriptAddr + GDSOf.FUNC_MAP ) -- head or root depending on the version
                 local lastElement = readPointer( gdScriptAddr + GDSOf.FUNC_MAP + GDSOf.PTRSIZE ) -- tail or end
                 local mapSize = readInteger( gdScriptAddr + GDSOf.FUNC_MAP + GDSOf.MAP_SIZE ) -- hashmap or map
-                if (mainElement == 0 or mainElement == nil) or
-                    (lastElement == 0 or lastElement == nil) or
-                    (mapSize == 0 or mapSize == nil) then
-                        if bDEBUGMode then print( debugPrefixStr..' getNodeFuncMap: Const: (hash)map is not found'); decDebugStep(); end
+                if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
+                        --sendDebugMessageAndStepOut('getNodeFuncMap: Const: (hash)map is not found')
                         return;-- return to skip if the const map is absent
                 end
-                if bDEBUGMode then decDebugStep(); end;
+                --debugStepOut()
                 
                 if GDSOf.MAJOR_VER >= 4 then
                     return mainElement, lastElement, mapSize, funcStructElement
@@ -1853,28 +2936,10 @@
             ---@param funcName string
             function getGDFunctionPtr(nodeName, funcName)
                 assert(type(nodeName) == 'string',"Node name has to be a string, instead got: "..type(nodeName))
-
                 local nodePtr = getNodeWithGDScriptInstance(nodeName)
-                if nodePtr == nil then print( "getGDFunctionPtr: Node: "..tostring(nodeName).." wasn't found" ); return; end
-                local mapFuncName;
-                local mapElement = getNodeFunctionMap(nodePtr)
-
-                repeat
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapFuncName = getGDFunctionName( mapElement ) -- #TODO IS it correct? Didn't care about functions much
-                    else
-                        mapFuncName = getStringNameStr( readPointer( mapElement + GDSOf.MAP_KVALUE ) )
-                    end
-                    if mapFuncName == funcName then
-                        return readPointer( mapElement + GDSOf.FUNC_MAPVAL )
-                    end
-
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                    end
-                until (mapElement == 0)
+                if isNullOrNil(nodePtr) then print( "getGDFunctionPtr: Node: "..tostring(nodeName).." wasn't found" ); return; end
+                local mapHead = getNodeFunctionMap(nodePtr)
+                return findMapEntryByName( mapHead, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement )
             end
 
             --- iterates a function map and adds it to a struct
@@ -1883,273 +2948,94 @@
             function iterateNodeFuncMapToStruct(nodeAddr, funcStructElement)
                 assert( type(nodeAddr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: '..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end;
-                
-                local headElement, tailElement, mapSize, funcStructElement = getNodeFuncMap( nodeAddr, funcStructElement)
-                if (headElement==0 or headElement==nil) or (mapSize==0 or mapSize==nil) then
-                    if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct (hash)map empty?: '..string.format( 'Address: %x ', tonumber(nodeAddr) ) ); decDebugStep(); end
+                debugStepIn()
+                local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeAddr, funcStructElement)
+                if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+                    sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: '..("Address: %x "):format(nodeAddr or -1))
                     return;
                 end
-
                 local mapElement = headElement
-                local prefixStr = 'func: '
                 local index = 0;
+
                 repeat
-                    if bDEBUGMode then print( debugPrefixStr..' iterateNodeFuncMapToStruct: Loop Map start'..string.format(' hashElemAddr: %x', mapElement)) end
-
-                    local funcName = getNodeConstName( mapElement ) or "UNKNOWN" -- the layout is similar to constant map's
-                    local newParentStructElem = addStructureElem( funcStructElement, prefixStr..funcName, GDSOf.FUNC_MAPVAL, vtPointer )
-
+                    sendDebugMessage('iterateNodeFuncMapToStruct: Looping '..(" mapElemAddr: %x"):format(mapElement or -1 ))
+                    local funcName = getFunctionMapName( mapElement ) or "UNKNOWN" -- the layout is similar to constant map's
                     if not bDISASSEMBLEFUNCTIONS then
-                        local funcValueAddr = readPointer( mapElement + GDSOf.FUNC_MAPVAL)
-
-                        newParentStructElem.ChildStruct = createStructure('GDFunction')
-                        addStructureElem( newParentStructElem, 'Code: '..funcName, GDSOf.FUNC_CODE, vtPointer )
-                        local funcConstantStructElem = addStructureElem( newParentStructElem, 'Constants: '..funcName, GDSOf.FUNC_CONST, vtPointer )
-                        funcConstantStructElem.ChildStruct = createStructure('GDFConst')
-                        local funcConstAddr = readPointer( funcValueAddr + GDSOf.FUNC_CONST )
-                        iterateFuncConstantsToStruct( funcConstAddr, funcConstantStructElem )
-
-                        local funcGlobalNameStructElem = addStructureElem( newParentStructElem, 'GlobalNames: '..funcName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer )
-                        funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
-                        local funcGlobalAddr = readPointer( funcValueAddr + GDSOf.FUNC_GLOBNAMEPTR )
-                        iterateFuncGlobalsToStruct( funcGlobalAddr, funcGlobalNameStructElem )
-
+                        emitFunctionStructEntry(currentContainer, mapElement, funcName)
                     end
-
                     index = index+1
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                        funcStructElement = addStructureElem( funcStructElement, 'Next['..index..']', 0x0, vtPointer )
-                        funcStructElement.ChildStruct = createStructure('FuncNext')
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                        funcStructElement = addStructureElem( funcStructElement, 'Next', GDSOf.MAP_NEXTELEM, vtPointer )
-                        funcStructElement.ChildStruct = createStructure('FuncNext')
+                    mapElement = advanceFunctionMapElement(mapElement)
+                    if mapElement ~= 0 then
+                        currentContainer = createNextFunctionContainer(currentContainer, index)
                     end
                 until (mapElement == 0)
 
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
                 return
             end
 
             function iterateFuncConstantsToStruct( funcConstantVect, funcConstantStructElem )
-                if funcConstantVect == 0 or funcConstantVect == nil then return; end
+                debugStepIn()
 
-                local vectorSize = readInteger( funcConstantVect - GDSOf.SIZE_VECTOR )
-                if vectorSize == 0 or vectorSize == nil then return; end
-                local variantSize, bSuccess = redefineVariantSizeByVector( funcConstantVect, vectorSize )
-
-                if not bSuccess then if bDEBUGMode then print( debugPrefixStr.." iterateFuncConstantsToStruct: Variant resize failed"); decDebugStep(); end return; end
-                local variantPtr, variantType, offsetToValue, variantTypeName
-                local prefixStr = 'Const['
-                local postfixStr = ''
-
-                for variantIndex=0, (vectorSize-1) do
-                    variantPtr, variantType, offsetToValue = getVariantByIndex( funcConstantVect, variantIndex, variantSize, true )
-                    local variantTypeName = getGDTypeName( variantType ) 
-
-                    if ( variantTypeName == 'DICTIONARY' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateFuncConstantsToStruct loop: DICT case" ) end
-                        postfixStr = ' dict'
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
-                        else
-                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize == nil or dictSize == 0 then
-                            postfixStr = ' dict (empty)'
-                            addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
-                        else
-                            local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
-                            newParentStructElem.ChildStruct = createStructure('Dict')
-                            iterateDictionaryToStruct( readPointer( variantPtr ) , newParentStructElem )
-                        end
-
-                    elseif variantTypeName == 'ARRAY' then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct: ARRAY case" ) end
-                        postfixStr = ' array'
-
-                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) == 0 then
-                            postfixStr = ' array(empty)'
-                            addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
-                        else
-                            local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
-                            newParentStructElem.ChildStruct = createStructure('Array')
-                            iterateArrayToStruct( readPointer( variantPtr ) , newParentStructElem )
-                        end
-
-                    elseif ( variantTypeName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateFuncConstantsToStruct loop: OBJ case" ) end
-                        local bShifted, newParentStructElem;
-                        variantPtr, bShifted = checkForVT( variantPtr ) -- check if the pointer is valid, if not, shift it back 0x8 bytes
-                        if bShifted then
-                            offsetToValue = offsetToValue - GDSOf.PTRSIZE
-                            newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..' Wrapper', offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('Wrapper')
-                            offsetToValue = 0x0 -- the object lies at 0x0 now
-                        else
-                            newParentStructElem = funcConstantStructElem
-                        end
-                        postfixStr = ' mNode'
-
-                        if checkForGDScript( readPointer( variantPtr ) ) then
-                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct loop: NODE SKIPPED" ) end 
-                            addLayoutStructElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0xFF8080, offsetToValue, vtPointer)
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToStruct: OBJ doesn\'t have GDScript/Inst'); end
-                            postfixStr = ' obj'
-                            addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, getCETypeFromGD( variantType ) )
-                        end
-
-                    elseif ( variantTypeName == 'PACKED_STRING_ARRAY' ) or ( variantTypeName == 'PACKED_BYTE_ARRAY' )
-                        or ( variantTypeName == 'PACKED_INT32_ARRAY' ) or ( variantTypeName == 'PACKED_INT64_ARRAY' )
-                        or ( variantTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( variantTypeName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( variantTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( variantTypeName == 'PACKED_COLOR_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR4_ARRAY' ) then -- packed arrays are a simple arrays of ptr
-
-                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct loop: "..tostring(variantType).." case" ) end
-                            local arrayAddr = readPointer( variantPtr )
-
-                            if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then
-                                postfixStr = ' pck_arr(empty)'
-                                addStructureElem( funcConstantStructElem, prefixStr..variantName..' of '..variantTypeName, offsetToValue, getCETypeFromGD( variantType ) )
-                            else
-                                postfixStr = ' pck_arr'
-                                local newParentStructElem = addStructureElem(funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..' of '..variantTypeName, offsetToValue, getCETypeFromGD( variantType ) )
-                                newParentStructElem.ChildStruct = createStructure('P_Array')
-                                iteratePackedArrayToStruct( arrayAddr, variantTypeName, newParentStructElem )
-                            end
-
-                    elseif ( variantTypeName == 'STRING' ) then
-                            postfixStr = ' string'
-                            local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('String')
-                            addStructureElem(newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x0, vtUnicodeString )
-
-                    elseif ( variantTypeName == 'COLOR' ) then
-                        postfixStr = ' color'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': R' , offsetToValue, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': G' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': B' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': A' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR2' ) then
-                        postfixStr = ' vec2'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR2I' ) then
-                        postfixStr = ' vec2i'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
-
-                    elseif ( variantTypeName == 'RECT2' ) then
-                        postfixStr = ' rect2'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': h' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( variantTypeName == 'RECT2I' ) then
-                        postfixStr = ' rect2i'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0x8, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': h' , offsetToValue+0xC, vtDword )
-
-                    elseif ( variantTypeName == 'VECTOR3' ) then
-                        postfixStr = ' vec3'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR3I' ) then
-                        postfixStr = ' vec3i'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtDword )
-
-                    elseif ( variantTypeName == 'VECTOR4' ) then
-                        postfixStr = ' vec4'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR4I' ) then
-                        postfixStr = ' vec4i'
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': x' , offsetToValue, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': z' , offsetToValue+0x8, vtDword )
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr..': w' , offsetToValue+0xC, vtDword )
-
-                    elseif ( variantTypeName == 'STRING_NAME' ) then
-                        postfixStr = ' StringName'
-                        local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('StringName')
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, 0x10, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('stringy')
-                        addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtUnicodeString )
-
-                    elseif ( variantTypeName == 'NODE_PATH' ) then
-                        postfixStr = ' NodePath'
-                        local newParentStructElem = addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, offsetToValue, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('NodePath')
-                        local nodePathVect = readPointer( readPointer( funcConstantVect + offsetToValue ) + 0x10 ) or 0x0 -- #TODO a more clear fallback
-                        local pathVectSize = readInteger( nodePathVect - GDSOf.SIZE_VECTOR )
-
-                        if (nodePathVect ~= nil and nodePathVect ~= 0) and (pathVectSize ~= nil and pathVectSize > 0 and pathVectSize <= 1000) then
-                            local newPathStructElem = addStructureElem( newParentStructElem, 'NodePathVect', 0x10, vtPointer )
-                            newPathStructElem.ChildStruct = createStructure('Paths')
-
-                            for pathIndex=0, (pathVectSize-1) do 
-                                newParentStructElem = addStructureElem( newPathStructElem, 'Sub'..prefixStr..tostring(pathIndex)..']'..postfixStr, (pathIndex*GDSOf.PTRSIZE) , vtPointer )
-                                newParentStructElem.ChildStruct = createStructure('StringName')
-                                newParentStructElem = addStructureElem( newParentStructElem, 'StringName '..prefixStr..tostring(pathIndex)..']'..postfixStr, GDSOf.STRING, vtPointer )
-                                newParentStructElem.ChildStruct = createStructure('stringy')
-                                addStructureElem( newParentStructElem, 'Sub'..prefixStr..tostring(pathIndex)..']'..' NodePathString', 0x0, vtUnicodeString )
-                            end
-                        end
-
-                    else
-                        addStructureElem( funcConstantStructElem, prefixStr..tostring(variantIndex)..'] '..variantTypeName, offsetToValue, getCETypeFromGD( variantType ) )
-                    end
-
+                if isNullOrNil(funcConstantVect) then
+                    sendDebugMessageAndStepOut('iterateFuncConstantsToStruct func vector invalid')
+                    return 
                 end
 
+                local vectorSize = readInteger( funcConstantVect - GDSOf.SIZE_VECTOR )
+                if isNullOrNil(vectorSize) then
+                    sendDebugMessageAndStepOut('iterateFuncConstantsToStruct vector size invalid')
+                    return;
+                end
+
+                local variantSize, ok = redefineVariantSizeByVector( funcConstantVect, vectorSize )
+
+                if not ok then
+                    sendDebugMessageAndStepOut("iterateFuncConstantsToStruct: Variant resize failed")
+                    return
+                end
+                local emitter = StructEmitter
+
+                for variantIndex = 0, (vectorSize - 1) do
+                    local entry = readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
+                    local contextTable = { nodeAddr = 0, nodeName = "FunctionConst", baseAddress = entry.variantPtr }
+                    local handler = VariantHandlers[entry.typeName] or VariantHandlers.DEFAULT
+                    handler(entry, emitter, funcConstantStructElem, contextTable)
+                end
+
+                debugStepOut()
                 return;
             end
 
             function iterateFuncGlobalsToStruct( funcGlobalVect, funcGlobalNameStructElem )
-                if funcGlobalVect == 0 or funcGlobalVect == nil then return; end
+                debugStepIn()
 
+                if isNullOrNil(funcGlobalVect) then
+                    sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct funcGlobalVect invalid')
+                    return;
+                end
+                
                 local vectorSize = readInteger( funcGlobalVect - GDSOf.SIZE_VECTOR )
-                if vectorSize == 0 or vectorSize == nil then return; end
-
-                local newParentStructElem
-                local prefixStr = 'GlobName['
-                local postfixStr = ' stringName'
-
-                for variantIndex=0, (vectorSize-1) do
-                    newParentStructElem = addStructureElem( funcGlobalNameStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, (variantIndex*GDSOf.PTRSIZE) , vtPointer )
-                    newParentStructElem.ChildStruct = createStructure('StringName')
-                    if isPointerNotNull( readPointer( funcGlobalVect + (variantIndex*GDSOf.PTRSIZE) ) + GDSOf.STRING ) then
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, GDSOf.STRING, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('stringy')
-                        addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtUnicodeString )
-                    else
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..postfixStr, GDSOf.STRING-GDSOf.PTRSIZE, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('stringy')
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..tostring(variantIndex)..']'..' string', 0x0, vtString )
-                        newParentStructElem.Bytesize = 100;
-                    end
-
+                if isNullOrNil(vectorSize) then
+                    sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct vector size invalid')
+                    return;
                 end
 
+                for variantIndex=0, (vectorSize-1) do
+                    local entryOffset = variantIndex * GDSOf.PTRSIZE
+                    local label = "GlobName["..variantIndex.."] stringName"
+                    local stringFieldLabel = "GlobName["..variantIndex.. "] string"
+                    local stringNamePtr = readPointer(funcGlobalVect + entryOffset)
+                    local bUniShift = false -- TODO: with version checking that should not be an issue
+
+                    if isPointerNotNull(stringNamePtr) then bUniShift = isPointerNotNull(stringNamePtr + GDSOf.STRING) end
+
+                    sendDebugMessage('iterateFuncGlobalsToStruct: Looping: label: '..label..(" funcVector: %x"):format(funcGlobalVect))
+
+                    emitStringNameStruct( funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, bUniShift )
+                end
+
+                debugStepOut()
                 return;
             end
 
@@ -3786,9 +4672,9 @@
                 assert( (type(funcAddr) == 'number') and (funcAddr ~= 0),'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: '..type(funcAddr) )
                 if GDF == nil then defineGDFunctionEnums() end
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
+                -- TODO: resolve that with a a helper
                 local codeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
                 funcStruct.Name = 'ScriptFunc'
                 local codeStructElement = funcStruct.addElement()
@@ -3825,7 +4711,7 @@
                     end
                     currIndx = currIndx+1
                 end
-                if bDEBUGMode then print( debugPrefixStr..' disassembleGDFunctionCode: codeSize: '..tostring(codeSize) ) end
+                sendDebugMessage('disassembleGDFunctionCode: codeSize: '..tostring(codeSize) )
 
                 local operandCount = 0
                 local opcodeName = 'UNKNOWN_OPCODE'
@@ -3861,16 +4747,16 @@
                 local funcResStringNameAddr = readPointer( funcAddr + GDSOf.PTRSIZE ) -- StringName source;
                 local funcCodeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
 
-                if (funcStringNameAddr ~= nil and funcStringNameAddr ~=0) and (funcResStringNameAddr ~= nil and funcResStringNameAddr ~=0) and isPointerNotNull( funcAddr + GDSOf.FUNC_CODE ) then
+                if isNotNullOrNil(funcStringNameAddr) and isNotNullOrNil(funcResStringNameAddr) and isPointerNotNull( funcAddr + GDSOf.FUNC_CODE ) then
 
                     local funcStringAddr = readPointer(funcStringNameAddr + GDSOf.STRING)
-                    if (funcStringAddr == nil or funcStringAddr == 0) then
+                    if isNullOrNil(funcStringAddr) then
                         funcStringAddr = readPointer( funcStringNameAddr + 0x8 )
-                        if funcStringAddr == nil or funcStringAddr == 0 then return false end
+                        if isNullOrNil(funcStringAddr) then return false end
                     end
 
                     local resStringAddr = readPointer( funcResStringNameAddr + GDSOf.STRING )
-                    if resStringAddr == 0 or resStringAddr == nil then return false end
+                    if isNullOrNil(resStringAddr) then return false end
                     if readUTFString( resStringAddr, 4 ) ~= 'res:' then return false end
 
                     return true
@@ -3883,29 +4769,32 @@
 
             --- returns a head element, tail element and (hash)Map size
             ---@param nodeAddr number
-            function getNodeConstMap(nodeAddr, constStructElement)
+            function getNodeConstMap(nodeAddr, constStructElement) 
                 assert(type(nodeAddr) == 'number',"getNodeConstMap: NodePtr should be a number, instead got: "..type(nodeAddr))
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
                 local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if scriptInstanceAddr == 0 or scriptInstanceAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeConstMap: scriptInstance is invalid'); decDebugStep(); end; return; end
+                if isNullOrNil(scriptInstanceAddr) then
+                    sendDebugMessageAndStepOut('getNodeConstMap: scriptInstance is invalid');
+                    return;
+                end
 
                 local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
-                if gdScriptAddr == 0 or gdScriptAddr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeConstMap: GDScript is invalid'); decDebugStep(); end; return; end
+                if isNullOrNil(gdScriptAddr) then
+                    sendDebugMessageAndStepOut('getNodeConstMap: GDScript is invalid')
+                    return;
+                end
 
                 local mainElement = readPointer( gdScriptAddr + GDSOf.CONST_MAP ) -- head or root depending on the version
                 local lastElement = readPointer( gdScriptAddr + GDSOf.CONST_MAP + GDSOf.PTRSIZE ) -- tail or end
                 local mapSize = readInteger( gdScriptAddr + GDSOf.CONST_MAP + GDSOf.MAP_SIZE ) -- hashmap or map
-                if (mainElement == 0 or mainElement == nil) or
-                    (lastElement == 0 or lastElement == nil) or
-                    (mapSize == 0 or mapSize == nil) then
-                        if bDEBUGMode then print( debugPrefixStr..' getNodeConstMap: Const: (hash)map is not found'); decDebugStep(); end
-                        return;-- return to skip if the const map is absent
+                if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
+                        sendDebugMessageAndStepOut('getNodeConstMap: Const: (hash)map is not found')
+                        return;
                 end
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
                 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER >= 4 then  -- TODO: the function can be segmented
                     return mainElement, lastElement, mapSize, constStructElement
                 else
                     if constStructElement then constStructElement.ChildStruct = createStructure('ConstMapRes') end
@@ -3916,773 +4805,149 @@
             --- returns a lua string for const name
             ---@param mapElement number
             function getNodeConstName(mapElement)
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
                 local mapElementKey = readPointer( mapElement + GDSOf.CONSTELEM_KEYVAL )
-                if mapElementKey == 0 or mapElementKey == nil then
-                if bDEBUGMode then print( debugPrefixStr..' getNodeConstName: (hash)mapElementKey invalid'); decDebugStep(); end; return 'C??' end
+                if isNullOrNil(mapElementKey) then
+                    sendDebugMessageAndStepOut('getNodeConstName: (hash)mapElementKey invalid');
+                    return 'C??'
+                end
 
                 local constNameStr = readPointer( mapElementKey + GDSOf.STRING )
 
-                if constNameStr == 0 or constNameStr == nil then
-                    if bDEBUGMode then print( debugPrefixStr..' getNodeConstName: string address invalid, trying ASCII'); end;
+                if isNullOrNil(constNameStr) then
+                    sendDebugMessage('getNodeConstName: string address invalid, trying ASCII');
                     constNameStr = readPointer( mapElementKey + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
-                    if constNameStr == 0 or constNameStr == nil then if bDEBUGMode then print( debugPrefixStr..' getNodeName: string address invalid, not ASCII either'); decDebugStep(); end; return 'C??' end  -- return empty string if no string was found
-                    if bDEBUGMode then decDebugStep(); end;
+                    if isNullOrNil(constNameStr) then
+                        sendDebugMessageAndStepOut('getNodeName: string address invalid, not ASCII either')
+                        return 'C??'
+                    end
+                    debugStepOut()
 
                     return readString( constNameStr, 100 )
                 end
 
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
 
                 return readUTFString( constNameStr )
             end
 
             -- iterates over const (hash)map of a node and creates addresses for it
             ---@param nodeAddr number
-            ---@param Owner userdata
-            function iterateNodeConstToAddr(nodeAddr, Owner)
+            ---@param parent userdata
+            function iterateNodeConstToAddr(nodeAddr, parent)
                 assert(type(nodeAddr) == 'number',"iterateNodeConstToAddr Node addr has to be a number, instead got: "..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
-                local nodeName = getNodeName( nodeAddr )
-                if not checkForGDScript( nodeAddr ) then if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToAddr: Node "..tostring(nodeName).." with NO GDScript"); decDebugStep(); end;
-
-                    synchronize(function(Owner)
-                                Owner.Destroy()
-                            end, Owner
-                        )
+                local nodeName = getNodeName( nodeAddr ) or "UnknownNode"
+                if not checkForGDScript( nodeAddr ) then
+                    sendDebugMessageAndStepOut("iterateNodeConstToAddr: Node "..tostring(nodeName).." with NO GDScript")
+                    synchronize( function(parent) parent.Destroy() end, parent )
                     return;
-
                 end;
 
                 local headElement, tailElement, mapSize = getNodeConstMap(nodeAddr)
-                if (headElement==0 or headElement==nil) or (mapSize==0 or mapSize==nil) then
-                    if bDEBUGMode then print( debugPrefixStr..' iterateNodeConstToAddr (hash)map empty?: '..string.format( 'Address: %x ', tonumber(nodeAddr) ) ); decDebugStep(); end
-
-                    synchronize(function(Owner)
-                            Owner.Destroy()
-                        end, Owner
-                    )
-
-                    return; -- just return on fail
+                if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+                    sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: '..('Address: %x '):format( nodeAddr or -1 ) )
+                    synchronize( function(parent) parent.Destroy() end, parent )
+                    return;
                 end
 
-                if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToAddr BEFORE loop (Node: "..tostring(nodeName)..": "..string.format('%x',nodeAddr).."):\t\t"..string.format('head: %x | ', headElement)..string.format('tailEnd: %x | ', tailElement)..'(Hash)M size: '..tostring(mapSize) ) end
-                local mapElement = headElement -- hashmap or map
-                local prefixStr = 'CONST: '
-                local suffixStr = 'array: '
+                local emitter = AddrEmitter
+                local mapElement = headElement
 
                 repeat
-                    local constName = getNodeConstName( mapElement )
-                    local constType = readInteger( mapElement + GDSOf.CONSTELEM_VALTYPE )
-                    local offsetToValue = GDSOf.CONSTELEM_VALTYPE + getVariantValueOffset( constType )
-                    local constPtr = getAddress( mapElement + offsetToValue ) -- to be safe
+                    local entry = readNodeConstEntry(mapElement)
+                    entry.name = "CONST: " .. entry.name
+                    local contextTable = { nodeAddr = nodeAddr, nodeName = nodeName or "UnknownNode", baseAddress = entry.variantPtr }
+                    local handler = VariantHandlers[entry.typeName] or VariantHandlers.DEFAULT
+                    handler(entry, emitter, parent, contextTable)
+                    mapElement = getNextMapElement(mapElement)
 
-                    if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToAddr loop (Node: "..tostring(nodeName)..": "..string.format('%x',nodeAddr).."):\t\t"..string.format('(hash)M elem: %x | ', mapElement)..' constName: '..tostring(constName)..'\t constType: '..tostring(constType)..string.format('\t constValue: %x', readPointer(constPtr) ) ) end
-                    local constTypeName = getGDTypeName( constType )
-
-                    if constTypeName == 'ARRAY' then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToAddr loop: ARRAY case for name: "..tostring(constName)) end
-
-                        if readPointer( readPointer( constPtr ) + GDSOf.ARRAY_TOVECTOR ) == 0 then
-
-                            synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
-                                    addMemRecTo( prefixStr..'array: (empty): '..constName , constPtr , getCETypeFromGD( constType ) , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, constType, Owner
-                            )
-
-                        else
-                            suffixStr = 'array: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
-                                        local newParentMemrec = addMemRecTo( prefixStr..suffixStr..constName , constPtr , getCETypeFromGD( constType ) , Owner ) 
-                                        newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, suffixStr, constName, constPtr, constType, Owner
-                                )
-
-                            iterateArrayToAddr( readPointer( constPtr ) , newParentMemrec )
-                        end
-
-                    elseif constTypeName == 'DICTIONARY' then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToAddr loop: DICT case for name: "..tostring(constName) ) end
-                        
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( constPtr ) + GDSOf.DICT_SIZE )
-                        else
-                            dictSize = readInteger( readPointer( readPointer( constPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize == nil or dictSize == 0 then
-                            suffixStr = 'dict (empty): '
-
-                            synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName , constPtr , getCETypeFromGD( constType ) , Owner ) -- when the dicitonary is empty, just add the addr
-                                end, prefixStr, suffixStr, constName, constPtr, constType, Owner
-                            )
-
-                        else
-                            suffixStr = 'dict: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..suffixStr..constName , constPtr , getCETypeFromGD( constType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, suffixStr, constName, constPtr, constType, Owner
-                                )
-
-                            iterateDictionaryToAddr( readPointer( constPtr ) , newParentMemrec )
-                        end
-
-                    elseif ( constTypeName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToAddr loop: OBJ case for name: "..tostring(constName) ) end
-                        constPtr = checkForVT( constPtr )
-
-                        if checkForGDScript( readPointer( constPtr ) ) then  -- is it even possible to have const nodes?
-                            suffixStr = 'mNode: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..suffixStr..constName , constPtr , getCETypeFromGD( constType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, suffixStr, constName, constPtr, constType, Owner
-                                )
-
-                            iterateMNodeToAddr( readPointer( constPtr ) , newParentMemrec )
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateNodeConstToAddr: OBJ doesn\'t have GDScript/Inst'); end;
-
-                            suffixStr = 'obj: '
-
-                            synchronize(function( prefixStr, suffixStr, constTypeName, constName, constPtr, constType, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..' '..tostring(constTypeName)..' '..constName , constPtr , getCETypeFromGD( constType )  , Owner )
-                                end, prefixStr, suffixStr, constTypeName, constName, constPtr, constType, Owner
-                            )
-
-                        end
-                    elseif ( constTypeName == 'PACKED_STRING_ARRAY' ) or ( constTypeName == 'PACKED_BYTE_ARRAY' )
-                        or ( constTypeName == 'PACKED_INT32_ARRAY' ) or ( constTypeName == 'PACKED_INT64_ARRAY' )
-                        or ( constTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( constTypeName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( constTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( constTypeName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( constTypeName == 'PACKED_COLOR_ARRAY' ) or ( constTypeName == 'PACKED_VECTOR4_ARRAY' ) then
-
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToAddr loop: "..tostring(constTypeName).." case: "..tostring(constName)) end
-                        
-                        local arrayAddr = readPointer( constPtr )
-                        if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then -- when there are no elements in an array, its pointer shuld be 0 ?
-                            prefixStr = 'pck_arr (empty): '
-
-                            synchronize(function( prefixStr, constName, constTypeName, arrayAddr, constType, Owner)
-                                    addMemRecTo( prefixStr..constName.. ' T: '..tostring(constTypeName) , arrayAddr , getCETypeFromGD( constType ) , Owner )
-                                end, prefixStr, constName, constTypeName, arrayAddr, constType, Owner
-                            )
-
-                        else
-                            prefixStr = 'pck_arr: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, constName, constTypeName, arrayAddr, constType, Owner)
-                                        local newParentMemrec = addMemRecTo( prefixStr..constName.. ' T: '..tostring(constTypeName) , arrayAddr , getCETypeFromGD( constType ) , Owner )
-                                        newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, constName, constTypeName, arrayAddr, constType, Owner
-                                )
-
-                            iteratePackedArrayToAddr(  arrayAddr , constTypeName, newParentMemrec )
-                        end
-
-                    elseif ( constTypeName == 'COLOR' ) then
-                        suffixStr = 'color: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..' R' , constPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..' G' , constPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..' B' , constPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..' A' , constPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'VECTOR2' ) then
-                        suffixStr = 'vec2: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'VECTOR2I' ) then
-                        suffixStr = 'vec2i: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'RECT2' ) then
-                        suffixStr = 'rect2: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': h' , constPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'RECT2I' ) then
-                        suffixStr = 'rect2i: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': h' , constPtr+0xC , vtDword , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'VECTOR3' ) then
-                        suffixStr = 'vec3: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtSingle , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'VECTOR3I' ) then
-                        suffixStr = 'vec3i: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtDword , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'VECTOR4' ) then
-                        suffixStr = 'vec4: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'VECTOR4I' ) then
-                        suffixStr = 'vec4i: '
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                    addMemRecTo( prefixStr..suffixStr..constName..': x' , constPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': y' , constPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': z' , constPtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..suffixStr..constName..': w' , constPtr+0xC , vtDword , Owner )
-                                end, prefixStr, suffixStr, constName, constPtr, Owner
-                            )
-
-                    elseif ( constTypeName == 'STRING_NAME' ) then
-                        suffixStr = 'StringName: '
-                        constPtr = readPointer( constPtr ) + GDSOf.STRING
-
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, Owner)
-                                addMemRecTo( prefixStr..suffixStr..constName , constPtr , vtString , Owner )
-                            end, prefixStr, suffixStr, constName, constPtr, Owner
-                        )
-
-                    else
-                        synchronize(function( prefixStr, suffixStr, constName, constPtr, constType, Owner)
-                                    addMemRecTo( prefixStr..constName , constPtr , getCETypeFromGD( constType ) , Owner ) 
-                                end, prefixStr, suffixStr, constName, constPtr, constType, Owner
-                            )
-
-                    end
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer(mapElement)
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                    end
                 until (mapElement == 0)
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
                 return
             end
 
             -- iterates over const (hash)map of a node and builds the structure for it
             ---@param nodeAddr number
             ---@param constStructElement userdata
-            function iterateNodeConstToStruct(nodeAddr, constStructElement)
+            function iterateNodeConstToStruct(nodeAddr, constStructElement) -- TODO: MAKE IT UNIVERSAL
                 assert(type(nodeAddr) == 'number',"iterateNodeConstToStruct Node addr has to be a number, instead got: "..type(nodeAddr))
 
-                local nodeName;
-                local index = 0;
+                debugStepIn()
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep(); nodeName  = getNodeName( nodeAddr ) end;
-
-                local headElement, tailElement, mapSize, constStructElement = getNodeConstMap( nodeAddr, constStructElement)
-                if (headElement==0 or headElement==nil) or (mapSize==0 or mapSize==nil) then
-                    if bDEBUGMode then print( debugPrefixStr..' iterateNodeConstToStruct (hash)map empty?: '..string.format( 'Address: %x ', tonumber(nodeAddr) ) ); decDebugStep(); end
-                    return; -- just return on fail
+                local headElement, _, mapSize, constStructElement = getNodeConstMap( nodeAddr, constStructElement)
+                if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+                    sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: '..('Address: %x '):format(nodeAddr or -1 ) )
+                    return;
                 end
 
-                if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToStruct BEFORE loop (Node: "..tostring(nodeName)..": "..string.format('%x',nodeAddr).."):\t\t"..string.format('head: %x | ', headElement)..string.format('tailEnd: %x | ', tailElement)..'(Hash)M size: '..tostring(mapSize) ) end
-                local mapElement = headElement -- hashmap or map
-                local prefixStr = 'CONST: '
-                local suffixStr = 'UNKNOWN: '
+                local mapElement = headElement
+                local emitter = StructEmitter
+                local currentContainer = constStructElement
+                local index = 0;
+                local nodeName = getNodeName(nodeAddr) or "UnknownNode"
 
                 repeat
-                    local constName = getNodeConstName( mapElement )
-                    local constType = readInteger( mapElement + GDSOf.CONSTELEM_VALTYPE )
-                    local offsetToValue = GDSOf.CONSTELEM_VALTYPE + getVariantValueOffset( constType )
-                    local constPtr = getAddress( mapElement + offsetToValue ) -- to be safe
+                    local entry = readNodeConstEntry(mapElement)
+                    entry.name = "CONST: " .. entry.name
+                    local contextTable = { nodeAddr = nodeAddr, nodeName = nodeName, baseAddress = entry.variantPtr }
+                    local handler = VariantHandlers[entry.typeName] or VariantHandlers.DEFAULT
+                    handler(entry, emitter, currentContainer, contextTable)
 
-                    if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToStruct loop (Node: "..tostring(nodeName)..": "..string.format('%x',nodeAddr).."):\t\t"..string.format('(hash)M elem: %x | ', mapElement)..' constName: '..tostring(constName)..'\t constType: '..tostring(constType)..string.format('\t constValue: %x', readPointer(constPtr) ) ) end
-                    local constTypeName = getGDTypeName( constType )
-
-                    if constTypeName == 'ARRAY' then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToStruct loop: ARRAY case for name: "..tostring(constName)) end
-
-                        if readPointer( readPointer( constPtr ) + GDSOf.ARRAY_TOVECTOR ) == 0 then
-                            addStructureElem( constStructElement, prefixStr..'array: (empty): '..constName, offsetToValue, getCETypeFromGD( constType ) )
-                        else
-                            suffixStr = 'array: '
-                            local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
-                            newParentStructElem.ChildStruct = createStructure('Array')
-                            iterateArrayToStruct( readPointer( constPtr ) , newParentStructElem )
-                        end
-
-                    elseif constTypeName == 'DICTIONARY' then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToStruct loop: DICT case for name: "..tostring(constName) ) end
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( constPtr ) + GDSOf.DICT_SIZE )
-                        else
-                            dictSize = readInteger( readPointer( readPointer( constPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize == nil or dictSize == 0 then
-                            suffixStr = 'dict (empty): '
-                            addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
-                        else
-                            suffixStr = 'dict: '
-                            local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
-                            newParentStructElem.ChildStruct = createStructure('Dict')
-                            iterateDictionaryToStruct( readPointer( constPtr ) , newParentStructElem )
-                        end
-
-                    elseif ( constTypeName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToStruct loop: OBJ case for name: "..tostring(constName) ) end
-                        local bShifted, newParentStructElem;
-                        constPtr, bShifted = checkForVT( constPtr ) -- check if the pointer is valid, if not, shift it back 0x8 bytes
-                        if bShifted then
-                            offsetToValue = offsetToValue - GDSOf.PTRSIZE
-                            newParentStructElem = addStructureElem( constStructElement, prefixStr..'Wrapper: '..constName, offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('Wrapper')
-                            offsetToValue = 0x0 -- the object lies at 0x0 now
-                        else
-                            newParentStructElem = constStructElement
-                        end
-
-                        if checkForGDScript( readPointer( constPtr ) ) then  -- is it even possible to have const nodes?
-                            suffixStr = 'mNode: '
-                            addLayoutStructElem( newParentStructElem, prefixStr..suffixStr..constName, 0xFF8080, offsetToValue, vtPointer)
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateNodeConstToStruct: OBJ doesn\'t have GDScript/Inst'); end;
-                            suffixStr = 'obj: '
-                            addStructureElem( newParentStructElem, prefixStr..suffixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
-                        end
-
-                    elseif ( constTypeName == 'PACKED_STRING_ARRAY' ) or ( constTypeName == 'PACKED_BYTE_ARRAY' )
-                        or ( constTypeName == 'PACKED_INT32_ARRAY' ) or ( constTypeName == 'PACKED_INT64_ARRAY' )
-                        or ( constTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( constTypeName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( constTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( constTypeName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( constTypeName == 'PACKED_COLOR_ARRAY' ) or ( constTypeName == 'PACKED_VECTOR4_ARRAY' ) then
-
-                        if bDEBUGMode then print( debugPrefixStr.." iterateNodeConstToStruct loop: "..tostring(constTypeName).." case: "..tostring(constName)) end
-
-                        local arrayAddr = readPointer( constPtr )
-                        if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then -- when there are no elements in an array, its pointer shuld be 0 ?
-                            suffixStr = 'pck_arr (empty): '
-                            addStructureElem( constStructElement, prefixStr..suffixStr..constName.. ' T: '..tostring(constTypeName), offsetToValue, getCETypeFromGD( constType ) )
-                        else
-                            suffixStr = 'pck_arr: '
-                            local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName.. ' T: '..tostring(constTypeName), offsetToValue, getCETypeFromGD( constType ) )
-                            newParentStructElem.ChildStruct = createStructure('P_Array')
-                            iteratePackedArrayToStruct(  arrayAddr , constTypeName, newParentStructElem )
-                        end
-
-                    elseif ( constTypeName == 'STRING' ) then
-                            suffixStr = 'String: '
-                            local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('String')
-                            addStructureElem(newParentStructElem, prefixStr..suffixStr..constName, 0x0, vtUnicodeString )
-
-                    elseif ( constTypeName == 'COLOR' ) then
-                        suffixStr = 'color: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0x4, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0x8, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue+0xC, vtSingle )
-
-                    elseif ( constTypeName == 'VECTOR2' ) then
-                        suffixStr = 'vec2: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
-
-                    elseif ( constTypeName == 'VECTOR2I' ) then
-                        suffixStr = 'vec2i: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
-
-                    elseif ( constTypeName == 'RECT2' ) then
-                        suffixStr = 'rect2: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': h' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( constTypeName == 'RECT2I' ) then
-                        suffixStr = 'rect2i: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0x8, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': h' , offsetToValue+0xC, vtDword )
-
-                    elseif ( constTypeName == 'VECTOR3' ) then
-                        suffixStr = 'vec3: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtSingle )
-
-                    elseif ( constTypeName == 'VECTOR3I' ) then
-                        suffixStr = 'vec3i: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtDword )
-
-                    elseif ( constTypeName == 'VECTOR4' ) then
-                        suffixStr = 'vec4: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( constTypeName == 'VECTOR4I' ) then
-                        suffixStr = 'vec4i: '
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': x' , offsetToValue, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': z' , offsetToValue+0x8, vtDword )
-                        addStructureElem( constStructElement, prefixStr..suffixStr..constName..': w' , offsetToValue+0xC, vtDword )
-
-                    elseif ( constTypeName == 'STRING_NAME' ) then
-                        suffixStr = 'StringName: '
-                        local newParentStructElem = addStructureElem( constStructElement, prefixStr..suffixStr..constName, offsetToValue, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('StringName')
-                        local newParentStructElem = addStructureElem( newParentStructElem, prefixStr..suffixStr..constName, 0x10, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('stringy')
-                        addStructureElem( newParentStructElem, prefixStr..'String: '..constName, 0x0, vtUnicodeString )
-
-                    else
-                        addStructureElem( constStructElement, prefixStr..constName, offsetToValue, getCETypeFromGD( constType ) )
-                    end
-
+                    mapElement = getNextMapElement(mapElement)
                     index = index+1
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                        constStructElement = addStructureElem( constStructElement, 'Next['..index..']', 0x0, vtPointer )
-                        constStructElement.ChildStruct = createStructure('ConstNext')
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                        constStructElement = addStructureElem( constStructElement, 'Next', GDSOf.MAP_NEXTELEM, vtPointer )
-                        constStructElement.ChildStruct = createStructure('ConstNext')
-                    end
-                until (mapElement == 0)
 
-                if bDEBUGMode then decDebugStep(); end;
+                    if mapElement ~= 0 then
+                        currentContainer = createNextConstContainer(currentContainer, index)
+                    end
+                    
+                until (mapElement == 0)
+                debugStepOut()
                 return
             end
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dictionary
 
+
+            local function iterateDictionary(dictHead, parent, emitter, options, contextSeed)
+
+                options = options or {}
+                local mapElement = dictHead
+                local currentContainer = parent
+                local index = 0
+
+                repeat
+                    local entry = readDictionaryContainerEntry(mapElement)
+                    local formatted = formatDictionaryEntry(entry)
+                    local contextTable = { nodeAddr = contextSeed and contextSeed.nodeAddr or 0, nodeName = contextSeed and contextSeed.nodeName or "Dictionary", baseAddress = entry.variantPtr }
+
+                    local handler = VariantHandlers[formatted.typeName] or VariantHandlers.DEFAULT
+                    handler(formatted, emitter, currentContainer, contextTable)
+
+                    mapElement = getDictElemPairNext(mapElement)
+                    index = index + 1
+
+                    if isNotNullOrNil(mapElement) and options.nextContainerFactory then
+                        currentContainer = options.nextContainerFactory(currentContainer, index)
+                    end
+
+                until (mapElement == 0)
+                return
+            end
+
             --- iterates a dictionary and adds it to a class
             ---@param dictAddr number
-            ---@param Owner userdata
-            function iterateDictionaryToAddr(dictAddr, Owner)
+            ---@param parent userdata
+            function iterateDictionaryToAddr(dictAddr, parent)
                 assert( type(dictAddr) == 'number', 'iterateDictionaryToAddr: dictAddr has to be a number, instead got: '..type(dictAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
-                if (not (dictAddr > 0)) then if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr: dictAddr was 0'); decDebugStep(); end; return; end
-                if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr: dictAddr'..string.format(' at %x', dictAddr)) end
-                
-                if GDSOf.MAJOR_VER == 3 then
-                    dictAddr = readPointer( dictAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
-                end
-                local dictSize = readInteger( dictAddr + GDSOf.DICT_SIZE )
-                if (dictSize == 0 or dictSize == nil) then if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr Dict: dictSize was 0'); decDebugStep(); end return; end
+                local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
+                if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then return end
 
-                local dictHead = readPointer( dictAddr + GDSOf.DICT_HEAD ) -- each key is likely to be a StringName, sometimes enum
-                local dictTail = readPointer( dictAddr + GDSOf.DICT_TAIL )
-                if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr: (hash)Map\t'..string.format(' head %x | last %x | size %d', dictHead, dictTail, dictSize)) end
-                local mapElement = dictHead
-                repeat
-                    if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr: Loop Map start'..string.format(' (hash)ElemAddr: %x', mapElement)) end
-                    
-                    local keyType, keyValueAddr
-                    if GDSOf.MAJOR_VER == 3 then
-                        local keyPtr = readPointer( mapElement ) -- key is a ptr
-                        keyType = readInteger( keyPtr + GDSOf.DICTELEM_KEYTYPE )
-                        keyValueAddr = getAddress( keyPtr + GDSOf.DICTELEM_KEYVAL )
-                    else
-                        keyType = readInteger( mapElement + GDSOf.DICTELEM_KEYTYPE ) -- those can be a key , NodePath, Callable, StringName, etc
-                        keyValueAddr = getAddress( mapElement + GDSOf.DICTELEM_KEYVAL )                
-                    end
-
-                    local keyName = "UNKNOWN"
-                    local valueValue;
-                    local prefixStr = '';
-                    local keyTypeName = getGDTypeName( keyType )
-                    if ( keyTypeName == 'STRING' ) then -- 4
-                        keyName = readUTFString( readPointer( keyValueAddr ) )
-                    elseif ( keyTypeName == 'STRING_NAME') then -- 21
-                        keyName = getStringNameStr( readPointer( keyValueAddr ) )
-                    elseif ( keyTypeName == 'FLOAT' ) then -- 3
-                        keyName = tostring( readDouble( keyValueAddr ) ) -- in godot 3.x real is 4 byte float or not?
-                    elseif ( keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' ) then
-                        keyName = tostring( readPointer( keyValueAddr ) )
-                    elseif ( keyTypeName == 'INT' ) then
-                        keyName = tostring( readInteger( keyValueAddr, true ) )
-                    else -- bool | might need separate for Vector2, Vector3, Color, etc
-                        keyName = readInteger( keyValueAddr )
-                    end
-
-                    local valueType = readInteger( mapElement + GDSOf.DICTELEM_VALTYPE )
-                    local offsetToValue = GDSOf.DICTELEM_VALTYPE + getVariantValueOffset( valueType )
-                    valueValue = readPointer( mapElement + offsetToValue )
-                    local valueValuePtr = getAddress( mapElement + offsetToValue ) -- let's have both for now
-
-                    local valueTypeName = getGDTypeName( valueType )
-                    if ( valueTypeName == 'DICTIONARY' ) then -- dictionary
-                        if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr: DICT CASE for name: '..tostring(keyName)) end
-                        local dictSizeCheck
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSizeCheck = readInteger( valueValue + GDSOf.DICT_SIZE )
-                        else
-                            dictSizeCheck = readInteger( readPointer( valueValue + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSizeCheck == nil or dictSizeCheck == 0 then
-                            prefixStr = 'dict (empty): '
-
-                            synchronize(function( prefixStr, keyName, valueValue, valueType, Owner)
-                                        addMemRecTo( prefixStr..keyName , valueValue , getCETypeFromGD( valueType ) , Owner ) -- when the dicitonary is empty, just add the addr
-                                    end, prefixStr, keyName, valueValue, valueType, Owner
-                                )
-
-                        else
-                            prefixStr = 'mdict: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, keyName, valueValue, valueType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..keyName , valueValue , getCETypeFromGD( valueType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, keyName, valueValue, valueType, Owner
-                                )
-
-                            iterateDictionaryToAddr( valueValue , newParentMemrec ) -- recursive
-                        end 
-
-                    elseif ( valueTypeName == 'ARRAY') then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToAddr: DICT ARRAY case for name: "..tostring(keyName)) end
-                        
-                        prefixStr = 'array: '
-                        if readPointer( valueValue + GDSOf.ARRAY_TOVECTOR ) == 0 then -- when there are no elements in an array, it's vector ptr is 0
-
-                            synchronize(function( prefixStr, keyName, valueValue, valueType, Owner)
-                                        addMemRecTo( prefixStr..'empty: '..keyName , valueValue , getCETypeFromGD( valueType ) , Owner )
-                                    end, prefixStr, keyName, valueValue, valueType, Owner
-                                )
-
-                        else
-                            prefixStr = 'array: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, keyName, valueValue, valueType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..keyName , valueValue , getCETypeFromGD( valueType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, keyName, valueValue, valueType, Owner
-                                )
-
-                            iterateArrayToAddr(  valueValue , newParentMemrec )
-                        end
-
-                    elseif ( valueTypeName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToAddr loop: OBJ case for name: "..tostring(keyName)..string.format(' and addr %x ', valueValue)) end
-                        valueValuePtr = checkForVT( valueValuePtr )
-                        valueValue = readPointer( valueValuePtr ) -- checkForVT returns a pointer
-
-                        if checkForGDScript( valueValue ) then
-                            if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToAddr loop: NODE case: "..string.format('%x ', valueValue)..tostring(keyName)) end
-                            prefixStr = 'mNode: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, keyName, valueValue, valueType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..keyName , valueValue , getCETypeFromGD( valueType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, keyName, valueValue, valueType, Owner
-                                )
-
-                            iterateMNodeToAddr( valueValue , newParentMemrec )
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr: OBJ doesn\'t have GDScript/Inst'); end
-                            prefixStr = 'obj: '
-
-                            synchronize(function( prefixStr, keyName, valueValue, valueType, Owner)
-                                        addMemRecTo( prefixStr..keyName , valueValue , getCETypeFromGD( valueType )  , Owner )
-                                    end, prefixStr, keyName, valueValue, valueType, Owner
-                                )
-
-                        end
-                    elseif ( valueTypeName == 'PACKED_STRING_ARRAY' ) or ( valueTypeName == 'PACKED_BYTE_ARRAY' )
-                        or ( valueTypeName == 'PACKED_INT32_ARRAY' ) or ( valueTypeName == 'PACKED_INT64_ARRAY' )
-                        or ( valueTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( valueTypeName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( valueTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( valueTypeName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( valueTypeName == 'PACKED_COLOR_ARRAY' ) or ( valueTypeName == 'PACKED_VECTOR4_ARRAY' ) then
-
-                            if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToAddr loop: "..tostring(valueTypeName).." case: "..tostring(keyName)) end
-
-
-                            if readPointer( valueValue + GDSOf.P_ARRAY_TOARR ) == 0 then -- when there are no elements in an array, its pointer shuld be 0 ?
-                                prefixStr = 'pck_arr (empty): '
-
-                                synchronize(function( prefixStr, keyName, valueTypeName, valueValue, valueType, Owner)
-                                            addMemRecTo( prefixStr..keyName..' of '..valueTypeName , valueValue , getCETypeFromGD( valueType ) , Owner )
-                                        end, prefixStr, keyName, valueTypeName, valueValue, valueType, Owner
-                                    )
-
-                            else
-
-                                local newParentMemrec = synchronize(function( prefixStr, keyName, valueTypeName, valueValue, valueType, Owner)
-                                                local newParentMemrec = addMemRecTo( prefixStr..keyName.. ' T: '..tostring(valueTypeName) , valueValue , getCETypeFromGD( valueType ) , Owner )
-                                                newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                            return newParentMemrec
-                                        end, prefixStr, keyName, valueTypeName, valueValue, valueType, Owner
-                                    )
-
-                                iteratePackedArrayToAddr(  valueValue , valueTypeName, newParentMemrec )
-                            end
-
-                    elseif ( valueTypeName == 'COLOR' ) then
-                        prefixStr = 'color: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..' R' , valueValuePtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..' G' , valueValuePtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..' B' , valueValuePtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..' A' , valueValuePtr+0xC , vtSingle , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'VECTOR2' ) then
-                        prefixStr = 'vec2: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'VECTOR2I' ) then
-                        prefixStr = 'vec2i: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'RECT2' ) then
-                        prefixStr = 'rect2: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': h' , valueValuePtr+0xC , vtSingle , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'RECT2I' ) then
-                        prefixStr = 'rect2i: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': h' , valueValuePtr+0xC , vtDword , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'VECTOR3' ) then
-                        prefixStr = 'vec3: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtSingle , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'VECTOR3I' ) then
-                        prefixStr = 'vec3i: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtDword , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'VECTOR4' ) then
-                        prefixStr = 'vec4: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0xC , vtSingle , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'VECTOR4I' ) then
-                        prefixStr = 'vec4i: '
-                        synchronize(function( prefixStr, keyName, valueValuePtr, Owner)
-                                    addMemRecTo( prefixStr..keyName..': x' , valueValuePtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': y' , valueValuePtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': z' , valueValuePtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..keyName..': w' , valueValuePtr+0xC , vtDword , Owner )
-                                end, prefixStr, keyName, valueValuePtr, Owner
-                            )
-
-                    elseif ( valueTypeName == 'STRING_NAME' ) then
-                        prefixStr = 'StringName: '
-                        valueValuePtr = readPointer( valueValuePtr ) + GDSOf.STRING
-
-                        synchronize(function( prefixStr, keyName, valueValuePtr, valueType, Owner)
-                                        addMemRecTo( prefixStr..keyName , valueValuePtr , vtString  , Owner )
-                                    end, prefixStr, keyName, valueValuePtr, valueType, Owner
-                                )
-
-                    else
-                        valueValue = valueValuePtr -- getAddress( mapElement + GDSOf.DICTELEM_VALTYPE + offsetToValue )
-                        if valueValue == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToAddr: ValueValue is 0: uninitialized?") end end
-
-                        synchronize(function( prefixStr, keyName, valueValue, valueType, Owner)
-                                        addMemRecTo( prefixStr..keyName , valueValue , getCETypeFromGD( valueType )  , Owner )
-                                    end, prefixStr, keyName, valueValue, valueType, Owner
-                                )
-
-                    end
-
-                    if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToAddr nextloop, result: \t'..string.format(' name %s || elem 0x%x || keyT %d | keyV 0x%x || valT %d | valV addr 0x%x', tostring(keyName), (mapElement or 0), (keyType or 0), (keyValueAddr or 0), (valueType or 0), (valueValue or 0))) end
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.DICTELEM_PAIR_NEXT )
-                    end
-                until (mapElement == 0)
-
-                if bDEBUGMode then decDebugStep(); end;
+                iterateDictionary( dictHead, parent, AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Dictionary" } )
                 return
             end
 
@@ -4690,232 +4955,19 @@
             ---@param dictAddr number
             ---@param dictStructElement userdata
             function iterateDictionaryToStruct(dictAddr, dictStructElement)
-                assert( type(dictAddr) == 'number', 'iterateDictionaryToStruct: dictAddr has to be a number, instead got: '..type(dictAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
-                if (not (dictAddr > 0)) then if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct: dictAddr was 0'); decDebugStep(); end; return; end
-                if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct: dictAddr'..string.format(' at %x', dictAddr)) end
+                local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
+                if isNullOrNil(dictRoot) then return end
+                local currentRoot = dictStructElement
 
                 if GDSOf.MAJOR_VER == 3 then
-                    dictAddr = readPointer( dictAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
-                end
-                local dictSize = readInteger( dictAddr + GDSOf.DICT_SIZE )
-                if (dictSize == 0 or dictSize == nil) then if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct Dict: dictSize was 0'); decDebugStep(); end return; end
-                if GDSOf.MAJOR_VER == 3 then -- dot it when the size is correct
-                    dictStructElement = addStructureElem( dictStructElement, 'dictList', GDSOf.DICT_LIST, vtPointer )
-                    dictStructElement.ChildStruct = createStructure('dictList')
+                    currentRoot = createChildStructElem(currentRoot, 'dictList', GDSOf.DICT_LIST, vtPointer, 'dictList')
                 end
 
-                local dictHead = readPointer( dictAddr + GDSOf.DICT_HEAD )
-                local dictTail = readPointer( dictAddr + GDSOf.DICT_TAIL )
-                local dictStructElement = addStructureElem( dictStructElement, 'dictHead', GDSOf.DICT_HEAD, vtPointer )
-                dictStructElement.ChildStruct = createStructure('dictHead')
-                if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct: (hash)Map\t'..string.format(' head %x | last %x | size %d', dictHead, dictTail, dictSize)) end
-                local mapElement = dictHead
-                repeat
-                    if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct: Loop Map start'..string.format(' hashElemAddr: %x', mapElement)) end
+                local headContainer = createChildStructElem(currentRoot, 'dictHead', GDSOf.DICT_HEAD, vtPointer, 'dictHead')
 
-                    local keyType, keyValueAddr
-                    if GDSOf.MAJOR_VER == 3 then
-                        local keyPtr = readPointer( mapElement ) -- key is a ptr
-                        keyType = readInteger( keyPtr + GDSOf.DICTELEM_KEYTYPE )
-                        keyValueAddr = getAddress( keyPtr + GDSOf.DICTELEM_KEYVAL )
-                    else
-                        keyType = readInteger( mapElement + GDSOf.DICTELEM_KEYTYPE ) -- those can be a key , NodePath, Callable, StringName, etc
-                        keyValueAddr = getAddress( mapElement + GDSOf.DICTELEM_KEYVAL )                
-                    end
+                iterateDictionary( dictHead, headContainer, StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer }, { nodeAddr = 0, nodeName = "Dictionary" } )
 
-                    local keyName = "UNKNOWN"
-                    local valueValue;
-                    local prefixStr = '';
-                    local keyTypeName = getGDTypeName( keyType )
-                    if ( keyTypeName == 'STRING' ) then -- 4
-                        keyName = readUTFString( readPointer( keyValueAddr ) )
-                    elseif ( keyTypeName == 'STRING_NAME') then -- 21
-                        keyName = getStringNameStr( readPointer( keyValueAddr ) )
-                    elseif ( keyTypeName == 'FLOAT' ) then -- 3
-                        keyName = tostring( readDouble( keyValueAddr ) ) -- in godot 3.x real is 4 byte float or not?
-                    elseif ( keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' ) then
-                        keyName = tostring( readPointer( keyValueAddr ) )
-                    elseif ( keyTypeName == 'INT' ) then
-                        keyName = tostring( readInteger( keyValueAddr, true ) )
-                    else
-                        keyName = readInteger( keyValueAddr )
-                    end
-
-                    local valueType = readInteger( mapElement + GDSOf.DICTELEM_VALTYPE )
-                    local offsetToValue = GDSOf.DICTELEM_VALTYPE + getVariantValueOffset( valueType )
-                    valueValue = readPointer( mapElement + offsetToValue ) -- I'm kinda inconsistent here, should I rewrite it to be a ptr only?
-
-                    local valueValuePtr = getAddress( mapElement + offsetToValue )
-
-                    local valueTypeName = getGDTypeName( valueType )
-                    if ( valueTypeName == 'DICTIONARY' ) then -- dictionary
-                        if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct: DICT CASE for name: '..tostring(keyName)) end
-                        local dictSizeCheck
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSizeCheck = readInteger( valueValue + GDSOf.DICT_SIZE )
-                        else
-                            dictSizeCheck = readInteger( readPointer( valueValue + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSizeCheck == nil or dictSizeCheck == 0 then
-                            prefixStr = 'dict (empty): '
-                            addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, getCETypeFromGD( valueType ) )
-                        else
-                            prefixStr = 'mdict: '
-                            local newParentStructElem = addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, getCETypeFromGD( valueType ) )
-                            newParentStructElem.ChildStruct = createStructure('Dict')
-                            iterateDictionaryToStruct( valueValue , newParentStructElem )
-                        end 
-
-                    elseif ( valueTypeName == 'ARRAY') then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToStruct: DICT ARRAY case for name: "..tostring(keyName)) end
-                        prefixStr = 'array: '
-
-                        if readPointer( valueValue + GDSOf.ARRAY_TOVECTOR ) == 0 then -- when there are no elements in an array, it's vector ptr is 0
-                            addStructureElem( dictStructElement, prefixStr..'empty: '..keyName, offsetToValue, getCETypeFromGD( valueType ) )
-                        else
-                            prefixStr = 'array: '
-                            local newParentStructElem = addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, getCETypeFromGD( valueType ) )
-                            newParentStructElem.ChildStruct = createStructure('Array')
-                            iterateArrayToStruct( valueValue , newParentStructElem )
-                        end
-
-                    elseif ( valueTypeName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToStruct loop: OBJ case for name: "..tostring(keyName)..string.format(' and addr %x ', valueValue)) end
-                        local bShifted, newParentStructElem;
-                        valueValuePtr, bShifted = checkForVT( valueValuePtr ) -- check if the pointer is valid, if not, shift it back 0x8 bytes
-                        valueValue = readPointer( valueValuePtr ) -- checkForVT returns a pointer
-                        if bShifted then
-                            offsetToValue = offsetToValue - GDSOf.PTRSIZE
-                            newParentStructElem = addStructureElem( dictStructElement, 'Wrapper: '..keyName, offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('Wrapper')
-                            offsetToValue = 0x0 -- the object lies at 0x0 now
-                        else
-                            newParentStructElem = dictStructElement
-                        end
-
-                        if checkForGDScript( valueValue ) then
-                            if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToStruct loop: NODE case: "..string.format('%x ', valueValue)..tostring(keyName)) end
-                            prefixStr = 'mNode: '
-                            addLayoutStructElem( newParentStructElem, prefixStr..keyName, 0xFF8080, offsetToValue, vtPointer)
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct: OBJ doesn\'t have GDScript/Inst'); end
-                            prefixStr = 'obj: '
-                            addStructureElem( newParentStructElem, prefixStr..keyName, offsetToValue, getCETypeFromGD( valueType ) )
-                        end
-
-                    elseif ( valueTypeName == 'PACKED_STRING_ARRAY' ) or ( valueTypeName == 'PACKED_BYTE_ARRAY' )
-                        or ( valueTypeName == 'PACKED_INT32_ARRAY' ) or ( valueTypeName == 'PACKED_INT64_ARRAY' )
-                        or ( valueTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( valueTypeName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( valueTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( valueTypeName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( valueTypeName == 'PACKED_COLOR_ARRAY' ) or ( valueTypeName == 'PACKED_VECTOR4_ARRAY' ) then
-
-                            if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToStruct loop: "..tostring(valueTypeName).." case: "..tostring(keyName)) end
-
-                            if readPointer( valueValue + GDSOf.P_ARRAY_TOARR ) == 0 then -- when there are no elements in an array, its pointer shuld be 0 ?
-                                prefixStr = 'pck_arr (empty): '
-                                addStructureElem( dictStructElement, prefixStr..keyName..' of '..valueTypeName, offsetToValue, getCETypeFromGD( valueType ) )
-                            else
-                                prefixStr = 'pck_arr: '
-                                local newParentStructElem = addStructureElem( dictStructElement, prefixStr..keyName.. ' T: '..tostring(valueTypeName), offsetToValue, getCETypeFromGD( valueType ) )
-                                newParentStructElem.ChildStruct = createStructure('P_Array')
-                                iteratePackedArrayToStruct(  valueValue , valueTypeName, newParentStructElem )
-                            end
-
-                    elseif ( valueTypeName == 'STRING' ) then
-                            prefixStr = 'String: '
-                            local newParentStructElem = addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('String')
-                            addStructureElem(newParentStructElem, prefixStr..keyName, 0x0, vtUnicodeString )
-
-                    elseif ( valueTypeName == 'COLOR' ) then
-                        prefixStr = 'color: '
-                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue+0x4, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue+0x8, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue+0xC, vtSingle )
-
-                    elseif ( valueTypeName == 'VECTOR2' ) then
-                        prefixStr = 'vec2: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
-
-                    elseif ( valueTypeName == 'VECTOR2I' ) then
-                        prefixStr = 'vec2i: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
-
-                    elseif ( valueTypeName == 'RECT2' ) then
-                        prefixStr = 'rect2: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': h' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( valueTypeName == 'RECT2I' ) then
-                        prefixStr = 'rect2i: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0x8, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': h' , offsetToValue+0xC, vtDword )
-
-                    elseif ( valueTypeName == 'VECTOR3' ) then
-                        prefixStr = 'vec3: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtSingle )
-
-                    elseif ( valueTypeName == 'VECTOR3I' ) then
-                        prefixStr = 'vec3i: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtDword )
-
-                    elseif ( valueTypeName == 'VECTOR4' ) then
-                        prefixStr = 'vec4: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( valueTypeName == 'VECTOR4I' ) then
-                        prefixStr = 'vec4i: '
-                        addStructureElem( dictStructElement, prefixStr..keyName..': x' , offsetToValue, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': z' , offsetToValue+0x8, vtDword )
-                        addStructureElem( dictStructElement, prefixStr..keyName..': w' , offsetToValue+0xC, vtDword )
-
-                    elseif ( valueTypeName == 'STRING_NAME' ) then
-                        prefixStr = 'StringName: '
-                        local newParentStructElem = addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('StringName')
-                        local newParentStructElem = addStructureElem( newParentStructElem, prefixStr..keyName, 0x10, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('stringy')
-                        addStructureElem( newParentStructElem, 'String: '..keyName, 0x0, vtUnicodeString )
-
-                    else
-                        valueValue = valueValuePtr -- getAddress( mapElement + GDSOf.DICTELEM_VALTYPE + offsetToValue )
-                        if valueValue == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateDictionaryToStruct: ValueValue is 0: uninitialized?") end end
-                        addStructureElem( dictStructElement, prefixStr..keyName, offsetToValue, getCETypeFromGD( valueType ) )
-                    end
-
-                    if bDEBUGMode then print( debugPrefixStr..' iterateDictionaryToStruct nextloop, result: \t'..string.format(' name %s || elem 0x%x || keyT %d | keyV 0x%x || valT %d | valV addr 0x%x', tostring(keyName), (mapElement or 0), (keyType or 0), (keyValueAddr or 0), (valueType or 0), (valueValue or 0))) end
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                        dictStructElement = addStructureElem( dictStructElement, 'Next', 0x0, vtPointer )
-                        dictStructElement.ChildStruct = createStructure('DictNext')
-                    else
-                        dictStructElement = addStructureElem( dictStructElement, 'Next',  GDSOf.DICTELEM_PAIR_NEXT, vtPointer )
-                        dictStructElement.ChildStruct = createStructure('DictNext')
-                        mapElement = readPointer(mapElement + GDSOf.DICTELEM_PAIR_NEXT)
-                    end
-
-                until (mapElement == 0)
-
-                if bDEBUGMode then decDebugStep(); end;
                 return
             end
 
@@ -4929,488 +4981,67 @@
                     dictAddr = readPointer( dictAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
                 end
                 local dictSize = readInteger( dictAddr + GDSOf.DICT_SIZE )
-                if (dictSize == 0 or dictSize == nil) then return; end
+                if isNullOrNil(dictSize) then return; end
 
                 local mapElement = readPointer( dictAddr + GDSOf.DICT_HEAD )
+                if isNullOrNil(mapElement) then return end
+                local visitor = NodeVisitor
+
                 repeat
-                    local valueValue;
-                    local valueType = readInteger( mapElement + GDSOf.DICTELEM_VALTYPE )
-                    local offsetToValue = GDSOf.DICTELEM_VALTYPE + getVariantValueOffset( valueType )
-                    valueValue = readPointer( mapElement +  offsetToValue ) -- to avoid doing it several times
-                    local valueValuePtr = getAddress( mapElement + offsetToValue )
-
-                    local valueTypeName = getGDTypeName( valueType )
-                    if ( valueTypeName == 'DICTIONARY' ) then -- dictionary
-                        local dictSizeCheck
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSizeCheck = readInteger( valueValue + GDSOf.DICT_SIZE )
-                        else
-                            dictSizeCheck = readInteger( readPointer( valueValue + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-                        if dictSizeCheck ~= nil and dictSizeCheck ~= 0 then
-                            iterateDictionaryForNodes( valueValue ) -- recursive
-                        end
-
-                    elseif ( valueTypeName == 'ARRAY') then
-
-                        if readPointer( valueValue + GDSOf.ARRAY_TOVECTOR ) ~= 0 then
-                            iterateArrayForNodes( valueValue )
-                        end
-
-                    elseif ( valueTypeName == 'OBJECT' ) then
-                        valueValuePtr = checkForVT( valueValuePtr )
-                        valueValue = readPointer( valueValuePtr ) -- checkForVT returns a ptr
-                        if checkForGDScript( valueValue ) then
-                            iterateMNode( valueValue )
-                        end
-
-                    else
-                    end
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.DICTELEM_PAIR_NEXT )
-                    end
-
+                    local entry = readDictionaryValueEntry(mapElement)
+                    local handler = NodeDiscoveryHandlers[entry.typeName]
+                    if handler then handler(entry, visitor) end
+                    mapElement = getDictElemPairNext(mapElement)
                 until (mapElement == 0)
             end
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Array
 
+
+            local function iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, emitter, options, contextSeed)
+                assert(type(arrVectorAddr) == 'number', "iterateArray: arrayAddr has to be a number, instead got: " .. type(arrVectorAddr))
+
+                options = options or {}
+                for varIndex = 0, arrVectorSize - 1 do
+                    local entry = readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, options.bNeedStructOffset)
+                    if isNullOrNil(entry.variantPtr) then goto continue end
+                    local formatted = formatArrayEntry(entry)
+                    local contextTable = { nodeAddr = contextSeed and contextSeed.nodeAddr or 0, nodeName = contextSeed and contextSeed.nodeName or "Array", baseAddress = entry.variantPtr }
+                    local handler = VariantHandlers[formatted.typeName] or VariantHandlers.DEFAULT
+                    handler(formatted, emitter, parent, contextTable)
+
+                    ::continue::
+                end
+            end
+
             --- takes in an array address and address owner to append to
             ---@param arrayAddr number
-            ---@param Owner userdata
-            function iterateArrayToAddr(arrayAddr, Owner)
+            ---@param parent userdata
+            function iterateArrayToAddr(arrayAddr, parent)
                 assert(type(arrayAddr) == 'number',"Array "..tostring(arrayAddr).." has to be a number, instead got: "..type(arrayAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
+                if isNullOrNil(arrVectorAddr) then
+                    return;
+                end  
 
-                local arrVectorAddr = readPointer( arrayAddr + GDSOf.ARRAY_TOVECTOR )
-                if arrVectorAddr == nil or arrVectorAddr == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr: vector ptr ("..tostring(arrVectorAddr)..") wasn't found."); decDebugStep(); end; return; end        
-                local arrVectorSize = readInteger(arrVectorAddr - GDSOf.SIZE_VECTOR )
-                if arrVectorSize == nil or arrVectorSize == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr: vector ptr's ("..tostring(arrVectorAddr)..") size was: "..tostring(arrVectorSize)); decDebugStep(); end; return; end
+                iterateArray( arrVectorAddr, arrVectorSize, variantArrSize, parent, AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array" } )
 
-                if bDEBUGMode then print( debugPrefixStr..' iterateArrayToAddr start array vector:'..string.format(' at %x ', arrVectorAddr)..'with size: '..tostring(arrVectorSize)) end
-
-                local variantArrSize, bSuccess = redefineVariantSizeByVector( arrVectorAddr , arrVectorSize )
-
-                if not bSuccess then if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr: Variant resize failed") end; decDebugStep(); return; end
-                local prefixStr = 'array['
-
-                for varIndex=0, arrVectorSize-1 do
-
-                    local variantPtr, variantType = getVariantByIndex( arrVectorAddr, varIndex, variantArrSize )
-                    if variantPtr == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr: vector ptr ("..tostring(arrVectorAddr)..") wasn't found.") end; goto continue; end;
-
-                    if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr loop (Array: "..string.format('%x',arrayAddr).."): iterating index: "..tostring(varIndex)..' of '..tostring(arrVectorSize-1)..' | GDype: '..tostring(variantType)..' | VarAddr: '..string.format('%x',variantPtr)) end
-
-                    local variantTypeName = getGDTypeName( variantType )
-                    if ( variantTypeName == 'ARRAY' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr: NESTED ARRAY case") end
-
-                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) == 0 then -- when there are no elements in an array, it's vector ptr is 0
-                            prefixStr = 'array['
-
-                            synchronize(function( prefixStr, varIndex, variantPtr, variantType, Owner)
-                                            addMemRecTo( prefixStr..varIndex..'] (empty)' , variantPtr , getCETypeFromGD( variantType ) , Owner )
-                                    end, prefixStr, varIndex, variantPtr, variantType, Owner
-                                )
-
-                        else
-                            prefixStr = 'array['
-
-                            local newParentMemrec = synchronize(function( prefixStr, varIndex, variantPtr, variantType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..varIndex..']' , variantPtr , getCETypeFromGD( variantType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, varIndex, variantPtr, variantType, Owner
-                                )
-
-                            iterateArrayToAddr( readPointer( variantPtr ) , newParentMemrec )
-                        end
-
-                    elseif ( variantTypeName == 'DICTIONARY' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr loop: DICT case") end
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
-                        else
-                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize == nil or dictSize == 0 then
-                            prefixStr = 'dict (empty): '
-
-                            synchronize(function( prefixStr, variantPtr, variantType, Owner)
-                                        addMemRecTo( prefixStr , variantPtr , getCETypeFromGD( variantType ) , Owner ) -- when the dicitonary is empty, just add the addr
-                                    end, prefixStr, variantPtr, variantType, Owner
-                                )
-
-                        else
-                            prefixStr = 'mdict: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, variantPtr, variantType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr , variantPtr , getCETypeFromGD( variantType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, variantPtr, variantType, Owner
-                                )
-
-                            iterateDictionaryToAddr( readPointer( variantPtr ) , newParentMemrec )
-                        end
-
-                    elseif ( variantTypeName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr loop: OBJ case") end
-                        variantPtr = checkForVT( variantPtr )
-
-                        if checkForGDScript( readPointer( variantPtr ) ) then
-                            prefixStr = 'mNode: '
-                            local nodeName = getNodeName( readPointer( variantPtr ) )
-
-                            local newParentMemrec = synchronize(function( prefixStr, nodeName, variantPtr, variantType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..tostring(nodeName) , variantPtr , getCETypeFromGD( variantType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, nodeName, variantPtr, variantType, Owner
-                                )
-
-                            iterateMNodeToAddr( readPointer( variantPtr ) , newParentMemrec )
-
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateArrayToAddr: OBJ doesn\'t have GDScript/Inst'); end
-                            prefixStr = 'obj: '
-                            local nodeName = getNodeName( readPointer( variantPtr ) )
-
-                            synchronize(function( prefixStr, nodeName, variantPtr, variantType, Owner)
-                                        addMemRecTo( prefixStr..tostring(nodeName) , variantPtr , getCETypeFromGD( variantType )  , Owner )
-                                    end, prefixStr, nodeName, variantPtr, variantType, Owner
-                                )
-
-                        end
-
-                    elseif ( variantTypeName == 'PACKED_STRING_ARRAY' ) or ( variantTypeName == 'PACKED_BYTE_ARRAY' )
-                        or ( variantTypeName == 'PACKED_INT32_ARRAY' ) or ( variantTypeName == 'PACKED_INT64_ARRAY' )
-                        or ( variantTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( variantTypeName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( variantTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( variantTypeName == 'PACKED_COLOR_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR4_ARRAY' ) then
-
-                            if bDEBUGMode then print( debugPrefixStr.." iterateArrayToAddr loop: "..tostring(variantTypeName).." case") end
-
-                            local arrayAddr = readPointer( variantPtr )
-
-                            if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then -- when there are no elements in an array, its vector ptr is 0 ?
-                                prefixStr = 'mpck_arr (empty): '
-
-                                synchronize(function( prefixStr, variantTypeName, variantPtr, variantType, Owner)
-                                            addMemRecTo( prefixStr..' of '..tostring(variantTypeName) , variantPtr , getCETypeFromGD( variantType ) , Owner )
-                                        end, prefixStr, variantTypeName, variantPtr, variantType, Owner
-                                    )
-
-                            else
-                                prefixStr = 'mpck_arr: '
-
-                                local newParentMemrec = synchronize(function( prefixStr, variantTypeName, variantPtr, variantType, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..' of '..tostring(variantTypeName) , variantPtr , getCETypeFromGD( variantType ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                            return newParentMemrec
-                                        end, prefixStr, variantTypeName, variantPtr, variantType, Owner
-                                    )
-
-                                iteratePackedArrayToAddr(  arrayAddr , variantTypeName, newParentMemrec )
-                            end
-
-                    elseif ( variantTypeName == 'COLOR' ) then
-                        prefixStr = 'mcolor['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']:'..' R' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']:'..' G' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']:'..' B' , variantPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']:'..' A' , variantPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'VECTOR2' ) then
-                        prefixStr = 'mvec2['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'VECTOR2I' ) then
-                        prefixStr = 'mvec2i['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'RECT2' ) then
-                        prefixStr = 'mrect2['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': h' , variantPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'RECT2I' ) then
-                        prefixStr = 'mrect2i['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': h' , variantPtr+0xC , vtDword , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'VECTOR3' ) then
-                        prefixStr = 'mvec3['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtSingle , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'VECTOR3I' ) then
-                        prefixStr = 'mvec3i['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtDword , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'VECTOR4' ) then
-                        prefixStr = 'mvec4['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'VECTOR4I' ) then
-                        prefixStr = 'mvec4i['
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..varIndex..']'..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': y' , variantPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': z' , variantPtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..varIndex..']'..': w' , variantPtr+0xC , vtDword , Owner )
-                                end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                            )
-
-                    elseif ( variantTypeName == 'STRING_NAME' ) then
-                        prefixStr = 'mStrName['
-                        variantPtr = readPointer( variantPtr ) + GDSOf.STRING
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, Owner)
-                                        addMemRecTo( prefixStr..varIndex..']' , variantPtr , vtString  , Owner )
-                                    end, prefixStr, varIndex, variantTypeName, variantPtr, Owner
-                                )
-
-                    else
-                        prefixStr = 'array['
-
-                        synchronize(function( prefixStr, varIndex, variantTypeName, variantPtr, variantType, Owner)
-                                        addMemRecTo( prefixStr..varIndex..']: '..tostring(variantTypeName) , variantPtr , getCETypeFromGD( variantType )  , Owner )
-                                    end, prefixStr, varIndex, variantTypeName, variantPtr, variantType, Owner
-                                )
-
-                    end
-                    ::continue:: -- just to feel safe when variantPtr is 0
-                end
-
-                if bDEBUGMode then decDebugStep(); end;
                 return
             end
 
             --- takes in an array address and struct owner to append to
             ---@param arrayAddr number
-            ---@param Owner userdata
+            ---@param parent userdata
             function iterateArrayToStruct(arrayAddr, arrayStructElement)
-                assert(type(arrayAddr) == 'number',"iterateArrayToStruct: Array "..tostring(arrayAddr).." has to be a number, instead got: "..type(arrayAddr))
+                assert(type(arrayAddr) == 'number', "iterateArrayToStruct: Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
+                if isNullOrNil(arrVectorAddr) then return; end
 
-                local arrVectorAddr = readPointer( arrayAddr + GDSOf.ARRAY_TOVECTOR )
-                if arrVectorAddr == nil or arrVectorAddr == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct: vector ptr ("..tostring(arrVectorAddr)..") wasn't found."); decDebugStep(); end; return; end        
-                local arrVectorSize = readInteger(arrVectorAddr - GDSOf.SIZE_VECTOR )
-                if arrVectorSize == nil or arrVectorSize == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct: vector ptr's ("..tostring(arrVectorAddr)..") size was: "..tostring(arrVectorSize)); decDebugStep(); end; return; end
                 arrayStructElement = addStructureElem( arrayStructElement, 'VectorArray', GDSOf.ARRAY_TOVECTOR, vtPointer )
                 arrayStructElement.ChildStruct = createStructure('ArrayData')
-
-                if bDEBUGMode then print( debugPrefixStr..' iterateArrayToStruct start array vector:'..string.format(' at %x ', arrVectorAddr)..'with size: '..tostring(arrVectorSize)) end
-                local variantArrSize, bSuccess = redefineVariantSizeByVector( arrVectorAddr , arrVectorSize )
-                if not bSuccess then if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr: Variant resize failed") end; decDebugStep(); return; end
-                local prefixStr = 'array['
-
-                for varIndex=0, arrVectorSize-1 do
-
-                    local variantPtr, variantType, offsetToValue = getVariantByIndex( arrVectorAddr, varIndex, variantArrSize, true )
-                    if variantPtr == 0 then if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct: vector ptr ("..tostring(arrVectorAddr)..") wasn't found.") end; goto continue; end;
-
-                    if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct loop (Array: "..string.format('%x',arrayAddr).."): iterating index: "..tostring(varIndex)..' of '..tostring(arrVectorSize-1)..' | GDype: '..tostring(variantType)..' | VarAddr: '..string.format('%x',variantPtr)) end
-                    local variantTypeName = getGDTypeName( variantType )
-
-                    if ( variantTypeName == 'ARRAY' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct: NESTED ARRAY case") end
-
-                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) == 0 then -- when there are no elements in an array, it's vector ptr is 0
-                            prefixStr = 'array['
-                            addStructureElem( arrayStructElement, prefixStr..varIndex..'] (empty)', offsetToValue, getCETypeFromGD( variantType ) )
-                        else
-                            prefixStr = 'array['
-                            local newParentStructElem = addStructureElem( arrayStructElement, prefixStr..varIndex..']', offsetToValue, getCETypeFromGD( variantType ) )
-                            newParentStructElem.ChildStruct = createStructure('Array')
-                            iterateArrayToStruct( readPointer( variantPtr ) , newParentStructElem )
-                        end
-
-                    elseif ( variantTypeName == 'DICTIONARY' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct loop: DICT case") end
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
-                        else
-                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize == nil or dictSize == 0 then
-                            prefixStr = 'dict (empty): '
-                            addStructureElem( arrayStructElement, prefixStr, offsetToValue, getCETypeFromGD( variantType ) )
-                        else
-                            prefixStr = 'mdict: '
-                            local newParentStructElem = addStructureElem( arrayStructElement, prefixStr, offsetToValue, getCETypeFromGD( variantType ) )
-                            newParentStructElem.ChildStruct = createStructure('Dict')
-                            iterateDictionaryToStruct( readPointer( variantPtr ) , newParentStructElem )
-                        end
-
-                    elseif ( variantTypeName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct loop: OBJ case") end
-                        local bShifted, newParentStructElem;
-                        variantPtr, bShifted = checkForVT( variantPtr ) -- check if the pointer is valid, if not, shift it back 0x8 bytes
-                        if bShifted then
-                            offsetToValue = offsetToValue - GDSOf.PTRSIZE
-                            newParentStructElem = addStructureElem( arrayStructElement, 'Wrapper', offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('Wrapper')
-                            offsetToValue = 0x0 -- the object lies at 0x0 now
-                        else
-                            newParentStructElem = arrayStructElement
-                        end
-
-                        local valueAddr = readPointer( variantPtr )
-                        local nodeName = getNodeName( valueAddr )
-
-                        if checkForGDScript( valueAddr ) then
-                            prefixStr = 'mNode: '
-                            addLayoutStructElem( newParentStructElem, prefixStr..tostring(nodeName), 0xFF8080, offsetToValue, vtPointer)
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateArrayToStruct: OBJ doesn\'t have GDScript/Inst'); end
-                            prefixStr = 'obj: '
-                            addStructureElem( newParentStructElem, prefixStr..tostring(nodeName), offsetToValue, getCETypeFromGD( variantType ) )
-                        end
-
-                    elseif ( variantTypeName == 'PACKED_STRING_ARRAY' ) or ( variantTypeName == 'PACKED_BYTE_ARRAY' )
-                        or ( variantTypeName == 'PACKED_INT32_ARRAY' ) or ( variantTypeName == 'PACKED_INT64_ARRAY' )
-                        or ( variantTypeName == 'PACKED_FLOAT32_ARRAY' ) or ( variantTypeName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( variantTypeName == 'PACKED_VECTOR2_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( variantTypeName == 'PACKED_COLOR_ARRAY' ) or ( variantTypeName == 'PACKED_VECTOR4_ARRAY' ) then
-
-                        if bDEBUGMode then print( debugPrefixStr.." iterateArrayToStruct loop: "..tostring(variantTypeName).." case") end
-                        
-                        local arrayAddr = readPointer( variantPtr )
-                        if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then -- when there are no elements in an array, its vector ptr is 0 ?
-                            prefixStr = 'mpck_arr (empty): '
-                            addStructureElem( arrayStructElement, prefixStr..' of '..tostring(variantTypeName), offsetToValue, getCETypeFromGD( variantType ) )
-                        else
-                            prefixStr = 'mpck_arr: '
-                            local newParentStructElem = addStructureElem(arrayStructElement, prefixStr..' of '..tostring(variantTypeName), offsetToValue, getCETypeFromGD( variantType ) )
-                            newParentStructElem.ChildStruct = createStructure('P_Array')
-                            iteratePackedArrayToStruct(  arrayAddr, variantTypeName, newParentStructElem )
-                        end
-
-                    elseif ( variantTypeName == 'STRING' ) then
-                            prefixStr = 'string['
-                            local newParentStructElem = addStructureElem( arrayStructElement, prefixStr..varIndex..']', offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('String')
-                            addStructureElem(newParentStructElem, prefixStr..varIndex..']', 0x0, vtUnicodeString )
-
-                    elseif ( variantTypeName == 'COLOR' ) then
-                        prefixStr = 'mcolor['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': R', offsetToValue, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': G', offsetToValue+0x4, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': B', offsetToValue+0x8, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': A', offsetToValue+0xC, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR2' ) then
-                        prefixStr = 'mvec2['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR2I' ) then
-                        prefixStr = 'mvec2i['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
-
-                    elseif ( variantTypeName == 'RECT2' ) then
-                        prefixStr = 'mrect2['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': h' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( variantTypeName == 'RECT2I' ) then
-                        prefixStr = 'mrect2i['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0x8, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': h' , offsetToValue+0xC, vtDword )
-
-                    elseif ( variantTypeName == 'VECTOR3' ) then
-                        prefixStr = 'mvec3['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR3I' ) then
-                        prefixStr = 'mvec3i['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtDword )
-
-                    elseif ( variantTypeName == 'VECTOR4' ) then
-                        prefixStr = 'mvec4['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( variantTypeName == 'VECTOR4I' ) then
-                        prefixStr = 'mvec4i:['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': x' , offsetToValue, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': z' , offsetToValue+0x8, vtDword )
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']'..': w' , offsetToValue+0xC, vtDword )
-
-                    elseif ( variantTypeName == 'STRING_NAME' ) then
-                        prefixStr = 'mStrName['
-                        local newParentStructElem = addStructureElem( arrayStructElement, prefixStr..varIndex..']', offsetToValue, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('StringName')
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..varIndex..']', 0x10, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('stringy')
-                        addStructureElem( newParentStructElem, 'String['..varIndex..']', 0x0, vtUnicodeString )
-                    else
-                        prefixStr = 'array['
-                        addStructureElem( arrayStructElement, prefixStr..varIndex..']', offsetToValue, getCETypeFromGD( variantType ) )
-                    end
-                    ::continue:: -- just to feel safe when variantPtr is 0
-                end
-
-                if bDEBUGMode then decDebugStep(); end;
+                iterateArray( arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array" } )
                 return
             end
 
@@ -5420,207 +5051,41 @@
                 assert(type(arrayAddr) == 'number',"iterateArrayForNodes: array "..tostring(arrayAddr).." has to be a number, instead got: "..type(arrayAddr))
 
                 local arrVectorAddr = readPointer( arrayAddr + GDSOf.ARRAY_TOVECTOR )
-                if arrVectorAddr == nil or arrVectorAddr == 0 then return; end        
+                if isNullOrNil(arrVectorAddr) then return; end        
                 local arrVectorSize = readInteger(arrVectorAddr - GDSOf.SIZE_VECTOR )
-                if arrVectorSize == nil or arrVectorSize == 0 then return; end
+                if isNullOrNil(arrVectorSize) then return; end
 
-                local variantArrSize, bSuccess = redefineVariantSizeByVector( arrVectorAddr , arrVectorSize )
-                if not bSuccess then return; end
+                local variantArrSize, ok = redefineVariantSizeByVector( arrVectorAddr , arrVectorSize )
+                if not ok then return; end
+
+                local visitor = NodeVisitor
 
                 for varIndex=0, arrVectorSize-1 do
 
-                    local variantPtr, variantType = getVariantByIndex( arrVectorAddr, varIndex, variantArrSize )
-                    if variantPtr == 0 then goto continue; end;
+                    local entry = readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
 
-                    local variantTypeName = getGDTypeName( variantType )
-
-                    if ( variantTypeName == 'ARRAY' ) then
-                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) ~= 0 then
-                            iterateArrayForNodes( readPointer( variantPtr ) )
-                        end
-
-                    elseif ( variantTypeName == 'DICTIONARY' ) then
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
-                        else -- 3.x
-                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize ~= nil and dictSize ~= 0 then
-                            iterateDictionaryForNodes( readPointer( variantPtr ) )
-                        end
-
-                    elseif ( variantTypeName == 'OBJECT' ) then
-                        variantPtr = checkForVT( variantPtr )
-
-                        if checkForGDScript( readPointer( variantPtr ) ) then
-                            iterateMNode( readPointer( variantPtr )  )
-                        end
-
-                    else
+                    if isNotNullOrNil(entry.variantPtr) then
+                        local handler = NodeDiscoveryHandlers[entry.typeName]
+                        if handler then handler(entry, visitor) end
                     end
-                    ::continue:: -- just to feel safe when variantPtr is 0
                 end
             end
 
             --- iterates a packed array and adds it to a class
             ---@param packedArrayAddr number
             ---@param packedTypeName string
-            ---@param Owner userdata
-            function iteratePackedArrayToAddr(packedArrayAddr, packedTypeName, Owner)
-                assert(type(packedArrayAddr) == 'number',"Packed Array "..tostring(packedArrayAddr).." has to be a number, instead got: "..type(packedArrayAddr))
-                assert(type(packedTypeName) == 'string',"TypeName "..tostring(packedTypeName).." has to be a string, instead got: "..type(packedTypeName))
+            ---@param parent userdata
+            function iteratePackedArrayToAddr(packedArrayAddr, packedTypeName, parent)
+                assert(type(packedArrayAddr) == 'number',"Packed Array has to be a number, instead got: "..type(packedArrayAddr))
+                assert(type(packedTypeName) == 'string',"TypeName has to be a string, instead got: "..type(packedTypeName))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
-
-                local packedDataArrAddr = readPointer( packedArrayAddr + GDSOf.P_ARRAY_TOARR )
-                if packedDataArrAddr == nil or packedDataArrAddr == 0 then if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr: vector ptr ("..tostring(packedDataArrAddr)..") wasn't found. Packed Arr type: "..tostring(packedTypeName)); decDebugStep(); end; return; end        
-                local packedVectorSize = readInteger( packedDataArrAddr - GDSOf.SIZE_VECTOR )
-                if packedVectorSize == nil or packedVectorSize == 0 then if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr: vector ptr's ("..tostring(packedDataArrAddr)..") size: "..tostring(packedVectorSize)..' Packed Arr type: '..tostring(packedTypeName)); decDebugStep(); end; return; end
-
-                if bDEBUGMode then print( debugPrefixStr..' iteratePackedArrayToAddr start array vector:'..string.format(' at %x ', packedDataArrAddr)..'with size: '..tostring(packedVectorSize)..' and type: '..tostring(packedTypeName)) end
-
-                local prefixStr = 'pck_arr['
+                local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
 
                 if packedVectorSize > 150 then
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr: Packed Array is quite big ("..tostring(packedVectorSize).."), truncating...") end
-
-                    -- synchronize(function(packedDataArrAddr, packedVectorSize, Owner)
-                    --             addMemRecTo( 'This array\'s size is '..tostring(packedVectorSize)..': dumping 150', packedDataArrAddr , vtPointer , Owner )
-                    --             addMemRecTo( 'Calculate next indices: base of this addr + sizeof(type)*index', packedDataArrAddr , vtPointer , Owner )
-                    --         end, packedDataArrAddr, packedVectorSize, Owner
-                    --     )
-
-                    packedVectorSize = 150 -- truncate to 150 elements
+                    packedVectorSize = 150
                 end
 
-                if ( packedTypeName == 'PACKED_STRING_ARRAY') then
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * GDSOf.PTRSIZE ) -- each element is a pointer to a StringName
-                        if readPointer( arrElement ) == 0 then if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr: Packed Array String element ("..tostring(arrElement)..") is zero.") end; goto continue; end;
-
-                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                    addMemRecTo( prefixStr..elemIndex..']' , arrElement , vtString , Owner )
-                                end, prefixStr, elemIndex, arrElement, Owner
-                            )
-
-                        ::continue:: -- just to feel safe
-                    end
-
-                elseif ( packedTypeName == 'PACKED_INT32_ARRAY' ) or ( packedTypeName == 'PACKED_FLOAT32_ARRAY' ) then -- 4 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): 32 int or float ") end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x4 )
-
-                        if packedTypeName == 'PACKED_FLOAT32_ARRAY' then
-                            synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                        addMemRecTo( prefixStr..elemIndex..']' , arrElement , vtSingle , Owner )
-                                    end, prefixStr, elemIndex, arrElement, Owner
-                                )
-                        else
-                            synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                        addMemRecTo( prefixStr..elemIndex..']' , arrElement , vtDword , Owner )
-                                    end, prefixStr, elemIndex, arrElement, Owner
-                                )
-                        end
-                    end
-                elseif ( packedTypeName == 'PACKED_INT64_ARRAY' ) or ( packedTypeName == 'PACKED_FLOAT64_ARRAY' ) then -- 8 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): 64 int or double" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * GDSOf.PTRSIZE )
-
-                        if packedTypeName == 'PACKED_FLOAT64_ARRAY' then
-                            synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                        addMemRecTo( prefixStr..elemIndex..']' , arrElement , vtDouble , Owner )
-                                    end, prefixStr, elemIndex, arrElement, Owner
-                                )
-                        else
-                            synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                        addMemRecTo( prefixStr..elemIndex..']' , arrElement , vtQword , Owner )
-                                    end, prefixStr, elemIndex, arrElement, Owner
-                                )
-                        end
-                    end
-
-                elseif ( packedTypeName == 'PACKED_BYTE_ARRAY' ) then -- 1 byte
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): byte" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x1 )
-
-                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                    addMemRecTo( prefixStr..elemIndex..']' , arrElement , vtByte , Owner )
-                                end, prefixStr, elemIndex, arrElement, Owner
-                            )
-                    end
-
-                elseif ( packedTypeName == 'PACKED_VECTOR2_ARRAY' ) then -- 8 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR2" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x8 )
-                        prefixStr = 'pck_mvec2['
-                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                    addMemRecTo( prefixStr..elemIndex..']: x' , arrElement , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: y' , arrElement+0x4 , vtSingle , Owner )
-                                end, prefixStr, elemIndex, arrElement, Owner
-                            )
-                    end
-
-                elseif ( packedTypeName == 'PACKED_VECTOR3_ARRAY' ) then -- 12 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR3" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0xC ) -- is it  0x10-byte aligned or not?
-                        prefixStr = 'pck_mvec3['
-                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                    addMemRecTo( prefixStr..elemIndex..']: x' , arrElement , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: y' , arrElement+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: z' , arrElement+0x8 , vtSingle , Owner )
-                                end, prefixStr, elemIndex, arrElement, Owner
-                            )
-                    end
-
-                elseif ( packedTypeName == 'PACKED_VECTOR4_ARRAY' ) then -- 16 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR4" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
-                        prefixStr = 'pck_mvec4['
-                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                    addMemRecTo( prefixStr..elemIndex..']: x' , arrElement , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: y' , arrElement+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: z' , arrElement+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: w' , arrElement+0xC , vtSingle , Owner )
-                                end, prefixStr, elemIndex, arrElement, Owner
-                            )
-                    end
-
-                elseif ( packedTypeName == 'PACKED_COLOR_ARRAY' ) then -- 16 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): COLOR" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
-                        prefixStr = 'pck_color['
-                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                    addMemRecTo( prefixStr..elemIndex..']: R' , arrElement , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: G' , arrElement+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: B' , arrElement+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..elemIndex..']: A' , arrElement+0xC , vtSingle , Owner )
-                                end, prefixStr, elemIndex, arrElement, Owner
-                            )
-                    end
-
-                else
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToAddr: Unhandled Packed Array type: "..tostring(packedTypeName) ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * GDSOf.PTRSIZE )
-
-                        synchronize(function(prefixStr, elemIndex, arrElement, Owner)
-                                    addMemRecTo( prefixStr..elemIndex..']' , arrElement , vtPointer , Owner )
-                                end, prefixStr, elemIndex, arrElement, Owner
-                            )
-                    end
-                end
-
-                if bDEBUGMode then decDebugStep(); end;
+                iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, PackedAddrEmitter)
                 return
             end
 
@@ -5632,614 +5097,79 @@
                 assert(type(packedArrayAddr) == 'number',"Packed Array "..tostring(packedArrayAddr).." has to be a number, instead got: "..type(packedArrayAddr))
                 assert(type(packedTypeName) == 'string',"TypeName "..tostring(packedTypeName).." has to be a string, instead got: "..type(packedTypeName))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
+                pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDSOf.P_ARRAY_TOARR, vtPointer)
+                pArrayStructElement.ChildStruct = createStructure('PArrayData')                
 
-                local packedDataArrAddr = readPointer( packedArrayAddr + GDSOf.P_ARRAY_TOARR )
-                if packedDataArrAddr == nil or packedDataArrAddr == 0 then if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct: vector ptr ("..tostring(packedDataArrAddr)..") wasn't found. Packed Arr type: "..tostring(packedTypeName)); decDebugStep(); end; return; end        
-                local packedVectorSize = readInteger( packedDataArrAddr - GDSOf.SIZE_VECTOR ) -- cannot confirm I'm right and if packed, those can be easily null terminated
-                if packedVectorSize == nil or packedVectorSize == 0 then if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct: vector ptr's ("..tostring(packedDataArrAddr)..") size: "..tostring(packedVectorSize)..' Packed Arr type: '..tostring(packedTypeName)); decDebugStep(); end; return; end
-                pArrayStructElement = addStructureElem( pArrayStructElement, 'PckArray', GDSOf.P_ARRAY_TOARR, vtPointer )
-                pArrayStructElement.ChildStruct = createStructure('PArrayData')
+                iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, PackedStructEmitter)
                 
-                if bDEBUGMode then print( debugPrefixStr..' iteratePackedArrayToStruct start array vector:'..string.format(' at %x ', packedDataArrAddr)..'with size: '..tostring(packedVectorSize)..' and type: '..tostring(packedTypeName)) end
-                local prefixStr = 'pck_arr['
-
-                if packedVectorSize > 256 then
-                    packedVectorSize = 256
-                end
-                local offsetToValue
-
-                if ( packedTypeName == 'PACKED_STRING_ARRAY') then
-                    for elemIndex=0, packedVectorSize-1 do
-                        offsetToValue = elemIndex * GDSOf.PTRSIZE
-                        local arrElement = getAddress( packedDataArrAddr + offsetToValue ) -- each element is a pointer to a String
-                        if readPointer( arrElement ) == 0 then if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct: Packed Array String element ("..tostring(arrElement)..") is zero.") end; goto continue; end;
-
-                        local stringPtrElement = addStructureElem( pArrayStructElement, ('strElem[%d]'):format(elemIndex), offsetToValue, vtPointer )
-                        stringPtrElement.ChildStruct = createStructure('StringItem')
-                        local stringElement = addStructureElem( stringPtrElement, 'String', 0x0, vtUnicodeString )
-                        --stringElement.Bytesize = 100*4
-
-                        ::continue:: -- just to feel safe
-                    end
-
-                elseif ( packedTypeName == 'PACKED_INT32_ARRAY' ) or ( packedTypeName == 'PACKED_FLOAT32_ARRAY' ) then -- 4 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): 32 int or float ") end
-                    for elemIndex=0, packedVectorSize-1 do
-                        offsetToValue = elemIndex * 0x4
-                        if packedTypeName == 'PACKED_FLOAT32_ARRAY' then
-                            addStructureElem( pArrayStructElement, prefixStr..elemIndex..']', offsetToValue, vtSingle)
-                        else
-                            addStructureElem( pArrayStructElement, prefixStr..elemIndex..']', offsetToValue, vtDword)
-                        end
-                    end
-
-                elseif ( packedTypeName == 'PACKED_INT64_ARRAY' ) or ( packedTypeName == 'PACKED_FLOAT64_ARRAY' ) then -- 8 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): 64 int or double" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        offsetToValue = elemIndex * GDSOf.PTRSIZE
-                        if packedTypeName == 'PACKED_FLOAT64_ARRAY' then
-                            addStructureElem( pArrayStructElement, prefixStr..elemIndex..']', offsetToValue, vtDouble)
-                        else
-                            addStructureElem( pArrayStructElement, prefixStr..elemIndex..']', offsetToValue, vtQword)
-                        end
-                    end
-
-                elseif ( packedTypeName == 'PACKED_BYTE_ARRAY' ) then -- 1 byte
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): byte" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        offsetToValue = elemIndex * 0x1
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']', offsetToValue, vtByte)
-                    end
-
-                elseif ( packedTypeName == 'PACKED_VECTOR2_ARRAY' ) then -- 8 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR2" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x8 )
-                        prefixStr = 'pck_mvec2['
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: x', offsetToValue, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: y', offsetToValue+0x4, vtSingle)
-                    end
-
-                elseif ( packedTypeName == 'PACKED_VECTOR3_ARRAY' ) then -- 12 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR3" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0xC ) -- is it  0x10-byte aligned or not?
-                        prefixStr = 'pck_mvec3['
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: x', offsetToValue, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: y', offsetToValue+0x4, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: z', offsetToValue+0x8, vtSingle)
-                    end
-
-                elseif ( packedTypeName == 'PACKED_VECTOR4_ARRAY' ) then -- 16 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): VECTOR4" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
-                        prefixStr = 'pck_mvec4['
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: x', offsetToValue, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: y', offsetToValue+0x4, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: z', offsetToValue+0x8, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: w', offsetToValue+0xC, vtSingle)
-                        
-                    end
-
-                elseif ( packedTypeName == 'PACKED_COLOR_ARRAY' ) then -- 16 bytes
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct before loop (Packed Array: "..string.format('%x',packedArrayAddr).."): COLOR" ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        local arrElement = getAddress( packedDataArrAddr + elemIndex * 0x10 )
-                        prefixStr = 'pck_color['
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: R', offsetToValue, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: G', offsetToValue+0x4, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: B', offsetToValue+0x8, vtSingle)
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..']: A', offsetToValue+0xC, vtSingle)
-                    end
-
-                else
-                    if bDEBUGMode then print( debugPrefixStr.." iteratePackedArrayToStruct: Unhandled Packed Array type: "..tostring(packedTypeName) ) end
-                    for elemIndex=0, packedVectorSize-1 do
-                        offsetToValue = elemIndex * GDSOf.PTRSIZE
-                        addStructureElem( pArrayStructElement, prefixStr..elemIndex..'] /U/', offsetToValue, vtPointer)
-                    end
-                end
-
-                if bDEBUGMode then decDebugStep(); end;
                 return
             end
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Variant
 
-            --- nodeName and owner to append to
             ---@param nodeAddr number
-            ---@param Owner userdata
-            function iterateVecVarToAddr(nodeAddr, Owner)
-                assert(type(nodeAddr) == 'number',"iterateVecVarToAddr: Node addr has to be a number, instead got: "..type(nodeAddr))
+            ---@param parent userdata
+            ---@param emitter table
+            ---@param options table
+            function iterateVectorVariants(nodeAddr, parent, emitter, options)
+                assert(type(nodeAddr) == 'number',"Node addr has to be a number, instead got: "..type(nodeAddr));
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
-                local nodeName = getNodeName( nodeAddr )
+                local nodeName = getNodeName( nodeAddr ) or "UnknownNode";
+                
+                options = options or {}
 
-                if not checkForGDScript( nodeAddr ) then if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr: Node "..tostring(nodeName).." with NO GDScript"); decDebugStep(); end; return; end;
+                if options.requireGDScript and not checkForGDScript(nodeAddr) then
+                    sendDebugMessageAndStepOut(" iterateVectorVariants: Node has NO GDScript: "..nodeName)
+                    -- synchronize(function(parent) parent.Destroy() end, parent ) -- TODO: compare the emitter?
+                    return;
+                end
 
-                if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr start (hash)map for node: '..tostring(nodeName)..string.format(' at %x', nodeAddr)) end
                 local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
-                if ( headElement==0 or headElement==nil ) or ( mapSize==0 or mapSize==nil ) then
-                    if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr (hash)Map empty?: '..tostring(nodeName)); decDebugStep(); end
-                    return; --just return on fail
+                if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+                    sendDebugMessageAndStepOut('iterateVectorVariants (hash)Map empty?: '..nodeName)
+                    return;
                 end 
-                local mapElement = headElement
-                local prefixStr = 'var: '
+                
                 local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-                local variantSize, bSuccess = redefineVariantSizeByVector( variantVector, vectorSize )
-                if not bSuccess then if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr: Variant resize failed"); decDebugStep(); end return; end
+                local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+                if not ok then
+                    sendDebugMessageAndStepOut("iterateVectorVariants: Variant resize strangely failed")
+                    return;
+                end
+                
+                local mapElement = headElement
 
                 repeat
-                    -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
-                    local variantName, variantTypeScr, testedVarT
-                    local variantIndex = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_I )
-                    local variantPtr, variantType = getVariantByIndex( variantVector, variantIndex, variantSize ) -- let's do that first to avoid several ver blocks
-                    
-                    if GDSOf.MAJOR_VER >= 4 then -- 4.x versions have type in the memberinfo which 3.x does not (or i'm not aware of)
-                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.CONSTELEM_KEYVAL ) ) -- at 0x10
-                        local variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE )
-                        if variantTypeScr > GDSOf.MAXTYPE then variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE - 0x8 ) end; -- 4.2.2 had the issue with type offset being different for different memberinfos
+                    local entry = readNodeVariantEntry(mapElement, variantVector, variantSize, options.bNeedStructOffset)
+                    local contextTable = { nodeAddr = nodeAddr, nodeName = nodeName, baseAddress = entry.variantPtr }
+                    local handler = VariantHandlers[entry.typeName] or VariantHandlers.DEFAULT;
+                    handler(entry, emitter, parent, contextTable);
 
-                        if variantTypeScr == variantType then -- silly, but the types are sometimes inconsistent, cross-checking resolves for most tested cases
-                        testedVarT = variantTypeScr
-                        elseif ( variantTypeScr > variantType ) and ( variantTypeScr > 0 and variantTypeScr <= GDSOf.MAXTYPE ) then
-                        testedVarT = variantTypeScr
-                        elseif ( variantType > variantTypeScr ) and ( variantType > 0 and variantType <= GDSOf.MAXTYPE ) then
-                        testedVarT = variantType
-                        elseif variantTypeScr > GDSOf.MAXTYPE then
-                            testedVarT = variantType; if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr: fallback1, cached type is used'); end; -- if the source is incorrect
-                        else
-                        testedVarT = variantTypeScr; if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr: fallback2, cached type is used'); end; -- let's have cached if everything is wrong
-                        end
-                    else
-                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.MAP_KVALUE ) )
-                        testedVarT = variantType -- actually not tested, just to be compatible
-                        variantTypeScr = variantType
-                    end
-
-                    if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop (Node: "..tostring(nodeName)..": "..string.format('%x',nodeAddr).."): iterating at:\t\t"..variantName..' index: '..tostring(variantIndex)..' of '..tostring(mapSize-1)..' | GDype (src/act/test): '..tostring(variantTypeScr)..'/'..tostring(variantType)..'/'..tostring(testedVarT)..' | VarAddr: '..string.format('%x',variantPtr)) end
-                    local testedVarName = getGDTypeName( testedVarT ) 
-
-                    if ( testedVarName == 'DICTIONARY' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop: DICT case for name: "..tostring(variantName) ) end
-                        prefixStr = 'dict: '
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
-                        else
-                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize == nil or dictSize == 0 then
-                            prefixStr = 'dict (empty): '
-
-                            synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner)
-                                        addMemRecTo( prefixStr..variantName , variantPtr , getCETypeFromGD( testedVarT ) , Owner ) -- when the dicitonary is empty, just add the addr
-                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                        else
-
-                            local newParentMemrec = synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..variantName , variantPtr , getCETypeFromGD( testedVarT ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                            iterateDictionaryToAddr( readPointer( variantPtr ) , newParentMemrec )
-                        end
-
-                    elseif testedVarName == 'ARRAY' then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr: ARRAY case for name: "..tostring(variantName) ) end
-                        
-                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) == 0 then
-
-                            synchronize(function( variantName, variantPtr, testedVarT, Owner)
-                                        addMemRecTo( 'array: (empty): '..variantName , variantPtr , getCETypeFromGD( testedVarT ) , Owner )
-                                    end, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                        else
-                            prefixStr = 'array: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..variantName , variantPtr , getCETypeFromGD( testedVarT ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                            iterateArrayToAddr( readPointer( variantPtr ) , newParentMemrec )
-                        end
-
-                    elseif ( testedVarName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop: OBJ case: name: "..tostring(variantName)..string.format(' addr: %x ', variantPtr)) end
-                        variantPtr = checkForVT( variantPtr )
-
-                        if checkForGDScript( readPointer( variantPtr ) ) then
-                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop: NODE case: "..string.format('%x ', variantPtr)..tostring(variantName)) end
-                            prefixStr = 'mNode: '
-
-                            local newParentMemrec = synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..variantName , variantPtr , getCETypeFromGD( testedVarT ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                            iterateMNodeToAddr( readPointer( variantPtr ) , newParentMemrec )
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr: OBJ doesn\'t have GDScript/Inst'); end
-                            prefixStr = 'obj: '
-
-                            synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner)
-                                        addMemRecTo( prefixStr..variantName , variantPtr , getCETypeFromGD( testedVarT )  , Owner )
-                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                        end
-
-                    elseif ( testedVarName == 'PACKED_STRING_ARRAY' ) or ( testedVarName == 'PACKED_BYTE_ARRAY' )
-                        or ( testedVarName == 'PACKED_INT32_ARRAY' ) or ( testedVarName == 'PACKED_INT64_ARRAY' )
-                        or ( testedVarName == 'PACKED_FLOAT32_ARRAY' ) or ( testedVarName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( testedVarName == 'PACKED_VECTOR2_ARRAY' ) or ( testedVarName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( testedVarName == 'PACKED_COLOR_ARRAY' ) or ( testedVarName == 'PACKED_VECTOR4_ARRAY' ) then -- packed arrays are a simple arrays of ptr
-
-                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop: "..tostring(testedVarName).." case for name: "..tostring(variantName) ) end
-
-                            local arrayAddr = readPointer( variantPtr )
-                            if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then
-                                prefixStr = 'pck_arr (empty): '
-
-                                synchronize(function( prefixStr, variantName, testedVarName, variantPtr, testedVarT, Owner)
-                                            addMemRecTo( prefixStr..variantName..' of '..testedVarName , variantPtr , getCETypeFromGD( testedVarT ) , Owner ) -- when the packed array is empty, just add the addr
-                                        end, prefixStr, variantName, testedVarName, variantPtr, testedVarT, Owner
-                                    )
-
-                            else
-                                prefixStr = 'pck_arr: '
-                                local newParentMemrec = synchronize(function( prefixStr, variantName, testedVarName, variantPtr, testedVarT, Owner)
-                                            local newParentMemrec = addMemRecTo( prefixStr..variantName..' of '..testedVarName , variantPtr , getCETypeFromGD( testedVarT ) , Owner )
-                                            newParentMemrec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                        return newParentMemrec
-                                    end, prefixStr, variantName, testedVarName, variantPtr, testedVarT, Owner
-                                )
-
-                                iteratePackedArrayToAddr(  arrayAddr , testedVarName, newParentMemrec )
-                            end
-
-                    elseif ( testedVarName == 'COLOR' ) then
-                        prefixStr = 'color: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner )
-                                    addMemRecTo( prefixStr..variantName..': R' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': G' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': B' , variantPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': A' , variantPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'VECTOR2' ) then
-                        prefixStr = 'vec2: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'VECTOR2I' ) then
-                        prefixStr = 'vec2i: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'RECT2' ) then
-                        prefixStr = 'rect2: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': h' , variantPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'RECT2I' ) then
-                        prefixStr = 'rect2i: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': h' , variantPtr+0xC , vtDword , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'VECTOR3' ) then
-                        prefixStr = 'vec3: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtSingle , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'VECTOR3I' ) then
-                        prefixStr = 'vec3i: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtDword , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'VECTOR4' ) then
-                        prefixStr = 'vec4: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner)
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtSingle , Owner )
-                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0xC , vtSingle , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'VECTOR4I' ) then
-                        prefixStr = 'vec4i: '
-                        synchronize(function( prefixStr, variantName, variantPtr, Owner )
-                                    addMemRecTo( prefixStr..variantName..': x' , variantPtr , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': y' , variantPtr+0x4 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': z' , variantPtr+0x8 , vtDword , Owner )
-                                    addMemRecTo( prefixStr..variantName..': w' , variantPtr+0xC , vtDword , Owner )
-                                end, prefixStr, variantName, variantPtr, Owner
-                            )
-
-                    elseif ( testedVarName == 'STRING_NAME' ) then
-                        prefixStr = 'StringName: '
-                        variantPtr = readPointer( variantPtr ) + GDSOf.STRING
-                        synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner )
-                                        addMemRecTo( prefixStr..variantName , variantPtr , vtString  , Owner )
-                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                    else
-                        prefixStr = 'var: '
-
-                        synchronize(function( prefixStr, variantName, variantPtr, testedVarT, Owner )
-                                        addMemRecTo( prefixStr..variantName , variantPtr , getCETypeFromGD( testedVarT ) , Owner )
-                                    end, prefixStr, variantName, variantPtr, testedVarT, Owner
-                                )
-
-                    end
-
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                    end
+                    mapElement = getNextMapElement(mapElement)
                 until (mapElement == 0)
 
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
                 return
             end
 
-            --- nodeName and ownerStruct to append to
+            --- nodeAddr and owner to append to
+            ---@param nodeAddr number
+            ---@param parent userdata
+            function iterateVecVarToAddr(nodeAddr, parent)
+                local options = { bNeedStructOffset = false, requireGDScript = true };
+                iterateVectorVariants(nodeAddr, parent, AddrEmitter, options);
+            end
+
+            --- nodeAddr and ownerStruct to append to
             ---@param nodeAddr number
             ---@param varStructElement userdata
             function iterateVecVarToStruct(nodeAddr, varStructElement)
-                assert(type(nodeAddr) == 'number',"iterateVecVarToStruct: Node addr has to be a number, instead got: "..type(nodeAddr))
-                
-                local nodeName;
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep(); nodeName = getNodeName( nodeAddr ) end; 
-
-                if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr start (hash)map for node: '..tostring(nodeName)..string.format(' at %x', nodeAddr)) end
-
-                local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
-                if ( headElement==0 or headElement==nil ) or ( mapSize==0 or mapSize==nil ) then
-                    if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr (hash)Map empty?: '..tostring(nodeName)); decDebugStep(); end
-                    return; --just return on fail
-                end 
-                local mapElement = headElement
-                local prefixStr = 'var: '
-                local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-                local variantSize, bSuccess = redefineVariantSizeByVector( variantVector, vectorSize )
-                if not bSuccess then if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct: Variant resize failed"); decDebugStep(); end return; end
-
-                repeat
-                    -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
-                    local variantName, variantTypeScr, testedVarT
-                    local variantIndex = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_I )
-                    local variantPtr, variantType, offsetToValue = getVariantByIndex( variantVector, variantIndex, variantSize, true )
-
-                    if GDSOf.MAJOR_VER >= 4 then -- 4.x versions have type in the memberinfo which 3.x does not (or i'm not aware of)
-                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.CONSTELEM_KEYVAL ) ) -- at 0x10
-                        local variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE )
-                        if variantTypeScr > GDSOf.MAXTYPE then variantTypeScr = readInteger( mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE - 0x8 ) end; -- 4.2.2 had the issue with type offset being different for different memberinfos
-
-                        if variantTypeScr == variantType then -- silly, but the types are sometimes inconsistent, cross-checking resolves for most tested cases
-                        testedVarT = variantTypeScr
-                        elseif ( variantTypeScr > variantType ) and ( variantTypeScr > 0 and variantTypeScr <= GDSOf.MAXTYPE ) then
-                        testedVarT = variantTypeScr
-                        elseif ( variantType > variantTypeScr ) and ( variantType > 0 and variantType <= GDSOf.MAXTYPE ) then
-                        testedVarT = variantType
-                        elseif variantTypeScr > GDSOf.MAXTYPE then
-                            testedVarT = variantType; if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr: fallback1, cached type is used'); end; -- if the source is incorrect
-                        else
-                        testedVarT = variantTypeScr; if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToAddr: fallback2, cached type is used'); end; -- let's have cached if everything is wrong
-                        end
-                    else
-                        variantName = getStringNameStr( readPointer( mapElement + GDSOf.MAP_KVALUE ) )
-                        testedVarT = variantType -- actually not tested, just to be compatible
-                        variantTypeScr = variantType
-                    end
-
-                    if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop (Node: "..tostring(nodeName)..": "..string.format('%x',nodeAddr).."): iterating at:\t\t"..variantName..' index: '..tostring(variantIndex)..' of '..tostring(mapSize-1)..' | GDype (src/act/test): '..tostring(variantTypeScr)..'/'..tostring(variantType)..'/'..tostring(testedVarT)..' | VarAddr: '..string.format('%x',variantPtr)) end
-                    local testedVarName = getGDTypeName( testedVarT ) 
-
-                    if ( testedVarName == 'DICTIONARY' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop: DICT case for name: "..tostring(variantName) ) end
-                        prefixStr = 'dict: '
-                        local dictSize
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
-                        else
-                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize == nil or dictSize == 0 then
-                            prefixStr = 'dict (empty): '
-                            addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                        else
-                            local newParentStructElem = addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                            newParentStructElem.ChildStruct = createStructure('Dict')
-                            iterateDictionaryToStruct( readPointer( variantPtr ) , newParentStructElem )
-                        end
-
-                    elseif testedVarName == 'ARRAY' then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct: ARRAY case for name: "..tostring(variantName) ) end
-                        prefixStr = 'array: '
-
-                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) == 0 then
-                            addStructureElem( varStructElement, 'array: (empty): '..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                        else
-                            local newParentStructElem = addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                            newParentStructElem.ChildStruct = createStructure('Array')
-                            iterateArrayToStruct( readPointer( variantPtr ) , newParentStructElem )
-                        end
-
-                    elseif ( testedVarName == 'OBJECT' ) then
-                        if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToAddr loop: OBJ case: name: "..tostring(variantName)..string.format(' addr: %x ', variantPtr)) end
-                        local bShifted, newParentStructElem;
-                        variantPtr, bShifted = checkForVT( variantPtr ) -- check if the pointer is valid, if not, shift it back 0x8 bytes
-                        if bShifted then
-                            offsetToValue = offsetToValue - GDSOf.PTRSIZE
-                            newParentStructElem = addStructureElem( varStructElement, 'Wrapper: '..variantName, offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('Wrapper')
-                            offsetToValue = 0x0 -- the object lies at 0x0 now
-                        else
-                            newParentStructElem = varStructElement
-                        end
-                        prefixStr = 'mNode: '
-
-                        if checkForGDScript( readPointer( variantPtr ) ) then
-                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct loop: NODE DETECTED, SKIP: "..string.format('%x ', variantPtr)..tostring(variantName)) end 
-                            addLayoutStructElem( newParentStructElem, prefixStr..variantName, 0xFF8080, offsetToValue, vtPointer)
-                        else
-                            if bDEBUGMode then print( debugPrefixStr..' iterateVecVarToStruct: OBJ doesn\'t have GDScript/Inst'); end
-                            prefixStr = 'obj: '
-                            addStructureElem( newParentStructElem, prefixStr..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                        end
-
-                    elseif ( testedVarName == 'PACKED_STRING_ARRAY' ) or ( testedVarName == 'PACKED_BYTE_ARRAY' )
-                        or ( testedVarName == 'PACKED_INT32_ARRAY' ) or ( testedVarName == 'PACKED_INT64_ARRAY' )
-                        or ( testedVarName == 'PACKED_FLOAT32_ARRAY' ) or ( testedVarName == 'PACKED_FLOAT64_ARRAY' )
-                        or ( testedVarName == 'PACKED_VECTOR2_ARRAY' ) or ( testedVarName == 'PACKED_VECTOR3_ARRAY' )
-                        or ( testedVarName == 'PACKED_COLOR_ARRAY' ) or ( testedVarName == 'PACKED_VECTOR4_ARRAY' ) then -- packed arrays are a simple arrays of ptr
-
-                            if bDEBUGMode then print( debugPrefixStr.." iterateVecVarToStruct loop: "..tostring(testedVarT).." case for name: "..tostring(variantName) ) end
-                            local arrayAddr = readPointer( variantPtr )
-
-                            if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then
-                                prefixStr = 'pck_arr (empty): '
-                                addStructureElem( varStructElement, prefixStr..variantName..' of '..testedVarName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                            else
-                                prefixStr = 'pck_arr: '
-                                local newParentStructElem = addStructureElem(varStructElement, prefixStr..variantName..' of '..testedVarName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                                newParentStructElem.ChildStruct = createStructure('P_Array')
-                                iteratePackedArrayToStruct(  arrayAddr, testedVarName, newParentStructElem )
-                            end
-
-                    elseif ( testedVarName == 'STRING' ) then
-                            prefixStr = 'String: '
-                            local newParentStructElem = addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, vtPointer )
-                            newParentStructElem.ChildStruct = createStructure('String')
-                            addStructureElem(newParentStructElem, prefixStr..variantName, 0x0, vtUnicodeString )
-
-                    elseif ( testedVarName == 'COLOR' ) then
-                        prefixStr = 'color: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': R' , offsetToValue, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': G' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': B' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': A' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( testedVarName == 'VECTOR2' ) then
-                        prefixStr = 'vec2: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
-
-                    elseif ( testedVarName == 'VECTOR2I' ) then
-                        prefixStr = 'vec2i: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
-
-                    elseif ( testedVarName == 'RECT2' ) then
-                        prefixStr = 'rect2: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': h' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( testedVarName == 'RECT2I' ) then
-                        prefixStr = 'rect2i: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0x8, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': h' , offsetToValue+0xC, vtDword )
-
-                    elseif ( testedVarName == 'VECTOR3' ) then
-                        prefixStr = 'vec3: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtSingle )
-
-                    elseif ( testedVarName == 'VECTOR3I' ) then
-                        prefixStr = 'vec3i: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtDword )
-
-                    elseif ( testedVarName == 'VECTOR4' ) then
-                        prefixStr = 'vec4: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtSingle )
-                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0xC, vtSingle )
-
-                    elseif ( testedVarName == 'VECTOR4I' ) then
-                        prefixStr = 'vec4i: '
-                        addStructureElem( varStructElement, prefixStr..variantName..': x' , offsetToValue, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': y' , offsetToValue+0x4, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': z' , offsetToValue+0x8, vtDword )
-                        addStructureElem( varStructElement, prefixStr..variantName..': w' , offsetToValue+0xC, vtDword )
-
-                    elseif ( testedVarName == 'STRING_NAME' ) then
-                        prefixStr = 'StringName: '
-                        local newParentStructElem = addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('StringName')
-                        newParentStructElem = addStructureElem( newParentStructElem, prefixStr..variantName, 0x10, vtPointer )
-                        newParentStructElem.ChildStruct = createStructure('stringy')
-                        addStructureElem( newParentStructElem, 'String: '..variantName, 0x0, vtUnicodeString )
-                    else
-                        prefixStr = 'var: '
-                        addStructureElem( varStructElement, prefixStr..variantName, offsetToValue, getCETypeFromGD( testedVarT ) )
-                    end
-
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                    end
-                until (mapElement == 0)
-
-                if bDEBUGMode then decDebugStep(); end;
-                return
+                local options = { bNeedStructOffset = true, requireGDScript = false }
+                iterateVectorVariants( nodeAddr, varStructElement, StructEmitter, options )
             end
-
             --- iterate nodes only and owner to append to
             ---@param nodeAddr number
             function iterateVecVarForNodes(nodeAddr)
@@ -6247,41 +5177,17 @@
 
                 if not checkForGDScript( nodeAddr ) then return; end;
                 local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-                if vectorSize == nil or vectorSize == 0 then return; end
+                if isNullOrNil(vectorSize) then return; end
 
-                local variantSize, bSuccess = redefineVariantSizeByVector( variantVector, vectorSize )
-                if not bSuccess then return; end
+                local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+                if not ok then return; end
+
+                local visitor = NodeVisitor
 
                 for variantIndex=0, vectorSize-1 do
-
-                    local variantPtr, variantType = getVariantByIndex( variantVector, variantIndex, variantSize )
-                    local variantTypeName = getGDTypeName( variantType ) 
-                    if ( variantTypeName == 'DICTIONARY' ) then
-                        local dictSize
-
-                        if GDSOf.MAJOR_VER >= 4 then
-                            dictSize = readInteger( readPointer( variantPtr ) + GDSOf.DICT_SIZE )
-                        else -- 3.x
-                            dictSize = readInteger( readPointer( readPointer( variantPtr ) + GDSOf.DICT_LIST ) + GDSOf.DICT_SIZE )
-                        end
-
-                        if dictSize ~= nil and dictSize ~= 0 then
-                            iterateDictionaryForNodes( readPointer( variantPtr ) )
-                        end
-
-                    elseif variantTypeName == 'ARRAY' then
-                        if readPointer( readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR ) ~= 0 then
-                            iterateArrayForNodes( readPointer( variantPtr ) )
-                        end
-
-                    elseif ( variantTypeName == 'OBJECT' ) then
-                        variantPtr = checkForVT( variantPtr )
-                        if checkForGDScript( readPointer( variantPtr ) ) then
-                            iterateMNode( readPointer( variantPtr ) )
-                        end
-
-                    else
-                    end
+                    local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize)
+                    local handler = NodeDiscoveryHandlers[entry.typeName]
+                    if handler then handler(entry, visitor) end
                 end
             end
 
@@ -6290,24 +5196,23 @@
             function getNodeVariantVector(nodeAddr)
                 assert(type(nodeAddr) == 'number',"nodeAddr should be a number, instead got: "..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
                 local scriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if scriptInstance == nil or scriptInstance == 0 then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeVariantVector: scriptInstance is absent for '..string.format(' %x', nodeAddr)); decDebugStep(); end return; end
+                if isNullOrNil(scriptInstance) then
+                    sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for '..string.format(' %x', nodeAddr))
+                    return;
+                end
 
                 local vectorPtr = readPointer( scriptInstance + GDSOf.VAR_VECTOR )
                 local vectorSize = readInteger( vectorPtr - GDSOf.SIZE_VECTOR )
 
-                if (vectorPtr == 0 or vectorPtr == nil) or
-                    (vectorSize == 0 or vectorSize == nil)
-                    then
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr..' getNodeVariantVector: vector is absent for '..string.format(' %x', nodeAddr)); decDebugStep(); end
-
-                        return;
+                if isNullOrNil(vectorPtr) or isNullOrNil(vectorSize) then
+                    sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for '..string.format(' %x', nodeAddr))
+                    return;
                 end
 
-                if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                debugStepOut()
 
                 return vectorPtr, vectorSize
             end
@@ -6317,28 +5222,30 @@
             function getNodeVariantMap(nodeAddr)
                 assert(type(nodeAddr) == 'number',"nodeAddr should be a number, instead got: "..type(nodeAddr))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
                 local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if scriptInstanceAddr == nil or scriptInstanceAddr == 0 then if bDEBUGMode then print( debugPrefixStr..' getNodeVariantMap: scriptInstance is absent for '..string.format(' %x', nodeAddr)); decDebugStep(); end return; end
+                if isNullOrNil(scriptInstanceAddr) then
+                    sendDebugMessageAndStepOut('getNodeVariantMap: scriptInstance is absent for '..string.format(' %x', nodeAddr));
+                    return;
+                end
 
                 local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
-                if gdScriptAddr == nil or gdScriptAddr == 0 then if bDEBUGMode then print( debugPrefixStr..' getNodeVariantMap: GDScript is absent for '..string.format(' %x', nodeAddr)); decDebugStep(); end return; end
+                if isNullOrNil(gdScriptAddr) then
+                    sendDebugMessageAndStepOut('getNodeVariantMap: GDScript is absent for '..string.format(' %x', nodeAddr));
+                    return;
+                end
 
                 local mainElement = readPointer( gdScriptAddr + GDSOf.VAR_NAMEINDEX_MAP ) -- head / root
                 local endElement = readPointer( gdScriptAddr + GDSOf.VAR_NAMEINDEX_MAP + GDSOf.PTRSIZE ) -- tail / end
                 local mapSize = readInteger( gdScriptAddr + GDSOf.VAR_NAMEINDEX_MAP + GDSOf.MAP_SIZE )
 
-                if (mainElement == 0 or mainElement == nil) or
-                    (endElement == 0 or endElement == nil) or
-                    (mapSize == 0 or mapSize == nil) then
-                        
-                        if bDEBUGMode then print( debugPrefixStr..' getNodeVariantMap: Variant: (hash)map is not found'); decDebugStep(); end
-                        return;
+                if isNullOrNil(mainElement) or isNullOrNil(endElement) or isNullOrNil(mapSize) then    
+                    sendDebugMessage('getNodeVariantMap: Variant: (hash)map is not found')
+                    return;
                 end
 
-                if bDEBUGMode then decDebugStep(); end;
+                debugStepOut()
                 if GDSOf.MAJOR_VER >= 4 then
                     return mainElement, endElement, mapSize
                 else
@@ -6354,25 +5261,24 @@
             function getVariantByIndex(vectorAddr, index, varSize, bPushOffset)
                 assert(type(vectorAddr) == 'number',">>getVariantByIndex: vector addr should be a number, instead got: "..type(vectorAddr))
                 assert((type(index) == 'number') and (index >= 0), ">>getVariantByIndex: index should be a valid number, instead got: "..type(nodePtr))
-                assert((type(varSize) == 'number') and (varSize >= 0x18), ">>getVariantByIndex: variant size should be at least 0x18, instead got: "..tostring(varSize))
 
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
-                if bDEBUGMode and ( index > ( readInteger( vectorAddr - GDSOf.SIZE_VECTOR) - 1 ) ) then print( debugPrefixStr.." getVariantByIndex: index is beyond vector size, pass index: "..tostring(index)..' VecSize: '..tostring(( readInteger( vectorAddr - GDSOf.SIZE_VECTOR) - 1 )) ) end
+                if ( index > ( readInteger( vectorAddr - GDSOf.SIZE_VECTOR) - 1 ) ) then
+                    sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: "..tostring(index)..' VecSize: '..tostring(( readInteger( vectorAddr - GDSOf.SIZE_VECTOR) - 1 )) )
+                end
 
                 local variantType = readInteger( vectorAddr + varSize * index )
                 local offsetToValue = getVariantValueOffset( variantType )
 
                 local offset = varSize * index + offsetToValue
-                local variantAddr = getAddress( vectorAddr + offset ) -- 0x8 or 0x10 is value
+                local variantAddr = getAddress( vectorAddr + offset )
 
-                if ( variantType == nil) -- variantType == 0 -- zero is nil which happens for uninitialized
-                    or (variantAddr == nil) -- zero is possible for uninitialized variantPtr == 0 or 
-                    then print('getVariantByIndex: variant ptr or type invalid'); error('getVariantByIndex: variant ptr or type invalid') end
+                if ( variantType == nil) or (variantAddr == nil) then  -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or 
+                    sendDebugMessage('getVariantByIndex: variant ptr or type invalid'); error('getVariantByIndex: variant ptr or type invalid')
+                end
 
-                if bDEBUGMode then decDebugStep(); end;
-
+                debugStepOut()
                 if bPushOffset then
                     return variantAddr, variantType, offset
                 else
@@ -6387,20 +5293,22 @@
             ---@param endElement number
             ---@param mapSize number
             function getLeftmostMapElem(rootElement, endElement, mapSize, struct)
-
-                local debugPrefixStr ='>';
-                if bDEBUGMode then debugPrefixStr = incDebugStep() end; 
+                debugStepIn()
 
                 local mapElement = readPointer( rootElement + GDSOf.MAP_LELEM )
-                if ( mapElement == nil ) or ( mapElement == 0 ) then if bDEBUGMode then print( debugPrefixStr..' getLeftmostMapElem: mapElement is likely non-existent: root : '..string.format( '%x', tonumber(rootElement) )..string.format(' last %x', tonumber(endElement) )..string.format(' size %x', tonumber(mapSize) )  ); decDebugStep(); end return 0, endElement, mapSize end -- return 0 as a head element 
-                    local leftStructElem
-                    if struct then
-                        leftStructElem = addStructureElem( struct, 'rootElem', GDSOf.MAP_LELEM, vtPointer )
-                        leftStructElem.ChildStruct = createStructure('rootElem')
-                    end
+                if isNullOrNil(mapElement) then
+                    sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : '..('%x'):format(rootElement or -1 )..(' last %x'):format(endElement or -1 )..(' size %x'):format(mapSize or -1 )  );
+                    return 0, endElement, mapSize  -- return 0 as a head element
+                end
+
+                local leftStructElem
+                if struct then
+                    leftStructElem = addStructureElem( struct, 'rootElem', GDSOf.MAP_LELEM, vtPointer )
+                    leftStructElem.ChildStruct = createStructure('rootElem')
+                end
 
                 if ( mapElement == endElement ) then
-                    if bDEBUGMode then decDebugStep(); end
+                    debugStepOut();
                     return mapElement, endElement, mapSize -- not sure that's possible
                 else
                     while readPointer( mapElement + GDSOf.MAP_LELEM ) ~= endElement do
@@ -6410,8 +5318,13 @@
                             leftStructElem.ChildStruct = createStructure('goLeft')
                         end
                     end
-                    if mapElement == 0 or mapElement == nil then if bDEBUGMode then print( debugPrefixStr..' getLeftmostMapElem: mapElement is likely non-existent: root : '..string.format( '%x', tonumber(rootElement) )..string.format(' last %x', tonumber(endElement) )..string.format(' size %x', tonumber(mapSize) )  ); decDebugStep(); end return 0, endElement, mapSize end -- return 0 as a head element
-                    if bDEBUGMode then decDebugStep(); end
+                    
+                    if isNullOrNil(mapElement) then
+                        sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : '..('%x'):format(rootElement or -1 )..(' last %x'):format(endElement or -1 )..(' size %x'):format(mapSize or -1 )  );
+                        return 0, endElement, mapSize
+                    end -- return 0 as a head element
+                    
+                    debugStepOut();
                     if struct then
                         return mapElement, endElement, mapSize, leftStructElem
                     else
@@ -6430,54 +5343,56 @@
                 assert((type(vectorPtr) == 'number'),"vectorPtr has to be a number, instead got: "..type(vectorPtr))
                 assert((type(vectorSize) == 'number') and (vectorSize > 0),"VectorSize is empty or not a number, type: "..type(vectorSize))
 
-                local debugPrefixStr = '>';
-                if bDEBUGMode and inMainThread() then debugPrefixStr = incDebugStep() end; 
+                --debugStepIn()
 
-                if (vectorSize == 0 or vectorSize == nil) then if bDEBUGMode and inMainThread() then print( debugPrefixStr..' redefineVariantSizeByVector: Bad vector size for '..string.format('%x',vectorPtr)); decDebugStep(); end; return 0x18, true; end
+                if isNullOrNil(vectorSize) then
+                    --sendDebugMessageAndStepOut('redefineVariantSizeByVector: Bad vector size for '..('%x'):format(vectorPtr));
+                    return 0x18, true;
+                end
 
                 if GDSOf.MAJOR_VER >= 4 then
 
                     if (vectorSize == 1) and ( readInteger(vectorPtr) == 27 ) then
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." 1-sized Vector: Variant was resized to 0x30 (vector: "..string.format('%x )',vectorPtr)); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut(" 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
 
                         return 0x30, true;
 
                     elseif (vectorSize == 1) then
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." 1-sized Vector: Variant was left 0x18 long (vector: "..string.format('%x )',vectorPtr)); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
 
                         return 0x18, true;
 
                     end
 
                     if (vectorSize == 2) and getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x18 ) ) then -- is it a valid variant Type?
-                        if bDEBUGMode then decDebugStep(); end;
+                        --debugStepOut()
 
                         return 0x18, true;
 
                     elseif (vectorSize == 2) and getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x30 ) ) then  -- if it's 0x30
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." Variant was resized to 0x30 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x30, true;
 
                     elseif (vectorSize == 2) and getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x40 ) ) then -- if it's 0x40
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." Variant was resized to 0x40 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut(" Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x40, true;
 
                     end
 
                     if getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x18 ) ) and getGDTypeName( readInteger( vectorPtr + 0x18*2 ) ) then -- is it a valid variant Type?
-                        if bDEBUGMode then decDebugStep(); end;
+                        --debugStepOut()
 
                         return 0x18, true;
 
                     elseif getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x30 ) ) and getGDTypeName( readInteger( vectorPtr + 0x30*2 ) ) then
-                        if bDEBUGMode and inMainThread() then print(  debugPrefixStr.." Variant was resized to 0x30 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x30, true;
 
                     elseif getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x40 ) ) and getGDTypeName( readInteger( vectorPtr + 0x40*2 ) ) then
-                        if bDEBUGMode and inMainThread() then print(  debugPrefixStr.." Variant was resized to 0x40 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x40, true;
 
@@ -6486,52 +5401,52 @@
                 else
 
                     if (vectorSize == 1) and ( getGDTypeName( vectorPtr ) == 'DICTIONARY' ) then -- for some reasons single-sized vectors with dict were 0x30
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." redefineVariantSizeByVector: 1-sized Vector: Variant was resized to 0x30 (vector: "..string.format('%x )',vectorPtr)); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
 
                         return 0x20, true;
 
                     elseif (vectorSize == 1) then
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." redefineVariantSizeByVector: 1-sized Vector: Variant was left 0x18 long (vector: "..string.format('%x )',vectorPtr)); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
 
                         return 0x18, true; -- Usual size is 0x18 in 3.x
 
                     end
 
                     if (vectorSize == 2) and getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x18 ) ) then -- is it a valid variant Type?
-                        if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                        --debugStepOut()
 
                         return 0x18, true; -- Usual size is 0x18 in 3.x
 
                     elseif (vectorSize == 2) and getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x20 ) ) then 
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." redefineVariantSizeByVector: 2s Variant was resized to 0x20 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x20, true;
 
                     elseif (vectorSize == 2) and getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x30 ) ) then
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." redefineVariantSizeByVector: 2s Variant was resized to 0x30 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x30, true; -- what's the longest for 3.x?
                     end
 
                     if getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x18 ) ) and getGDTypeName( readInteger( vectorPtr + 0x18*2 ) ) then -- is it a valid variant Type?
-                        if bDEBUGMode and inMainThread() then decDebugStep(); end;
+                        --debugStepOut()
 
                         return 0x18, true; -- Usual size is 0x18 in 3.x
 
                     elseif getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x20 ) ) and getGDTypeName( readInteger( vectorPtr + 0x20*2 ) ) then
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." redefineVariantSizeByVector: Variant was resized to 0x20 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x20, true;
 
                     elseif getGDTypeName( readInteger( vectorPtr ) ) and getGDTypeName( readInteger( vectorPtr + 0x30 ) ) and getGDTypeName( readInteger( vectorPtr + 0x30*2 ) ) then
-                        if bDEBUGMode and inMainThread() then print( debugPrefixStr.." redefineVariantSizeByVector: Variant was resized to 0x30 (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                        --sendDebugMessageAndStepOut(" redefineVariantSizeByVector: Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
 
                         return 0x30, true; -- what's the longest for 3.x?
                     end
 
                 end
 
-                if bDEBUGMode and inMainThread() then print( debugPrefixStr.." redefineVariantSizeByVector: Variant resize failed past 4 cases (vector: "..string.format('%x',vectorPtr)..")"); decDebugStep(); end;
+                --sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant resize failed past 4 cases (vector: "..('%x'):format(vectorPtr)..")")
                 -- // Variant takes 24 bytes when real_t is float, and 40 bytes if double.
                 -- // It only allocates extra memory for AABB/Transform2D (24, 48 if double),
                 -- // Basis/Transform3D (48, 96 if double), Projection (64, 128 if double),
@@ -6650,7 +5565,10 @@
             --- takes in a godot type, returns a godot type name
             ---@param typeInt number
             function getGDTypeName(typeInt)
-                if type(typeInt) ~= "number" then if bDEBUGMode then print("getGDTypeName: input not a number, instead: "..tostring(typeInt)) end; return false; end
+                if type(typeInt) ~= "number" then
+                    --sendDebugMessage("getGDTypeName: input not a number, instead: "..tostring(typeInt))
+                    return false;
+                end
 
                 if GDSOf.MAJOR_VER >= 4 then
                     if (typeInt == 2) then return "INT" end -- these go first
@@ -6869,14 +5787,14 @@
             --- returns a node dictionary
             function getMainNodeDict()
                 local childrenAddr, childrenSize = getVPChildren()
-                if childrenAddr == nil or childrenSize == nil then return end
+                if isNullOrNil(childrenAddr) then return end
 
                 local nodeDict = {}
 
                 for i=0,(childrenSize-1) do
 
                     local nodePtr = readPointer( childrenAddr + i * GDSOf.PTRSIZE )
-                    if nodePtr == nil or nodePtr == 0 then error('getMainNodeDict: NO MAIN NODES') end
+                    if isNullOrNil(nodePtr) then error('getMainNodeDict: NO MAIN NODES') end
 
                     local nodeNameStr = getNodeName(nodePtr)
                     nodeNameStr = tostring(nodeNameStr)
@@ -6906,14 +5824,14 @@
             --- returns a node table
             function getMainNodeTable()
                 local childrenAddr, childrenSize = getVPChildren()
-                if childrenAddr == nil or childrenSize == nil then return end
+                if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then return end
 
                 local nodeTable = {}
 
                 for i=0,(childrenSize-1) do
 
                     local nodeAddr = readPointer( childrenAddr + i * GDSOf.PTRSIZE )
-                    if nodeAddr == nil or nodeAddr == 0 then error('getMainNodeDict: NO MAIN NODES') end
+                    if isNullOrNil(nodeAddr) then error('getMainNodeDict: NO MAIN NODES') end
 
                     local nodeNameStr = getNodeName( nodeAddr )
                     nodeNameStr = tostring( nodeNameStr )
@@ -6923,36 +5841,16 @@
                 return nodeTable
             end
 
-            --- prints all functions for a given nodeName
-            ---@param nodeName string
-            function DumpNodeFunctions(nodeName)
-                assert(type(nodeName) == 'string',"Node name has to be a string, instead got: "..type(nodeName))
-
-                local nodeaddr = getNodeWithGDScriptInstance( nodeName )
-                if nodeaddr == nil then print(" DumpNodeFunctions: Node: "..tostring(nodeName).." wasn't found"); return; end
-                
-                local headElementPtr, tailElementPtr, mapSize = getNodeFunctionMap( nodeaddr )
-                local mapElement = headElementPtr
-
-                repeat
-                    local funcName = getGDFunctionName(mapElement)
-                    printf("Func: %s - %x : of node: %s", funcName , readPointer( mapElement + 0x18 ) , nodeName ) -- mysterious number, it should be a constant I guess
-                    if GDSOf.MAJOR_VER >= 4 then
-                        mapElement = readPointer( mapElement )
-                    else
-                        mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                    end
-
-                until (mapElement == 0)
-            end
-
             --- gets a dumped Node by name
             ---@param nodeName string
             function getDumpedNode(nodeName)
                 assert(type(nodeName) == "string",'Node name should be a string, instead got: '..type(nodeName))
                 if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
-                if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then if bDEBUGMode then print('getDumpedNode: dumped nodes table is nil, dump the game first') end return; end
+                if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
+                    --sendDebugMessage('getDumpedNode: dumped nodes table is nil, dump the game first')
+                    return;
+                end
                 for _,nodeAddr in ipairs(dumpedMonitorNodes) do
                     local nodeNameStr = getNodeName(nodeAddr)
                     if nodeNameStr == nodeName then
@@ -6964,40 +5862,15 @@
 
             --- prints all gathered nodeNames
             function printDumpedNodes()
-                if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then if bDEBUGMode then print('printDumpedNodes: dumped nodes table is nil, dump the game first') end return; end
+                if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
+                    --sendDebugMessage('printDumpedNodes: dumped nodes table is nil, dump the game first')
+                    return;
+                end
                 if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
                 for _,nodeAddr in ipairs(dumpedMonitorNodes) do
                     local nodeNameStr = getNodeName( nodeAddr )
                     printf(">Node name: %s \t Node addr: %x", tostring(nodeNameStr), tonumber(nodeAddr))
-                end
-            end
-
-            --- prints all functions for dumped Nodes
-            function printDumpedNodeFunctions()
-                if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then if bDEBUGMode then print('printDumpedNodeFunctions: dumped nodes table is nil, dump the game first') end return; end
-                if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
-
-                for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-
-                    local nodeNameStr = getNodeName( nodeAddr )
-                    if not checkForGDScript( nodeAddr ) then if bDEBUGMode then print('printDumpedNodeFunctions: node '..tostring(nodeNameStr)..' doesnt have GDScript/Inst') end goto continue end
-
-                    local headElement, tailElement, mapSize = getNodeFunctionMap( nodeAddr )
-                    if mapSize == 0 or mapSize == nil then if bDEBUGMode then print('printDumpedNodeFunctions: node '..tostring(nodeNameStr)..' doesnt have functions') end goto continue end
-                    printf(">Node: %s \t Address %x :: functions (%d): ", tostring(nodeNameStr), tonumber(nodeAddr), tonumber(mapSize))
-                    local mapElement = headElement
-                    repeat
-                        local funcName = getGDFunctionName( mapElement )
-                        printf( "Func: %s ", tostring( funcName ) )
-                        if GDSOf.MAJOR_VER >= 4 then
-                            mapElement = readPointer( mapElement )
-                        else
-                            mapElement = readPointer( mapElement + GDSOf.MAP_NEXTELEM )
-                        end
-                    until (mapElement == 0)
-
-                    ::continue:: 
                 end
             end
 
@@ -7037,8 +5910,11 @@
                 table.insert( dumpedNodes , nodeAddr )
 
                 local nodeNameStr = getNodeName( nodeAddr )
-                if not checkForGDScript( nodeAddr ) then if bDEBUGMode then print( debugPrefixStr..' DumpNodeToAddr: node '..nodeNameStr..' doesnt have GDScript/Inst') end return end
-                if bDEBUGMode then print( debugPrefixStr..' DumpNodeToAddr: node '..tostring(nodeNameStr)..string.format( 'addr: %x' , nodeAddr ) ) end
+                if not checkForGDScript( nodeAddr ) then
+                    --sendDebugMessage('DumpNodeToAddr: node '..nodeNameStr..' doesnt have GDScript/Inst')
+                    return
+                end
+                --sendDebugMessage('DumpNodeToAddr: node '..tostring(nodeNameStr)..('addr: %x'):format(nodeAddr) )
 
                 synchronize(function(parentMemrec)
                         if parentMemrec.Count ~= 0 then -- let's clear all children
@@ -7049,8 +5925,8 @@
                     end, parentMemrec
                 )
 
-                if bDoConstants then
-                    if bDEBUGMode then print( debugPrefixStr..' DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) ) end
+                if bDoConstants and (GDSOf.CONST_MAP ~= 0) then
+                    --sendDebugMessage('DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) )
 
                     local newConstRec = synchronize(function(parentMemrec)
                                 local newConstRec = getAddressList().createMemoryRecord()
@@ -7065,8 +5941,9 @@
                         )
 
                     iterateNodeConstToAddr( nodeAddr , newConstRec )
+ 
                 end
-                    if bDEBUGMode then print( debugPrefixStr..' DumpNodeToAddr: variants for node: '..tostring(nodeNameStr) ) end
+                    --sendDebugMessage('DumpNodeToAddr: variants for node: '..tostring(nodeNameStr) )
                     iterateVecVarToAddr( nodeAddr , parentMemrec )
                     debugPrefix = 1; -- reset debug prefix
             end
@@ -7107,23 +5984,25 @@
                         )
 
                     table.insert( dumpedNodes , value.PTR )
-                    if bDEBUGMode then print('MAIN: loop. STEP: Constants for: '..key) end
+                    sendDebugMessage('MAIN: loop. STEP: Constants for: '..key)
 
-                    local newConstRec = synchronize(function(value)
-                                local newConstRec = getAddressList().createMemoryRecord()
-                                newConstRec.setDescription( "Consts:" )
-                                newConstRec.setAddress( 0xBABE )
-                                newConstRec.setType( vtPointer )
-                                newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                                newConstRec.DontSave = true
-                                newConstRec.appendToEntry( value.MEMREC )
-                                return newConstRec
-                            end, value
-                        )
+                    if GDSOf.CONST_MAP ~= 0 then
+                        local newConstRec = synchronize(function(value)
+                                    local newConstRec = getAddressList().createMemoryRecord()
+                                    newConstRec.setDescription( "Consts:" )
+                                    newConstRec.setAddress( 0xBABE )
+                                    newConstRec.setType( vtPointer )
+                                    newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+                                    newConstRec.DontSave = true
+                                    newConstRec.appendToEntry( value.MEMREC )
+                                    return newConstRec
+                                end, value
+                            )
 
-                    iterateNodeConstToAddr( value.PTR , newConstRec )
+                        iterateNodeConstToAddr( value.PTR , newConstRec )
+                    end
 
-                    if bDEBUGMode then print(' MAIN: loop. STEP: VARIANTS for: '..key) end
+                    sendDebugMessage('MAIN: loop. STEP: VARIANTS for: '..key)
                     iterateVecVarToAddr( value.PTR , value.MEMREC )
                 end
 
@@ -7133,9 +6012,49 @@
             end
 
 
-        if not (targetIsGodot) then --[[print('target is not godot')]] return end
+        if not (targetIsGodot) then --[[print('target is not godot')--]] return; end;
         defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
-    end
+    end;
 
 
     godotRegisterPreinit()
+
+    -- function iterateMap(headElement, callback)
+    --     local mapElement = headElement
+    --     local index = 0
+
+    --     while mapElement and mapElement ~= 0 do
+    --         callback(mapElement, index)
+    --         mapElement = getNextMapElement(mapElement)
+    --         index = index + 1
+    --     end
+    -- end
+
+    -- function emitEmpty(visitor, parent, label, offset, ceType)
+    --     return visitor:addValue(parent, label, offset, ceType)
+    -- end
+
+    -- function emitChild(visitor, parent, label, offset, ceType, structName, recurseFn, addr)
+    --     local child = visitor:createChild(parent, label, offset, ceType, structName)
+    --     recurseFn(addr, visitor, child)
+    --     return child
+    -- end
+
+    -- rendering
+    --renderFunctionEntry(...)
+
+
+    -- top-level adapters
+    --dumpFunctionsToStruct(...)
+
+    -- function dumpVariantsToStruct(nodeAddr, varStructElement)
+    --     local emitter = StructEmitter:new(varStructElement)
+    --     walkNodeVariants(nodeAddr, emitter, varStructElement)
+    -- end
+
+    -- function dumpVariantsToAddr(nodeAddr, owner)
+    --     local emitter = MemrecEmitter:new(owner)
+    --     walkNodeVariants(nodeAddr, emitter, owner)
+    -- end
+
+
