@@ -2212,11 +2212,18 @@
                 local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable);
 
                 if checkForGDScript(readPointer(realPtr)) then
-                    local nodeChild = emitter.branch(objectContext, objectParent, "mNode: "..entry.name, realOffset, vtPointer, "Node");
-                    nodeChild.BackgroundColor = 0xFF8080
-                    if emitter.recurseNode then
-                        emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) -- 
+                    if emitter == StructEmitter then
+                        local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: "..entry.name, realOffset, vtPointer);    
+                        nodeChild.BackgroundColor = 0xFF8080
+                    else
+                        local nodeChild = emitter.branch(objectContext, objectParent, "mNode: "..entry.name, realOffset, vtPointer, "Node");
+                        nodeChild.BackgroundColor = 0xFF8080
+
+                        if emitter.recurseNode then -- TODO: redundant?
+                            emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) -- 
+                        end
                     end
+
                 else
                     emitter.leaf(objectContext, objectParent, "obj: " .. entry.name, realOffset, vtPointer);
                 end
@@ -2725,10 +2732,11 @@
                     iterateNodeConstToStruct( nodeAddr , constMapStructElem )
                 end
 
-                sendDebugMessage('iterateNodeToStruct: STEP: Functions for: '..tostring(nodeName) )
-                functMapStructElem.ChildStruct = createStructure( 'Funcs' )
-                iterateNodeFuncMapToStruct( nodeAddr , functMapStructElem )
-
+                if GDSOf.FUNC_MAP ~= 0 then
+                    sendDebugMessage('iterateNodeToStruct: STEP: Functions for: '..tostring(nodeName) )
+                    functMapStructElem.ChildStruct = createStructure( 'Funcs' )
+                    iterateNodeFuncMapToStruct( nodeAddr , functMapStructElem )
+                end
                 debugStepOut()
                 return
             end
