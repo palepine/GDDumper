@@ -41,6 +41,36 @@
             end
 
         --///---///--///---///--///---/// GD preinit
+
+            function getExportTableName()
+                local base = getAddress(process)
+                -- first check via PE -- https://wiki.osdev.org/PE
+                if isNotNullOrNil(base) then
+                    local PE = base + readInteger( base + 0x3C ) -- MZ.e_lfanew has an offset to PE
+                    local optPE = PE + 0x18 -- just skip to optional header
+                    local magic = readSmallInteger(optPE) -- Pe32OptionalHeader.mMagic
+                    local dataDirOffset = (magic == 0x10B) and 0x60 or 0x70 -- 32/64 bit
+                    local exportRVA = readInteger( optPE + dataDirOffset ) -- skip directly to DataDirectory
+                    if (exportRVA) and exportRVA ~= 0 then 
+                        local exportVA  = base + exportRVA -- jump to exportRVA (.edata)
+                        local nameRVA = readInteger(exportVA + 0xC) -- 12 is PEExportsTableHeader.mNameRVA, offset to name's virtual address
+                        
+                        return readString( (base + nameRVA), 60 ) or "ExportTableNotFound"
+                    end
+                end
+            end
+
+            function getGodotVersionString()
+                local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV](0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
+                local godotVersionStringTable = lregexScan( reStr, "+W-E-C", true, false, false, 15 )
+                
+                if godotVersionStringTable[1] and godotVersionStringTable[1].name then
+                    return godotVersionStringTable[1].text
+                else
+                    return "SEMVER_NOT_FOUND"
+                end
+            end
+            
             --- heuristic to identify whether the process is godot
             function godotOnProcessOpened(processid, processhandle, caption)
                 -- similar to monoscript.lua in implementation
@@ -53,25 +83,13 @@
                         thr.Name = 'GDDumper_ProcessMonitorThread'
                         targetIsGodot = false
                         -- first check via PE -- https://wiki.osdev.org/PE
-                        local base = getAddress(process)
-                        if (base) and base ~= 0 then
-                            local PE = base + readInteger( base + 0x3C ) -- MZ.e_lfanew has an offset to PE
-                            local optPE = PE + 0x18 -- just skip to optional header
-                            local magic = readSmallInteger(optPE) -- Pe32OptionalHeader.mMagic
-                            local dataDirOffset = (magic == 0x10B) and 0x60 or 0x70 -- 32/64 bit
-                            local exportRVA = readInteger( optPE + dataDirOffset ) -- skip directly to DataDirectory
-                            if (exportRVA) and exportRVA ~= 0 then 
-                                local exportVA  = base + exportRVA -- jump to exportRVA (.edata)
-                                local nameRVA = readInteger(exportVA + 0xC) -- 12 is PEExportsTableHeader.mNameRVA, offset to name's virtual address
-                                local exportTablename = readString( (base + nameRVA), 60 ) or ""
-                                
-                                if (exportTablename):match("([gG][oO][Dd][Oo][Tt])") then
-                                    if GDSOf == nil then GDSOf = {} end
-                                    GDSOf.GDEXPORT_TABLE = exportTablename
-                                    targetIsGodot = true;
-                                end
-                            end
+                        local exportTablename = getExportTableName()
+                        if ( exportTablename ):match("([gG][oO][Dd][Oo][Tt])") then
+                            -- if GDSOf == nil then GDSOf = {} end
+                            -- GDSOf.GDEXPORT_TABLE = exportTablename
+                            targetIsGodot = true;
                         end
+                        
                         -- secondly, check if there's a package file, many apps do
                         if not targetIsGodot then
                             local pathToExe = enumModules()[1].PathToFile
@@ -125,12 +143,9 @@
             end
 
             function defineGDVersion()
-                local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV](0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
-                local godotVersionString = lregexScan( reStr, "+W-E-C", true, false, false, 15 )
+                local godotVersionString = getGodotVersionString()
 
-                if isNullOrNil(godotVersionString) then
-                    return
-                end
+                if isNullOrNil(GDSOf) then GDSOf = {} end
 
                 GDSOf.FULL_GDVERSION_STRING = godotVersionString
                 local major, minor, patch, tag = (godotVersionString[1].text):match( "Godot Engine v(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
@@ -141,8 +156,6 @@
                     GDSOf.MINOR_VER = tonumber(minor)
                     GDSOf.RELEASE_VER = tonumber(patch)
                     GDSOf.VERSION_STRING = major..'.'..minor
-                else
-                    return nil, nil, nil
                 end
             end
 
