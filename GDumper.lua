@@ -574,7 +574,7 @@
                     addCustomMenuButtonTo( gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Try resolving offset', GDStoredOffsetsSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Guess log', GDGuessLogSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'DebugMode', GDDebugSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Debug Mode', GDDebugSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Create Script', addGDMemrecToTable )
                 end
 
@@ -592,7 +592,6 @@
             end
 
             function GDDebugSwitch(sender)
-                if bDEBUGMode == nil then return end
                 sender.Checked = not sender.Checked
                 if sender.Checked then
                     bDEBUGMode = true
@@ -602,7 +601,6 @@
             end
 
             function GDGuessLogSwitch(sender)
-                if bASSUMPTIONLOG == nil then return end
                 sender.Checked = not sender.Checked
                 if sender.Checked then
                     bASSUMPTIONLOG = true
@@ -612,7 +610,6 @@
             end
 
             function GDDisasmFuncSwitch(sender)
-                if bDISASSEMBLEFUNCTIONS == nil then return end
                 sender.Checked = not sender.Checked
                 if sender.Checked then
                     bDISASSEMBLEFUNCTIONS = true
@@ -622,7 +619,6 @@
             end
 
             function GDStoredOffsetsSwitch(sender)
-                if bHARDCODEDOFFSETS == nil then return end
                 sender.Checked = not sender.Checked
                 if sender.Checked then
                     bHARDCODEDOFFSETS = true
