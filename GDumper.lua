@@ -147,7 +147,12 @@
                 if isNullOrNil(GDSOf) then GDSOf = {} end
 
                 GDSOf.FULL_GDVERSION_STRING = godotVersionString
-                local major, minor, patch, tag = (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)" ) or (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%a*)" )
+                local major, minor, patch, tag = (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
+                
+                if isNullOrNil(major) or isNullOrNil(minor) then
+                    major, minor, patch = (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%a*)" )
+                end
+
                 patch = patch ~= "" and patch or nil
                 tag = tag ~= "" and tag or nil
                 
@@ -573,7 +578,7 @@
                     addCustomMenuButtonTo( gdMenuItem, 'VP Struct', createVPStructForm )
                     addCustomMenuButtonTo( gdMenuItem, 'GD Dissector', GDDissectorSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'Try resolving offset', GDStoredOffsetsSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Assign stored offsets', GDStoredOffsetsSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Guess log', GDGuessLogSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Debug Mode', GDDebugSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Create Script', addGDMemrecToTable )
@@ -794,7 +799,7 @@
                     defineGDVersion()
                 end
 
-                if bHARDCODEDOFFSETS --[[and (not bOverrideAssumption)]] then
+                if bHARDCODEDOFFSETS then
                     GDSOf.CHILDREN,
                     GDSOf.OBJ_STRING_NAME,
                     GDSOf.GDSCRIPTINSTANCE,
