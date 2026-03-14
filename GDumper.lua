@@ -6,11 +6,11 @@
 -- to keep the code more organized in a single file, it's split into foldable sections
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
-    --TODO add more functionality for function overriding
     --TODO a plugin injecting routines?
-    --TODO implement godot version detection
     --TODO investigate packedArray size (at least 3.x)
     --TODO dump nodes schema with the addresslist?
+    --TODO add more functionality for function overriding ==>
+    --TODO bytecode patching function that assembles a function for return;end. or return true;end It should store the original function (address association?)
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
@@ -170,13 +170,14 @@
 
             function getStoredOffsetsFromVersion( majminVersionStr )
 
+                majminVersionStr = majminVersionStr or GDSOf.VERSION_STRING
                 -- TODO: GDSOf.MAXTYPE
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
                 
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
                 if majminVersionStr == "4.6" then
                     if GDSOf.DEBUGVER then
-                        error("Not defined yet")
+                        -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x30, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
                     else
@@ -226,6 +227,9 @@
                         -- Godot Engine v4.3.stable.official 
                         -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
                         return 0x178, 0x1D0, 0x68, 0x120, 0x280, 0x250, 0x1B8, 0x28, 0x40, 0x8, nil, 0x178, 0x198, 0x1A8
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.3.stable.custom_build
+                        --0x1C0, 0x218, 0x68, 0x168, 0x2C8, 0x298, 0x200, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                     end
                 elseif majminVersionStr == "4.2" then
                     if GDSOf.DEBUGVER then
@@ -252,7 +256,7 @@
                     end
                 elseif majminVersionStr == "4.0" then
                     if GDSOf.DEBUGVER then
-                        error("Not defined yet")
+                        -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x168+0x8, 0x1C0+0x8, 0x68+0x8, 0x178+0x8, 0x270+0x8, 0x238+0x8, 0x2A8+0x8, 0x28+0x30, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
                     else
@@ -270,7 +274,8 @@
                     end
                 elseif majminVersionStr == "3.5" then
                     if GDSOf.DEBUGVER then
-                        error("Not defined yet")
+                        -- godot.windows.opt.debug.64.exe 
+                        -- Godot Engine 3.5.2.stable 
                         GDSOf.STRING = 0x8
                         return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
@@ -281,7 +286,7 @@
                     end
                 elseif majminVersionStr == "3.4" then
                     if GDSOf.DEBUGVER then
-                        error("Not defined yet")
+                        -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x108+0x8, 0x120+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
@@ -291,7 +296,7 @@
                     end
                 elseif majminVersionStr == "3.3" then
                     if GDSOf.DEBUGVER then
-                        error("Not defined yet")
+                        -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x100+0x8, 0x118+0x8, 0x50+0x8, 0x100+0x8, 0x1A0+0x8, 0x188+0x8, 0x1B8+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
@@ -588,7 +593,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=true\nbDISASSEMBLEFUNCTIONS=false\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
+                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=false\nbHARDCODEDOFFSETS=true\nbDISASSEMBLEFUNCTIONS=false\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1827,53 +1832,53 @@
             ---------------------------------------------------------------------------------
             GDEmitters.AddrEmitter = {}
 
-            local function makeAddr(base, offset)
-                return (base or 0) + (offset or 0)
-            end
+                local function makeAddr(base, offset)
+                    return (base or 0) + (offset or 0)
+                end
 
-            function GDEmitters.AddrEmitter.leaf(contextTable, parent, label, offset, ceType)
-                local created
-                synchronize(function(label, addr, ceType, parent)
-                                created = addMemRecTo(label, addr, ceType, parent)
-                            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
-                        )
-                return created
-            end
+                function GDEmitters.AddrEmitter.leaf(contextTable, parent, label, offset, ceType)
+                    local created
+                    synchronize(function(label, addr, ceType, parent)
+                                    created = addMemRecTo(label, addr, ceType, parent)
+                                end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
+                            )
+                    return created
+                end
 
-            function GDEmitters.AddrEmitter.layout(contextTable, parent, label, color, offset, ceType)
-                local created
-                synchronize(function(label, addr, ceType, parent)
-                                created = addMemRecTo(label, addr, ceType, parent)
-                            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
-                        )
-                return created
-            end
+                function GDEmitters.AddrEmitter.layout(contextTable, parent, label, color, offset, ceType)
+                    local created
+                    synchronize(function(label, addr, ceType, parent)
+                                    created = addMemRecTo(label, addr, ceType, parent)
+                                end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
+                            )
+                    return created
+                end
 
-            function GDEmitters.AddrEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
-                local created
-                synchronize(function(label, addr, ceType, parent)
-                                created = addMemRecTo(label, addr, ceType, parent)
-                                created.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
-                        )
-                return created
-            end
+                function GDEmitters.AddrEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
+                    local created
+                    synchronize(function(label, addr, ceType, parent)
+                                    created = addMemRecTo(label, addr, ceType, parent)
+                                    created.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+                                end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent
+                            )
+                    return created
+                end
 
-            function GDEmitters.AddrEmitter.recurseDictionary(contextTable, parent, dictPtr)
-                iterateDictionaryToAddr(dictPtr, parent)
-            end
+                function GDEmitters.AddrEmitter.recurseDictionary(contextTable, parent, dictPtr)
+                    iterateDictionaryToAddr(dictPtr, parent)
+                end
 
-            function GDEmitters.AddrEmitter.recurseArray(contextTable, parent, arrPtr)
-                iterateArrayToAddr(arrPtr, parent)
-            end
+                function GDEmitters.AddrEmitter.recurseArray(contextTable, parent, arrPtr)
+                    iterateArrayToAddr(arrPtr, parent)
+                end
 
-            function GDEmitters.AddrEmitter.recurseNode(contextTable, parent, nodePtr)
-                iterateMNodeToAddr(nodePtr, parent)
-            end
+                function GDEmitters.AddrEmitter.recurseNode(contextTable, parent, nodePtr)
+                    iterateMNodeToAddr(nodePtr, parent)
+                end
 
-            function GDEmitters.AddrEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
-                iteratePackedArrayToAddr(arrayAddr, typeName, parent)
-            end
+                function GDEmitters.AddrEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
+                    iteratePackedArrayToAddr(arrayAddr, typeName, parent)
+                end
 
             ---------------------------------------------------------------------------------
 
@@ -2559,7 +2564,7 @@
                     if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then
                         emitter.leaf( contextTable, parent, entry.typeName..' (empty): '..entry.name, rootOffset(entry, emitter), entry.ceType )
                     else
-                        local child = emitter.branch( contextTable, parent, entry.typeName..entry.name, rootOffset(entry, emitter), entry.ceType, "P_Array" )
+                        local child = emitter.branch( contextTable, parent, entry.typeName..' '..entry.name, rootOffset(entry, emitter), entry.ceType, "P_Array" )
                         emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
                     end
                 end
@@ -5055,9 +5060,11 @@
                         GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP] = {
                             name = "OPCODE_JUMP",
                             handler = function(contextTable)
-                                local operand1 = tostring(contextTable.codeInts[contextTable.instrPointer + 1])
-                                addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 + 1)*0x4, vtDword )
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1
+                                local operand1 = ("%X"):format( contextTable.codeInts[contextTable.instrPointer + 1] * 0x4 ) -- where to jump in hex representation, 4byte step
+                                local elem = addStructureElem( contextTable.codeStructElement, "JUMP to "..operand1, (contextTable.instrPointer-1 + 1)*0x4, vtDword )
+                                elem.DisplayMethod = 'dtHexadecimal'
+                                elem.ShowAsHex = true
+                                contextTable.opcodeName = contextTable.opcodeName..' -> '..operand1
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1 )*0x4, vtDword )
 
@@ -5071,9 +5078,11 @@
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
 
-                                local operand2 = tostring(contextTable.codeInts[contextTable.instrPointer + 2])
-                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + 2)*0x4, vtDword )
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' to '..operand1
+                                local operand2 = ("%X"):format( contextTable.codeInts[contextTable.instrPointer + 2] * 0x4 ) -- where to jump
+                                local elem = addStructureElem( contextTable.codeStructElement, "JUMP to "..operand2, (contextTable.instrPointer-1 + 2)*0x4, vtDword )
+                                elem.DisplayMethod = 'dtHexadecimal'
+                                elem.ShowAsHex = true
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' -> '..operand2
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1 )*0x4, vtDword )
 
@@ -6270,6 +6279,7 @@
                 end
             end
 
+
             function disassembleGDFunctionCodeToStruct( funcAddr, funcStruct )
                 assert( (type(funcAddr) == 'number') and (funcAddr ~= 0),'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: '..type(funcAddr) )
                 
@@ -7439,7 +7449,7 @@
             --- returns a node table
             function getMainNodeTable()
                 local childrenAddr, childrenSize = getVPChildren()
-                if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then return end
+                if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('getMainNodeDict: VP Children not valid') end
 
                 local nodeTable = {}
 
