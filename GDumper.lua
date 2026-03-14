@@ -632,7 +632,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nbASSUMPTIONLOG=false\nbHARDCODEDOFFSETS=true\nbDISASSEMBLEFUNCTIONS=false\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
+                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\n\ninitDumper()\n--nodeMonitor()\n[DISABLE]\n--nodeMonitor()'
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
