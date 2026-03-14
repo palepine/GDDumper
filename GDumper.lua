@@ -61,12 +61,13 @@
             end
 
             function getGodotVersionString()
-                local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV](0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
+                local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
                 local godotVersionStringTable = lregexScan( reStr, "WR-E-C", true, false, false, 15 ) or {}
                 
                 if isNotNullOrNil(godotVersionStringTable[1]) then
                     return godotVersionStringTable[1].text
                 else
+                    print("Version string not found")
                     return "SEMVER_NOT_FOUND"
                 end
             end
@@ -159,8 +160,6 @@
                     GDSOf.DEBUGVER = false
                 end
                 
-                
-                
                 if isNotNullOrNil(major) and isNotNullOrNil(minor) then
                     GDSOf.MAJOR_VER = tonumber(major)
                     GDSOf.MINOR_VER = tonumber(minor)
@@ -195,7 +194,10 @@
                         GDSOf.STRING = 0x8
                         return 0x170+0x8, 0x1C0+0x8, 0x68+0x8, 0x120+0x8, 0x268+0x8, 0x208+0x8, 0x1B8+0x8, 0x28+0x28, 0x48, 0x8, nil, 0x178+0x8, 0x198+0x8, 0x1A8+0x8
                     else
-                        return 0x170, 0x1C0, 0x68, 0x120, 0x268, 0x208, 0x1B8, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.5.1.stable.official.f62fdbde1 
+                        GDSOf.STRING = 0x8
+                        return 0x170, 0x1C0, 0x68, 0x120, 0x268, 0x208, 0x1B8, 0x28, 0x48, 0x8, nil, 0x180, 0x1A0, 0x1B0 --0x178, 0x198, 0x1A8
                     end
                 elseif majminVersionStr == "4.4" then
                     if GDSOf.DEBUGVER then
@@ -227,9 +229,10 @@
                     end
                 elseif majminVersionStr == "4.2" then
                     if GDSOf.DEBUGVER then
-                        error("Not defined yet")
+                        -- godot.windows.template_debug.x86_64.exe 
+                        --  Godot Engine v4.2.2.stable.official
                         GDSOf.STRING = 0x8
-                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x40, 0x4, nil, 0x170, 0x190, 0x1A0
+                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x48, 0x4, nil, 0x170, 0x190, 0x1A0
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.2.1.stable.official.b09f793f5 
@@ -3027,9 +3030,9 @@
                 table.insert( dumpedDissectorNodes , nodeAddr )
 
                 local varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', 0x000080, GDSOf.VAR_VECTOR, vtPointer )
-                local scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', 0x008080, GDSOf.GDSCRIPT_REF, vtPointer )
-                local constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', 0x400000, GDSOf.CONST_MAP, vtPointer )
-                local functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', 0x400000, GDSOf.FUNC_MAP, vtPointer )
+                local scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDSOf.GDSCRIPT_REF, vtPointer )
+                local constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', --[[0x400000]] nil, GDSOf.CONST_MAP, vtPointer )
+                local functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', --[[0x400000]] nil, GDSOf.FUNC_MAP, vtPointer )
 
                 sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: '..tostring(nodeName) )
                 varVectorStructElem.ChildStruct = createStructure( 'Vars' )
