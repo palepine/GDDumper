@@ -577,7 +577,6 @@
                     addCustomMenuButtonTo( gdMenuItem, 'Debug Mode', GDDebugSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Create Script', addGDMemrecToTable )
                 end
-
             end
 
             --- toggling dissector override
