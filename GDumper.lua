@@ -62,9 +62,9 @@
 
             function getGodotVersionString()
                 local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV](0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
-                local godotVersionStringTable = lregexScan( reStr, "+W-E-C", true, false, false, 15 )
+                local godotVersionStringTable = lregexScan( reStr, "WR-E-C", true, false, false, 15 ) or {}
                 
-                if godotVersionStringTable[1] and godotVersionStringTable[1].name then
+                if isNotNullOrNil(godotVersionStringTable[1]) then
                     return godotVersionStringTable[1].text
                 else
                     return "SEMVER_NOT_FOUND"
@@ -132,8 +132,6 @@
                     godot_ProcessMonitorThread = nil
                 end
 
-
-
                 return nil
             end
 
@@ -148,9 +146,21 @@
                 if isNullOrNil(GDSOf) then GDSOf = {} end
 
                 GDSOf.FULL_GDVERSION_STRING = godotVersionString
-                local major, minor, patch, tag = (godotVersionString[1].text):match( "Godot Engine v(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
+                local major, minor, patch, tag = (godotVersionString):match( "Godot Engine v(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
                 patch = patch ~= "" and patch or nil
                 tag = tag ~= "" and tag or nil
+                
+                local exportTableStr = getExportTableName()
+                
+                if (exportTableStr):match( "debug" ) then
+                    GDSOf.DEBUGVER = true
+                --elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
+                else
+                    GDSOf.DEBUGVER = false
+                end
+                
+                
+                
                 if isNotNullOrNil(major) and isNotNullOrNil(minor) then
                     GDSOf.MAJOR_VER = tonumber(major)
                     GDSOf.MINOR_VER = tonumber(minor)
@@ -159,6 +169,135 @@
                 end
             end
 
+            function getStoredOffsetsFromVersion( majminVersionStr )
+
+                -- TODO: GDSOf.MAXTYPE
+                -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
+                
+                -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, 4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, 3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
+                if majminVersionStr == "4.6" then
+                    if GDSOf.DEBUGVER then
+                        error("Not defined yet")
+                        -- return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x30, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
+                    else
+                        -- godot.windows.template_release.x86_64.exe
+                        -- Godot Engine v4.6.stable.official.89cea1439
+                        -- 49 8B 06 4C 89 F2 48 89 7C 24
+                        GDSOf.STRING = 0x8
+                        return 0x140, 0x190, 0x60, 0xF0, 0x230, 0x208, 0x180, 0x28, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
+                    end
+                elseif majminVersionStr == "4.5" then
+                    if GDSOf.DEBUGVER then
+                        -- godot.windows.template_debug.x86_64.exe 
+                        -- Godot Engine v4.5.1.stable.official 
+                        -- 48 8B 06 8B 8C 24
+                        GDSOf.STRING = 0x8
+                        return 0x170+0x8, 0x1C0+0x8, 0x68+0x8, 0x120+0x8, 0x268+0x8, 0x208+0x8, 0x1B8+0x8, 0x28+0x28, 0x48, 0x8, nil, 0x178+0x8, 0x198+0x8, 0x1A8+0x8
+                    else
+                        return 0x170, 0x1C0, 0x68, 0x120, 0x268, 0x208, 0x1B8, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                    end
+                elseif majminVersionStr == "4.4" then
+                    -- (there are many variations however)
+                    if GDSOf.DEBUGVER then
+                        -- godot.windows.template_debug.x86_64.exe 
+                        -- Godot Engine v4.4.1.stable.official
+                        return 0x188+0x8, 0x1E0+0x8, 0x68+0x8, 0x130+0x8, 0x2D8+0x8, 0x2A8+0x8, 0x210+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                        -- godot.windows.template_debug.x86_64.mono.exe 
+                        -- Godot Engine v4.4.stable.mono.official 
+                        -- 48 8B 03 48 89 D9 FF 90 ? ? ? ? 84 C0 0F 84 ? ? ? ? 48 89 D9 E8 ? ? ? ? 84 C0
+                        -- 48 8B 03 48 8D B4 24 ? ? ? ? 48 89 DA 4C 8D AC 24
+                    else
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.4.stable.official.4c311cbee 
+                        -- 49 8B 45 ? 4C 89 EA 48 89 7C 24
+                        return 0x188, 0x1E0, 0x68, 0x130, 0x2D8, 0x2A8, 0x210, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                    end
+                elseif majminVersionStr == "4.3" then
+                    if GDSOf.DEBUGVER then
+                        -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
+                        -- Godot Engine v4.3.stable.official 
+                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                    else
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.3.stable.official 
+                        -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
+                        return 0x178, 0x1D0, 0x68, 0x120, 0x280, 0x250, 0x1B8, 0x28, 0x40, 0x8, nil, 0x178, 0x198, 0x1A8
+                    end
+                elseif majminVersionStr == "4.2" then
+                    if GDSOf.DEBUGVER then
+                        error("Not defined yet")
+                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x40, 0x4, nil, 0x170, 0x190, 0x1A0
+                    else
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.2.1.stable.official.b09f793f5 
+                        return 0x178, 0x1D0, 0x68, 0x120, 0x280, 0x250, 0x1B8, 0x28, 0x40, 0x4, nil, 0x170, 0x190, 0x1A0
+                    end
+                elseif majminVersionStr == "4.1" then
+                    -- 4.1.2 has some wild offsets however
+                    if GDSOf.DEBUGVER then
+                        -- godot.windows.template_debug.x86_64.exe 
+                        --  Godot Engine v4.1.1.stable.official
+                        GDSOf.STRING = 0x8
+                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x148+0x8, 0x260+0x8, 0x1F0+0x8, 0x290+0x8, 0x28+0x30, 0x40, 0x4, nil, 0x118, 0x100, 0xF0
+                    else
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.2.1.stable.official.b09f793f5 
+                        return 0x178, 0x1D0, 0x68, 0x148, 0x260, 0x1F0, 0x290, 0x28, 0x40, 0x4, nil, 0x118 --[[?]], 0x100, 0xF0
+                    end
+                elseif majminVersionStr == "4.0" then
+                    if GDSOf.DEBUGVER then
+                        error("Not defined yet")
+                    else
+                        return 0x168, 0x1C0, 0x68, 0x178, 0x270, 0x238, 0x2A8, 0x28, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
+                    end
+                elseif majminVersionStr == "3.6" then
+                    if GDSOf.DEBUGVER then
+                        -- godot.windows.opt.debug.64.exe 
+                        GDSOf.STRING = 0x8
+                        return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    else
+                        -- godot.windows.opt.64.exe 
+                        --  Godot Engine v3.6.stable.custom_build.de2f0f147 
+                        return 0x108, 0x130, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    end
+                elseif majminVersionStr == "3.5" then
+                    if GDSOf.DEBUGVER then
+                        error("Not defined yet")
+                    else
+                        -- godot.windows.opt.64.exe 
+                        -- Godot Engine v3.5.1.stable.official.6fed1ffa3
+                        -- 48 8B 01 48 89 CB 41 89 D4 FF
+                        return 0x108, 0x130, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    end
+                elseif majminVersionStr == "3.4" then
+                    if GDSOf.DEBUGVER then
+                        error("Not defined yet")
+                    else
+                        --godot.windows.opt.64.exe 
+                        --Godot Engine v3.4.4.stable.official.419e713a2
+                        return 0x108, 0x120, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    end
+                elseif majminVersionStr == "3.3" then
+                    if GDSOf.DEBUGVER then
+                        error("Not defined yet")
+                    else
+                        -- godot.windows.opt.64.exe 
+                        -- Godot Engine v3.3.2.stable.official 
+                        return 0x100, 0x118, 0x50, 0x100, 0x1A0, 0x188, 0x1B8, 0x20, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    end
+                elseif majminVersionStr == "3.2" then
+                    if GDSOf.DEBUGVER then
+                        error("Not defined yet")
+                    else
+                        error("Not defined yet")
+                        -- return VPChildren, VPObjStringName, 0x50, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, 0x20, nil, 0x4, 3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, 0xFF, 0xFF
+                    end
+                else
+                    print("No recorded version found")
+                    error("Not defined yet")
+                    return
+                end
+            end
 
         --///---///--///---///--///---/// POINTER HANDLERS
 
@@ -578,10 +717,12 @@
             --- initializes and assigns offsets
             function defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
 
+                -- TODO: change bOverrideAssumption to modes and possibly fix the order of the arguments above
                 bMonitorNodes = false;
                 bDEBUGMode = bDEBUGMode and true or nil
                 bASSUMPTIONLOG = bASSUMPTIONLOG and true or nil
                 bDISASSEMBLEFUNCTIONS = bDISASSEMBLEFUNCTIONS and true or false
+                bHARDCODEDOFFSETS = bHARDCODEDOFFSETS and true or false
                 dumpedMonitorNodes = {};
                 debugPrefix = 1;
 
@@ -590,6 +731,75 @@
 
                 if lregexScan and type(lregexScan) == "function" then
                     defineGDVersion()
+                end
+
+                if bHARDCODEDOFFSETS then
+                    GDSOf.CHILDREN,
+                    GDSOf.OBJ_STRING_NAME,
+                    GDSOf.GDSCRIPTINSTANCE,
+                    GDSOf.GDSCRIPTNAME,
+                    GDSOf.FUNC_MAP,
+                    GDSOf.CONST_MAP,
+                    GDSOf.VAR_NAMEINDEX_MAP,
+                    GDSOf.VAR_VECTOR,
+                    GDSOf.VAR_NAMEINDEX_VARTYPE,
+                    GDSOf.SIZE_VECTOR,
+                    GDSOf.VAR_NAMEINDEX_I,
+                    GDSOf.FUNC_CODE,
+                    GDSOf.FUNC_CONST,
+                    GDSOf.FUNC_GLOBNAMEPTR
+                      = getStoredOffsetsFromVersion( GDSOf.VERSION_STRING )
+
+                    if GDSOf.MAJOR_VER == 4 then
+                        GDSOf.GDSCRIPT_REF = 0x18
+                        GDSOf.MAXTYPE = 39
+                        GDSOf.FUNC_MAPVAL = 0x18
+                        GDSOf.STRING = GDSOf.STRING or 0x10
+                        GDSOf.CHILDREN_SIZE = 0x8
+                        GDSOf.MAP_SIZE = 0x14
+                        GDSOf.ARRAY_TOVECTOR = 0x10
+                        GDSOf.P_ARRAY_TOARR = 0x18
+                        GDSOf.P_ARRAY_SIZE = 0x8
+                        GDSOf.DICT_HEAD = 0x28
+                        GDSOf.DICT_TAIL = 0x30
+                        GDSOf.DICT_SIZE = 0x3C
+                        GDSOf.DICTELEM_KEYTYPE = 0x10
+                        GDSOf.DICTELEM_KEYVAL = 0x18
+                        GDSOf.DICTELEM_VALTYPE = 0x28
+                        GDSOf.CONSTELEM_KEYVAL = 0x10
+                        GDSOf.CONSTELEM_VALTYPE = 0x18
+                        GDSOf.VAR_NAMEINDEX_I = 0x18
+                    else
+                        GDSOf.MAXTYPE = 27
+                        GDSOf.GDSCRIPT_REF = 0x10
+                        GDSOf.FUNC_MAPVAL = 0x38
+                        GDSOf.STRING = GDSOf.STRING or 0x10
+                        GDSOf.CHILDREN_SIZE = 0x4
+                        GDSOf.MAP_SIZE = 0x10
+                        GDSOf.MAP_LELEM = 0x10
+                        GDSOf.MAP_NEXTELEM = 0x20
+                        GDSOf.MAP_KVALUE = 0x30
+                        GDSOf.DICT_LIST = 0x8
+                        GDSOf.DICT_HEAD = 0x0
+                        GDSOf.DICT_TAIL = 0x8
+                        GDSOf.DICT_SIZE = 0x10
+                        GDSOf.DICTELEM_PAIR_NEXT = 0x20
+                        GDSOf.DICTELEM_KEYTYPE = 0x0
+                        GDSOf.DICTELEM_KEYVAL = 0x8
+                        GDSOf.DICTELEM_VALTYPE = 0x8
+                        GDSOf.DICTELEM_VALVAL = 0x10
+                        GDSOf.ARRAY_TOVECTOR = 0x10
+                        GDSOf.P_ARRAY_TOARR = 0x8
+                        GDSOf.P_ARRAY_SIZE = 0x18
+                        GDSOf.CONSTELEM_KEYVAL = 0x30
+                        GDSOf.CONSTELEM_VALTYPE = 0x38
+                    end
+
+                    gdOffsetsDefined = true
+                    checkGDStringType()
+                    defineGDFunctionEnums()
+                    fuckoffPrint()
+                    return
                 end
 
                 majorVersion = GDSOf.MAJOR_VER or majorVersion or 0
