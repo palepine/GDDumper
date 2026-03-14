@@ -71,7 +71,7 @@
                     return "SEMVER_NOT_FOUND"
                 end
             end
-            
+
             --- heuristic to identify whether the process is godot
             function godotOnProcessOpened(processid, processhandle, caption)
                 -- similar to monoscript.lua in implementation
@@ -571,6 +571,10 @@
                     mainMenu.Items.add( gdMenuItem )
                     addCustomMenuButtonTo( gdMenuItem, 'VP Struct', createVPStructForm )
                     addCustomMenuButtonTo( gdMenuItem, 'GD Dissector', GDDissectorSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Try resolving offset', GDStoredOffsetsSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Guess log', GDGuessLogSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'DebugMode', GDDebugSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Create Script', addGDMemrecToTable )
                 end
 
@@ -584,6 +588,46 @@
                     enableGDDissect()
                 else
                     disableGDDissect()
+                end
+            end
+
+            function GDDebugSwitch(sender)
+                if bDEBUGMode == nil then return end
+                sender.Checked = not sender.Checked
+                if sender.Checked then
+                    bDEBUGMode = true
+                else
+                    bDEBUGMode = false
+                end
+            end
+
+            function GDGuessLogSwitch(sender)
+                if bASSUMPTIONLOG == nil then return end
+                sender.Checked = not sender.Checked
+                if sender.Checked then
+                    bASSUMPTIONLOG = true
+                else
+                    bASSUMPTIONLOG = false
+                end
+            end
+
+            function GDDisasmFuncSwitch(sender)
+                if bDISASSEMBLEFUNCTIONS == nil then return end
+                sender.Checked = not sender.Checked
+                if sender.Checked then
+                    bDISASSEMBLEFUNCTIONS = true
+                else
+                    bDISASSEMBLEFUNCTIONS = false
+                end
+            end
+
+            function GDStoredOffsetsSwitch(sender)
+                if bHARDCODEDOFFSETS == nil then return end
+                sender.Checked = not sender.Checked
+                if sender.Checked then
+                    bHARDCODEDOFFSETS = true
+                else
+                    bHARDCODEDOFFSETS = false
                 end
             end
 
@@ -754,7 +798,7 @@
                     defineGDVersion()
                 end
 
-                if bHARDCODEDOFFSETS then
+                if bHARDCODEDOFFSETS --[[and (not bOverrideAssumption)]] then
                     GDSOf.CHILDREN,
                     GDSOf.OBJ_STRING_NAME,
                     GDSOf.GDSCRIPTINSTANCE,
@@ -4613,6 +4657,7 @@
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 + 1+argc)*0x4, vtDword )
                                 operand1 = operand1..'.'
 
+                                -- TODO: there's value before argc which isn't reflected
                                 local operandArg = '';
 
                                 for i=0, argc-1 do
@@ -4622,7 +4667,8 @@
                                 end
 
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]]'..'('..operandArg..')' --TODO retrieve the funciton name
+                                -- contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'GlobalNames[ FuncCode[ '..(contextTable.instrPointer+instr_var_args+2)..' ] ]'..'('..operandArg..')' --TODO retrieve the funciton name
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'GlobalNames[ FuncCode[ '..(contextTable.instrPointer+instr_var_args+2)..' ] ]'..'('..operandArg..') ::: Globals['..(contextTable.codeInts[contextTable.instrPointer+instr_var_args+2])..']'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
