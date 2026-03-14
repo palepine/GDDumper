@@ -4669,7 +4669,7 @@
 
 
                                 -- contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'GlobalNames[ FuncCode[ '..(contextTable.instrPointer+instr_var_args+2)..' ] ]'..'('..operandArg..')' --TODO retrieve the funciton name
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'GlobalNames[ FuncCode[ '..(contextTable.instrPointer+instr_var_args+2)..' ] ]'..'('..operandArg..') ::: Globals['..(contextTable.codeInts[contextTable.instrPointer+instr_var_args+2])..']'
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'Globals['..(contextTable.codeInts[ contextTable.instrPointer + instr_var_args + 2 ])..']'..'('..operandArg..')' -- original representation 'GlobalNames[FuncCode['..(contextTable.instrPointer-1 + instr_var_args+2)..']]'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
