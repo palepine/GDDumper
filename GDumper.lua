@@ -147,7 +147,7 @@
                 if isNullOrNil(GDSOf) then GDSOf = {} end
 
                 GDSOf.FULL_GDVERSION_STRING = godotVersionString
-                local major, minor, patch, tag = (godotVersionString):match( "Godot Engine v(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
+                local major, minor, patch, tag = (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)" ) or (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%a*)" )
                 patch = patch ~= "" and patch or nil
                 tag = tag ~= "" and tag or nil
                 
@@ -156,6 +156,7 @@
                 if (exportTableStr):match( "debug" ) then
                     GDSOf.DEBUGVER = true
                 --elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
+                --elseif (exportTableStr):match( "custom" ) then
                 else
                     GDSOf.DEBUGVER = false
                 end
@@ -163,7 +164,7 @@
                 if isNotNullOrNil(major) and isNotNullOrNil(minor) then
                     GDSOf.MAJOR_VER = tonumber(major)
                     GDSOf.MINOR_VER = tonumber(minor)
-                    GDSOf.RELEASE_VER = tonumber(patch)
+                    -- GDSOf.RELEASE_VER = patch
                     GDSOf.VERSION_STRING = major..'.'..minor
                 end
             end
