@@ -174,11 +174,12 @@
                 -- TODO: GDSOf.MAXTYPE
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
                 
-                -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, 4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, 3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
+                -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
                 if majminVersionStr == "4.6" then
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
-                        -- return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x30, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
+                        GDSOf.STRING = 0x8
+                        return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x30, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
                     else
                         -- godot.windows.template_release.x86_64.exe
                         -- Godot Engine v4.6.stable.official.89cea1439
@@ -197,15 +198,15 @@
                         return 0x170, 0x1C0, 0x68, 0x120, 0x268, 0x208, 0x1B8, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                     end
                 elseif majminVersionStr == "4.4" then
-                    -- (there are many variations however)
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         -- Godot Engine v4.4.1.stable.official
-                        return 0x188+0x8, 0x1E0+0x8, 0x68+0x8, 0x130+0x8, 0x2D8+0x8, 0x2A8+0x8, 0x210+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                         -- godot.windows.template_debug.x86_64.mono.exe 
                         -- Godot Engine v4.4.stable.mono.official 
                         -- 48 8B 03 48 89 D9 FF 90 ? ? ? ? 84 C0 0F 84 ? ? ? ? 48 89 D9 E8 ? ? ? ? 84 C0
                         -- 48 8B 03 48 8D B4 24 ? ? ? ? 48 89 DA 4C 8D AC 24
+                        GDSOf.STRING = 0x8
+                        return 0x188+0x8, 0x1E0+0x8, 0x68+0x8, 0x130+0x8, 0x2D8+0x8, 0x2A8+0x8, 0x210+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.4.stable.official.4c311cbee 
@@ -216,6 +217,7 @@
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
                         -- Godot Engine v4.3.stable.official 
+                        GDSOf.STRING = 0x8
                         return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                     else
                         -- godot.windows.template_release.x86_64.exe 
@@ -226,6 +228,7 @@
                 elseif majminVersionStr == "4.2" then
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
+                        GDSOf.STRING = 0x8
                         return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x40, 0x4, nil, 0x170, 0x190, 0x1A0
                     else
                         -- godot.windows.template_release.x86_64.exe 
@@ -247,6 +250,8 @@
                 elseif majminVersionStr == "4.0" then
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x168+0x8, 0x1C0+0x8, 0x68+0x8, 0x178+0x8, 0x270+0x8, 0x238+0x8, 0x2A8+0x8, 0x28+0x30, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
                     else
                         return 0x168, 0x1C0, 0x68, 0x178, 0x270, 0x238, 0x2A8, 0x28, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
                     end
@@ -263,6 +268,8 @@
                 elseif majminVersionStr == "3.5" then
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         -- godot.windows.opt.64.exe 
                         -- Godot Engine v3.5.1.stable.official.6fed1ffa3
@@ -272,6 +279,8 @@
                 elseif majminVersionStr == "3.4" then
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x108+0x8, 0x120+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         --godot.windows.opt.64.exe 
                         --Godot Engine v3.4.4.stable.official.419e713a2
@@ -280,6 +289,8 @@
                 elseif majminVersionStr == "3.3" then
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x100+0x8, 0x118+0x8, 0x50+0x8, 0x100+0x8, 0x1A0+0x8, 0x188+0x8, 0x1B8+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         -- godot.windows.opt.64.exe 
                         -- Godot Engine v3.3.2.stable.official 
@@ -288,9 +299,11 @@
                 elseif majminVersionStr == "3.2" then
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x118+0x8, 0x130+0x8, 0x50+0x8, 0x108+0x8, 0x1C0+0x8, 0x1A8+0x8, 0x1D8+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50 --[[?]], 0x30, 0x20
                     else
                         error("Not defined yet")
-                        -- return VPChildren, VPObjStringName, 0x50, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, 0x20, nil, 0x4, 3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, 0xFF, 0xFF
+                        return 0x118, 0x130, 0x50, 0x108, 0x1C0, 0x1A8, 0x1D8, 0x20, nil, 0x4, 0x38, 0x50 --[[?]], 0x30, 0x20
                     end
                 else
                     print("No recorded version found")
