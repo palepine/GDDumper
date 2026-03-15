@@ -2047,7 +2047,7 @@
 
             local function emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
 
-                local globalsElem = createChildStructElem( funcParent, "GlobalNames: "..funcName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals" )
+                local globalsElem = createChildStructElem( funcParent, "Globals: "..funcName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals" )
                 local funcGlobalAddr = readPointer(funcValueAddr + GDSOf.FUNC_GLOBNAMEPTR)
                 iterateFuncGlobalsToStruct(funcGlobalAddr, globalsElem)
                 return globalsElem
@@ -6417,7 +6417,7 @@
                 iterateFuncConstantsToStruct( funcConstAddr, funcConstantStructElem )
 
                 local funcGlobalNameStructElem = funcStruct.addElement()
-                funcGlobalNameStructElem.Name = 'GlobalNames'
+                funcGlobalNameStructElem.Name = 'Globals'
                 funcGlobalNameStructElem.Offset = GDSOf.FUNC_GLOBNAMEPTR
                 funcGlobalNameStructElem.VarType = vtPointer
                 funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
@@ -6457,8 +6457,8 @@
                 end
 
                 if     ( addrType == GDF.EADDRESS['ADDR_TYPE_STACK'] )    then return ("stack[%d]"):format(addrIndex)
-                elseif ( addrType == GDF.EADDRESS['ADDR_TYPE_CONSTANT'] ) then return ("const[%d]"):format(addrIndex)
-                elseif ( addrType == GDF.EADDRESS['ADDR_TYPE_MEMBER'] )   then return ("member[%d]"):format(addrIndex)
+                elseif ( addrType == GDF.EADDRESS['ADDR_TYPE_CONSTANT'] ) then return ("Constants[%d]"):format(addrIndex)
+                elseif ( addrType == GDF.EADDRESS['ADDR_TYPE_MEMBER'] )   then return ("Variants[%d]"):format(addrIndex) -- for clarity ("member[%d]"):format(addrIndex)
                 else                                                           return ("addr?(0x%08X)"):format(addrInt)
                 end
             end
