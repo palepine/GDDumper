@@ -4898,7 +4898,6 @@
                                 contextTable.instrPointer = contextTable.instrPointer + 1
                                 local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
-                                -- '_methods_ptr[_code_ptr[ip + 2 + instr_var_args]]'
                                 local operand2 = '';
                                 local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
@@ -4909,10 +4908,13 @@
                                     operand2 = operand2..' = '
                                 end
 
+                                local operand3 = '_methods_ptr['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']' -- TODO: workaround
+                                addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
+
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1+argc] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 + 1+argc)*0x4, vtDword )
                                 operand1 = operand1..'.'
-                                operand1 = operand1..'method->get_name()' --TODO
+                                operand1 = operand1..operand3..'->get_name()' --TODO
                                 local operandArg = '';
 
                                 for i=0, argc-1 do
@@ -5052,7 +5054,6 @@
                                 contextTable.instrPointer = contextTable.instrPointer + 1
                                 local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
-                                -- MethodBind *method = _methods_ptr[_code_ptr[ip + 2 + instr_var_args]];
                                 local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
 
@@ -5069,7 +5070,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..operand1..'method->get_name()'..'('..operandArg..')'
+                                local operand3 = '_methods_ptr['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']' -- TODO: workaround
+                                addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..operand1..'.'..operand3..'->get_name()'..'('..operandArg..')'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -5083,7 +5087,6 @@
                                 contextTable.instrPointer = contextTable.instrPointer + 1
                                 local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
-                                -- MethodBind *method = _methods_ptr[_code_ptr[ip + 2 + instr_var_args]];
                                 local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
 
@@ -5097,7 +5100,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..'.'..'method->get_name()'..'('..operandArg..')'
+                                local operand3 = '_methods_ptr['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']' -- TODO: workaround
+                                addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..'.'..operand3..'->get_name()'..'('..operandArg..')'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -5823,9 +5829,6 @@
                                     contextTable.instrPointer = contextTable.instrPointer + 1
                                     local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                     addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
-                                    
-                                    -- MethodBind *method = _methods_ptr[_code_ptr[ip + 2 + instr_var_args]];
-
                                     local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                     addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
 
@@ -5841,8 +5844,10 @@
                                         addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i+1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                     end
 
+                                    local operand3 = '_methods_ptr['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']' -- TODO: workaround
+                                    addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
 
-                                    contextTable.opcodeName = contextTable.opcodeName..' '..operand1..'method->getname()'..'('..operandArg..')' -- TODO: retrieve the funciton name
+                                    contextTable.opcodeName = contextTable.opcodeName..' '..operand1..operand3..'->getname()'..'('..operandArg..')' -- TODO: retrieve the funciton name
 
                                     addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -5858,8 +5863,6 @@
                                     local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                     addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
                                     
-                                    -- MethodBind *method = _methods_ptr[_code_ptr[ip + 2 + instr_var_args]];
-
                                     local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                     addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
 
@@ -5878,8 +5881,11 @@
                                         addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i+1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                     end
 
+                                    local operand3 = '_methods_ptr['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']' -- TODO: workaround
+                                    addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
+
                                     local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_','')
-                                    contextTable.opcodeName = contextTable.opcodeName..'(return '..opcodeType..') '..operand2..' = '..operand1..'method->getname()'..'('..operandArg..')' -- TODO: retrieve the funciton name
+                                    contextTable.opcodeName = contextTable.opcodeName..'(return '..opcodeType..') '..operand2..' = '..operand1..operand3..'->getname()'..'('..operandArg..')'
                                     addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
                                     return contextTable.instrPointer + 5 + argc
