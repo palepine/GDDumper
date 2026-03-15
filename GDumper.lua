@@ -181,7 +181,7 @@
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
                 
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
-                    if majminVersionStr == "4.6" then
+                if majminVersionStr == "4.6" then
                         GDSOf.DICT_HEAD = 0x20
                         GDSOf.DICT_TAIL = 0x28
                         GDSOf.DICT_SIZE = 0x3C
@@ -233,9 +233,10 @@
                         GDSOf.STRING = 0x8
                         return 0x188+0x8, 0x1E0+0x8, 0x68+0x8, 0x130+0x8, 0x2D8+0x8, 0x2A8+0x8, 0x210+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                     elseif GDSOf.CUSTOMVER then
-                        error("Not defined yet")
-                        GDSOf.STRING = 0x8
-                        return 0x188+0x48, 0x1E0+0x48, 0x68, 0x130+0x48, 0x2D8+0x48, 0x2A8+0x48, 0x210+0x48, 0x28, 0x48, 0x8, nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
+                        GDSOf.STRING = 0x10
+                        -- godot.windows.template_release.x86_64.exe
+                        -- Godot Engine v4.4.1.stable.custom_build.49a5bc7b6
+                        return 0x188+0x48, 0x1E0+0x48, 0x68, 0x130+0x48, 0x2D8+0x48, 0x2A8+0x48, 0x210+0x48, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.4.stable.official.4c311cbee 
@@ -444,7 +445,7 @@
                 end
             end
 
-            function printGDSemver()
+            function getGDSemver()
                 print(getExportTableName()..'\n'..getGodotVersionString())
             end
             
@@ -4703,7 +4704,7 @@
                         GDF.DisasmHandlers[GDF.OP.OPCODE_CALL] = {
                             name = "OPCODE_CALL",
                             handler = function(contextTable)
-                                local ret = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID( GDF.OP.OPCODE_CALL )
+                                local ret = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID( GDF.OP.OPCODE_CALL_RETURN )
                                 local async = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID( GDF.OP.OPCODE_CALL_ASYNC )
 
                                 contextTable.instrPointer = contextTable.instrPointer + 1
