@@ -8,6 +8,7 @@
     --TODO dump nodes schema with the addresslist?
     --TODO add more functionality for function overriding ==>
     --TODO bytecode patching function that assembles a function for return;end. or return true;end It should store the original function (address association?)
+    --TODO make non-GDInstance objects show its children
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
@@ -591,6 +592,15 @@
 
                 elseif bDISASSEMBLEFUNCTIONS and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
                     disassembleGDFunctionCodeToStruct( baseaddr, struct )
+
+                elseif checkIfGDObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
+                    local childrenStructElem = struct.addElement()
+                    childrenStructElem.Name = 'Children'
+                    childrenStructElem.BackgroundColor = 0xFF0080
+                    childrenStructElem.Offset = GDSOf.CHILDREN
+                    childrenStructElem.VarType = vtPointer
+                    childrenStructElem.ChildStruct = createStructure( 'Children' )
+                    iterateNodeChildrenToStruct( childrenStructElem, baseaddr )
                 else
                     -- otherwise just let CE decide, btw why the hell the base address should be a fucking hex string?
                     struct.autoGuess( ("%x"):format(baseaddr), 0x0, 0x200) -- 512 bytes
@@ -782,17 +792,17 @@
 
                 if strSize and (strSize > MAX_CHARS_TO_READ) then
                     --sendDebugMessageAndStepOut('readUTFString: chars to read is bigger than MAX_CHARS_TO_READ')
-                    return "ain\'t reading this"  -- we aren't gonna read novels
+                    return "??" --"ain\'t reading this"  -- we aren't gonna read novels
                 end
                 
                 if GDSOf.MAJOR_VER >= 4 then
                     if readInteger(strAddress) == 0 then
                         --sendDebugMessageAndStepOut('readUTFString: empty string');
-                        return "empt str"
+                        return "??" --"empt str"
                     end
                 elseif readSmallInteger(strAddress) == 0 then
                     --sendDebugMessageAndStepOut(' readUTFString: empty string')
-                    return "empt str"
+                    return "??" --"empt str"
                 end
 
                 local charTable = {}
@@ -800,7 +810,7 @@
 
                 if GDSOf.MAJOR_VER == 3 and (strSize and strSize > 0) then
                     --debugStepOut()
-                    return readString( strAddress, strSize * 2 , true ) or '???_INVALID_MEM_CAUGHT_WSIZE'
+                    return readString( strAddress, strSize * 2 , true ) or "??" -- '???_INVALID_MEM_CAUGHT_WSIZE'
 
                 elseif GDSOf.MAJOR_VER == 3 then
                     --debugStepOut()
@@ -811,7 +821,7 @@
                         retString = readString( strAddress, MAX_CHARS_TO_READ , true )
                     end
                     --debugStepOut()
-                    return retString or '???_INVALID_MEM_CAUGHT'
+                    return retString or "??" -- '???_INVALID_MEM_CAUGHT'
 
                 end
 
@@ -833,7 +843,7 @@
                 end
 
                 --debugStepOut()
-                return table.concat( charTable ) or '???_UNKNSTR'
+                return table.concat( charTable ) or "??" --'???_UNKNSTR'
             end
 
             function codePointToUTF8(codePoint)
@@ -861,22 +871,22 @@
             function getStringNameStr(stringNamePtr)
                 assert((type(stringNamePtr) == 'number'),"string address should be a number, instead got: "..type(stringNamePtr));
 
-                debugStepIn()
+                -- debugStepIn()
 
                 local retStringAddr = readPointer(stringNamePtr + GDSOf.STRING)
                 if isNullOrNil(retStringAddr) then
-                    sendDebugMessage('getStringNameStr: string address invalid, trying ASCII')
+                    -- sendDebugMessage('getStringNameStr: string address invalid, trying ASCII')
                     retStringAddr = readPointer( stringNamePtr + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
                     if isNullOrNil(retStringAddr) then
-                        sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
+                        -- sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
                         return '??'
                     end  -- return an empty string if no string was found
 
-                    debugStepOut()
+                    -- debugStepOut()
                     return readString( retStringAddr, 100 )
                 end
 
-                debugStepOut()
+                -- debugStepOut()
                 return readUTFString( retStringAddr )
             end
 
@@ -3060,6 +3070,38 @@
                     return false;
 
                 end
+            end
+    
+            function checkIfGDObjectWithChildren(objAddr)
+                if isNullOrNil(objAddr) then return false end
+
+                -- check vTable
+                local vtbl = readPointer( objAddr )
+                if (not isValidPointer( vtbl ) ) or (not isValidPointer( readPointer( vtbl + GDSOf.PTRSIZE*2 ) ) ) then return false end
+
+                -- check children
+                local objectChildren = readPointer( objAddr + GDSOf.CHILDREN )
+                if isNullOrNil(objectChildren) then return false end
+
+                local childrenSize;
+                if GDSOf.MAJOR_VER == 4 then
+                    childrenSize = readInteger( objAddr + GDSOf.CHILDREN - GDSOf.CHILDREN_SIZE ) -- size is 8 bytes behind
+                -- elseif GDSOf.MAJOR_VER > 4 then -- TODO: versions before ~4.2 have size inside the array 4 bytes behind
+                --     childrenSize = readInteger( objectChildren - GDSOf.CHILDREN_SIZE )
+                else
+                    childrenSize = readInteger( objectChildren - GDSOf.CHILDREN_SIZE )
+                end
+                -- if no children, we don't need it
+                if isNullOrNil(childrenSize) then return false end
+
+                -- check for StringName which should always be present?
+                local objectStrNamePtr = readPointer( objAddr + GDSOf.OBJ_STRING_NAME )
+                if isNullOrNil(objectStrNamePtr) then return false end
+
+                local objName = getStringNameStr(objectStrNamePtr)
+                if isNullOrNil(objName) or objName == "??" then return false end
+
+                return true
             end
 
             --- builds a structure layout for a node's children array
