@@ -1,9 +1,6 @@
--- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens | https://www.patreon.com/c/palepine
--- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code.
--- My github: https://github.com/palepine
--- tested on 50+ applications
-
--- to keep the code more organized in a single file, it's split into foldable sections
+-- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens
+-- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code initially.
+-- Source code on github: https://github.com/palepine/GDDumper
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
     --TODO a plugin injecting routines?
@@ -578,10 +575,15 @@
                     addCustomMenuButtonTo( gdMenuItem, 'VP Struct', createVPStructForm )
                     addCustomMenuButtonTo( gdMenuItem, 'GD Dissector', GDDissectorSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'Assign stored offsets', GDStoredOffsetsSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Guess log', GDGuessLogSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Debug Mode', GDDebugSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'Create Script', addGDMemrecToTable )
+                    addCustomMenuButtonTo( gdMenuItem, 'Add Template', addGDMemrecToTable )
+                    local menuItem = addCustomMenuButtonTo( gdMenuItem, 'Append Script', appendDumperScript )
+                    -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
+                    addCustomMenuButtonTo( gdMenuItem, 'Load Script', loadDumperScript )
+                    
+                    addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
                 end
             end
 
@@ -638,7 +640,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\n\ninitDumper()\n--nodeMonitor()\n[DISABLE]\n--nodeMonitor()'
+                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\n\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -661,6 +663,47 @@
                 supportPalique.Type = vtAutoAssembler
                 supportPalique.Color = 0x8F379F
                 supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
+            end
+
+            -- attaches the script to the table
+            function appendDumperScript(sender)
+                local cedir = getCheatEngineDir()
+                local scriptPath = cedir..[[autorun\GDumper.lua]]
+                createTableFile("GDumper",scriptPath)
+                sender.Enabled=false
+            end
+
+            -- load from attached script
+            function loadDumperScript(sender)
+                local tableFile = findTableFile("GDumper")
+                if tableFile == nil then return end
+		        local fileStream = tableFile.getData()
+		        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
+		        if scriptString ~= nil then
+                    local doScript = loadstring(scriptString)
+                    if type(doScript) == 'function' then
+                        doScript()
+                        sender.Checked = true
+                    end
+                    
+                end
+            end
+
+            function loadDumperScriptFromFile(sender)
+                local cedir = getCheatEngineDir()
+                local scriptPath = cedir..[[autorun\GDumper.lua]]
+                local scriptFile, err = io.open(scriptPath, "r")
+                if not scriptFile then error("Could not open file: " .. scriptPath .. "\n" .. tostring(err)) end
+                local scriptCode = scriptFile:read("*a")
+                scriptFile:close()
+		        if scriptCode and scriptCode ~= "" then
+                    local doScript, loadErr = loadstring(scriptCode)
+                    if not doScript then error("Compile error in " .. scriptPath .. ":\n" .. tostring(loadErr)) end
+                    local ok, runErr = pcall(doScript)
+                    if not ok then error("Runtime error in " .. scriptPath .. ":\n" .. tostring(runErr)) end
+                else
+                    error("File is empty: " .. scriptPath)
+                end
             end
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
@@ -3265,42 +3308,6 @@
                 return readUTFString( functionNameAddr )
             end
 
-            --- returns a head element, tail element and (hash)map size
-            ---@param nodePtr number
-            function getNodeFunctionMap(nodeAddr)
-                assert(type(nodeAddr) == 'number',"nodeAddr should be a number, instead got: "..type(nodeAddr))
-
-                debugStepIn()
-
-                local gdScriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
-                if isNullOrNil(gdScriptInstance) then
-                    sendDebugMessageAndStepOut('getNodeFunctionMap: gdScriptInstance is invalid');
-                    return;
-                end
-
-                local scriptPtr = readPointer( gdScriptInstance + GDSOf.GDSCRIPT_REF )
-                if isNullOrNil(scriptPtr) then
-                    sendDebugMessageAndStepOut('getNodeFunctionMap: scriptPtr is invalid')
-                    return;
-                end
-
-                local mainElement = readPointer( scriptPtr + GDSOf.FUNC_MAP )
-                local lastElement = readPointer( scriptPtr + GDSOf.FUNC_MAP + GDSOf.PTRSIZE )
-                local mapSize = readInteger( scriptPtr + GDSOf.FUNC_MAP + GDSOf.MAP_SIZE )
-
-                if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
-                    sendDebugMessageAndStepOut('getNodeFunctionMap: (hash)map is not found')
-                    return;
-                end
-
-                debugStepOut()
-                if GDSOf.MAJOR_VER >= 4 then
-                    return mainElement, lastElement, mapSize
-                else
-                    return getLeftmostMapElem( mainElement, lastElement, mapSize )
-                end
-            end
-
             --- returns a head element, tail element and (hash)Map size
             ---@param nodeAddr number
             function getNodeFuncMap(nodeAddr, funcStructElement)
@@ -3336,14 +3343,14 @@
                 end
             end
 
-            --- gets a functionPtr by nodename and funcname
+            --- gets a functionPtr by nodename (root children) and funcname
             ---@param nodeName string
             ---@param funcName string
             function getGDFunctionPtr(nodeName, funcName)
                 assert(type(nodeName) == 'string',"Node name has to be a string, instead got: "..type(nodeName))
                 local nodePtr = getNodeWithGDScriptInstance(nodeName)
-                if isNullOrNil(nodePtr) then print( "getGDFunctionPtr: Node: "..tostring(nodeName).." wasn't found" ); return; end
-                local mapHead = getNodeFunctionMap(nodePtr)
+                if isNullOrNil(nodePtr) then sendDebugMessage( "getGDFunctionPtr: Node: "..tostring(nodeName).." wasn't found" ); return; end
+                local mapHead = getNodeFuncMap(nodePtr)
                 return findMapEntryByName( mapHead, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement )
             end
 
@@ -4658,7 +4665,7 @@
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 + 1+argc)*0x4, vtDword )
                                 operand1 = operand1..'.'
 
-                                -- TODO: there's value before argc which isn't reflected
+                                -- TODO: there's value before argc and after (latter references call index from globalnames)
                                 local operandArg = '';
 
                                 for i=0, argc-1 do
@@ -4667,8 +4674,6 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i+1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-
-                                -- contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'GlobalNames[ FuncCode[ '..(contextTable.instrPointer+instr_var_args+2)..' ] ]'..'('..operandArg..')' --TODO retrieve the funciton name
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'Globals['..(contextTable.codeInts[ contextTable.instrPointer + instr_var_args + 2 ])..']'..'('..operandArg..')' -- original representation 'GlobalNames[FuncCode['..(contextTable.instrPointer-1 + instr_var_args+2)..']]'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
@@ -6325,7 +6330,6 @@
                     --TODO for 3.x
                 end
             end
-
 
             function disassembleGDFunctionCodeToStruct( funcAddr, funcStruct )
                 assert( (type(funcAddr) == 'number') and (funcAddr ~= 0),'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: '..type(funcAddr) )
