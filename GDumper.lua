@@ -4382,7 +4382,7 @@
                                 local operand3 = getGDTypeName( contextTable.codeInts[contextTable.instrPointer + 3] )
                                 addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 +3)*0x4, vtDword )
 
-                                contextTable.opcodeName = contextTable.opcodeName..' ('..operand3..') '..operand1..'] = '..operand2
+                                contextTable.opcodeName = contextTable.opcodeName..' ('..operand3..') '..operand1..' = '..operand2
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1 )*0x4, vtDword )
 
