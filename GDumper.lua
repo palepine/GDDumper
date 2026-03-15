@@ -158,9 +158,12 @@
                 if (exportTableStr):match( "debug" ) then
                     GDSOf.DEBUGVER = true
                 --elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
-                --elseif (exportTableStr):match( "custom" ) then
                 else
                     GDSOf.DEBUGVER = false
+                end
+
+                if (godotVersionString):match( "custom" ) then -- TODO: for now let it be liek this until custom debug versions
+                    GDSOf.CUSTOMVER = true
                 end
                 
                 if isNotNullOrNil(major) and isNotNullOrNil(minor) then
@@ -178,11 +181,15 @@
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
                 
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
-                if majminVersionStr == "4.6" then
+                    if majminVersionStr == "4.6" then
                     if GDSOf.DEBUGVER then
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x30, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x140+0x48, 0x190+0x48, 0x60, 0xF0+0x48, 0x230+0x48, 0x208+0x48, 0x180+0x48, 0x28, 0x44, 0x10, nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
                     else
                         -- godot.windows.template_release.x86_64.exe
                         -- Godot Engine v4.6.stable.official.89cea1439
@@ -197,6 +204,11 @@
                         -- 48 8B 06 8B 8C 24
                         GDSOf.STRING = 0x8
                         return 0x170+0x8, 0x1C0+0x8, 0x68+0x8, 0x120+0x8, 0x268+0x8, 0x208+0x8, 0x1B8+0x8, 0x28+0x28, 0x48, 0x8, nil, 0x178+0x8, 0x198+0x8, 0x1A8+0x8
+                    elseif GDSOf.CUSTOMVER then
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.5.1.stable.custom_build 
+                        GDSOf.STRING = 0x8
+                        return 0x170+0x48, 0x1C0+0x48, 0x68, 0x120+0x48, 0x268+0x48, 0x208+0x48, 0x1B8+0x48, 0x28, 0x48, 0x8, nil, 0x178+0x8, 0x198+0x8, 0x1A8+0x8
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.5.1.stable.official.f62fdbde1 
@@ -213,6 +225,10 @@
                         -- 48 8B 03 48 8D B4 24 ? ? ? ? 48 89 DA 4C 8D AC 24
                         GDSOf.STRING = 0x8
                         return 0x188+0x8, 0x1E0+0x8, 0x68+0x8, 0x130+0x8, 0x2D8+0x8, 0x2A8+0x8, 0x210+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x188+0x48, 0x1E0+0x48, 0x68, 0x130+0x48, 0x2D8+0x48, 0x2A8+0x48, 0x210+0x48, 0x28, 0x48, 0x8, nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.4.stable.official.4c311cbee 
@@ -225,14 +241,16 @@
                         -- Godot Engine v4.3.stable.official 
                         GDSOf.STRING = 0x8
                         return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                    elseif GDSOf.CUSTOMVER then
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.3.stable.custom_build
+                        -- GDSOf.STRING = 0x8
+                        return 0x178+0x48, 0x1D0+0x48, 0x68, 0x120+0x48, 0x280+0x48, 0x250+0x48, 0x1B8+0x48, 0x28, 0x48, 0x8, nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.3.stable.official 
                         -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
                         return 0x178, 0x1D0, 0x68, 0x120, 0x280, 0x250, 0x1B8, 0x28, 0x40, 0x8, nil, 0x178, 0x198, 0x1A8
-                        -- godot.windows.template_release.x86_64.exe 
-                        -- Godot Engine v4.3.stable.custom_build
-                        --0x1C0, 0x218, 0x68, 0x168, 0x2C8, 0x298, 0x200, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
                     end
                 elseif majminVersionStr == "4.2" then
                     if GDSOf.DEBUGVER then
@@ -240,6 +258,10 @@
                         --  Godot Engine v4.2.2.stable.official
                         GDSOf.STRING = 0x8
                         return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x48, 0x4, nil, 0x170, 0x190, 0x1A0
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x178+0x48, 0x1D0+0x48, 0x68, 0x120+0x48, 0x280+0x48, 0x250+0x48, 0x1B8+0x48, 0x28, 0x48, 0x4, nil, 0x170--[[+0x8]], 0x190--[[+0x8]], 0x1A0--[[+0x8]]
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.2.1.stable.official.b09f793f5 
@@ -252,6 +274,10 @@
                         --  Godot Engine v4.1.1.stable.official
                         GDSOf.STRING = 0x8
                         return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x148+0x8, 0x260+0x8, 0x1F0+0x8, 0x290+0x8, 0x28+0x30, 0x40, 0x4, nil, 0x118, 0x100, 0xF0
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x178+0x48, 0x1D0+0x48, 0x68, 0x148+0x48, 0x260+0x48, 0x1F0+0x48, 0x290+0x48, 0x28, 0x40, 0x4, nil, 0x118, 0x100, 0xF0
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.2.1.stable.official.b09f793f5 
@@ -262,6 +288,9 @@
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x168+0x8, 0x1C0+0x8, 0x68+0x8, 0x178+0x8, 0x270+0x8, 0x238+0x8, 0x2A8+0x8, 0x28+0x30, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        return 0x168+0x48, 0x1C0+0x48, 0x68, 0x178+0x48, 0x270+0x48, 0x238+0x48, 0x2A8+0x48, 0x28, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
                     else
                         return 0x168, 0x1C0, 0x68, 0x178, 0x270, 0x238, 0x2A8, 0x28, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
                     end
@@ -270,6 +299,10 @@
                         -- godot.windows.opt.debug.64.exe 
                         GDSOf.STRING = 0x8
                         return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x108+0x48, 0x130+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         -- godot.windows.opt.64.exe 
                         --  Godot Engine v3.6.stable.custom_build.de2f0f147 
@@ -281,6 +314,9 @@
                         -- Godot Engine 3.5.2.stable 
                         GDSOf.STRING = 0x8
                         return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        return 0x108+0x48, 0x130+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         -- godot.windows.opt.64.exe 
                         -- Godot Engine v3.5.1.stable.official.6fed1ffa3
@@ -292,6 +328,10 @@
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x108+0x8, 0x120+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x108+0x48, 0x120+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         --godot.windows.opt.64.exe 
                         --Godot Engine v3.4.4.stable.official.419e713a2
@@ -302,6 +342,10 @@
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x100+0x8, 0x118+0x8, 0x50+0x8, 0x100+0x8, 0x1A0+0x8, 0x188+0x8, 0x1B8+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        GDSOf.STRING = 0x8
+                        return 0x100+0x48, 0x118+0x48, 0x50, 0x100+0x48, 0x1A0+0x48, 0x188+0x48, 0x1B8+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         -- godot.windows.opt.64.exe 
                         -- Godot Engine v3.3.2.stable.official 
@@ -312,6 +356,9 @@
                         error("Not defined yet")
                         GDSOf.STRING = 0x8
                         return 0x118+0x8, 0x130+0x8, 0x50+0x8, 0x108+0x8, 0x1C0+0x8, 0x1A8+0x8, 0x1D8+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50 --[[?]], 0x30, 0x20
+                    elseif GDSOf.CUSTOMVER then
+                        error("Not defined yet")
+                        return 0x118+0x48, 0x130+0x48, 0x50, 0x108+0x48, 0x1C0+0x48, 0x1A8+0x48, 0x1D8+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50 --[[?]], 0x30, 0x20
                     else
                         error("Not defined yet")
                         return 0x118, 0x130, 0x50, 0x108, 0x1C0, 0x1A8, 0x1D8, 0x20, nil, 0x4, 0x38, 0x50 --[[?]], 0x30, 0x20
@@ -3838,6 +3885,7 @@
 
                     }
                     GDF.DisasmHandlers = {}
+                        -- https://github.com/godotengine/godot/blob/master/modules/gdscript/gdscript_disassembler.cpp
 
                         GDF.DisasmHandlers[GDF.OP.OPCODE_OPERATOR] = {
                             name = "OPCODE_OPERATOR",
@@ -4121,7 +4169,7 @@
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
                                 local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2] )
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
-                                local operand3 = '_global_names_ptr[operand2]' -- TODO _global_names_ptr[operand3]]
+                                local operand3 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+3]..']'
                                 addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 +3)*0x4, vtDword )
 
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand1..'["'..operand3..'"] = '..operand2
@@ -4157,7 +4205,7 @@
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
                                 local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2] )
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
-                                local operand3 = '_global_names_ptr[operand2]' --TODO
+                                local operand3 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+3]..']'
                                 addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 +3)*0x4, vtDword )
 
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..operand1..'["'..operand3..'"]'
@@ -4191,7 +4239,7 @@
                             handler = function(contextTable)
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
-                                local operand2 = '_global_names_ptr[operand3]' --TODO
+                                local operand2 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+2]..']'
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
 
                                 contextTable.opcodeName = contextTable.opcodeName..' '..'["'..operand2..'"] = '..operand1
@@ -4207,7 +4255,7 @@
                             handler = function(contextTable)
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
-                                local operand2 = '_global_names_ptr[operand2]' --TODO
+                                local operand2 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+2]..']'
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
 
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = ["'..operand2..'"]'
@@ -4710,7 +4758,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]]'..'('..operandArg..')'
+                                local operand2 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']'
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..operand2..'('..operandArg..')'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -4820,8 +4871,11 @@
                                     operandArg = operandArg..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] )
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
+                                
+                                local operand3 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']'
+                                addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]]'..'('..operandArg..')'
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..operand3..'('..operandArg..')'
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
                                 return contextTable.instrPointer + 4 + argc
@@ -4891,7 +4945,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..typeName..'.'..'_global_names_ptr[_code_ptr[ip + 2 + instr_var_args]].operator String()'..'('..operandArg..')'
+                                local operand2 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+2+instr_var_args]..']'
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..typeName..'.'..operand2..'.operator String()'..'('..operandArg..')'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -5535,8 +5592,9 @@
                             handler = function(contextTable)
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
-                                addStructureElem( contextTable.codeStructElement, '_global_names_ptr[_code_ptr[ip + 2]]', (contextTable.instrPointer-1 +2)*0x4, vtDword )
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..'_global_names_ptr[_code_ptr[ip + 2]]'
+                                local operand2 = 'Globals['..contextTable.codeInts[contextTable.instrPointer+2]..']'
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..operand2
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1 )*0x4, vtDword )
 
                                 return contextTable.instrPointer + 3
