@@ -182,6 +182,9 @@
                 
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
                     if majminVersionStr == "4.6" then
+                        GDSOf.DICT_HEAD = 0x20
+                        GDSOf.DICT_TAIL = 0x28
+                        GDSOf.DICT_SIZE = 0x3C
                     if GDSOf.DEBUGVER then
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
@@ -198,6 +201,9 @@
                         return 0x140, 0x190, 0x60, 0xF0, 0x230, 0x208, 0x180, 0x28, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
                     end
                 elseif majminVersionStr == "4.5" then
+                        GDSOf.DICT_HEAD = 0x20
+                        GDSOf.DICT_TAIL = 0x28
+                        GDSOf.DICT_SIZE = 0x3C
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         -- Godot Engine v4.5.1.stable.official 
@@ -213,6 +219,7 @@
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.5.1.stable.official.f62fdbde1 
                         GDSOf.STRING = 0x8
+
                         return 0x170, 0x1C0, 0x68, 0x120, 0x268, 0x208, 0x1B8, 0x28, 0x48, 0x8, nil, 0x180, 0x1A0, 0x1B0 --0x178, 0x198, 0x1A8
                     end
                 elseif majminVersionStr == "4.4" then
@@ -437,6 +444,10 @@
                 end
             end
 
+            function printGDSemver()
+                print(getExportTableName()..'\n'..getGodotVersionString())
+            end
+            
         --///---///--///---///--///---/// STRUCTURES
 
             --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
@@ -916,9 +927,9 @@
                         GDSOf.ARRAY_TOVECTOR = 0x10
                         GDSOf.P_ARRAY_TOARR = 0x18
                         GDSOf.P_ARRAY_SIZE = 0x8
-                        GDSOf.DICT_HEAD = 0x28
-                        GDSOf.DICT_TAIL = 0x30
-                        GDSOf.DICT_SIZE = 0x3C
+                        GDSOf.DICT_HEAD = GDSOf.DICT_HEAD or 0x28
+                        GDSOf.DICT_TAIL = GDSOf.DICT_TAIL or 0x30
+                        GDSOf.DICT_SIZE = GDSOf.DICT_TAIL or 0x3C
                         GDSOf.DICTELEM_KEYTYPE = 0x10
                         GDSOf.DICTELEM_KEYVAL = 0x18
                         GDSOf.DICTELEM_VALTYPE = 0x28
