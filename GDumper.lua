@@ -4722,7 +4722,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i+1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..'Globals['..(contextTable.codeInts[ contextTable.instrPointer + instr_var_args + 2 ])..']'..'('..operandArg..')' -- original representation 'GlobalNames[FuncCode['..(contextTable.instrPointer-1 + instr_var_args+2)..']]'
+                                local operand3 = 'Globals['..(contextTable.codeInts[ contextTable.instrPointer + instr_var_args + 2 ])..']'
+                                addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + instr_var_args + 2)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..operand1..operand3..']'..'('..operandArg..')' -- original representation 'GlobalNames[FuncCode['..(contextTable.instrPointer-1 + instr_var_args+2)..']]'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
