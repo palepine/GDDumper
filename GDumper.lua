@@ -4792,7 +4792,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..'utilities_names[_code_ptr[ip + 3 + argc]]'..'('..operandArg..')'
+                                local operand3 = 'utilities_names['..contextTable.codeInts[contextTable.instrPointer+3+argc]..']'
+                                addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 3+argc)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..operand3..'('..operandArg..')'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -4819,7 +4822,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..'gds_utilities_names[_code_ptr[ip + 3 + argc]]'..'('..operandArg..')'
+                                local operand3 = 'gds_utilities_names['..contextTable.codeInts[contextTable.instrPointer+3+argc]..']'
+                                addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 3+argc)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..operand3..'('..operandArg..')'
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
                                 return contextTable.instrPointer + 4 + argc
