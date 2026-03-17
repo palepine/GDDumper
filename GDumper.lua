@@ -180,7 +180,9 @@
                 majminVersionStr = majminVersionStr or GDSOf.VERSION_STRING
                 -- TODO: GDSOf.MAXTYPE
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
-                
+                -- TODO: custom debug versions
+                -- TODO: refactor the branching
+
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
                 if majminVersionStr == "4.6" then
                         GDSOf.DICT_HEAD = 0x20
@@ -309,29 +311,65 @@
                         GDSOf.STRING = 0x8
                         return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     elseif GDSOf.CUSTOMVER then
-                        error("Not defined yet")
-                        GDSOf.STRING = 0x8
-                        return 0x108+0x48, 0x130+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                        -- error("Not defined yet")
+                        GDSOf.STRING = 0x10
+                        return 0x108--[[+0x48]], 0x130--[[+0x48]], 0x58, 0x108--[[+0x48]], 0x1A8--[[+0x48]], 0x190--[[+0x48]], 0x1C0--[[+0x48]], 0x20--[[+0x18]], nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     else
                         -- godot.windows.opt.64.exe 
                         --  Godot Engine v3.6.stable.custom_build.de2f0f147 
                         return 0x108, 0x130, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x30, 0x20
                     end
                 elseif majminVersionStr == "3.5" then
-                    if GDSOf.DEBUGVER then
-                        -- godot.windows.opt.debug.64.exe 
-                        -- Godot Engine 3.5.2.stable 
-                        GDSOf.STRING = 0x8
-                        return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
-                    elseif GDSOf.CUSTOMVER then
-                        error("Not defined yet")
-                        return 0x108+0x48, 0x130+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                    
+                    if GDSOf._x64bit then
+                        if GDSOf.DEBUGVER then
+                            -- godot.windows.opt.debug.64.exe
+                            -- Godot Engine 3.5.2.stable 
+                            GDSOf.STRING = 0x8
+                            return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                        elseif GDSOf.CUSTOMVER then
+                            error("Not defined yet")
+                            return 0x108+0x48, 0x130+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                        else
+                            -- godot.windows.opt.64.exe 
+                            -- Godot Engine v3.5.1.stable.official
+                            -- 48 8B 01 48 89 CB 41 89 D4 FF
+                            return 0x108, 0x130, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                        end
                     else
-                        -- godot.windows.opt.64.exe 
-                        -- Godot Engine v3.5.1.stable.official.6fed1ffa3
-                        -- 48 8B 01 48 89 CB 41 89 D4 FF
-                        return 0x108, 0x130, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x30, 0x20
+                        if GDSOf.DEBUGVER then
+                            error("Not defined yet")
+                        elseif GDSOf.CUSTOMVER then
+                            error("Not defined yet")
+                        else
+                            -- godot.windows.opt.32.exe
+                            -- Godot Engine v3.5.3.stable.official
+                            -- 48 8B 01 48 89 CB 41 89 D4 FF
+                            GDSOf.STRING = 0x8 -- ascii
+                            GDSOf.GDSCRIPT_REF = 0x8
+                            GDSOf.MAP_SIZE = 0x10
+                            GDSOf.MAP_LELEM = 0x8
+                            GDSOf.MAP_NEXTELEM = 0x10
+                            GDSOf.MAP_KVALUE = 0x18
+                            GDSOf.FUNC_MAPVAL = 0x1C
+                            GDSOf.DICT_LIST = 0x4
+                            GDSOf.DICT_HEAD = 0x0
+                            GDSOf.DICT_TAIL = 0x4
+                            GDSOf.DICT_SIZE = 0x10
+                            GDSOf.DICTELEM_PAIR_NEXT = 0x20
+                            GDSOf.DICTELEM_KEYTYPE = 0x0
+                            GDSOf.DICTELEM_KEYVAL = 0x8
+                            GDSOf.DICTELEM_VALTYPE = 0x8
+                            GDSOf.DICTELEM_VALVAL = 0x10
+                            GDSOf.ARRAY_TOVECTOR = 0x8
+                            -- GDSOf.P_ARRAY_TOARR =
+                            -- GDSOf.P_ARRAY_SIZE =
+                            GDSOf.CONSTELEM_KEYVAL = 0x18
+                            GDSOf.CONSTELEM_VALTYPE = 0x20
+                            return 0x90, 0xB0, 0x38, 0x94, 0xE8, 0xDC, 0xF4, 0x10, nil --[[0x34]], 0x4, 0x1C, 0x38, 0x20, 0x28
+                        end
                     end
+
                 elseif majminVersionStr == "3.4" then
                     if GDSOf.DEBUGVER then
                         -- error("Not defined yet")
@@ -905,7 +943,15 @@
                 debugPrefix = 1;
 
                 if GDSOf == nil then GDSOf = {} end
-                GDSOf.PTRSIZE = targetIs64Bit() and 0x8 or 0x4
+
+                if targetIs64Bit() then
+                    GDSOf.PTRSIZE = 0x8
+                    GDSOf._x64bit = true
+                else  -- TODO: theres a lot more to do with 32bit in the script
+                    GDSOf.PTRSIZE = 0x4
+                    GDSOf._x64bit = false
+                end
+                
 
                 if lregexScan and type(lregexScan) == "function" then
                     defineGDVersion()
@@ -949,28 +995,28 @@
                         GDSOf.VAR_NAMEINDEX_I = 0x18
                     else
                         GDSOf.MAXTYPE = 27
-                        GDSOf.GDSCRIPT_REF = 0x10
-                        GDSOf.FUNC_MAPVAL = 0x38
+                        GDSOf.GDSCRIPT_REF = GDSOf.GDSCRIPT_REF or 0x10
+                        GDSOf.FUNC_MAPVAL = GDSOf.FUNC_MAPVAL or 0x38
                         GDSOf.STRING = GDSOf.STRING or 0x10
                         GDSOf.CHILDREN_SIZE = 0x4
-                        GDSOf.MAP_SIZE = 0x10
-                        GDSOf.MAP_LELEM = 0x10
-                        GDSOf.MAP_NEXTELEM = 0x20
-                        GDSOf.MAP_KVALUE = 0x30
-                        GDSOf.DICT_LIST = 0x8
-                        GDSOf.DICT_HEAD = 0x0
-                        GDSOf.DICT_TAIL = 0x8
-                        GDSOf.DICT_SIZE = 0x10
-                        GDSOf.DICTELEM_PAIR_NEXT = 0x20
-                        GDSOf.DICTELEM_KEYTYPE = 0x0
-                        GDSOf.DICTELEM_KEYVAL = 0x8
-                        GDSOf.DICTELEM_VALTYPE = 0x8
-                        GDSOf.DICTELEM_VALVAL = 0x10
-                        GDSOf.ARRAY_TOVECTOR = 0x10
-                        GDSOf.P_ARRAY_TOARR = 0x8
-                        GDSOf.P_ARRAY_SIZE = 0x18
-                        GDSOf.CONSTELEM_KEYVAL = 0x30
-                        GDSOf.CONSTELEM_VALTYPE = 0x38
+                        GDSOf.MAP_SIZE = GDSOf.MAP_SIZE or 0x10
+                        GDSOf.MAP_LELEM = GDSOf.MAP_LELEM or 0x10
+                        GDSOf.MAP_NEXTELEM = GDSOf.MAP_NEXTELEM or 0x20
+                        GDSOf.MAP_KVALUE = GDSOf.MAP_KVALUE or 0x30
+                        GDSOf.DICT_LIST = GDSOf.DICT_LIST or 0x8
+                        GDSOf.DICT_HEAD = GDSOf.DICT_HEAD or 0x0
+                        GDSOf.DICT_TAIL = GDSOf.DICT_TAIL or 0x8
+                        GDSOf.DICT_SIZE = GDSOf.DICT_SIZE or 0x1C -- GDSOf.DICT_SIZE = GDSOf.DICT_SIZE or 0x10
+                        GDSOf.DICTELEM_PAIR_NEXT = GDSOf.DICTELEM_PAIR_NEXT or 0x20
+                        GDSOf.DICTELEM_KEYTYPE = GDSOf.DICTELEM_KEYTYPE or 0x0
+                        GDSOf.DICTELEM_KEYVAL = GDSOf.DICTELEM_KEYVAL or 0x8
+                        GDSOf.DICTELEM_VALTYPE = GDSOf.DICTELEM_VALTYPE or 0x8
+                        GDSOf.DICTELEM_VALVAL = GDSOf.DICTELEM_VALVAL or 0x10
+                        GDSOf.ARRAY_TOVECTOR = GDSOf.ARRAY_TOVECTOR or 0x10
+                        GDSOf.P_ARRAY_TOARR = GDSOf.P_ARRAY_TOARR or 0x8
+                        GDSOf.P_ARRAY_SIZE = GDSOf.P_ARRAY_SIZE or 0x18
+                        GDSOf.CONSTELEM_KEYVAL = GDSOf.CONSTELEM_KEYVAL or 0x30
+                        GDSOf.CONSTELEM_VALTYPE = GDSOf.CONSTELEM_VALTYPE or 0x38
                     end
 
                     gdOffsetsDefined = true
@@ -1065,7 +1111,7 @@
                     GDSOf.DICT_LIST = 0x8
                     GDSOf.DICT_HEAD = 0x0
                     GDSOf.DICT_TAIL = 0x8
-                    GDSOf.DICT_SIZE = 0x10
+                    GDSOf.DICT_SIZE = 0x1C -- GDSOf.DICT_SIZE = 0x10
                     GDSOf.DICTELEM_PAIR_NEXT = 0x20
 
                     GDSOf.DICTELEM_KEYTYPE = 0x0
@@ -1205,7 +1251,7 @@
                         GDSOf.DICT_LIST = 0x8
                         GDSOf.DICT_HEAD = 0x0
                         GDSOf.DICT_TAIL = 0x8
-                        GDSOf.DICT_SIZE = 0x10
+                        GDSOf.DICT_SIZE = 0x1C -- GDSOf.DICT_SIZE = 0x10
                         GDSOf.DICTELEM_PAIR_NEXT = 0x20
                         GDSOf.DICTELEM_KEYTYPE = 0x0
                         GDSOf.DICTELEM_KEYVAL = 0x8
@@ -2202,11 +2248,12 @@
             end
 
             local function getDictionarySizeFromVariantPtr(variantPtr)
-                if GDSOf.MAJOR_VER >= 4 then
-                    return readInteger(readPointer(variantPtr) + GDSOf.DICT_SIZE)
-                else
-                    return readInteger(readPointer(readPointer(variantPtr) + GDSOf.DICT_LIST) + GDSOf.DICT_SIZE)
-                end
+                -- if GDSOf.MAJOR_VER >= 4 then
+                --     return readInteger(readPointer(variantPtr) + GDSOf.DICT_SIZE)
+                -- else
+                --     return readInteger(readPointer(readPointer(variantPtr) + GDSOf.DICT_LIST) + GDSOf.DICT_SIZE)
+                -- end
+                return readInteger(readPointer(variantPtr) + GDSOf.DICT_SIZE)
             end
 
             local function isArrayEmptyFromVariantPtr(variantPtr)
@@ -2385,17 +2432,17 @@
                 local keyName = "UNKNOWN"
 
                 if keyTypeName == 'STRING' then
-                    keyName = readUTFString(readPointer(keyValueAddr))
+                    keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
                 elseif keyTypeName == 'STRING_NAME' then
-                    keyName = getStringNameStr(readPointer(keyValueAddr))
+                    keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
                 elseif keyTypeName == 'FLOAT' then
-                    keyName = tostring(readDouble(keyValueAddr)) -- in godot 3.x real is 4 byte float or not?
+                    keyName = tostring(readDouble(keyValueAddr) or "_couldnt_read") -- in godot 3.x real is 4 byte float or not?
                 elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' then
-                    keyName = tostring(readPointer(keyValueAddr))
+                    keyName = tostring(readPointer(keyValueAddr) or "_couldnt_read")
                 elseif keyTypeName == 'INT' then
-                    keyName = tostring(readInteger(keyValueAddr, true))
+                    keyName = tostring(readInteger(keyValueAddr, true) or "_couldnt_read")
                 else -- bool | might need separate for Vector2, Vector3, Color, etc
-                    keyName = tostring(readInteger(keyValueAddr))
+                    keyName = tostring(readInteger(keyValueAddr) or "_couldnt_read")
                 end
 
                 return keyType, keyValueAddr, keyName
@@ -2418,7 +2465,8 @@
                     end
                 end
 
-                local dictSize = readInteger(dictRoot + GDSOf.DICT_SIZE)
+                -- local dictSize = readInteger(dictRoot + GDSOf.DICT_SIZE)
+                local dictSize = readInteger(dictAddr + GDSOf.DICT_SIZE)
                 if isNullOrNil(dictSize) then
                     sendDebugMessageAndStepOut('getDictionaryInfo: dictSize isnt valid')
                     return nil
@@ -6784,15 +6832,19 @@
                 assert( type(dictAddr) == 'number', 'iterateDictionaryForNodes: dictAddr has to be a number, instead got: '..type(dictAddr))
                 if (not (dictAddr > 0)) then return; end
 
+                local dictRoot = dictAddr
                 if GDSOf.MAJOR_VER == 3 then
-                    dictAddr = readPointer( dictAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
+                    dictRoot = readPointer( dictAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
                 end
+
+                -- local dictSize = readInteger(dictRoot + GDSOf.DICT_SIZE)
                 local dictSize = readInteger( dictAddr + GDSOf.DICT_SIZE )
+
                 if isNullOrNil(dictSize) then
                     return;
                 end
 
-                local mapElement = readPointer( dictAddr + GDSOf.DICT_HEAD )
+                local mapElement = readPointer( dictRoot + GDSOf.DICT_HEAD )
                 if isNullOrNil(mapElement) then
                     return
                 end
