@@ -82,7 +82,7 @@
                         thr.Name = 'GDDumper_ProcessMonitorThread'
                         targetIsGodot = false
                         -- first check via PE -- https://wiki.osdev.org/PE
-                        local exportTablename = getExportTableName()
+                        local exportTablename = getExportTableName() or ""
                         if ( exportTablename ):match("([gG][oO][Dd][Oo][Tt])") then
                             -- if GDSOf == nil then GDSOf = {} end
                             -- GDSOf.GDEXPORT_TABLE = exportTablename
@@ -154,7 +154,7 @@
                 patch = patch ~= "" and patch or nil
                 tag = tag ~= "" and tag or nil
                 
-                local exportTableStr = getExportTableName()
+                local exportTableStr = getExportTableName() or ""
                 
                 if (exportTableStr):match( "debug" ) then
                     GDSOf.DEBUGVER = true
@@ -4089,7 +4089,7 @@
                                 local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2] )
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
 
-                                local operand3 = 'get_global_name(operand3)' -- TODO get_global_name(_code_ptr[ip + 3]);
+                                local operand3 = 'get_global_name('..(contextTable.codeInts[ contextTable.instrPointer+3])..')'
                                 addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 +3)*0x4, vtDword )
 
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..operand2..' is '..operand3
@@ -4241,7 +4241,7 @@
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
                                 local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2] )
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
-                                local operand3 = 'setter_names[operand3]' -- TODO setter_names[_code_ptr[ip + 3]];
+                                local operand3 = 'setter_names['..(contextTable.codeInts[ contextTable.instrPointer+3])..']'
                                 addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 +3)*0x4, vtDword )
 
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand1..'["'..operand3..'"] = '..operand2
@@ -4561,6 +4561,7 @@
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
 
                                 local typeName = getGDTypeName( contextTable.codeInts[contextTable.instrPointer + 3 + instr_var_args] )
+                                addStructureElem( contextTable.codeStructElement, typeName, (contextTable.instrPointer-1 + 3+instr_var_args)*0x4, vtDword )
                                 local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
 
@@ -4594,8 +4595,7 @@
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 + 1+argc)*0x4, vtDword )
                                 local operandArg = '';
-                                
-                                local operand3 = 'constructors_names[_code_ptr[ip + 3 + argc]]'
+                                local operand3 = 'constructors_names['(contextTable.codeInts[contextTable.instrPointer+3+argc])']'
                                 addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 3+argc)*0x4, vtDword )
 
                                 for i=0, argc-1 do
@@ -4648,11 +4648,12 @@
                                 local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
 
-
-                                local operand4 = getGDTypeName( contextTable.codeInts[contextTable.instrPointer + argc+4] ) --TODO
-                                addStructureElem( contextTable.codeStructElement, 'get_constant(_code_ptr[ip + argc + 2] & ADDR_MASK)', (contextTable.instrPointer-1 + argc+2)*0x4, vtDword )
+                                local operand2 = 'get_constant('..(contextTable.codeInts[contextTable.instrPointer+argc+2] & GDF.EADDRESS["ADDR_MASK"] )..')'
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + argc+2)*0x4, vtDword )
+                                local operand4 = getGDTypeName( contextTable.codeInts[contextTable.instrPointer + argc+4] )
                                 addStructureElem( contextTable.codeStructElement, operand4, (contextTable.instrPointer-1 + argc+4)*0x4, vtDword )
-                                addStructureElem( contextTable.codeStructElement, 'get_global_name(_code_ptr[ip + argc + 5])', (contextTable.instrPointer-1 + argc+5)*0x4, vtDword )
+                                local operand5 = 'get_global_name('..(contextTable.codeInts[contextTable.instrPointer+argc+5])..')'
+                                addStructureElem( contextTable.codeStructElement, operand5, (contextTable.instrPointer-1 + argc+5)*0x4, vtDword )
 
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 + 1+argc)*0x4, vtDword )
@@ -4710,17 +4711,20 @@
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
                                 local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
-                                
-                                
-                                local operand5 = getGDTypeName( contextTable.codeInts[contextTable.instrPointer +  argc*2+5] ) --TODO
-                                addStructureElem( contextTable.codeStructElement, 'get_constant(_code_ptr[ip + argc * 2 + 2] & ADDR_MASK)', (contextTable.instrPointer-1 + argc*2+2)*0x4, vtDword )
-                                addStructureElem( contextTable.codeStructElement, operand4, (contextTable.instrPointer-1 + argc*2+5)*0x4, vtDword )
-                                addStructureElem( contextTable.codeStructElement, 'get_global_name(_code_ptr[ip + argc * 2 + 6])', (contextTable.instrPointer-1 + argc*2+6)*0x4, vtDword )
 
-                                local operand7 = getGDTypeName( contextTable.codeInts[contextTable.instrPointer +  argc*2+7] )
-                                addStructureElem( contextTable.codeStructElement, 'get_constant(_code_ptr[ip + argc * 2 + 3] & ADDR_MASK)', (contextTable.instrPointer-1 + argc*2+3)*0x4, vtDword )
-                                addStructureElem( contextTable.codeStructElement, operand7, (contextTable.instrPointer-1 + argc*2+7)*0x4, vtDword )
-                                addStructureElem( contextTable.codeStructElement, 'get_global_name(_code_ptr[ip + argc * 2 + 8])', (contextTable.instrPointer-1 + argc*2+8)*0x4, vtDword )
+                                local operand2_2 = 'get_constant('..(contextTable.codeInts[contextTable.instrPointer+argc*2+2] & GDF.EADDRESS["ADDR_MASK"] )..')'
+                                addStructureElem( contextTable.codeStructElement, operand2_2, (contextTable.instrPointer-1 + argc*2+2)*0x4, vtDword )
+                                local operand2_5 = getGDTypeName( contextTable.codeInts[contextTable.instrPointer +  argc*2+5] )
+                                addStructureElem( contextTable.codeStructElement, operand2_5, (contextTable.instrPointer-1 + argc*2+5)*0x4, vtDword )
+                                local operand2_6 = 'get_global_name('..(contextTable.codeInts[contextTable.instrPointer+argc*2+6])..')'
+                                addStructureElem( contextTable.codeStructElement, operand2_6, (contextTable.instrPointer-1 + argc*2+6)*0x4, vtDword )
+
+                                local operand2_3 = 'get_constant('..(contextTable.codeInts[contextTable.instrPointer+argc*2+3] & GDF.EADDRESS["ADDR_MASK"] )..')'
+                                addStructureElem( contextTable.codeStructElement, operand2_3, (contextTable.instrPointer-1 + argc*2+3)*0x4, vtDword )
+                                local operand2_7 = getGDTypeName( contextTable.codeInts[contextTable.instrPointer +  argc*2+7] )
+                                addStructureElem( contextTable.codeStructElement, operand2_7, (contextTable.instrPointer-1 + argc*2+7)*0x4, vtDword )
+                                local operand2_8 = 'get_global_name('..(contextTable.codeInts[contextTable.instrPointer+argc*2+8])..')'
+                                addStructureElem( contextTable.codeStructElement, operand2_8, (contextTable.instrPointer-1 + argc*2+8)*0x4, vtDword )
 
                                 local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1+argc*2] )
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + 1+argc*2)*0x4, vtDword )
@@ -4735,7 +4739,7 @@
                                     addStructureElem( contextTable.codeStructElement, 'argV: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1] ) , (contextTable.instrPointer-1 + 1 + i * 2 + 1)*0x4, vtDword )
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' ('..operand5..', '..operand7..') '..operand2..' = {'..operandArg..'}'
+                                contextTable.opcodeName = contextTable.opcodeName..' ('..operand2_5..', '..operand2_7..') '..operand2..' = {'..operandArg..'}'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -4908,7 +4912,10 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..operand1..'.'..'builtin_methods_names[_code_ptr[ip + 4 + argc]]'..'('..operandArg..')'
+                                local operand4 = 'builtin_methods_names['(contextTable.codeInts[contextTable.instrPointer+4+argc])']'
+                                addStructureElem( contextTable.codeStructElement, operand4, (contextTable.instrPointer-1 + 4+argc)*0x4, vtDword )
+
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..operand1..'.'..operand4..'('..operandArg..')'
 
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
@@ -4948,7 +4955,7 @@
                         GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND] = {
                             name = "OPCODE_CALL_METHOD_BIND",
                             handler = function(contextTable)
-                                local ret = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_METHOD_BIND_RET)
+                                local ret = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID( GDF.OP.OPCODE_CALL_METHOD_BIND_RET )
                                 contextTable.instrPointer = contextTable.instrPointer + 1
                                 local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
@@ -5187,7 +5194,9 @@
                                 contextTable.instrPointer = contextTable.instrPointer + 1
                                 local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
-                                -- GDScriptFunction *lambda = _lambdas_ptr[_code_ptr[ip + 2 + instr_var_args]];
+                                
+                                local operand2 = '_lambdas_ptr['(contextTable.codeInts[contextTable.instrPointer+2+instr_var_args])']'
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
                                 local captures_count = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1+captures_count] )
@@ -5201,7 +5210,7 @@
                                     addStructureElem( contextTable.codeStructElement, 'captures_count: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' create lambda from '..'lambda->name.operator String()'..' function, captures ('..operandArg..')'
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' create lambda from '..operand2..'->name.operator String()'..' function, captures ('..operandArg..')'
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
                                 return contextTable.instrPointer + 4 + captures_count
@@ -5214,7 +5223,8 @@
                                 contextTable.instrPointer = contextTable.instrPointer + 1
                                 local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
-                                -- GDScriptFunction *lambda = _lambdas_ptr[_code_ptr[ip + 2 + instr_var_args]];
+                                local operand2 = '_lambdas_ptr['(contextTable.codeInts[contextTable.instrPointer+2+instr_var_args])']'
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
                                 local captures_count = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1+captures_count] )
@@ -5228,7 +5238,7 @@
                                     addStructureElem( contextTable.codeStructElement, 'captures_count: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' create lambda from '..'lambda->name.operator String()'..' function, captures ('..operandArg..')'
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' create lambda from '..operand2..'->name.operator String()'..' function, captures ('..operandArg..')'
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1-1 )*0x4, vtDword )
 
                                 return contextTable.instrPointer + 4 + captures_count
@@ -5355,11 +5365,14 @@
                         GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_SCRIPT] = {
                             name = "OPCODE_RETURN_TYPED_SCRIPT",
                             handler = function(contextTable)
-                                -- Ref<Script> script = get_constant(_code_ptr[ip + 2] & ADDR_MASK);
+                                
+                                local operand2 = 'get_constant('..(contextTable.codeInts[contextTable.instrPointer+2] & GDF.EADDRESS["ADDR_MASK"] )..')'
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
+
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
 
-                                contextTable.opcodeName = contextTable.opcodeName..' ('..'GDScript::debug_get_script_name(script)'..') '..operand1
+                                contextTable.opcodeName = contextTable.opcodeName..' ('..'GDScript::debug_get_script_name('..operand2..')'..') '..operand1
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1 )*0x4, vtDword )
 
                                 return contextTable.instrPointer + 3
@@ -5648,8 +5661,10 @@
                             handler = function(contextTable)
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
-                                addStructureElem( contextTable.codeStructElement, 'String::num_int64(_code_ptr[ip + 2])', (contextTable.instrPointer-1 +2)*0x4, vtDword )
-                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..'String::num_int64(_code_ptr[ip + 2])'
+
+                                local operand2 = 'String::num_int64('..(contextTable.codeInts[contextTable.instrPointer+2])..')' -- TODO number to string representation, is it base 10 here?
+                                addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
+                                contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..operand2
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1 )*0x4, vtDword )
 
                                 return contextTable.instrPointer + 3
