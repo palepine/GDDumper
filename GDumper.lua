@@ -292,7 +292,7 @@
                     else
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.2.1.stable.official.b09f793f5 
-                        return 0x178, 0x1D0, 0x68, 0x148, 0x260, 0x1F0, 0x290, 0x28, 0x40, 0x4, nil, 0x118 --[[?]], 0x100, 0xF0
+                        return 0x178, 0x1D0, 0x68, 0x148, 0x260, 0x1F0, 0x290, 0x28, 0x40, 0x4, nil, 0x118 --[[?]], 0xF0, 0x100 -- 0x100, 0xF0
                     end
                 elseif majminVersionStr == "4.0" then
                     if GDSOf.DEBUGVER then
@@ -362,11 +362,11 @@
                             GDSOf.DICTELEM_VALTYPE = 0x8
                             GDSOf.DICTELEM_VALVAL = 0x10
                             GDSOf.ARRAY_TOVECTOR = 0x8
-                            -- GDSOf.P_ARRAY_TOARR =
-                            -- GDSOf.P_ARRAY_SIZE =
+                            GDSOf.P_ARRAY_TOARR = GDSOf.P_ARRAY_TOARR or 0x4
+                            GDSOf.P_ARRAY_SIZE = GDSOf.P_ARRAY_SIZE or 0xC
                             GDSOf.CONSTELEM_KEYVAL = 0x18
                             GDSOf.CONSTELEM_VALTYPE = 0x20
-                            return 0x90, 0xB0, 0x38, 0x94, 0xE8, 0xDC, 0xF4, 0x10, nil --[[0x34]], 0x4, 0x1C, 0x38, 0x20, 0x28
+                            return 0x90, 0xB0, 0x38, 0x94, 0xE8, 0xDC, 0xF4, 0x10, 0x34, 0x4, 0x1C, 0x38, 0x20, 0x28
                         end
                     end
 
@@ -2506,9 +2506,15 @@
                     return nil
                 end
 
-                local packedVectorSize = readInteger(packedDataArrAddr - GDSOf.SIZE_VECTOR)
+                local packedVectorSize
+                if GDSOf.MAJOR_VER == 4 then
+                    packedVectorSize = readInteger(packedDataArrAddr - GDSOf.SIZE_VECTOR)
+                    if isNullOrNil(packedVectorSize) or packedVectorSize > 150 then packedVectorSize = 150 end
+                else
+                    packedVectorSize = 150 -- no size to rely :(
+                end
                 if isNullOrNil(packedVectorSize) then
-                    sendDebugMessageAndStepOut('getPackedArrayInfo: packedVectorSize isnt pointer')
+                    sendDebugMessageAndStepOut('getPackedArrayInfo: packedVectorSize isnt valid')
                     return nil
                 end
 
@@ -2517,14 +2523,11 @@
             end
 
             local function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter)
-                if packedVectorSize > 256 then
-                    packedVectorSize = 256
-                end
-                
+
                 debugStepIn()
+                sendDebugMessageAndStepOut("Packed Array: "..packedTypeName..(" address %x"):format(packedDataArrAddr or -1))
                 local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
                 handler(packedDataArrAddr, packedVectorSize, parent, emitter)
-                sendDebugMessageAndStepOut("Packed Array: "..packedTypeName..(" address %x"):format(packedDataArrAddr or -1))
             end
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
@@ -2549,7 +2552,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readNodeVariantEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readNodeVariantEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.." type: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
 
                 return entry
             end
@@ -2571,8 +2574,8 @@
                         ceType = getCETypeFromGD(finalType)
                         }
 
-                -- debugStepIn()
-                -- sendDebugMessageAndStepOut("readFunctionConstantEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+                debugStepIn()
+                sendDebugMessageAndStepOut("readFunctionConstantEntry: name:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
 
                 return entry
             end
@@ -2595,7 +2598,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readNodeConstEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readNodeConstEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
 
                 return entry
             end
@@ -2639,7 +2642,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readArrayContainerEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readArrayContainerEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
 
                 return entry
 
@@ -2666,7 +2669,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readDictionaryContainerEntry: name: "..entry.name.." Index: "..entry.index.." type: "..entry.typeName.." Ptr: "..('%x'):format(entry.variantPtr or -1).." ? Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readDictionaryContainerEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
 
                 return entry
             end
@@ -6945,10 +6948,7 @@
                 assert(type(packedTypeName) == 'string',"TypeName has to be a string, instead got: "..type(packedTypeName))
 
                 local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
-
-                if packedVectorSize > 150 then
-                    packedVectorSize = 150
-                end
+                if isNullOrNil(packedDataArrAddr) then return end;
 
                 iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, GDEmitters.PackedAddrEmitter)
                 return
@@ -6963,8 +6963,9 @@
                 assert(type(packedTypeName) == 'string',"TypeName "..tostring(packedTypeName).." has to be a string, instead got: "..type(packedTypeName))
 
                 local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
+                if isNullOrNil(packedDataArrAddr) then return end;
                 pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDSOf.P_ARRAY_TOARR, vtPointer)
-                pArrayStructElement.ChildStruct = createStructure('PArrayData')                
+                pArrayStructElement.ChildStruct = createStructure('PArrayData')
 
                 iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, GDEmitters.PackedStructEmitter)
                 
