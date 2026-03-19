@@ -286,8 +286,8 @@
                         GDSOf.STRING = 0x8
                         return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x148+0x8, 0x260+0x8, 0x1F0+0x8, 0x290+0x8, 0x28+0x30, 0x40, 0x4, nil, 0x118, 0x100, 0xF0
                     elseif GDSOf.CUSTOMVER then
-                        error("Not defined yet")
-                        GDSOf.STRING = 0x8
+                        -- Godot Engine v4.1.2.rc.custom_build
+                        GDSOf.STRING = 0x10
                         return 0x178+0x48, 0x1D0+0x48, 0x68, 0x148+0x48, 0x260+0x48, 0x1F0+0x48, 0x290+0x48, 0x28, 0x40, 0x4, nil, 0x118, 0x100, 0xF0
                     else
                         -- godot.windows.template_release.x86_64.exe 
@@ -2412,7 +2412,7 @@
             local function formatDictionaryEntry(entry)
                 local cloned = {}
                 for k, v in pairs(entry) do cloned[k] = v end
-                cloned.name = "dict[" .. tostring(entry.name) .. "]"
+                cloned.name = "[ " .. tostring(entry.name) .. " ]"
                 return cloned
             end
 
