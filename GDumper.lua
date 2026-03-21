@@ -60,7 +60,15 @@
 
             function getGodotVersionString()
                 local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
-                local godotVersionStringTable = lregexScan( reStr, "WR-E-C", true, false, false, 15 ) or {}
+                local godotVersionStringTable = lregexScan({   pattern = reStr,
+                                                                protection = "WR-E-C",
+                                                                encoding = "ASCII",
+                                                                engine = "RE2",
+                                                                findOne = true,
+                                                                caseSensitive = false,
+                                                                minLength = 15,
+                                                                maxLength = 60
+                                                            }) or {}
                 
                 if isNotNullOrNil(godotVersionStringTable[1]) then
                     return godotVersionStringTable[1].text
@@ -747,7 +755,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\n\ninitDumper()\nnodeMonitor()\n[DISABLE]\nnodeMonitor()'
+                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\noverrideAssumption =        true, -- let the script assume the offsets (pretty unreliable)\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableGuessLog =            false, -- if print heuristic-explored offsets (experimental)\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -816,7 +824,7 @@
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
 
 
-    function initDumper(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
+    function initDumper(config)
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// STRING
 
             --- reads GD strings (1-4 bytes)
@@ -931,14 +939,20 @@
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// DEFINE
 
             --- initializes and assigns offsets
-            function defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
+            function defineGDOffsets( config )
+                if config == nil then config = {} end
 
-                -- TODO: change bOverrideAssumption to modes and possibly fix the order of the arguments above
                 bMonitorNodes = false;
+                bMonitorNodes = config.startMonitoringNodes or bMonitorNodes
                 bDEBUGMode = bDEBUGMode and true or nil
+                bDEBUGMode = config.enableDebugMode or bDEBUGMode
                 bASSUMPTIONLOG = bASSUMPTIONLOG and true or nil
+                bASSUMPTIONLOG = config.enableGuessLog or bASSUMPTIONLOG
                 bDISASSEMBLEFUNCTIONS = bDISASSEMBLEFUNCTIONS and true or false
+                bDISASSEMBLEFUNCTIONS = config.enableFunDisasm or bDISASSEMBLEFUNCTIONS
                 bHARDCODEDOFFSETS = bHARDCODEDOFFSETS and true or false
+                bHARDCODEDOFFSETS = config.useHardcodedOffsets or bHARDCODEDOFFSETS
+
                 dumpedMonitorNodes = {};
                 debugPrefix = 1;
 
@@ -952,12 +966,13 @@
                     GDSOf._x64bit = false
                 end
                 
+                GDSOf.VERSION_STRING = config.majMinVerStr or nil
 
-                if lregexScan and type(lregexScan) == "function" then
+                if lregexScan and type(lregexScan) == "function" then -- a regex plugin must be initialized for that
                     defineGDVersion()
                 end
 
-                if bHARDCODEDOFFSETS then
+                if bHARDCODEDOFFSETS or not( config.majMinVerStr == nil or config.majMinVerStr == "") then
                     GDSOf.CHILDREN,
                     GDSOf.OBJ_STRING_NAME,
                     GDSOf.GDSCRIPTINSTANCE,
@@ -1026,32 +1041,31 @@
                     return
                 end
 
-                majorVersion = GDSOf.MAJOR_VER or majorVersion or 0
+                local majorVersion = GDSOf.MAJOR_VER or config.majorVersion or 0
 
-                if bOverrideAssumption and majorVersion >= 4 then
+                if config.overrideAssumption and majorVersion >= 4 then
 
                     GDSOf.MAJOR_VER = majorVersion
 
-                    GDSOf.CHILDREN = oChildren or 0x1C0
-                    GDSOf.OBJ_STRING_NAME = oObjStringName or 0x218
-                    GDSOf.GDSCRIPTINSTANCE = oGDScriptInstance or 0x68
-                    GDSOf.GDSCRIPTNAME = oGDScriptName or 0x168
-                    GDSOf.FUNC_MAP = oFuncDict or 0x2C8
-                    GDSOf.CONST_MAP = oGDConst or 0x298
-                    GDSOf.VAR_NAMEINDEX_MAP = oVariantNameHM or 0x200
+                    GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
+                    GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+                    GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+                    GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+                    GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
+                    GDSOf.CONST_MAP = config.offsetConstMap or 0x0
+                    GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
 
-
-                    GDSOf.VAR_VECTOR = oVariantVector or 0x28
-                    GDSOf.VAR_NAMEINDEX_VARTYPE = oVariantNameHMVarType or 0x48
-                    GDSOf.SIZE_VECTOR = oVarSize or 0x8
+                    GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x28
+                    GDSOf.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
+                    GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
 
                     GDSOf.GDSCRIPT_REF = 0x18
                     GDSOf.MAXTYPE = 39
-                    --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x60
+                    --GDSOf.SCRIPTFUNC_STRING = GDFunctionString or 0x60
                     GDSOf.FUNC_MAPVAL = 0x18
-                    GDSOf.FUNC_CODE = oGDFunctionCode or 0x178
-                    GDSOf.FUNC_CONST = oGDFunctionConsts or (GDSOf.FUNC_CODE+0x20) -- 0x198
-                    GDSOf.FUNC_GLOBNAMEPTR = oGDFunctionGlobName or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
+                    GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+                    GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_CODE+0x20)
+                    GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
 
                     GDSOf.STRING = GDSOf.STRING or 0x10
                     GDSOf.CHILDREN_SIZE = 0x8
@@ -1075,21 +1089,21 @@
 
                     GDSOf.VAR_NAMEINDEX_I = 0x18
 
-                elseif bOverrideAssumption and majorVersion == 3 then
+                elseif config.overrideAssumption and majorVersion == 3 then
                     GDSOf.MAJOR_VER = 3
 
-                    GDSOf.CHILDREN = oChildren or 0x108
-                    GDSOf.OBJ_STRING_NAME = oObjStringName or 0x130
-                    GDSOf.GDSCRIPTINSTANCE = oGDScriptInstance or 0x58
-                    GDSOf.GDSCRIPTNAME = oGDScriptName or 0x108
-                    GDSOf.FUNC_MAP = oFuncDict or 0x1A8
-                    GDSOf.CONST_MAP = oGDConst or 0x190
-                    GDSOf.VAR_NAMEINDEX_MAP = oVariantNameHM or 0x1C0
+                    GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
+                    GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+                    GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+                    GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+                    GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
+                    GDSOf.CONST_MAP = config.offsetConstMap or 0x0
+                    GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
 
-                    GDSOf.VAR_VECTOR = oVariantVector or 0x20
-                    GDSOf.SIZE_VECTOR = oVarSize or 0x4
+                    GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x20
+                    GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
 
-                    GDSOf.VAR_NAMEINDEX_I = oVariantHMIndex or 0x38
+                    GDSOf.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
 
                     GDSOf.MAXTYPE = 27
                     --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
@@ -1097,9 +1111,9 @@
                     GDSOf.GDSCRIPT_REF = 0x10
 
                     GDSOf.FUNC_MAPVAL = 0x38
-                    GDSOf.FUNC_CODE = oGDFunctionCode or 0x50
-                    GDSOf.FUNC_GLOBNAMEPTR = oGDFunctionGlobName or (GDSOf.FUNC_CODE-0x20) -- (GDSOf.FUNC_CODE+0x30)
-                    GDSOf.FUNC_CONST = oGDFunctionConsts or (GDSOf.FUNC_GLOBNAMEPTR-0x10) -- (GDSOf.FUNC_CONST+0x50)
+                    GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+                    GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CODE-0x20)
+                    GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_GLOBNAMEPTR-0x10)
                     GDSOf.STRING = GDSOf.STRING or 0x10
                     GDSOf.CHILDREN_SIZE = 0x4
 
@@ -1126,7 +1140,7 @@
                     GDSOf.CONSTELEM_KEYVAL = 0x30
                     GDSOf.CONSTELEM_VALTYPE = 0x38
 
-                elseif ( not bOverrideAssumption ) and majorVersion >= 4 then -- that semi-manual check might be avoided if assumption functions handle versions before 4.2
+                elseif ( not config.overrideAssumption ) and majorVersion >= 4 then -- that semi-manual check might be avoided if assumption functions handle versions before 4.2
                         
                         GDSOf.DEBUGVER = false;
                         GDSOf.STRING = GDSOf.STRING or 0x10
@@ -7884,7 +7898,7 @@
 
 
         if not (targetIsGodot) then --[[print('target is not godot')--]] return; end;
-        defineGDOffsets(bOverrideAssumption, majorVersion, oChildren, oObjStringName, oGDScriptInstance, oGDScriptName, oFuncDict, oGDConst, oVariantNameHM, oVariantVector, oVariantNameHMVarType, oVarSize, oVariantHMIndex, oGDFunctionCode, oGDFunctionConsts, oGDFunctionGlobName)
+        defineGDOffsets( config )
     end;
 
     godotRegisterPreinit()
