@@ -13,17 +13,29 @@ Game version can be either deduced or found by scanning the app's executable (tr
 Offsets can be assumed by calling `defineGDOffsets` with no args, but that's not reliable.
 
 offsetNodeChildren =        -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively
+
 offsetNodeStringName =      -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)
+
 offsetGDScriptInstance =    -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript
+
 offsetVariantVector =       -- Node->GDScriptInstance->
+
 offsetVariantVectorSize =   -- is an int located before the 1st item in the Vector container, exact offset varies
 
 offsetGDScriptName =        -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://
+
 offsetFuncMap =             -- if you need funcs: GDScript->member_functions - in 4.x - (4 ptrs, capacity, size) use offset to the Head (second to the last ptr); in 3.x (ptr to the RBT root and sentinel after it) use roor offset.
+
 offsetGDFunctionCode =      -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot
+
 offsetGDFunctionConst =     -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code
+
 offsetGDFunctionGlobals =   -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants
+
 offsetConstMap =            -- GDScript->constants - layout same as w/ offsetGDFunctionCode
+
 offsetVariantMap =          -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode
+
 offsetVariantMapVarType =   -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking 
+
 offsetVariantMapIndex =     -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes
