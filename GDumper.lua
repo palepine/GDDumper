@@ -59,13 +59,13 @@
             end
 
             function getGodotVersionString()
-                local reStr = [[[Gg][Oo][Dd][Oo][Tt]\s[Ee][Nn][Gg][Ii][Nn][Ee]\s[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
+                local reStr = [[Godot\sEngine\s(\(With\sGodot\sSecure\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
                 local godotVersionStringTable = lregexScan({   pattern = reStr,
                                                                 protection = "WR-E-C",
                                                                 encoding = "ASCII",
                                                                 engine = "RE2",
                                                                 findOne = true,
-                                                                caseSensitive = false,
+                                                                caseSensitive = true,
                                                                 minLength = 15,
                                                                 maxLength = 60
                                                             }) or {}
@@ -153,7 +153,7 @@
                 if isNullOrNil(GDSOf) then GDSOf = {} end
 
                 GDSOf.FULL_GDVERSION_STRING = godotVersionString
-                local major, minor, patch, tag = (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
+                local major, minor, patch, tag = (godotVersionString):match( "v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
                 
                 if isNullOrNil(major) or isNullOrNil(minor) then
                     major, minor, patch = (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%a*)" )
@@ -201,9 +201,8 @@
                         GDSOf.STRING = 0x8
                         return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x30, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
                     elseif GDSOf.CUSTOMVER then
-                        error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x140+0x48, 0x190+0x48, 0x60, 0xF0+0x48, 0x230+0x48, 0x208+0x48, 0x180+0x48, 0x28, 0x44, 0x10, nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
+                        return 0x140+0x48, 0x190+0x48, 0x60, 0xF0+0x48, 0x230+0x48, 0x208+0x48, 0x180+0x48, 0x28, 0x44, 0x8--[[0x10 too]], nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
                     else
                         -- godot.windows.template_release.x86_64.exe
                         -- Godot Engine v4.6.stable.official.89cea1439
@@ -4660,7 +4659,7 @@
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 + 1+argc)*0x4, vtDword )
                                 local operandArg = '';
-                                local operand3 = 'constructors_names['(contextTable.codeInts[contextTable.instrPointer+3+argc])']'
+                                local operand3 = 'constructors_names['..(contextTable.codeInts[contextTable.instrPointer+3+argc])..']'
                                 addStructureElem( contextTable.codeStructElement, operand3, (contextTable.instrPointer-1 + 3+argc)*0x4, vtDword )
 
                                 for i=0, argc-1 do
@@ -4977,7 +4976,7 @@
                                     addStructureElem( contextTable.codeStructElement, 'arg: '..formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] ) , (contextTable.instrPointer-1 + i+1)*0x4, vtDword )    
                                 end
 
-                                local operand4 = 'builtin_methods_names['(contextTable.codeInts[contextTable.instrPointer+4+argc])']'
+                                local operand4 = 'builtin_methods_names['..(contextTable.codeInts[contextTable.instrPointer+4+argc])..']'
                                 addStructureElem( contextTable.codeStructElement, operand4, (contextTable.instrPointer-1 + 4+argc)*0x4, vtDword )
 
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand2..' = '..operand1..'.'..operand4..'('..operandArg..')'
@@ -5288,7 +5287,7 @@
                                 contextTable.instrPointer = contextTable.instrPointer + 1
                                 local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
                                 addStructureElem( contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer-1)*0x4, vtDword )
-                                local operand2 = '_lambdas_ptr['(contextTable.codeInts[contextTable.instrPointer+2+instr_var_args])']'
+                                local operand2 = '_lambdas_ptr['..(contextTable.codeInts[contextTable.instrPointer+2+instr_var_args])..']'
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 + 2+instr_var_args)*0x4, vtDword )
                                 local captures_count = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
                                 addStructureElem( contextTable.codeStructElement, 'argc:', (contextTable.instrPointer-1 + 1+instr_var_args)*0x4, vtDword )
