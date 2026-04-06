@@ -10,8 +10,6 @@ A Variant structure may vary in size depending on the largest type stored (`0x18
 Game version can be either deduced or found by scanning the app's executable (try searching for the string `Godot Engine` to find something like `Godot Engine v4.4.1.stable.official`, usually ASCII. You can also use a regex formula to search the string.
 
 ## Offsets
-Offsets can be assumed by calling `defineGDOffsets` with no args, but that's not reliable.
-
 offsetNodeChildren =        -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively
 
 offsetNodeStringName =      -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)

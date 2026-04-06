@@ -197,9 +197,8 @@
                         GDSOf.DICT_TAIL = 0x28
                         GDSOf.DICT_SIZE = 0x3C
                     if GDSOf.DEBUGVER then
-                        -- error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x30, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
+                        return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x28, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
                     elseif GDSOf.CUSTOMVER then
                         GDSOf.STRING = 0x8
                         return 0x140+0x48, 0x190+0x48, 0x60, 0xF0+0x48, 0x230+0x48, 0x208+0x48, 0x180+0x48, 0x28, 0x44, 0x8--[[0x10 too]], nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
@@ -755,7 +754,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\noverrideAssumption =        true, -- if set to false, lets the script assume the offsets (pretty unreliable)\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableGuessLog =            false, -- if print heuristic-explored offsets (experimental)\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
+                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableGuessLog =            false, -- if print heuristic-explored offsets (experimental)\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -841,7 +840,7 @@
                     return "??" --"ain\'t reading this"  -- we aren't gonna read novels
                 end
                 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     if readInteger(strAddress) == 0 then
                         --sendDebugMessageAndStepOut('readUTFString: empty string');
                         return "??" --"empt str"
@@ -945,9 +944,7 @@
                 bMonitorNodes = false;
                 bMonitorNodes = config.startMonitoringNodes or bMonitorNodes
                 bDEBUGMode = bDEBUGMode and true or nil
-                bDEBUGMode = config.enableDebugMode or bDEBUGMode
-                bASSUMPTIONLOG = bASSUMPTIONLOG and true or nil
-                bASSUMPTIONLOG = config.enableGuessLog or bASSUMPTIONLOG
+                bDEBUGMode = config.enableDebugMode or bDEBUGMode                
                 bDISASSEMBLEFUNCTIONS = bDISASSEMBLEFUNCTIONS and true or false
                 bDISASSEMBLEFUNCTIONS = config.enableFunDisasm or bDISASSEMBLEFUNCTIONS
                 bHARDCODEDOFFSETS = bHARDCODEDOFFSETS and true or false
@@ -965,7 +962,7 @@
                     GDSOf.PTRSIZE = 0x4
                     GDSOf._x64bit = false
                 end
-                
+
                 GDSOf.VERSION_STRING = config.majMinVerStr or nil
 
                 if lregexScan and type(lregexScan) == "function" then -- a regex plugin must be initialized for that
@@ -1043,7 +1040,7 @@
 
                 local majorVersion = GDSOf.MAJOR_VER or config.majorVersion or 0
 
-                if config.overrideAssumption and majorVersion >= 4 then
+                if majorVersion == 4 then
 
                     GDSOf.MAJOR_VER = majorVersion
 
@@ -1089,7 +1086,7 @@
 
                     GDSOf.VAR_NAMEINDEX_I = 0x18
 
-                elseif config.overrideAssumption and majorVersion == 3 then
+                else
                     GDSOf.MAJOR_VER = 3
 
                     GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
@@ -1140,797 +1137,12 @@
                     GDSOf.CONSTELEM_KEYVAL = 0x30
                     GDSOf.CONSTELEM_VALTYPE = 0x38
 
-                elseif ( not config.overrideAssumption ) and majorVersion >= 4 then -- that semi-manual check might be avoided if assumption functions handle versions before 4.2
-                        
-                        GDSOf.DEBUGVER = false;
-                        GDSOf.STRING = GDSOf.STRING or 0x10
-                    local MAJOR_VER, CHILDREN, OBJ_STRING_NAME = assumeVPOffsets()
-                        GDSOf.CHILDREN = CHILDREN
-                        GDSOf.OBJ_STRING_NAME = OBJ_STRING_NAME
-                        GDSOf.MAJOR_VER = majorVersion -- we know it better
-
-                        GDSOf.GDSCRIPT_REF = 0x18
-                        GDSOf.MAXTYPE = 39
-                        GDSOf.STRING = GDSOf.STRING or 0x10
-                        GDSOf.CHILDREN_SIZE = 0x8 
-                        GDSOf.MAP_SIZE = 0x14
-                        GDSOf.ARRAY_TOVECTOR = 0x10 
-                        GDSOf.P_ARRAY_TOARR = 0x18 
-                        GDSOf.P_ARRAY_SIZE = 0x8 
-                        GDSOf.DICT_HEAD = 0x28 
-                        GDSOf.DICT_TAIL = 0x30 
-                        GDSOf.DICT_SIZE = 0x3C 
-                        GDSOf.DICTELEM_KEYTYPE = 0x10 
-                        GDSOf.DICTELEM_KEYVAL = 0x18 
-                        GDSOf.DICTELEM_VALTYPE = 0x28 
-                        GDSOf.CONSTELEM_KEYVAL = 0x10 
-                        GDSOf.CONSTELEM_VALTYPE = 0x18 
-                        GDSOf.VAR_NAMEINDEX_I = 0x18 
-
-                        local GDSCRIPTINSTANCE, GDSCRIPTNAME, FUNC_MAP, CONST_MAP, VAR_MAP, VAR_VECTOR, VAR_VECTOR_SIZE = assumeNodeOffsets()
-
-                        GDSOf.GDSCRIPTINSTANCE = GDSCRIPTINSTANCE
-                        GDSOf.GDSCRIPTNAME = GDSCRIPTNAME
-                        GDSOf.FUNC_MAP = FUNC_MAP or 0x0
-                        GDSOf.CONST_MAP = CONST_MAP or 0x400
-                        GDSOf.VAR_NAMEINDEX_MAP = VAR_MAP
-                        GDSOf.VAR_VECTOR = VAR_VECTOR
-                        GDSOf.VAR_NAMEINDEX_VARTYPE = 0x48
-                        GDSOf.SIZE_VECTOR = VAR_VECTOR_SIZE
-
-                        GDSOf.SCRIPTFUNC_STRING = 0x60
-                        GDSOf.FUNC_MAPVAL = 0x18 
-                        GDSOf.FUNC_CODE = 0x178 
-
-                        if bASSUMPTIONLOG then
-                            print("Copy that: (mind that vector size can be 0x4)\n",
-                            "true,0x4,"..
-                            ('0x%x'):format(GDSOf.CHILDREN)..","..
-                            ('0x%x'):format(GDSOf.OBJ_STRING_NAME)..","..
-                            ('0x%x'):format(GDSOf.GDSCRIPTINSTANCE)..","..
-                            ('0x%x'):format(GDSOf.GDSCRIPTNAME)..","..
-                            ('0x%x'):format(GDSOf.FUNC_MAP)..","..
-                            ('0x%x'):format(GDSOf.CONST_MAP)..","..
-                            ('0x%x'):format(GDSOf.VAR_NAMEINDEX_MAP)..","..
-                            ('0x%x'):format(GDSOf.VAR_VECTOR)..",0x48,"..
-                            ('0x%x'):format(GDSOf.SIZE_VECTOR))
-                        end
-
-                else
-                        GDSOf.DEBUGVER = false;
-                        GDSOf.STRING = GDSOf.STRING or 0x10
-                    local MAJOR_VER, CHILDREN, OBJ_STRING_NAME = assumeVPOffsets()
-                        GDSOf.CHILDREN = CHILDREN
-                        GDSOf.OBJ_STRING_NAME = OBJ_STRING_NAME
-                        GDSOf.MAJOR_VER = MAJOR_VER
-
-                    if GDSOf.MAJOR_VER >= 4 then
-                        GDSOf.GDSCRIPT_REF = 0x18
-                        GDSOf.MAXTYPE = 39
-                        GDSOf.STRING = 0x10 
-                        GDSOf.CHILDREN_SIZE = 0x8 
-                        GDSOf.MAP_SIZE = 0x14
-                        GDSOf.ARRAY_TOVECTOR = 0x10 
-                        GDSOf.P_ARRAY_TOARR = 0x18 
-                        GDSOf.P_ARRAY_SIZE = 0x8 
-                        GDSOf.DICT_HEAD = 0x28 
-                        GDSOf.DICT_TAIL = 0x30 
-                        GDSOf.DICT_SIZE = 0x3C 
-                        GDSOf.DICTELEM_KEYTYPE = 0x10 
-                        GDSOf.DICTELEM_KEYVAL = 0x18 
-                        GDSOf.DICTELEM_VALTYPE = 0x28 
-                        GDSOf.CONSTELEM_KEYVAL = 0x10 
-                        GDSOf.CONSTELEM_VALTYPE = 0x18 
-                        GDSOf.VAR_NAMEINDEX_I = 0x18 
-
-                        local GDSCRIPTINSTANCE, GDSCRIPTNAME, FUNC_MAP, CONST_MAP, VAR_MAP, VAR_VECTOR, VAR_VECTOR_SIZE = assumeNodeOffsets()
-
-                        GDSOf.GDSCRIPTINSTANCE = GDSCRIPTINSTANCE
-                        GDSOf.GDSCRIPTNAME = GDSCRIPTNAME
-                        GDSOf.FUNC_MAP = FUNC_MAP or 0x0
-                        GDSOf.CONST_MAP = CONST_MAP or 0x400
-                        GDSOf.VAR_NAMEINDEX_MAP = VAR_MAP
-                        GDSOf.VAR_VECTOR = VAR_VECTOR
-                        GDSOf.VAR_NAMEINDEX_VARTYPE = 0x48
-                        GDSOf.SIZE_VECTOR = VAR_VECTOR_SIZE
-
-                        GDSOf.SCRIPTFUNC_STRING = 0x60
-                        GDSOf.FUNC_MAPVAL = 0x18 
-                        GDSOf.FUNC_CODE = 0x178 
-
-                        if bASSUMPTIONLOG then
-                            print("Copy that: (mind that vector size can be 0x4)\n",
-                            "true, 0x4,"..
-                            ('0x%x'):formt(GDSOf.CHILDREN)..","..
-                            ('0x%x'):formt(GDSOf.OBJ_STRING_NAME)..","..
-                            ('0x%x'):formt(GDSOf.GDSCRIPTINSTANCE)..","..
-                            ('0x%x'):formt(GDSOf.GDSCRIPTNAME)..","..
-                            ('0x%x'):formt(GDSOf.FUNC_MAP)..","..
-                            ('0x%x'):formt(GDSOf.CONST_MAP)..","..
-                            ('0x%x'):formt(GDSOf.VAR_NAMEINDEX_MAP)..","..
-                            ('0x%x'):formt(GDSOf.VAR_VECTOR)..",0x48,"..
-                            ('0x%x'):formt(GDSOf.SIZE_VECTOR))
-                        end
-
-                    else
-                        GDSOf.VAR_NAMEINDEX_I = 0x38
-                        GDSOf.MAXTYPE = 27
-                        GDSOf.GDSCRIPT_REF = 0x10
-                        GDSOf.STRING = 0x10
-                        GDSOf.CHILDREN_SIZE = 0x4
-                        GDSOf.MAP_SIZE = 0x10
-                        GDSOf.MAP_LELEM = 0x10
-                        GDSOf.MAP_NEXTELEM = 0x20
-                        GDSOf.MAP_KVALUE = 0x30
-                        GDSOf.DICT_LIST = 0x8
-                        GDSOf.DICT_HEAD = 0x0
-                        GDSOf.DICT_TAIL = 0x8
-                        GDSOf.DICT_SIZE = 0x1C -- GDSOf.DICT_SIZE = 0x10
-                        GDSOf.DICTELEM_PAIR_NEXT = 0x20
-                        GDSOf.DICTELEM_KEYTYPE = 0x0
-                        GDSOf.DICTELEM_KEYVAL = 0x8
-                        GDSOf.DICTELEM_VALTYPE = 0x8
-                        GDSOf.DICTELEM_VALVAL = 0x10
-                        GDSOf.ARRAY_TOVECTOR = 0x10
-                        GDSOf.P_ARRAY_TOARR = 0x8
-                        GDSOf.P_ARRAY_SIZE = 0x18
-                        GDSOf.CONSTELEM_KEYVAL = 0x30
-                        GDSOf.CONSTELEM_VALTYPE = 0x38
-
-                        local GDSCRIPTINSTANCE, GDSCRIPTNAME, FUNC_MAP, CONST_MAP, VAR_MAP, VAR_VECTOR, VAR_VECTOR_SIZE = assumeNodeOffsets()
-
-                        GDSOf.GDSCRIPTINSTANCE = GDSCRIPTINSTANCE
-                        GDSOf.GDSCRIPTNAME = GDSCRIPTNAME
-                        GDSOf.FUNC_MAP = FUNC_MAP or 0x0
-                        GDSOf.CONST_MAP = CONST_MAP or 0x400
-                        GDSOf.VAR_NAMEINDEX_MAP = VAR_MAP
-                        GDSOf.VAR_VECTOR = VAR_VECTOR
-                        GDSOf.SIZE_VECTOR = VAR_VECTOR_SIZE
-
-                        GDSOf.SCRIPTFUNC_STRING = 0x80
-                        GDSOf.FUNC_MAPVAL = 0x38
-                        GDSOf.FUNC_CODE = oGDFunctionCode or 0x50
-
-                        if bASSUMPTIONLOG then
-                            print("Copy that:\n",
-                            "true,0x3,"..
-                            ('0x%x'):format(GDSOf.CHILDREN)..","..
-                            ('0x%x'):format(GDSOf.OBJ_STRING_NAME)..","..
-                            ('0x%x'):format(GDSOf.GDSCRIPTINSTANCE)..","..
-                            ('0x%x'):format(GDSOf.GDSCRIPTNAME)..","..
-                            ('0x%x'):format(GDSOf.FUNC_MAP)..","..
-                            ('0x%x'):format(GDSOf.CONST_MAP)..","..
-                            ('0x%x'):format(GDSOf.VAR_NAMEINDEX_MAP)..","..
-                            ('0x%x'):format(GDSOf.VAR_VECTOR)..",nil,"..
-                            ('0x%x'):format(GDSOf.SIZE_VECTOR)..",0x38")
-                        end
-                    end
-
                 end
 
                 gdOffsetsDefined = true
                 checkGDStringType()
                 defineGDFunctionEnums()
                 fuckoffPrint()
-            end
-
-            -- will use the VP pointer and try to assume the game version and the root offsets
-            function assumeVPOffsets()
-
-                function assumeChildrenOffset( viewport )
-
-                    -- children array usually starts at 0x108, the furthest was 0x1C0
-                    local CHILDREN;
-                    local childrenSize, childrenAddr, nodeAddr;
-
-                    for i=0, 50 do
-                        CHILDREN = 0x100 + i * 8 -- 0x100 is the first offset for children, 0x1C0 is the last known offset
-
-                        childrenAddr = readPointer( viewport + CHILDREN )
-
-                        local bOK = true;
-
-                        if isNotNullOrNil(childrenAddr) then
-
-                            -- let's try 4.x first
-                            childrenSize = readInteger( viewport + CHILDREN - 0x8 ) -- size is 8 bytes behind for ~4.2+
-
-                            if isNotNullOrNil(childrenSize) and ( childrenSize > 0 and childrenSize < 100 ) then -- let 100 be an arbitrary node num limit
-                                for j=0, childrenSize-1 do
-                                    nodeAddr = readPointer( childrenAddr + j * GDSOf.PTRSIZE )
-                                    if isNullOrNil(nodeAddr) or ( not isValidPointer( nodeAddr ) ) or ( not isValidPointer( readPointer( nodeAddr ) ) ) then bOK = false; break; end  -- check for ptr, it's vtable
-                                end
-
-                                if bOK then
-                                    if bASSUMPTIONLOG then print("assumeOffsetsByVP: found a valid CHILDREN offset (4.x): "..string.format('0x%x', CHILDREN) ) end
-                                    return true, 4, CHILDREN; -- return true, majorVersion, offset
-                                end
-
-                            else -- trying 3.x but also might be <4.2
-                                childrenSize = readInteger( childrenAddr - 0x4 ) -- size is 4 bytes behind the 1st item in the array
-                                if isNotNullOrNil(childrenSize) and childrenSize > 0 and childrenSize < 60 then
-                                    for i=0, childrenSize-1 do
-                                        nodeAddr = readPointer(childrenAddr + i * 8)
-                                        if isNullOrNil(nodeAddr) or (not isValidPointer( nodeAddr) ) then bOK = false; break; end  -- if a node is invalid, that's a wrong offset
-                                    end
-
-                                    if bOK then
-                                        if bASSUMPTIONLOG then print( "assumeOffsetsByVP: found a valid CHILDREN offset (3.x): "..string.format('0x%x', CHILDREN) ) end
-                                        return true, 3, CHILDREN; -- return true, majorVersion, offset
-                                    end
-                                end
-                            end
-
-
-                        end
-                    end
-
-                    return;
-                end
-
-                function assumeObjNameOffset( CHILDREN, viewport )
-                    -- object name is always after the children array
-                    local OBJ_STRING_NAME, nodeNamePtr;
-
-                    for i=1, 30 do
-                        OBJ_STRING_NAME = CHILDREN + i * 8
-
-                        nodeNamePtr = readPointer( viewport + OBJ_STRING_NAME )
-                        if isNotNullOrNil(nodeNamePtr) then
-                            if getStringNameStr(nodeNamePtr) == 'root' then -- check for root
-                                if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset: "..string.format('0x%x', OBJ_STRING_NAME) ) end
-                                return true, OBJ_STRING_NAME;
-                            else
-                                local stringAddr = readPointer( nodeNamePtr + 0x8 ) -- for debug builds that have a UTF16 string
-                                if isNotNullOrNil(stringAddr) then
-                                    if readString( stringAddr ) == 'root' then
-                                        if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset (debug?): "..string.format('0x%x', OBJ_STRING_NAME) ) end
-                                        return true, OBJ_STRING_NAME;
-                                    elseif readUTFString( stringAddr, 4 ) == 'root' then
-                                        if bASSUMPTIONLOG then print( "assumeObjNameOffset: found a valid OBJ_STRING_NAME offset (debug?): "..string.format('0x%x', OBJ_STRING_NAME) ) end
-                                        return true, OBJ_STRING_NAME;
-                                    end
-                                end
-                            end
-                        end
-                    end
-
-                    return;
-                end
-
-                local viewport = getViewport()
-                if isNullOrNil(viewport) then if bASSUMPTIONLOG then print( "assumeOffsetsByVP: viewport pointer is invalid" ); end error('viewport pointer is invalid') end
-
-                local bSuccess, MAJOR_VER, CHILDREN = assumeChildrenOffset( viewport )
-                if not bSuccess then
-                    if bASSUMPTIONLOG then print( "<<< assumeOffsetsByVP: failed to assume CHILDREN offset, aborting" ) end
-                    error("failed to assume CHILDREN offset")
-                end
-
-                GDSOf.MAJOR_VER = MAJOR_VER
-
-                local bSuccess, OBJ_STRING_NAME = assumeObjNameOffset( CHILDREN, viewport )
-
-                if not bSuccess then
-                    if bASSUMPTIONLOG then print( "<<< assumeOffsetsByVP: failed to assume OBJ_STRING_NAME offset, aborting" ) end
-                    error("failed to assume OBJ_STRING_NAME offset")
-                end
-
-                return MAJOR_VER, CHILDREN, OBJ_STRING_NAME
-            end
-
-            --- assumes the offsets for GDScriptInstance, GDScriptName, FuncMap, ConstMap, VarMap, VarVector
-            function assumeNodeOffsets()
-
-                local mainNodeDict = getMainNodeDict()
-                local offsets =
-                {
-                    ['GDSCRIPTINSTANCE'] = {['offset'] = nil, ['checkedTimes'] = 0},
-                    ['GDSCRIPTNAME'] = {['offset'] = nil, ['checkedTimes'] = 0},
-                    ['FUNC_MAP'] = {['offset'] = nil, ['checkedTimes'] = 0},
-                    ['CONST_MAP'] = {['offset'] = nil, ['checkedTimes'] = 0},
-                    ['VAR_MAP'] = {['offset'] = nil, ['checkedTimes'] = 0},
-                    ['VAR_VECTOR'] = {['offset'] = nil, ['checkedTimes'] = 0},
-                    ['VAR_VECTOR_SIZE'] = {['offset'] = nil, ['checkedTimes'] = 0}
-                }
-
-                for key, value in pairs(mainNodeDict) do
-
-                    local bSuccess, GDSCRIPTINSTANCE, gdScriptAddr, VAR_VECTOR, VAR_VECTOR_SIZE = assumeGDScriptOffset( value.PTR ) -- try to assume GDScriptInstance offset
-                    if not bSuccess then goto continue end -- if we failed to assume GDScriptInstance, skip this node
-
-                    if isNotNullOrNil(GDSCRIPTINSTANCE) and GDSCRIPTINSTANCE > 0 then
-                        if offsets['GDSCRIPTINSTANCE']['offset'] ~= GDSCRIPTINSTANCE and offsets['GDSCRIPTINSTANCE']['checkedTimes'] == 0 then
-                            offsets['GDSCRIPTINSTANCE']['offset'] = GDSCRIPTINSTANCE
-                            offsets['GDSCRIPTINSTANCE']['checkedTimes'] = offsets['GDSCRIPTINSTANCE']['checkedTimes'] + 1
-                        elseif offsets['GDSCRIPTINSTANCE']['offset'] ~= GDSCRIPTINSTANCE and offsets['GDSCRIPTINSTANCE']['checkedTimes'] > 0 then
-                            if bASSUMPTIONLOG then print("//===============// assumeNodeOffsets: GDSCRIPTINSTANCE offset changed, this is unexpected: "..string.format('0x%x', GDSCRIPTINSTANCE).." vs. "..string.format('0x%x', offsets['GDSCRIPTINSTANCE']['offset'])) end
-                        elseif offsets['GDSCRIPTINSTANCE']['offset'] == GDSCRIPTINSTANCE then 
-                            offsets['GDSCRIPTINSTANCE']['checkedTimes'] = offsets['GDSCRIPTINSTANCE']['checkedTimes'] + 1
-                        end
-                    end
-
-                    if isNotNullOrNil(VAR_VECTOR) and VAR_VECTOR > 0 then
-                        if offsets['VAR_VECTOR']['offset'] ~= VAR_VECTOR and offsets['VAR_VECTOR']['checkedTimes'] == 0 then
-                            offsets['VAR_VECTOR']['offset'] = VAR_VECTOR
-                            offsets['VAR_VECTOR']['checkedTimes'] = offsets['VAR_VECTOR']['checkedTimes'] + 1
-                        elseif offsets['VAR_VECTOR']['offset'] ~= VAR_VECTOR and offsets['VAR_VECTOR']['checkedTimes'] > 0 then
-                            if bASSUMPTIONLOG then print("//===============// assumeNodeOffsets: VAR_VECTOR offset changed, this is unexpected: "..string.format('0x%x', VAR_VECTOR).." vs. "..string.format('0x%x', offsets['VAR_VECTOR']['offset'])) end
-                        elseif offsets['VAR_VECTOR']['offset'] == VAR_VECTOR then 
-                            offsets['VAR_VECTOR']['checkedTimes'] = offsets['VAR_VECTOR']['checkedTimes'] + 1
-                        end
-                    end
-
-                    if isNotNullOrNil(VAR_VECTOR_SIZE) and VAR_VECTOR_SIZE > 0 then
-                        if offsets['VAR_VECTOR_SIZE']['offset'] ~= VAR_VECTOR_SIZE and offsets['VAR_VECTOR_SIZE']['checkedTimes'] == 0 then
-                            offsets['VAR_VECTOR_SIZE']['offset'] = VAR_VECTOR_SIZE
-                            offsets['VAR_VECTOR_SIZE']['checkedTimes'] = offsets['VAR_VECTOR_SIZE']['checkedTimes'] + 1
-                        elseif offsets['VAR_VECTOR_SIZE']['offset'] ~= VAR_VECTOR_SIZE and offsets['VAR_VECTOR_SIZE']['checkedTimes'] > 0 then
-                            if bASSUMPTIONLOG then print("//===============// assumeNodeOffsets: VAR_VECTOR_SIZE offset changed, this is unexpected: "..string.format('0x%x', VAR_VECTOR_SIZE).." vs. "..string.format('0x%x', offsets['VAR_VECTOR_SIZE']['offset'])) end
-                        elseif offsets['VAR_VECTOR_SIZE']['offset'] == VAR_VECTOR_SIZE then 
-                            offsets['VAR_VECTOR_SIZE']['checkedTimes'] = offsets['VAR_VECTOR_SIZE']['checkedTimes'] + 1
-                        end
-                    end
-
-                    local bSuccess, GDSCRIPTNAME, VAR_MAP, CONST_MAP, FUNC_MAP = assumeGDScriptMaps( gdScriptAddr )
-                    if not bSuccess then goto continue end
-
-                    if isNotNullOrNil(GDSCRIPTNAME) and GDSCRIPTNAME > 0 then
-                        if offsets['GDSCRIPTNAME']['offset'] ~= GDSCRIPTNAME and offsets['GDSCRIPTNAME']['checkedTimes'] == 0 then
-                            offsets['GDSCRIPTNAME']['offset'] = GDSCRIPTNAME
-                            offsets['GDSCRIPTNAME']['checkedTimes'] = offsets['GDSCRIPTNAME']['checkedTimes'] + 1
-                        elseif offsets['GDSCRIPTNAME']['offset'] ~= GDSCRIPTNAME and offsets['GDSCRIPTNAME']['checkedTimes'] > 0 then
-                            if bASSUMPTIONLOG then print("//===============// assumeNodeOffsets: GDSCRIPTNAME offset changed, this is unexpected: "..string.format('0x%x', GDSCRIPTNAME).." vs. "..string.format('0x%x', offsets['GDSCRIPTNAME']['offset'])) end
-                        elseif offsets['GDSCRIPTNAME']['offset'] == GDSCRIPTNAME then 
-                            offsets['GDSCRIPTNAME']['checkedTimes'] = offsets['GDSCRIPTNAME']['checkedTimes'] + 1
-                        end
-                    end
-
-                    if isNotNullOrNil(VAR_MAP) and VAR_MAP > 0 then
-                        if offsets['VAR_MAP']['offset'] ~= VAR_MAP and offsets['VAR_MAP']['checkedTimes'] == 0 then
-                            offsets['VAR_MAP']['offset'] = VAR_MAP
-                            offsets['VAR_MAP']['checkedTimes'] = offsets['VAR_MAP']['checkedTimes'] + 1
-                        elseif offsets['VAR_MAP']['offset'] ~= VAR_MAP and offsets['VAR_MAP']['checkedTimes'] > 0 then
-                            if bASSUMPTIONLOG then print("//===============// assumeNodeOffsets: VAR_MAP offset changed, this is unexpected: "..string.format('0x%x', VAR_MAP).." vs. "..string.format('0x%x', offsets['VAR_MAP']['offset'])) end
-                        elseif offsets['VAR_MAP']['offset'] == VAR_MAP then 
-                            offsets['VAR_MAP']['checkedTimes'] = offsets['VAR_MAP']['checkedTimes'] + 1
-                        end
-                    end
-
-                    if isNotNullOrNil(CONST_MAP) and CONST_MAP > 0 then
-                        if offsets['CONST_MAP']['offset'] ~= CONST_MAP and offsets['CONST_MAP']['checkedTimes'] == 0 then
-                            offsets['CONST_MAP']['offset'] = CONST_MAP
-                            offsets['CONST_MAP']['checkedTimes'] = offsets['CONST_MAP']['checkedTimes'] + 1
-                        elseif offsets['CONST_MAP']['offset'] ~= CONST_MAP and offsets['CONST_MAP']['checkedTimes'] > 0 then
-                            if bASSUMPTIONLOG then print("//===============// assumeNodeOffsets: CONST_MAP offset changed, this is unexpected: "..string.format('0x%x', CONST_MAP).." vs. "..string.format('0x%x', offsets['CONST_MAP']['offset'])) end
-                        elseif offsets['CONST_MAP']['offset'] == CONST_MAP then 
-                            offsets['CONST_MAP']['checkedTimes'] = offsets['CONST_MAP']['checkedTimes'] + 1
-                        end
-                    end
-
-                    if isNotNullOrNil(FUNC_MAP) and FUNC_MAP > 0 then
-                        if offsets['FUNC_MAP']['offset'] ~= FUNC_MAP and offsets['FUNC_MAP']['checkedTimes'] == 0 then
-                            offsets['FUNC_MAP']['offset'] = FUNC_MAP
-                            offsets['FUNC_MAP']['checkedTimes'] = offsets['FUNC_MAP']['checkedTimes'] + 1
-                        elseif offsets['FUNC_MAP']['offset'] ~= FUNC_MAP and offsets['FUNC_MAP']['checkedTimes'] > 0 then
-                            if bASSUMPTIONLOG then print("//===============// assumeNodeOffsets: FUNC_MAP offset changed, this is unexpected: "..string.format('0x%x', FUNC_MAP).." vs. "..string.format('0x%x', offsets['FUNC_MAP']['offset'])) end
-                        elseif offsets['FUNC_MAP']['offset'] == FUNC_MAP then 
-                            offsets['FUNC_MAP']['checkedTimes'] = offsets['FUNC_MAP']['checkedTimes'] + 1
-                        end
-                    end
-
-                    ::continue::
-                end
-                    
-                if ( offsets['GDSCRIPTINSTANCE']['offset'] ~= nil and offsets['GDSCRIPTINSTANCE']['checkedTimes'] > 0 )
-                and ( offsets['GDSCRIPTNAME']['offset'] ~= nil and offsets['GDSCRIPTNAME']['checkedTimes'] > 0 )
-                -- and ( offsets['FUNC_MAP']['offset'] ~= nil and offsets['FUNC_MAP']['checkedTimes'] > 0 ) -- not a big deal actually
-                and ( offsets['VAR_MAP']['offset'] ~= nil and offsets['VAR_MAP']['checkedTimes'] > 0 )
-                and ( offsets['VAR_VECTOR']['offset'] ~= nil and offsets['VAR_VECTOR']['checkedTimes'] > 0 )
-                and ( offsets['VAR_VECTOR_SIZE']['offset'] ~= nil and offsets['VAR_VECTOR_SIZE']['checkedTimes'] > 0 ) then
-                    if bASSUMPTIONLOG then print("--//-- TIMES: GDSCRIPTINSTANCE: "..offsets['GDSCRIPTINSTANCE']['checkedTimes']..
-                    ", GDSCRIPTNAME: "..offsets['GDSCRIPTNAME']['checkedTimes']..
-                    ", FUNC_MAP: "..offsets['FUNC_MAP']['checkedTimes']..", VAR_MAP: "..offsets['VAR_MAP']['checkedTimes']..
-                    ", VAR_VECTOR: "..offsets['VAR_VECTOR']['checkedTimes']..", VAR_VECTOR_SIZE: "..offsets['VAR_VECTOR_SIZE']['checkedTimes']..
-                    ", CONST_MAP: "..offsets['CONST_MAP']['checkedTimes']) end
-                    return offsets['GDSCRIPTINSTANCE']['offset'], offsets['GDSCRIPTNAME']['offset'], offsets['FUNC_MAP']['offset'], offsets['CONST_MAP']['offset'], offsets['VAR_MAP']['offset'], offsets['VAR_VECTOR']['offset'], offsets['VAR_VECTOR_SIZE']['offset']
-                end
-
-                error("<<< assumeNodeOffsets: failed to assume Node offsets after passing through all nodes, do it yourself pal")
-            end
-
-            function assumeGDScriptMaps(gdScriptAddr)
-                local bOK = false;
-                local bConstPresent = false;
-                local GDSCRIPTNAME, VAR_MAP, CONST_MAP, FUNC_MAP, mapAddr, hashAddr, headAddr, tailAddr, mapSize, nextAddr, namePtr, endmapAddr, leftAddr, rightAddr, color, elementIndex;
-
-                -- last resort for 3.x function map can be 8 bytes pointer after the StringName which contains an object which has a StringName at 0x0 that starts with 'res:'
-
-                if GDSOf.MAJOR_VER >= 4 then
-                    
-                    bOK = false;
-                    -- find script name
-                    for i=0, 30 do
-                        GDSCRIPTNAME = 0x120 + i * 8
-                        local gdScriptNameAddr = readPointer( gdScriptAddr + GDSCRIPTNAME )
-                        if isNotNullOrNil(gdScriptNameAddr) then
-                            if readUTFString( gdScriptNameAddr, 4 ) == 'res:' then
-                                if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid GDSCRIPTNAME offset: "..string.format('0x%x', GDSCRIPTNAME) ) end
-                                bOK = true
-                                break;
-                            end
-                        end
-                    end
-
-                    if not bOK then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume GDSCRIPTNAME offset, skipping" ); end GDSCRIPTNAME = nil end
-
-                    bOK = false;
-                    -- variant map
-                    for i=0,40 do
-                        VAR_MAP = GDSCRIPTNAME + i * 8
-                        mapAddr = readPointer( gdScriptAddr + VAR_MAP )
-                        if isNotNullOrNil(mapAddr) then
-                            hashAddr = readPointer( gdScriptAddr + VAR_MAP+0x8 ) -- the whole hashmap
-                            headAddr = readPointer( gdScriptAddr + VAR_MAP+0x10 )
-                            tailAddr = readPointer( gdScriptAddr + VAR_MAP+0x18 )
-                            mapSize = readInteger( gdScriptAddr + VAR_MAP+0x24 )
-
-                            if ( isNotNullOrNil(hashAddr) and isValidPointer( hashAddr ) )
-                            and ( isNotNullOrNil(headAddr) and isValidPointer( headAddr ) )
-                            and ( isNotNullOrNil(tailAddr) and isValidPointer( tailAddr ) )
-                            and mapSize > 0 and mapSize < 900 then
-
-                                nextAddr = readPointer( headAddr )
-                                namePtr = readPointer( headAddr + 0x10 )
-
-                                if ( isNotNullOrNil(nextAddr) and isValidPointer( nextAddr ) ) and ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) then
-                                    if readInteger( nextAddr + 0x18 ) == 1 then -- check the index
-                                        VAR_MAP = VAR_MAP + 0x10
-                                        if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #3 VAR_MAP offset: "..string.format('0x%x', VAR_MAP) ) end
-                                        bOK = true;
-                                        break;
-                                    end
-                                end
-
-                            end
-                        end
-                    end
-
-                    if not bOK then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume VAR_MAP offset, skipping" ); end  VAR_MAP = nil end
-
-                    -- constant map (if it exists)
-                    for i=0,40 do
-
-                        CONST_MAP = 0x1F0 + i * 8 -- 4.x version are usually sequential, starts from 0x1F0
-                        mapAddr = readPointer( gdScriptAddr + CONST_MAP )
-                        if isNotNullOrNil(mapAddr) then
-                            hashAddr = readPointer( gdScriptAddr + CONST_MAP+0x8 ) -- the whole hashmap
-                            headAddr = readPointer( gdScriptAddr + CONST_MAP+0x10 )
-                            tailAddr = readPointer( gdScriptAddr + CONST_MAP+0x18 )
-                            mapSize = readInteger( gdScriptAddr + CONST_MAP+0x24 )
-
-                            if ( isNotNullOrNil(hashAddr) and isValidPointer( hashAddr ) )
-                            and ( isNotNullOrNil(headAddr) and isValidPointer( headAddr ) )
-                            and ( isNotNullOrNil(tailAddr) and isValidPointer( tailAddr ))
-                            and mapSize > 0 and mapSize < 900 then
-                                local nextPtr = readPointer( headAddr )
-                                local namePtr = readPointer( headAddr + 0x10 )
-                                local elementType = readInteger( headAddr + 0x18 ) -- element type is at 0x18
-
-                                if ( isNotNullOrNil(nextPtr) and isValidPointer( nextPtr ) ) and ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) and ( elementType > 0 and elementType < GDSOf.MAXTYPE ) then
-                                    CONST_MAP = CONST_MAP + 0x10
-                                    if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #2 CONST_MAP offset: "..string.format('0x%x', CONST_MAP) ) end
-                                    bConstPresent = true;
-                                    break;
-                                end
-
-                            end
-                        end
-                    end
-
-                    if not bConstPresent then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume CONST_MAP offset, probably not used" ); end CONST_MAP = nil end
-
-                    bOK = false;
-                    -- function map
-                    for i=0,35 do
-                        if bConstPresent then
-                            FUNC_MAP = CONST_MAP+0x18 + i * 8
-                        else
-                            FUNC_MAP = 0x260 + i * 8 -- not sure about this offset though
-                        end
-
-                        mapAddr = readPointer( gdScriptAddr + FUNC_MAP )
-                        if isNotNullOrNil(mapAddr) then
-                            hashAddr = readPointer( gdScriptAddr + FUNC_MAP+0x8 ) -- the whole hashmap
-                            headAddr = readPointer( gdScriptAddr + FUNC_MAP+0x10 )
-                            tailAddr = readPointer( gdScriptAddr + FUNC_MAP+0x18 )
-                            mapSize = readInteger( gdScriptAddr + FUNC_MAP+0x24 )
-
-                            if ( isNotNullOrNil(hashAddr) and isValidPointer( hashAddr ) )
-                            and ( isNotNullOrNil(headAddr) and isValidPointer( headAddr ) ) 
-                            and ( isNotNullOrNil(tailAddr) and isValidPointer( tailAddr ) )
-                            and mapSize > 0 and mapSize < 900 then
-                                local nextPtr = readPointer( headAddr )
-                                local prevPtr = readInteger( headAddr + 0x8 )
-                                local namePtr = readPointer( headAddr + 0x10 )
-                                local funcPtr = readPointer( headAddr + 0x18 )
-
-                                if ( isNotNullOrNil(nextPtr) and isValidPointer( nextPtr ) ) and ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) and ( isNotNullOrNil(funcPtr) and isValidPointer( funcPtr ) ) then
-                                    FUNC_MAP = FUNC_MAP + 0x10
-                                    if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #1 FUNC_MAP offset: "..string.format('0x%x', FUNC_MAP) ) end
-                                    bOK = true;
-                                    break;
-                                end
-                            end
-                        end
-                    end
-
-                    if not bOK then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume FUNC_MAP offset, skipping" ); end FUNC_MAP = nil end
-
-
-                else -------------------------------------------------------------------------- 3.x
-
-                    -- find script name
-                    for i=0, 20 do
-                        GDSCRIPTNAME = 0x100 + i * 8 -- 0x100 is the earliest offset for GDScriptName I've seen
-                        local gdScriptNameAddr = readPointer( gdScriptAddr + GDSCRIPTNAME )
-                        if isNotNullOrNil(gdScriptNameAddr) then
-                            if readUTFString( gdScriptNameAddr, 4 ) == 'res:' then
-                                if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid GDSCRIPTNAME offset: "..string.format('0x%x', GDSCRIPTNAME) ) end
-                                bOK = true
-                                break;
-                            end
-                        end
-                    end
-
-                    if not bOK then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume GDSCRIPTNAME offset, skipping" ); end GDSCRIPTNAME = nil end
-
-                    bOK = false;
-
-                    -- constant map (if it exists) | First comes a variant map with no index, next constants, function and a variant map with indices
-                    for i=0,8 do
-                        CONST_MAP = 0x188 + i * 8 -- 0x188 is the earlies I know
-                        mapAddr = readPointer( gdScriptAddr + CONST_MAP )
-                        endmapAddr = readPointer( gdScriptAddr + CONST_MAP+0x8 )
-                        mapSize = readInteger( gdScriptAddr + CONST_MAP+0x10 )
-
-                        if isNotNullOrNil(mapAddr) and isNotNullOrNil(endmapAddr) and mapSize > 0 and mapSize < 900  then
-                            color = readInteger( mapAddr )
-                            leftAddr = readPointer( mapAddr + 0x8 ) -- RedBlack-map
-                            rightAddr = readPointer( mapAddr + 0x10 )
-                            nextAddr = readPointer( mapAddr + 0x18 )
-
-                            if ( color == 1 )
-                            and ( isNotNullOrNil(leftAddr) and isValidPointer( leftAddr ) )
-                            and ( isNotNullOrNil(rightAddr) and isValidPointer( rightAddr ) )
-                            and ( isNotNullOrNil(nextAddr)  and isValidPointer( nextAddr ) )
-                            and ( nextAddr == leftAddr and rightAddr ~= endmapAddr ) then
-
-                                namePtr = readPointer( rightAddr + 0x30 )
-                                local elementType = readInteger( rightAddr + 0x38 ) -- element type is at 0x18
-                                if ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) and ( elementType > 0 and elementType < GDSOf.MAXTYPE ) then
-                                    if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #2 CONST_MAP offset: "..string.format('0x%x', CONST_MAP) ) end
-                                    bConstPresent = true;
-                                    break;
-                                end
-
-                            end
-                        end
-                    end
-
-                    if not bConstPresent then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume CONST_MAP offset, probably not used" ); end CONST_MAP = nil end
-
-                    bOK = false;
-                    -- function map
-                    for i=0,20 do
-                        if bConstPresent then
-                            FUNC_MAP = CONST_MAP+0x18 + i * 8
-                        else
-                            FUNC_MAP = 0x1A0 + 0x18*2 + i * 8 -- 0x1A0 start | GDSCRIPTNAME + (0x18+0x28)+ 0x18*2
-                        end
-
-                        mapAddr = readPointer( gdScriptAddr + FUNC_MAP )
-                        endmapAddr = readPointer( gdScriptAddr + FUNC_MAP+0x8 )
-                        mapSize = readInteger( gdScriptAddr + FUNC_MAP+0x10 )
-
-                        if isNotNullOrNil(mapAddr) and isNotNullOrNil(endmapAddr) and mapSize > 0 and mapSize < 900  then
-                            color = readInteger( mapAddr )
-                            leftAddr = readPointer( mapAddr + 0x8 ) -- RedBlack-map
-                            rightAddr = readPointer( mapAddr + 0x10 )
-                            nextAddr = readPointer( mapAddr + 0x18 )
-
-                            if ( color == 1 )
-                            and ( isNotNullOrNil(leftAddr) and isValidPointer( leftAddr ) )
-                            and ( isNotNullOrNil(rightAddr) and isValidPointer( rightAddr ) )
-                            and ( isNotNullOrNil(nextAddr) and isValidPointer( nextAddr ) )
-                            and ( nextAddr == leftAddr and rightAddr ~= endmapAddr ) then
-
-                                namePtr = readPointer( rightAddr + 0x30 )
-                                local funcPtr = readPointer( rightAddr + 0x38 ) -- it's 0x0 offset is a gdscriptName ptr
-                                local funcData = readPointer( rightAddr + 0x40 ) -- not sure what's that actually
-
-                                if isNotNullOrNil(namePtr) and isValidPointer( namePtr ) and isNotNullOrNil(funcPtr) and isValidPointer( funcPtr ) and isNotNullOrNil(funcData) and isValidPointer( funcData ) then
-                                    if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #1 FUNC_MAP offset: "..string.format('0x%x', FUNC_MAP) ) end
-                                    bOK = true;
-                                    break;
-                                end
-                            end
-                        end
-                    end
-
-                    if not bOK then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume FUNC_MAP offset, skipping" ); end FUNC_MAP = nil end
-
-                    bOK = false;
-                    -- variant map (2nd map with indices)
-                    for i=0,8 do
-                        if FUNC_MAP ~= nil then
-                            VAR_MAP = FUNC_MAP + 0x18 + i * 8 -- right after the func map
-                        elseif CONST_MAP ~= nil then
-                            VAR_MAP = CONST_MAP + 0x18*2 + i * 8 -- just 1 map after the const map
-                        else
-                            VAR_MAP = 0x1B8 + i * 8 -- usually starts at 0x1B8 | FUNC_MAP+0x18 | CONST_MAP + 0x18*2
-                        end
-                        
-                        mapAddr = readPointer( gdScriptAddr + VAR_MAP )
-                        endmapAddr = readPointer( gdScriptAddr + VAR_MAP+0x8 )
-                        mapSize = readInteger( gdScriptAddr + VAR_MAP+0x10 )
-
-                        if isNotNullOrNil(mapAddr) and isNotNullOrNil(endmapAddr) and mapSize > 0 and mapSize < 900  then
-                            color = readInteger( mapAddr )
-                            leftAddr = readPointer( mapAddr + 0x8 ) -- RedBlack-map
-                            rightAddr = readPointer( mapAddr + 0x10 )
-                            nextAddr = readPointer( mapAddr + 0x18 )
-                            elementIndex = readInteger( mapAddr + 0x38 )
-
-                            if ( color == 1 )
-                            and ( isNotNullOrNil(leftAddr) and isValidPointer( leftAddr ) )
-                            and ( isNotNullOrNil(rightAddr) and isValidPointer( rightAddr ) )
-                            and ( isNotNullOrNil(nextAddr) and isValidPointer( nextAddr ) )
-                            and ( nextAddr == leftAddr and rightAddr ~= endmapAddr )
-                            and elementIndex >= 0 and elementIndex < mapSize then
-
-                                namePtr = readPointer( rightAddr + 0x30 )
-                                if ( isNotNullOrNil(namePtr) and isValidPointer( namePtr ) ) then
-                                    if bASSUMPTIONLOG then print( "assumeGDScriptMaps: found a valid #3 VAR_MAP offset: "..string.format('0x%x', VAR_MAP) ) end
-                                    bOK = true;
-                                    break;
-                                end
-                            end
-                        end
-                    end
-
-                    if not bOK then if bASSUMPTIONLOG then print( "<<< assumeGDScriptMaps: failed to assume VAR_MAP offset, skipping" ); end VAR_MAP = nil end
-                end
-
-                return true, GDSCRIPTNAME, VAR_MAP, CONST_MAP, FUNC_MAP
-
-            end
-
-            function assumeGDScriptOffset(nodeAddr)
-                local GDSCRIPTINSTANCE, VAR_VECTOR, VAR_VECTOR_SIZE, scriptInstanceAddr, gdScriptAddr, nodeRefAddr;
-
-                for i=0, 5 do
-                    GDSCRIPTINSTANCE = 0x50 + i * 8 -- 0x50 is the first offset for GDScriptInstance, 0x70 is the last known offset
-                    scriptInstanceAddr = readPointer( nodeAddr + GDSCRIPTINSTANCE )
-                    if isNotNullOrNil(scriptInstanceAddr) and isValidPointer( scriptInstanceAddr ) then
-
-                        if GDSOf.MAJOR_VER >= 4 then
-                            gdScriptAddr = readPointer( scriptInstanceAddr + 0x18 ) -- gdscript ref is after the owner (node)
-                            nodeRefAddr = readPointer( scriptInstanceAddr + 0x10 ) -- node reference
-
-                            if isNotNullOrNil(gdScriptAddr) and nodeRefAddr == nodeAddr then -- check for a valid script reference
-                                if GDSCRIPTINSTANCE == 0x70 then
-                                    VAR_VECTOR, VAR_VECTOR_SIZE = assumeVarVectorOffset( scriptInstanceAddr, true )
-                                else
-                                    VAR_VECTOR, VAR_VECTOR_SIZE = assumeVarVectorOffset( scriptInstanceAddr, false )
-                                end
-
-                                if bASSUMPTIONLOG then print( "assumeGDScriptOffset: found a valid GDSCRIPTINSTANCE offset: "..string.format('0x%x', GDSCRIPTINSTANCE) ) end
-                                return true, GDSCRIPTINSTANCE, gdScriptAddr, VAR_VECTOR, VAR_VECTOR_SIZE;
-                            end
-
-                        else
-                            gdScriptAddr = readPointer( scriptInstanceAddr + 0x10 ) -- gdscript ref is after the owner (node)
-                            nodeRefAddr = readPointer( scriptInstanceAddr + 0x08 ) -- node reference
-
-                            if isNotNullOrNil(gdScriptAddr) and nodeRefAddr == nodeAddr then -- check for a valid script reference
-                                if GDSCRIPTINSTANCE == 0x60 then
-                                    VAR_VECTOR, VAR_VECTOR_SIZE = assumeVarVectorOffset( scriptInstanceAddr, true )
-                                else
-                                    VAR_VECTOR, VAR_VECTOR_SIZE = assumeVarVectorOffset( scriptInstanceAddr, false )
-                                end
-
-                                if bASSUMPTIONLOG then print( "assumeGDScriptOffset: found a valid GDSCRIPTINSTANCE offset: "..string.format('0x%x', GDSCRIPTINSTANCE) ) end
-                                return true, GDSCRIPTINSTANCE, gdScriptAddr, VAR_VECTOR, VAR_VECTOR_SIZE;
-                            end
-                        end
-
-                    end
-                end
-
-                return;
-            end
-
-            function assumeVarVectorOffset(gdScriptInstanceAddr, bDEBUG)
-                -- so far the offsets were mostly consistent for both major versions
-                local firstType, vectorAddr, VAR_VECTOR, VAR_VECTOR_SIZE;
-
-                if GDSOf.MAJOR_VER >= 4 then
-                    if bDEBUG then
-                        vectorAddr = readPointer( gdScriptInstanceAddr + 0x58 )
-                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
-                    else
-                        vectorAddr = readPointer( gdScriptInstanceAddr + 0x28 )
-                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
-                    end
-
-                    if ( firstType >= 0 and firstType < GDSOf.MAXTYPE ) then
-                        local vectorSize = readInteger( vectorAddr-0x4 )
-                        local vectorSizeLong = readInteger( vectorAddr-0x8 )
-
-                        if (vectorSize < 0 or vectorSize > 1500) and (vectorSizeLong < 0 or vectorSizeLong > 1500) then
-                            if bASSUMPTIONLOG then print( "<<< assumeVarVectorOffset: failed to assume VAR_VECTOR/SIZE offset, size not in [0;1500)" ) end
-                            error("failed to assume VAR_VECTOR offset")
-                        elseif vectorSizeLong >= 0 and vectorSizeLong < 1500 then
-                            VAR_VECTOR_SIZE = 0x8
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR_SIZE (4.x) is 0x8" ) end
-                        elseif vectorSize >= 0 and vectorSize < 1500 then
-                            VAR_VECTOR_SIZE = 0x4
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR_SIZE (4.x) is 0x4" ) end
-                        else
-                            if bASSUMPTIONLOG then print( "<<< assumeVarVectorOffset: failed to assume VAR_VECTOR_SIZE, aborting" ) end
-                            error("failed to assume VAR_VECTOR size")
-                        end
-
-                        if bDEBUG then
-                            GDSOf.DEBUGVER = true;
-                            VAR_VECTOR = 0x58
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR (4.x) is 0x58" ) end
-                            return VAR_VECTOR, VAR_VECTOR_SIZE
-                        else
-                            GDSOf.DEBUGVER = false;
-                            VAR_VECTOR = 0x28
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR (4.x) is 0x28" ) end
-                            return VAR_VECTOR, VAR_VECTOR_SIZE
-                        end
-                    else
-                        if bASSUMPTIONLOG then print( "<<< assumeVarVectorOffset (4.x): failed to assume VAR_VECTOR offset, aborting" ) end
-                        error("failed to assume VAR_VECTOR offset")
-                    end
-
-                else
-                    if bDEBUG then
-                        local vectorAddr = readPointer( gdScriptInstanceAddr + 0x38 )
-                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
-                    else
-                        local vectorAddr = readPointer( gdScriptInstanceAddr + 0x20 )
-                        if isNotNullOrNil(vectorAddr) and isValidPointer( vectorAddr ) then firstType = readInteger( vectorAddr ) else return end
-                    end
-
-                    if ( firstType >= 0 and firstType < GDSOf.MAXTYPE ) then
-
-                        if bDEBUG then
-                            GDSOf.DEBUGVER = true;
-                            VAR_VECTOR = 0x38
-                            VAR_VECTOR_SIZE = 0x4
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR_SIZE (3.x) is 0x4" ) end
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR (3.x) is 0x38" ) end
-                            return VAR_VECTOR, VAR_VECTOR_SIZE
-                        else
-                            GDSOf.DEBUGVER = false;
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR_SIZE (3.x) is 0x4" ) end
-                            if bASSUMPTIONLOG then print( "assumeVarVectorOffset: assuming VAR_VECTOR (3.x) is 0x20" ) end
-                            VAR_VECTOR = 0x20
-                            VAR_VECTOR_SIZE = 0x4
-                            return VAR_VECTOR, VAR_VECTOR_SIZE
-                        end 
-                    else
-                        if bASSUMPTIONLOG then print( "<<< assumeVarVectorOffset: failed to assume VAR_VECTOR offset, aborting" ) end
-                        error("failed to assume VAR_VECTOR offset")
-                    end
-
-                end
-
             end
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Viewport
@@ -1999,7 +1211,7 @@
             -- layouts are basically leaves with colors (where it makes sense)
             -- branches are developing tree structures/recursion
             
-            GDEmitters ={}            
+            GDEmitters ={}
             ---------------------------------------------------------------------------------
             GDEmitters.StructEmitter = {}
 
@@ -2151,14 +1363,14 @@
             end
 
             local function advanceFunctionMapElement(mapElement)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return readPointer(mapElement)
                 end
                 return readPointer(mapElement + GDSOf.MAP_NEXTELEM)
             end
 
             local function createNextFunctionContainer(currentContainer, index)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
                     nextElem.ChildStruct = createStructure("FuncNext")
                     return nextElem
@@ -2246,7 +1458,7 @@
             -- TODO: make magic dereferences more obvious
 
             local function getNextMapElement(mapElement)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return readPointer(mapElement)
                 else
                     return readPointer(mapElement + GDSOf.MAP_NEXTELEM)
@@ -2254,7 +1466,7 @@
             end
 
             local function getDictElemPairNext(mapElement)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return readPointer(mapElement)
                 else
                     return readPointer(mapElement + GDSOf.DICTELEM_PAIR_NEXT)
@@ -2262,7 +1474,7 @@
             end
 
             local function getDictionarySizeFromVariantPtr(variantPtr)
-                -- if GDSOf.MAJOR_VER >= 4 then
+                -- if GDSOf.MAJOR_VER == 4 then
                 --     return readInteger(readPointer(variantPtr) + GDSOf.DICT_SIZE)
                 -- else
                 --     return readInteger(readPointer(readPointer(variantPtr) + GDSOf.DICT_LIST) + GDSOf.DICT_SIZE)
@@ -2303,7 +1515,7 @@
             end
 
             local function getVariantNameFromMapElement(mapElement)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return getStringNameStr(readPointer(mapElement + GDSOf.CONSTELEM_KEYVAL))
                 else
                     return getStringNameStr(readPointer(mapElement + GDSOf.MAP_KVALUE))
@@ -2335,7 +1547,7 @@
             local function getFunctionMapName(mapElement)
                 if isNullOrNil(mapElement) then return nil end
 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return getGDFunctionName(mapElement)
                 end
                 return getStringNameStr(readPointer(mapElement + GDSOf.MAP_KVALUE))
@@ -2359,7 +1571,7 @@
             end
 
             local function getConstMapLookupResult(mapElement)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     local constType = readInteger(mapElement + GDSOf.CONSTELEM_VALTYPE)
                     local offsetToValue = getVariantValueOffset(constType)
                     return
@@ -2376,7 +1588,7 @@
             end
 
             local function createNextConstContainer(currentContainer, index)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
                     nextElem.ChildStruct = createStructure('ConstNext')
                     return nextElem
@@ -2499,7 +1711,7 @@
             end
 
             local function createNextDictContainer(currentContainer, index)
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
                 end
 
@@ -3501,7 +2713,7 @@
                 end
                 debugStepOut()
                 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return mainElement, lastElement, mapSize, funcStructElement
                 else
                     if funcStructElement then funcStructElement.ChildStruct = createStructure('ConstMapRes') end
@@ -3801,7 +3013,7 @@
                     return newDisassembler
                 end
 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
 
                     GDF.OP = {
                         OPCODE_OPERATOR = "OPCODE_OPERATOR",
@@ -6666,7 +5878,7 @@
                 end
                 debugStepOut()
                 
-                if GDSOf.MAJOR_VER >= 4 then  -- TODO: the function can be segmented
+                if GDSOf.MAJOR_VER == 4 then  -- TODO: the function can be segmented
                     return mainElement, lastElement, mapSize, constStructElement
                 else
                     if constStructElement then constStructElement.ChildStruct = createStructure('ConstMapRes') end
@@ -7131,7 +6343,7 @@
                 end
 
                 debugStepOut()
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     return mainElement, endElement, mapSize
                 else
                     return getLeftmostMapElem( mainElement, endElement, mapSize )
@@ -7235,7 +6447,7 @@
                     return 0x18, true;
                 end
 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
 
                     if (vectorSize == 1) and ( readInteger(vectorPtr) == 27 ) then
                         --sendDebugMessageAndStepOut(" 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
@@ -7353,7 +6565,7 @@
             function getCETypeFromGD(gdType)
                 assert(type(gdType) == "number",'getCETypeFromGD Type from enum should be a number, instead got: '..type(gdType))
 
-                if GDSOf.MAJOR_VER >= 4 then -- TODO make it patchable 
+                if GDSOf.MAJOR_VER == 4 then -- TODO make it patchable 
                     if (gdType == 2) then return vtDword end
                     if (gdType == 1) then return vtByte end
                     if (gdType == 3) then return vtDouble end
@@ -7455,7 +6667,7 @@
                     return false;
                 end
 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     if (typeInt == 2) then return "INT" end -- these go first
                     if (typeInt == 1) then return "BOOL" end
                     if (typeInt == 3) then return "FLOAT" end
@@ -7655,7 +6867,7 @@
                 end
 
 
-                if GDSOf.MAJOR_VER >= 4 then
+                if GDSOf.MAJOR_VER == 4 then
                     if getCustomType("GD4 String") then
                         GDSOf.GD4_STRING_EXISTS = true
                     else
@@ -7685,7 +6897,7 @@
                     nodeNameStr = tostring(nodeNameStr)
                     registerSymbol( nodeNameStr , nodePtr , true) -- let's have them registered
 
-                    if GDSOf.MAJOR_VER >= 4 then
+                    if GDSOf.MAJOR_VER == 4 then
 
                         nodeDict[ nodeNameStr ] = {
                                                     NAME = nodeNameStr,
