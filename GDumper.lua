@@ -8,7 +8,7 @@
     --TODO dump nodes schema with the addresslist?
     --TODO add more functionality for function overriding ==>
     --TODO bytecode patching function that assembles a function for return;end. or return true;end It should store the original function (address association?)
-    --TODO make non-GDInstance objects show its children
+    --TODO always check UTF32>UTF8>ASCII for all strings and both 8/10 offsets
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
@@ -42,6 +42,10 @@
 
             function getExportTableName()
                 local base = getAddress(process)
+
+                -- cases when getAddress fails
+                if isNullOrNil(base) then base = enumModules()[1].Address end
+
                 -- first check via PE -- https://wiki.osdev.org/PE
                 if isNotNullOrNil(base) then
                     local PE = base + readInteger( base + 0x3C ) -- MZ.e_lfanew has an offset to PE
@@ -158,9 +162,6 @@
                 if isNullOrNil(major) or isNullOrNil(minor) then
                     major, minor, patch = (godotVersionString):match( "Godot Engine v?(%d+)%.(%d+)%.?(%a*)" )
                 end
-
-                patch = patch ~= "" and patch or nil
-                tag = tag ~= "" and tag or nil
                 
                 local exportTableStr = getExportTableName() or ""
                 
@@ -178,7 +179,6 @@
                 if isNotNullOrNil(major) and isNotNullOrNil(minor) then
                     GDSOf.MAJOR_VER = tonumber(major)
                     GDSOf.MINOR_VER = tonumber(minor)
-                    -- GDSOf.RELEASE_VER = patch
                     GDSOf.VERSION_STRING = major..'.'..minor
                 end
             end
@@ -441,6 +441,104 @@
                 return isValidPointer(addr) and readPointer(addr) ~= 0
             end
 
+            --- gets some section info (bounds)
+            ---@param sectionName number
+            ---@return table
+            function getSectionBounds(sectionName)
+                local base = getAddress(process)
+                if base == 0 or base == nil then base = enumModules()[1].Address end -- for cases when getAddress fails
+                if not base then return nil end -- if it's still failing, quit
+
+                -- DOS header -> e_lfanew
+                local peOffset = readInteger(base + 0x3C)
+                if not peOffset then return nil end
+
+                local PE = base + peOffset
+
+                local signature = readInteger(PE)
+                if signature ~= 0x00004550 then return nil end
+
+                -- IMAGE_FILE_HEADER
+                local numberOfSections   = readSmallInteger(PE + 0x6)
+                local sizeOfOptionalHdr  = readSmallInteger(PE + 0x14)
+
+                if not numberOfSections or not sizeOfOptionalHdr then return nil end
+
+                -- Section table starts after:
+                -- 4 bytes PE signature + 20 bytes IMAGE_FILE_HEADER + optional header
+                local sectionTable = PE + 0x18 + sizeOfOptionalHdr
+
+                for i = 0, numberOfSections - 1 do
+                    local sec = sectionTable + (i * 0x28) -- IMAGE_SECTION_HEADER = 40 bytes
+
+                    local name = readString(sec, 8) or ""
+                    name = name:gsub("%z.*", "") -- strip trailing nulls
+
+                    if name == sectionName then
+                        local virtualSize    = readInteger(sec + 0x8)
+                        local virtualAddress = readInteger(sec + 0xC)
+
+                        if not virtualSize or not virtualAddress then return nil end
+
+                        return {
+                            name = name,
+                            base = base,
+                            virtualAddress = virtualAddress, -- RVA
+                            virtualSize = virtualSize,
+                            startAddress = base + virtualAddress,
+                            endAddress = base + virtualAddress + virtualSize - 1
+                        }
+                    end
+                end
+
+                return nil
+            end
+
+            -- check VTable validity for main module (MM)
+            ---@param VTAddr number
+            ---@return boolean
+            function isMMVTable( VTAddr )
+                if VTAddr == 0 or VTAddr == nil then return false end
+                -- the vtables are stored in some readonly data section, text included too
+                local moduleStart = getAddress(process) or 0
+                local moduleEnd;
+                local moduleSize = getModuleSize(process)   
+
+                -- for cases when getAddress fails
+                if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
+                    moduleStart = enumModules()[1].Address
+                    moduleEnd = moduleStart + enumModules()[1].Size
+                else
+                    moduleEnd = moduleStart + moduleSize
+                end
+                
+                if moduleStart < VTAddr and VTAddr < moduleEnd then
+                    -- iterate a few pointers and confirm if they are executable
+                    local ptrsize = targetIs64Bit() and 0x8 or 0x4
+                    local sectionInfo = getSectionBounds(".text")
+                    if sectionInfo == nil then return false end
+
+                    for i=0, 5 do -- 5 pointers
+                        local pmethod = readPointer( VTAddr + ptrsize*i )
+                        if not isInsideMMTextSection( pmethod, sectionInfo ) then
+                            return false
+                        end
+                    end
+                else -- outside the main module
+                    return false
+                end
+
+                return true
+            end
+
+            function isInsideMMTextSection(addr, sectionInfo)
+                if addr == nil or addr == 0 then return false end
+                -- in .text range
+                if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
+                    return true
+                end
+            end
+
         --///---///--///---///--///---/// MISC
 
             --- turns off showOnPrint
@@ -611,7 +709,7 @@
                 struct = struct and struct or createStructure('') -- should not happen though?
                 struct.beginUpdate()
 
-                if checkForGDScript( baseaddr ) then
+                if checkForGDScript( baseaddr ) and isMMVTable( readPointer(baseaddr) ) then
                     dumpedDissectorNodes = {} -- redundant?
                     -- safe to assume, that's a starting point
                     local nodeName = getNodeName( baseaddr )
@@ -791,9 +889,9 @@
             function loadDumperScript(sender)
                 local tableFile = findTableFile("GDumper")
                 if tableFile == nil then return end
-		        local fileStream = tableFile.getData()
-		        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
-		        if scriptString ~= nil then
+                local fileStream = tableFile.getData()
+                local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
+                if scriptString ~= nil then
                     local doScript = loadstring(scriptString)
                     if type(doScript) == 'function' then
                         doScript()
@@ -810,7 +908,7 @@
                 if not scriptFile then error("Could not open file: " .. scriptPath .. "\n" .. tostring(err)) end
                 local scriptCode = scriptFile:read("*a")
                 scriptFile:close()
-		        if scriptCode and scriptCode ~= "" then
+                if scriptCode and scriptCode ~= "" then
                     local doScript, loadErr = loadstring(scriptCode)
                     if not doScript then error("Compile error in " .. scriptPath .. ":\n" .. tostring(loadErr)) end
                     local ok, runErr = pcall(doScript)
@@ -2353,8 +2451,7 @@
                 if isNullOrNil(objAddr) then return false end
 
                 -- check vTable
-                local vtbl = readPointer( objAddr )
-                if (not isValidPointer( vtbl ) ) or (not isValidPointer( readPointer( vtbl + GDSOf.PTRSIZE*2 ) ) ) then return false end
+                if not isMMVTable( readPointer( objAddr ) ) then return false end
 
                 -- check children
                 local objectChildren = readPointer( objAddr + GDSOf.CHILDREN )
@@ -2500,7 +2597,7 @@
                 end
                 table.insert( dumpedDissectorNodes , nodeAddr )
 
-                local varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', 0x000080, GDSOf.VAR_VECTOR, vtPointer )
+                local varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDSOf.VAR_VECTOR, vtPointer )
                 local scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDSOf.GDSCRIPT_REF, vtPointer )
                 local constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', --[[0x400000]] nil, GDSOf.CONST_MAP, vtPointer )
                 local functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', --[[0x400000]] nil, GDSOf.FUNC_MAP, vtPointer )
@@ -2582,7 +2679,7 @@
             function checkForVT( objectPtr )
                 local objectAddr = readPointer( objectPtr ) -- it's either an obj ptr or zero
 
-                if (not isValidPointer( objectAddr ) ) and ( not isValidPointer(  readPointer( objectAddr ) ) ) then -- check for vtable and 1st vmethod
+                if (not isMMVTable( objectAddr ) ) then -- check for vtable
                     -- debugStepIn()
 
                     -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
@@ -2590,20 +2687,20 @@
                     local wrapperAddr = readPointer( adjustedObjectPtr ) -- this will be a wrapped obj ptr
                     objectAddr = readPointer( wrapperAddr )
 
-                    if ( wrapperAddr == 0 ) or ( not isValidPointer( wrapperAddr ) )  then -- check the wrapper, obj and its vtable
+                    if isNullOrNil(wrapperAddr) or not isValidPointer(wrapperAddr) then -- check the wrapper
                         -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not an obj  ptr, leave it be')
                         return objectPtr, false; -- revert the value, whatever
                     end
 
-                    if isValidPointer( objectAddr ) then -- check for vtable to be safe
+                    if isMMVTable( objectAddr ) then -- check for vtable to be safe
                         -- sendDebugMessageAndStepOut('checkForVT: shifted OBJ addr is a ptr, returning it')
-                        return readPointer( adjustedObjectPtr ), true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
+                        return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
 
                     else
                         -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not a ptr, leave it be')
                         return objectPtr, false; -- revert the value, whatever
                     end
-                else
+                else -- vtable valid
                     return objectPtr, false
                 end
             end
