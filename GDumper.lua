@@ -62,9 +62,9 @@
             end
 
             function getGodotVersionString()
-                local reStr = [[Godot\sEngine\s(\(With\sGodot\sSecure\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
+                local reStr = [[Godot\sEngine\s(\(.{4,35}\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
                 local godotVersionStringTable = lregexScan({   pattern = reStr,
-                                                                protection = "WR-E-C",
+                                                                protection = "+R-W-E-C",
                                                                 encoding = "ASCII",
                                                                 engine = "RE2",
                                                                 findOne = true,
@@ -1720,7 +1720,6 @@
                 for i, sig in ipairs(sigs) do if setVPRVA(sig) then sendDebugMessage('setSTtoVPoffset: hit at: '..tostring(i).."\t"..sig) return true end end
                 return false
             end
-
 
             --- returns a valid Viewport pointer
             --- @return number
