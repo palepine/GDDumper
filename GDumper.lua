@@ -64,7 +64,7 @@
             function getGodotVersionString()
                 local reStr = [[Godot\sEngine\s(\(.{4,35}\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
                 local godotVersionStringTable = lregexScan({   pattern = reStr,
-                                                                protection = "+R-W-E-C",
+                                                                protection = "RW-E-C", -- sometimes it's not in rdata
                                                                 encoding = "ASCII",
                                                                 engine = "RE2",
                                                                 findOne = true,
