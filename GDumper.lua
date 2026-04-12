@@ -950,6 +950,10 @@
                 return string.rep(str, times)
             end
 
+            function numtohexstr(num)
+                return ("%X"):format( num or -1 )
+            end
+
             function debugStepIn()
                 if bDEBUGMode and inMainThread() then debugPrefix = debugPrefix+1 end
             end
@@ -1009,7 +1013,7 @@
                 -- let's ensure VP is found, it will throw an error otherwise
                 getViewport()
 
-                local symbolToChildren = '[[ptVP]+'..('%x'):format(GDSOf.CHILDREN)..']' -- '[[ptVP]+CHILDREN]'
+                local symbolToChildren = '[[ptVP]+'..numtohexstr(GDSOf.CHILDREN)..']' -- '[[ptVP]+CHILDREN]'
                 local viewportStructForm = createStructureForm( symbolToChildren, 'VP', 'Viewport' ) 
                 local childrenStruct = createVPStructure()
 
@@ -1154,7 +1158,7 @@
                     iterateNodeChildrenToStruct( childrenStructElem, baseaddr )
                 else
                     -- otherwise just let CE decide, btw why the hell the base address should be a fucking hex string?
-                    struct.autoGuess( ("%x"):format(baseaddr), 0x0, 0x500 --[[0x200]]) -- 0x500 for researching
+                    struct.autoGuess( numtohexstr(baseaddr), 0x0, 0x500 --[[0x200]]) -- 0x500 for researching
                 end
 
                 struct.endUpdate()
@@ -1250,7 +1254,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\nmajMinVerStr =          '', -- major.minor godot version if you want hardcoded offsets manually, e.g '4.2'\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
+                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\nmajMinVerStr =              '', -- major.minor godot version if you want hardcoded offsets manually, e.g '4.2'\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1690,14 +1694,14 @@
                 end
 
                 local sigs = {}
-                table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8")
+                -- table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8")
                 table.insert(sigs, "48 8B 9? ? ? ? ? 4? 8D 8F ? ? ? ? 45 33 C0 E8")
                 table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8 ? ? ? ? 80 3D ? ? ? ? 00")
                 table.insert(sigs, "48 8B B0 ? ? ? ? 80 BB")
                 table.insert(sigs, "48 8B 88 ? ? ? ? E8 ? ? ? ? 84 C0 74 ? 48 8B 03")
                 table.insert(sigs, "48 8B B9 ? ? ? ? 89 DA")
                 table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E")
-                table.insert(sigs, "48 8B BF ? ? ? ? 74")
+                table.insert(sigs, "48 8B BF ? ? ? ? 74") -- might be too short
                 table.insert(sigs, "48 8B 80 ? ? ? ? 40 38 B8 ? ? ? ? 0F 85")
                 table.insert(sigs, "48 8B B0 ? ? ? ? 48 39 BE")
                 table.insert(sigs, "48 8B 80 ? ? ? ? 80 B8 ? ? ? ? ? 0F 85 ? ? ? ? 48 8B 03")
@@ -2114,7 +2118,7 @@
                     offset = 0x0
                 end
 
-                sendDebugMessageAndStepOut("prepareObjectParent: "..("%x"):format(ptr or -1).." Object: "..entry.name)
+                sendDebugMessageAndStepOut("prepareObjectParent: "..numtohexstr(ptr).." Object: "..entry.name)
                 return currentParent, ptr, offset, currentContext
             end
 
@@ -2352,7 +2356,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readNodeVariantEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.." type: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readNodeVariantEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.." type: "..entry.typeName.."\tPtr: "..numtohexstr(entry.variantPtr).."\t Offset: "..numtohexstr(entry.offsetToValue))
 
                 return entry
             end
@@ -2375,7 +2379,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readFunctionConstantEntry: name:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readFunctionConstantEntry: name:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..numtohexstr(entry.variantPtr).."\t Offset: "..numtohexstr(entry.offsetToValue))
 
                 return entry
             end
@@ -2398,7 +2402,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readNodeConstEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readNodeConstEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..numtohexstr(entry.variantPtr).."\t Offset: "..numtohexstr(entry.offsetToValue))
 
                 return entry
             end
@@ -2442,7 +2446,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readArrayContainerEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readArrayContainerEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..numtohexstr(entry.variantPtr).."\t Offset: "..numtohexstr(entry.offsetToValue))
 
                 return entry
 
@@ -2457,7 +2461,7 @@
 
                 local entry = {
                         index = 0,
-                        name = keyName or ("key@" .. ("%x"):format(mapElement)),
+                        name = keyName or ("key@" .. numtohexstr(mapElement)),
                         runtimeType = valueType,
                         typeId = valueType,
                         typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
@@ -2469,7 +2473,7 @@
                         }
 
                 debugStepIn()
-                sendDebugMessageAndStepOut("readDictionaryContainerEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..('%x'):format(entry.variantPtr or -1).."\t Offset: "..("%x"):format(entry.offsetToValue or -1))
+                sendDebugMessageAndStepOut("readDictionaryContainerEntry:\tname:\t"..entry.name.."\tIndex: "..entry.index.."\ttype: "..entry.typeName.."\tPtr: "..numtohexstr(entry.variantPtr).."\t Offset: "..numtohexstr(entry.offsetToValue))
 
                 return entry
             end
@@ -2491,7 +2495,7 @@
             GDHandlers.VariantHandlers = {}
 
                 GDHandlers.VariantHandlers.DICTIONARY = function(entry, emitter, parent, contextTable)
-                    sendDebugMessage("DICTIONARY case for name: "..entry.name..(" address: %x"):format(entry.variantPtr)..(" offset: %x"):format(entry.offsetToValue))
+                    sendDebugMessage("DICTIONARY case for name: "..entry.name.." address: "..numtohexstr(entry.variantPtr).." offset: "..numtohexstr(entry.offsetToValue))
                     local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
 
                     if isNullOrNil(dictSize) then
@@ -2516,7 +2520,7 @@
                 end
 
                 GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
-                    sendDebugMessage("OBJECT case: name: "..entry.name..(" addr: %x "):format(entry.variantPtr) )
+                    sendDebugMessage("OBJECT case: name: "..entry.name.." addr: "..numtohexstr(entry.variantPtr) )
                     local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable);
 
                     if checkForGDScript(readPointer(realPtr)) then
@@ -2882,24 +2886,24 @@
                 -- debugStepIn()
 
                 if isNullOrNil(nodeAddr) then
-                    -- sendDebugMessageAndStepOut('checkForGDScript: nodeAddr invalid'..(" address %x"):format(nodeAddr or -1))
+                    -- sendDebugMessageAndStepOut('checkForGDScript: nodeAddr invalid'.." address "..numtohexstr(nodeAddr))
                     return false
                 end
 
                 if (not isValidPointer( readPointer( nodeAddr ) ) ) then
-                    -- sendDebugMessageAndStepOut('checkForGDScript: Node vTable invalid'..(" address %x"):format(nodeAddr or -1))
+                    -- sendDebugMessageAndStepOut('checkForGDScript: Node vTable invalid'.." address "..numtohexstr(nodeAddr))
                     return false
                 end
 
                 local scriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
                 if isNullOrNil( scriptInstance ) then
-                    -- sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance is 0/nil'..(" address %x"):format(nodeAddr or -1))
+                    -- sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance is 0/nil'.." address "..numtohexstr(nodeAddr))
                     return false
                 end
                 
                 local gdscript = readPointer( scriptInstance + GDSOf.GDSCRIPT_REF )
                 if isNullOrNil(gdscript) then
-                    -- sendDebugMessageAndStepOut('checkForGDScript: GDScript is 0/nil'..(" address %x"):format(nodeAddr or -1))
+                    -- sendDebugMessageAndStepOut('checkForGDScript: GDScript is 0/nil'.." address "..numtohexstr(nodeAddr))
                     return false
                 end;
 
@@ -3314,14 +3318,14 @@
                 debugStepIn()
                 local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeAddr, funcStructElement)
                 if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-                    sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: '..("Address: %x "):format(nodeAddr or -1))
+                    sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: '.." Address "..numtohexstr(nodeAddr))
                     return;
                 end
                 local mapElement = headElement
                 local index = 0;
 
                 repeat
-                    -- sendDebugMessage('iterateNodeFuncMapToStruct: Looping '..(" mapElemAddr: %x"):format(mapElement or -1 ))
+                    -- sendDebugMessage('iterateNodeFuncMapToStruct: Looping '.." mapElemAddr: "..numtohexstr(mapElement))
 
                     local funcName = getFunctionMapName( mapElement ) or "UNKNOWN" -- the layout is similar to constant map's
                     
@@ -3394,7 +3398,7 @@
 
                     if isPointerNotNull(stringNamePtr) then bUniShift = isPointerNotNull(stringNamePtr + GDSOf.STRING) end
 
-                    -- sendDebugMessage('iterateFuncGlobalsToStruct: Looping: label: '..label..(" funcVector: %x"):format(funcGlobalVect))
+                    -- sendDebugMessage('iterateFuncGlobalsToStruct: Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
 
                     emitStringNameStruct( funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, bUniShift )
                 end
@@ -5098,7 +5102,7 @@
                         GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP] = {
                             name = "OPCODE_JUMP",
                             handler = function(contextTable)
-                                local operand1 = ("%X"):format( contextTable.codeInts[contextTable.instrPointer + 1] * 0x4 ) -- where to jump in hex representation, 4byte step
+                                local operand1 = numtohexstr( contextTable.codeInts[contextTable.instrPointer + 1] * 0x4 ) -- where to jump in hex representation, 4byte step
                                 local elem = addStructureElem( contextTable.codeStructElement, "JUMP to "..operand1, (contextTable.instrPointer-1 + 1)*0x4, vtDword )
                                 elem.DisplayMethod = 'dtHexadecimal'
                                 elem.ShowAsHex = true
@@ -5116,7 +5120,7 @@
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
 
-                                local operand2 = ("%X"):format( contextTable.codeInts[contextTable.instrPointer + 2] * 0x4 ) -- where to jump
+                                local operand2 = numtohexstr( contextTable.codeInts[contextTable.instrPointer + 2] * 0x4 ) -- where to jump
                                 local elem = addStructureElem( contextTable.codeStructElement, "JUMP to "..operand2, (contextTable.instrPointer-1 + 2)*0x4, vtDword )
                                 elem.DisplayMethod = 'dtHexadecimal'
                                 elem.ShowAsHex = true
@@ -6506,7 +6510,7 @@
 
                 local headElement, tailElement, mapSize = getNodeConstMap(nodeAddr)
                 if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-                    sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: '..('Address: %x '):format( nodeAddr or -1 ) )
+                    sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: '..'Address: '..numtohexstr(nodeAddr) )
                     synchronize( function(parent) parent.Destroy() end, parent )
                     return;
                 end
@@ -6537,7 +6541,7 @@
 
                 local headElement, _, mapSize, constStructElement = getNodeConstMap( nodeAddr, constStructElement)
                 if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-                    sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: '..('Address: %x '):format(nodeAddr or -1 ) )
+                    sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: '..'Address: '..numtohexstr(nodeAddr) )
                     return;
                 end
 
@@ -6967,7 +6971,7 @@
 
                 local mapElement = readPointer( rootElement + GDSOf.MAP_LELEM )
                 if isNullOrNil(mapElement) then
-                    sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : '..('%x'):format(rootElement or -1 )..(' last %x'):format(endElement or -1 )..(' size %x'):format(mapSize or -1 )  );
+                    sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : '..numtohexstr(rootElement)..' last '..numtohexstr(endElement)..' size '..numtohexstr(mapSize)  );
                     return 0, endElement, mapSize  -- return 0 as a head element
                 end
 
@@ -6990,7 +6994,7 @@
                     end
                     
                     if isNullOrNil(mapElement) then
-                        sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : '..('%x'):format(rootElement or -1 )..(' last %x'):format(endElement or -1 )..(' size %x'):format(mapSize or -1 )  );
+                        sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : '..numtohexstr(rootElement)..' last '..numtohexstr(endElement)..' size '..numtohexstr(mapSize)  );
                         return 0, endElement, mapSize
                     end -- return 0 as a head element
                     
@@ -7016,7 +7020,7 @@
                 --debugStepIn()
 
                 if isNullOrNil(vectorSize) then
-                    --sendDebugMessageAndStepOut('redefineVariantSizeByVector: Bad vector size for '..('%x'):format(vectorPtr));
+                    --sendDebugMessageAndStepOut('redefineVariantSizeByVector: Bad vector size for '..numtohexstr(vectorPtr));
                     return 0x18, true;
                 end
 
@@ -7116,7 +7120,7 @@
 
                 end
 
-                --sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant resize failed past 4 cases (vector: "..('%x'):format(vectorPtr)..")")
+                --sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant resize failed past 4 cases (vector: "..numtohexstr(vectorPtr)..")")
                 -- // Variant takes 24 bytes when real_t is float, and 40 bytes if double.
                 -- // It only allocates extra memory for AABB/Transform2D (24, 48 if double),
                 -- // Basis/Transform3D (48, 96 if double), Projection (64, 128 if double),
@@ -7584,7 +7588,7 @@
                     --sendDebugMessage('DumpNodeToAddr: node '..nodeNameStr..' doesnt have GDScript/Inst')
                     return
                 end
-                --sendDebugMessage('DumpNodeToAddr: node '..tostring(nodeNameStr)..('addr: %x'):format(nodeAddr) )
+                --sendDebugMessage('DumpNodeToAddr: node '..tostring(nodeNameStr)..'addr: '..numtohexstr(nodeAddr) )
 
                 synchronize(function(parentMemrec)
                         if parentMemrec.Count ~= 0 then -- let's clear all children
