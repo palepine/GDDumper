@@ -3,12 +3,11 @@
 -- Source code on github: https://github.com/palepine/GDDumper
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
-    --TODO a plugin injecting routines?
-    --TODO investigate packedArray size (at least 3.x)
     --TODO dump nodes schema with the addresslist?
     --TODO add more functionality for function overriding ==>
     --TODO bytecode patching function that assembles a function for return;end. or return true;end It should store the original function (address association?)
     --TODO always check UTF32>UTF8>ASCII for all strings and both 8/10 offsets
+    --TODO addresslist should include node's children of children
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
 
