@@ -1063,9 +1063,12 @@
 
                 GDSOf.VERSION_STRING = config.majMinVerStr or nil
 
-                if lregexScan and type(lregexScan) == "function" then -- a regex plugin must be initialized for that
-                    defineGDVersion()
+                if tryRegSceneTree() and setSTtoVPoffset() then 
+                    registerSymbol('ptVP','[pSceneTree]+oSTtoVP',false)
                 end
+
+                -- a regex plugin must be initialized for that
+                if lregexScan and type(lregexScan) == "function" then defineGDVersion() end
 
                 if bHARDCODEDOFFSETS or not( config.majMinVerStr == nil or config.majMinVerStr == "") then
                     GDSOf.CHILDREN,
@@ -1243,7 +1246,81 @@
                 fuckoffPrint()
             end
 
-        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Viewport
+        --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Viewport / Window / SceneTree
+
+
+            function tryRegSceneTree()
+                local function resolveRVA(aobSignature, offsetToValue, offsetToNextIntr)
+                    local function resolveAddress(instructionAddr, offsetToValue, offsetToNextIntr)
+                        local relativeAddr = readInteger( instructionAddr + offsetToValue )
+                        local nextAddr = getAddress( instructionAddr + offsetToNextIntr )
+                        registerSymbol('pSceneTree',(nextAddr+relativeAddr),false)
+                    end
+                    local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+                    if addr == 0 or addr == nil then return false end
+                    offsetToNextIntr = offsetToNextIntr or getInstructionSize(addr)
+                    offsetToValue = offsetToValue or (offsetToNextIntr - 4)
+                    resolveAddress(addr, offsetToValue, offsetToNextIntr)
+                    return true
+                end
+                local sigs = {}
+                table.insert(sigs, "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?")
+                table.insert(sigs, "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?")
+                table.insert(sigs, "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00")
+                table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?")
+                table.insert(sigs, "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05")
+
+                table.insert(sigs, "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB")
+                table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D")
+                table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 4C 8B 2B")
+                table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36")
+                table.insert(sigs, "4C 8B 0D ? ? ? ? 4C 89 B4 24")
+                table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B")
+                for _, sig in ipairs(sigs) do if resolveRVA(sig, 3) then return true end end
+                return false
+            end
+
+            function setSTtoVPoffset()
+
+                local function setVPRVA(aobSignature)
+                    local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+                    if addr == 0 or addr == nil then return false end
+                    local relativeAddr = readInteger( addr + 3 )
+                    registerSymbol('oSTtoVP',relativeAddr,false)
+                    return true
+                end
+
+                local sigs = {}
+                table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8")
+                table.insert(sigs, "48 8B 9? ? ? ? ? 4? 8D 8F ? ? ? ? 45 33 C0 E8")
+                table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8 ? ? ? ? 80 3D ? ? ? ? 00")
+                table.insert(sigs, "48 8B B0 ? ? ? ? 80 BB")
+                table.insert(sigs, "48 8B 88 ? ? ? ? E8 ? ? ? ? 84 C0 74 ? 48 8B 03")
+                table.insert(sigs, "48 8B B9 ? ? ? ? 89 DA")
+                table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E")
+                table.insert(sigs, "48 8B BF ? ? ? ? 74")
+                table.insert(sigs, "48 8B 80 ? ? ? ? 40 38 B8 ? ? ? ? 0F 85")
+                table.insert(sigs, "48 8B B0 ? ? ? ? 48 39 BE")
+                table.insert(sigs, "48 8B 80 ? ? ? ? 80 B8 ? ? ? ? ? 0F 85 ? ? ? ? 48 8B 03")
+                table.insert(sigs, "48 8B 89 ? ? ? ? E9 ? ? ? ? 0F 1F 80 ? ? ? ? 81 FA")
+                table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E ? ? ? ? 48 85 C9 74")
+                table.insert(sigs, "48 8B 88 ? ? ? ? E8 ? ? ? ? 84 C0 0F 85 ? ? ? ? 48 8B 03")
+                table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E ? ? ? ? 48 85 C9 0F 84")
+                table.insert(sigs, "48 8B 8? ? ? ? ? E8 ? ? ? ? 48 8B 5C 24 ? 48 83 C4 ? 5F C3 90")
+                table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F E9 ? ? ? ? 0F 1F 80")
+                table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F E9 ? ? ? ? 0F 1F 44 00 ? 48 8B 05")
+                table.insert(sigs, "48 8B 8B ? ? ? ? 45 31 C0 48 89 F2 48 89 B3")
+                table.insert(sigs, "48 8B 8B ? ? ? ? 45 31 C0 4C 89 E2 4C 89 A3")
+                table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 41 5C 41 5D 41 5E")
+
+                table.insert(sigs, "48 3B 90 ? ? ? ? 0F 84 ? ? ? ? 48 8B 83")
+                table.insert(sigs, "48 39 82 ? ? ? ? 74 ? 48 8B 83")
+                table.insert(sigs, "48 39 86 ? ? ? ? 74 ? C7 44 24")
+                table.insert(sigs, "49 83 BC 24 ? ? ? ? ? 0F 84 ? ? ? ? 48 8B 05")        
+                for _, sig in ipairs(sigs) do if setVPRVA(sig) then return true end end
+                return false
+            end
+
 
             --- returns a valid Viewport pointer
             --- @return number
@@ -2679,7 +2756,7 @@
             function checkForVT( objectPtr )
                 local objectAddr = readPointer( objectPtr ) -- it's either an obj ptr or zero
 
-                if (not isMMVTable( objectAddr ) ) then -- check for vtable
+                if (not isMMVTable( readPointer( objectAddr ) ) ) then -- check for vtable
                     -- debugStepIn()
 
                     -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
