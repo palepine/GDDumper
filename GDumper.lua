@@ -189,237 +189,624 @@
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
                 -- TODO: custom debug versions
                 -- TODO: refactor the branching
+                
+                local offsets = {}
 
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
                 if majminVersionStr == "4.6" then
-                        GDSOf.DICT_HEAD = 0x20
-                        GDSOf.DICT_TAIL = 0x28
-                        GDSOf.DICT_SIZE = 0x3C
+                    GDSOf.DICT_HEAD = 0x20
+                    GDSOf.DICT_TAIL = 0x28
+                    GDSOf.DICT_SIZE = 0x3C
+                    GDSOf.STRING = 0x8
+
+                    -- godot.windows.template_release.x86_64.exe
+                    -- Godot Engine v4.6.stable.official.89cea1439
+                    offsets.VPChildren = 0x140
+                    offsets.VPObjStringName = 0x190
+                    offsets.NodeGDScriptInstance = 0x60
+                    offsets.NodeGDScriptName = 0xF0
+                    offsets.GDScriptFunctionMap = 0x230
+                    offsets.GDScriptConstantMap = 0x208
+                    offsets.GDScriptVariantNameHM = 0x180
+                    offsets.oVariantVector = 0x28
+                    offsets.GDScriptVariantNameType = 0x44 -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x10
+                    offsets.GDScriptVariantNamesIndex = nil -- 3.x
+                    offsets.GDScriptFunctionCode = 0x178
+                    offsets.GDScriptFunctionCodeConsts = 0x198
+                    offsets.GDScriptFunctionCodeGlobals = 0x1A8
+
                     if GDSOf.DEBUGVER then
-                        GDSOf.STRING = 0x8
-                        return 0x140+0x8, 0x190+0x8, 0x60+0x8, 0xF0+0x8, 0x230+0x8, 0x208+0x8, 0x180+0x8, 0x28+0x28, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
-                    elseif GDSOf.CUSTOMVER then
-                        GDSOf.STRING = 0x8
-                        return 0x140+0x48, 0x190+0x48, 0x60, 0xF0+0x48, 0x230+0x48, 0x208+0x48, 0x180+0x48, 0x28, 0x44, 0x8--[[0x10 too]], nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
-                    else
-                        -- godot.windows.template_release.x86_64.exe
-                        -- Godot Engine v4.6.stable.official.89cea1439
-                        -- 49 8B 06 4C 89 F2 48 89 7C 24
-                        GDSOf.STRING = 0x8
-                        return 0x140, 0x190, 0x60, 0xF0, 0x230, 0x208, 0x180, 0x28, 0x44, 0x10, nil, 0x178, 0x198, 0x1A8
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x28
+                        -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+                        -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+                        -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+                        -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+                        -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+                        -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
                     end
+
+                    if GDSOf.CUSTOMVER then
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                        -- offsets.oVariantVector = offsets.oVariantVector
+                        -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+                        -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+                        -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+                        -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+                        -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+                        -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+                    end
+
+                    return offsets
+
                 elseif majminVersionStr == "4.5" then
                         GDSOf.DICT_HEAD = 0x20
                         GDSOf.DICT_TAIL = 0x28
                         GDSOf.DICT_SIZE = 0x3C
+                        GDSOf.STRING = 0x8
+
+                    -- godot.windows.template_release.x86_64.exe 
+                    -- Godot Engine v4.5.1.stable.official.f62fdbde1
+                    offsets.VPChildren = 0x170
+                    offsets.VPObjStringName = 0x1C0
+                    offsets.NodeGDScriptInstance = 0x68
+                    offsets.NodeGDScriptName = 0x120
+                    offsets.GDScriptFunctionMap = 0x268
+                    offsets.GDScriptConstantMap = 0x208
+                    offsets.GDScriptVariantNameHM = 0x1B8
+                    offsets.oVariantVector = 0x28
+                    offsets.GDScriptVariantNameType = 0x48 -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x8
+                    offsets.GDScriptVariantNamesIndex = nil -- 3.x
+                    offsets.GDScriptFunctionCode = 0x180 -- 0x178
+                    offsets.GDScriptFunctionCodeConsts = 0x1A0 -- 0x198
+                    offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
+
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         -- Godot Engine v4.5.1.stable.official 
-                        -- 48 8B 06 8B 8C 24
-                        GDSOf.STRING = 0x8
-                        return 0x170+0x8, 0x1C0+0x8, 0x68+0x8, 0x120+0x8, 0x268+0x8, 0x208+0x8, 0x1B8+0x8, 0x28+0x28, 0x48, 0x8, nil, 0x178+0x8, 0x198+0x8, 0x1A8+0x8
-                    elseif GDSOf.CUSTOMVER then
-                        -- godot.windows.template_release.x86_64.exe 
-                        -- Godot Engine v4.5.1.stable.custom_build 
-                        GDSOf.STRING = 0x8
-                        return 0x170+0x48, 0x1C0+0x48, 0x68, 0x120+0x48, 0x268+0x48, 0x208+0x48, 0x1B8+0x48, 0x28, 0x48, 0x8, nil, 0x178+0x8, 0x198+0x8, 0x1A8+0x8
-                    else
-                        -- godot.windows.template_release.x86_64.exe 
-                        -- Godot Engine v4.5.1.stable.official.f62fdbde1 
-                        GDSOf.STRING = 0x8
-
-                        return 0x170, 0x1C0, 0x68, 0x120, 0x268, 0x208, 0x1B8, 0x28, 0x48, 0x8, nil, 0x180, 0x1A0, 0x1B0 --0x178, 0x198, 0x1A8
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x28
                     end
+
+                    if GDSOf.CUSTOMVER then
+                        -- godot.windows.template_release.x86_64.exe 
+                        -- Godot Engine v4.5.1.stable.custom_build
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                    end
+
+                    return offsets
+
                 elseif majminVersionStr == "4.4" then
+                    -- godot.windows.template_release.x86_64.exe 
+                    -- Godot Engine v4.4.stable.official.4c311cbee
+                    offsets.VPChildren = 0x188
+                    offsets.VPObjStringName = 0x1E0
+                    offsets.NodeGDScriptInstance = 0x68
+                    offsets.NodeGDScriptName = 0x130
+                    offsets.GDScriptFunctionMap = 0x2D8
+                    offsets.GDScriptConstantMap = 0x2A8
+                    offsets.GDScriptVariantNameHM = 0x210
+                    offsets.oVariantVector = 0x28
+                    offsets.GDScriptVariantNameType = 0x48 -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x8
+                    offsets.GDScriptVariantNamesIndex = nil -- 3.x
+                    offsets.GDScriptFunctionCode = 0x178
+                    offsets.GDScriptFunctionCodeConsts = 0x198
+                    offsets.GDScriptFunctionCodeGlobals = 0x1A8
+
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         -- Godot Engine v4.4.1.stable.official
                         -- godot.windows.template_debug.x86_64.mono.exe 
                         -- Godot Engine v4.4.stable.mono.official 
-                        -- 48 8B 03 48 89 D9 FF 90 ? ? ? ? 84 C0 0F 84 ? ? ? ? 48 89 D9 E8 ? ? ? ? 84 C0
-                        -- 48 8B 03 48 8D B4 24 ? ? ? ? 48 89 DA 4C 8D AC 24
                         GDSOf.STRING = 0x8
-                        return 0x188+0x8, 0x1E0+0x8, 0x68+0x8, 0x130+0x8, 0x2D8+0x8, 0x2A8+0x8, 0x210+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
-                    elseif GDSOf.CUSTOMVER then
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x30
+                    end
+                    if GDSOf.CUSTOMVER then
                         GDSOf.STRING = 0x10
                         -- godot.windows.template_release.x86_64.exe
                         -- Godot Engine v4.4.1.stable.custom_build.49a5bc7b6
-                        return 0x188+0x48, 0x1E0+0x48, 0x68, 0x130+0x48, 0x2D8+0x48, 0x2A8+0x48, 0x210+0x48, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
-                    else
-                        -- godot.windows.template_release.x86_64.exe 
-                        -- Godot Engine v4.4.stable.official.4c311cbee 
-                        -- 49 8B 45 ? 4C 89 EA 48 89 7C 24
-                        return 0x188, 0x1E0, 0x68, 0x130, 0x2D8, 0x2A8, 0x210, 0x28, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
                     end
+                    return offsets
+
                 elseif majminVersionStr == "4.3" then
+                    -- godot.windows.template_release.x86_64.exe 
+                    -- Godot Engine v4.3.stable.official 
+                    -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
+                    offsets.VPChildren = 0x178
+                    offsets.VPObjStringName = 0x1D0
+                    offsets.NodeGDScriptInstance = 0x68
+                    offsets.NodeGDScriptName = 0x120
+                    offsets.GDScriptFunctionMap = 0x280
+                    offsets.GDScriptConstantMap = 0x250
+                    offsets.GDScriptVariantNameHM = 0x1B8
+                    offsets.oVariantVector = 0x28
+                    offsets.GDScriptVariantNameType = 0x40 -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x8
+                    offsets.GDScriptVariantNamesIndex = nil -- 3.x
+                    offsets.GDScriptFunctionCode = 0x178
+                    offsets.GDScriptFunctionCodeConsts = 0x198
+                    offsets.GDScriptFunctionCodeGlobals = 0x1A8
+
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
                         -- Godot Engine v4.3.stable.official 
                         GDSOf.STRING = 0x8
-                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x48, 0x8, nil, 0x178, 0x198, 0x1A8
-                    elseif GDSOf.CUSTOMVER then
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x30
+                         offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType+0x8 -- 4.x
+
+                    end
+                    if GDSOf.CUSTOMVER then
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.3.stable.custom_build
-                        -- GDSOf.STRING = 0x8
-                        return 0x178+0x48, 0x1D0+0x48, 0x68, 0x120+0x48, 0x280+0x48, 0x250+0x48, 0x1B8+0x48, 0x28, 0x48, 0x8, nil, 0x178--[[+0x8]], 0x198--[[+0x8]], 0x1A8--[[+0x8]]
-                    else
-                        -- godot.windows.template_release.x86_64.exe 
-                        -- Godot Engine v4.3.stable.official 
-                        -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
-                        return 0x178, 0x1D0, 0x68, 0x120, 0x280, 0x250, 0x1B8, 0x28, 0x40, 0x8, nil, 0x178, 0x198, 0x1A8
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                         offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType+0x8 -- 4.x
                     end
+
+                    return offsets
+
                 elseif majminVersionStr == "4.2" then
+                    -- godot.windows.template_release.x86_64.exe 
+                    -- Godot Engine v4.2.1.stable.official.b09f793f5 
+                    offsets.VPChildren = 0x178
+                    offsets.VPObjStringName = 0x1D0
+                    offsets.NodeGDScriptInstance = 0x68
+                    offsets.NodeGDScriptName = 0x120
+                    offsets.GDScriptFunctionMap = 0x280
+                    offsets.GDScriptConstantMap = 0x250
+                    offsets.GDScriptVariantNameHM = 0x1B8
+                    offsets.oVariantVector = 0x28
+                    offsets.GDScriptVariantNameType = 0x40 -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = nil -- 3.x
+                    offsets.GDScriptFunctionCode = 0x170
+                    offsets.GDScriptFunctionCodeConsts = 0x190
+                    offsets.GDScriptFunctionCodeGlobals = 0x1A0
+
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         --  Godot Engine v4.2.2.stable.official
                         GDSOf.STRING = 0x8
-                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x120+0x8, 0x280+0x8, 0x250+0x8, 0x1B8+0x8, 0x28+0x30, 0x48, 0x4, nil, 0x170, 0x190, 0x1A0
-                    elseif GDSOf.CUSTOMVER then
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x30
+                         offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType+0x8 -- 4.x
+                    end
+                    if GDSOf.CUSTOMVER then
                         error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x178+0x48, 0x1D0+0x48, 0x68, 0x120+0x48, 0x280+0x48, 0x250+0x48, 0x1B8+0x48, 0x28, 0x48, 0x4, nil, 0x170--[[+0x8]], 0x190--[[+0x8]], 0x1A0--[[+0x8]]
-                    else
-                        -- godot.windows.template_release.x86_64.exe 
-                        -- Godot Engine v4.2.1.stable.official.b09f793f5 
-                        return 0x178, 0x1D0, 0x68, 0x120, 0x280, 0x250, 0x1B8, 0x28, 0x40, 0x4, nil, 0x170, 0x190, 0x1A0
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                         offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType+0x8 -- 4.x
                     end
+
+                    return offsets
+
                 elseif majminVersionStr == "4.1" then
                     -- 4.1.2 has some wild offsets however
+                    -- godot.windows.template_release.x86_64.exe 
+                    -- Godot Engine v4.2.1.stable.official.b09f793f5 
+                    offsets.VPChildren = 0x178
+                    offsets.VPObjStringName = 0x1D0
+                    offsets.NodeGDScriptInstance = 0x68
+                    offsets.NodeGDScriptName = 0x148
+                    offsets.GDScriptFunctionMap = 0x260
+                    offsets.GDScriptConstantMap = 0x1F0
+                    offsets.GDScriptVariantNameHM = 0x290
+                    offsets.oVariantVector = 0x28
+                    offsets.GDScriptVariantNameType = 0x40 -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = nil -- 3.x
+                    offsets.GDScriptFunctionCode = 0x118
+                    offsets.GDScriptFunctionCodeConsts = 0x100
+                    offsets.GDScriptFunctionCodeGlobals = 0xF0
+
                     if GDSOf.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         --  Godot Engine v4.1.1.stable.official
                         GDSOf.STRING = 0x8
-                        return 0x178+0x8, 0x1D0+0x8, 0x68+0x8, 0x148+0x8, 0x260+0x8, 0x1F0+0x8, 0x290+0x8, 0x28+0x30, 0x40, 0x4, nil, 0x118, 0x100, 0xF0
-                    elseif GDSOf.CUSTOMVER then
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x30
+                    end
+                    if GDSOf.CUSTOMVER then
                         -- Godot Engine v4.1.2.rc.custom_build
                         GDSOf.STRING = 0x10
-                        return 0x178+0x48, 0x1D0+0x48, 0x68, 0x148+0x48, 0x260+0x48, 0x1F0+0x48, 0x290+0x48, 0x28, 0x40, 0x4, nil, 0x118, 0x100, 0xF0
-                    else
-                        -- godot.windows.template_release.x86_64.exe 
-                        -- Godot Engine v4.2.1.stable.official.b09f793f5 
-                        return 0x178, 0x1D0, 0x68, 0x148, 0x260, 0x1F0, 0x290, 0x28, 0x40, 0x4, nil, 0x118 --[[?]], 0xF0, 0x100 -- 0x100, 0xF0
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
                     end
+
+                    return offsets
+
                 elseif majminVersionStr == "4.0" then
+                    offsets.VPChildren = 0x168
+                    offsets.VPObjStringName = 0x1C0
+                    offsets.NodeGDScriptInstance = 0x68
+                    offsets.NodeGDScriptName = 0x178
+                    offsets.GDScriptFunctionMap = 0x270
+                    offsets.GDScriptConstantMap = 0x238
+                    offsets.GDScriptVariantNameHM = 0x2A8
+                    offsets.oVariantVector = 0x28
+                    offsets.GDScriptVariantNameType = 0x40 -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x8
+                    offsets.GDScriptVariantNamesIndex = nil -- 3.x
+                    offsets.GDScriptFunctionCode = 0x118
+                    offsets.GDScriptFunctionCodeConsts = 0x100
+                    offsets.GDScriptFunctionCodeGlobals = 0xF0
+
                     if GDSOf.DEBUGVER then
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x168+0x8, 0x1C0+0x8, 0x68+0x8, 0x178+0x8, 0x270+0x8, 0x238+0x8, 0x2A8+0x8, 0x28+0x30, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x30
                     elseif GDSOf.CUSTOMVER then
                         error("Not defined yet")
-                        return 0x168+0x48, 0x1C0+0x48, 0x68, 0x178+0x48, 0x270+0x48, 0x238+0x48, 0x2A8+0x48, 0x28, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
-                    else
-                        return 0x168, 0x1C0, 0x68, 0x178, 0x270, 0x238, 0x2A8, 0x28, 0x40, 0x8, nil, 0x118 --[[?]], 0x100, 0xF0
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
                     end
+
+                    return offsets
+
                 elseif majminVersionStr == "3.6" then
+                    -- godot.windows.opt.64.exe 
+                    --  Godot Engine v3.6.stable.custom_build.de2f0f147 
+                    offsets.VPChildren = 0x108
+                    offsets.VPObjStringName = 0x130
+                    offsets.NodeGDScriptInstance = 0x58
+                    offsets.NodeGDScriptName = 0x108
+                    offsets.GDScriptFunctionMap = 0x1A8
+                    offsets.GDScriptConstantMap = 0x190
+                    offsets.GDScriptVariantNameHM = 0x1C0
+                    offsets.oVariantVector = 0x20
+                    offsets.GDScriptVariantNameType = nil -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+                    offsets.GDScriptFunctionCode = 0x50
+                    offsets.GDScriptFunctionCodeConsts = 0x20
+                    offsets.GDScriptFunctionCodeGlobals = 0x30
+
                     if GDSOf.DEBUGVER then
                         -- godot.windows.opt.debug.64.exe 
                         GDSOf.STRING = 0x8
-                        return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                    elseif GDSOf.CUSTOMVER then
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x18
+                    end
+                    if GDSOf.CUSTOMVER then
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x10
-                        return 0x108--[[+0x48]], 0x130--[[+0x48]], 0x58, 0x108--[[+0x48]], 0x1A8--[[+0x48]], 0x190--[[+0x48]], 0x1C0--[[+0x48]], 0x20--[[+0x18]], nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                    else
-                        -- godot.windows.opt.64.exe 
-                        --  Godot Engine v3.6.stable.custom_build.de2f0f147 
-                        return 0x108, 0x130, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x20, 0x30
+                        offsets.VPChildren = offsets.VPChildren--[[+0x48]]
+                        offsets.VPObjStringName = offsets.VPObjStringName--[[+0x48]]
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName--[[+0x48]]
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap--[[+0x48]]
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap--[[+0x48]]
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM--[[+0x48]]
                     end
+
+                    return offsets
+
                 elseif majminVersionStr == "3.5" then
                     
                     if GDSOf._x64bit then
+                        -- godot.windows.opt.64.exe 
+                        -- Godot Engine v3.5.1.stable.official
+                        offsets.VPChildren = 0x108
+                        offsets.VPObjStringName = 0x130
+                        offsets.NodeGDScriptInstance = 0x58
+                        offsets.NodeGDScriptName = 0x108
+                        offsets.GDScriptFunctionMap = 0x1A8
+                        offsets.GDScriptConstantMap = 0x190
+                        offsets.GDScriptVariantNameHM = 0x1C0
+                        offsets.oVariantVector = 0x20
+                        offsets.GDScriptVariantNameType = nil -- 4.x
+                        offsets.NodeVariantVectorSizeOffset = 0x4
+                        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+                        offsets.GDScriptFunctionCode = 0x50
+                        offsets.GDScriptFunctionCodeConsts = 0x20
+                        offsets.GDScriptFunctionCodeGlobals = 0x30
+
                         if GDSOf.DEBUGVER then
                             -- godot.windows.opt.debug.64.exe
                             -- Godot Engine 3.5.2.stable 
                             GDSOf.STRING = 0x8
-                            return 0x108+0x8, 0x130+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                        elseif GDSOf.CUSTOMVER then
+                            offsets.VPChildren = offsets.VPChildren+0x8
+                            offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                            offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                            offsets.oVariantVector = offsets.oVariantVector+0x18
+                        end
+                        if GDSOf.CUSTOMVER then
                             error("Not defined yet")
-                            return 0x108+0x48, 0x130+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                        else
-                            -- godot.windows.opt.64.exe 
-                            -- Godot Engine v3.5.1.stable.official
-                            -- 48 8B 01 48 89 CB 41 89 D4 FF
-                            return 0x108, 0x130, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x20, 0x30
+                            offsets.VPChildren = offsets.VPChildren+0x48
+                            offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                            offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                             offsets.oVariantVector = offsets.oVariantVector+0x18
                         end
                     else
+                        GDSOf.STRING = 0x8 -- ascii
+                        GDSOf.GDSCRIPT_REF = 0x8
+                        GDSOf.MAP_SIZE = 0x10
+                        GDSOf.MAP_LELEM = 0x8
+                        GDSOf.MAP_NEXTELEM = 0x10
+                        GDSOf.MAP_KVALUE = 0x18
+                        GDSOf.FUNC_MAPVAL = 0x1C
+                        GDSOf.DICT_LIST = 0x4
+                        GDSOf.DICT_HEAD = 0x0
+                        GDSOf.DICT_TAIL = 0x4
+                        GDSOf.DICT_SIZE = 0x10
+                        GDSOf.DICTELEM_PAIR_NEXT = 0x20
+                        GDSOf.DICTELEM_KEYTYPE = 0x0
+                        GDSOf.DICTELEM_KEYVAL = 0x8
+                        GDSOf.DICTELEM_VALTYPE = 0x8
+                        GDSOf.DICTELEM_VALVAL = 0x10
+                        GDSOf.ARRAY_TOVECTOR = 0x8
+                        GDSOf.P_ARRAY_TOARR = GDSOf.P_ARRAY_TOARR or 0x4
+                        GDSOf.P_ARRAY_SIZE = GDSOf.P_ARRAY_SIZE or 0xC
+                        GDSOf.CONSTELEM_KEYVAL = 0x18
+                        GDSOf.CONSTELEM_VALTYPE = 0x20
+
+                        -- godot.windows.opt.32.exe
+                        -- Godot Engine v3.5.3.stable.official
+                        offsets.VPChildren = 0x90
+                        offsets.VPObjStringName = 0xB0
+                        offsets.NodeGDScriptInstance = 0x38
+                        offsets.NodeGDScriptName = 0x94
+                        offsets.GDScriptFunctionMap = 0xE8
+                        offsets.GDScriptConstantMap = 0xDC
+                        offsets.GDScriptVariantNameHM = 0xF4
+                        offsets.oVariantVector = 0x10
+                        offsets.GDScriptVariantNameType = 0x34 -- 4.x
+                        offsets.NodeVariantVectorSizeOffset = 0x4
+                        offsets.GDScriptVariantNamesIndex = 0x1C -- 3.x
+                        offsets.GDScriptFunctionCode = 0x38
+                        offsets.GDScriptFunctionCodeConsts = 0x20
+                        offsets.GDScriptFunctionCodeGlobals = 0x28
+
                         if GDSOf.DEBUGVER then
                             error("Not defined yet")
+                            offsets.VPChildren = offsets.VPChildren+0x4
+                            offsets.VPObjStringName = offsets.VPObjStringName+0x4
+                            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x4
+                            offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x4
+                            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x4
+                            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x4
+                            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x4
+                            offsets.oVariantVector = offsets.oVariantVector+0x0C
                         elseif GDSOf.CUSTOMVER then
                             error("Not defined yet")
-                        else
-                            -- godot.windows.opt.32.exe
-                            -- Godot Engine v3.5.3.stable.official
-                            -- 48 8B 01 48 89 CB 41 89 D4 FF
-                            GDSOf.STRING = 0x8 -- ascii
-                            GDSOf.GDSCRIPT_REF = 0x8
-                            GDSOf.MAP_SIZE = 0x10
-                            GDSOf.MAP_LELEM = 0x8
-                            GDSOf.MAP_NEXTELEM = 0x10
-                            GDSOf.MAP_KVALUE = 0x18
-                            GDSOf.FUNC_MAPVAL = 0x1C
-                            GDSOf.DICT_LIST = 0x4
-                            GDSOf.DICT_HEAD = 0x0
-                            GDSOf.DICT_TAIL = 0x4
-                            GDSOf.DICT_SIZE = 0x10
-                            GDSOf.DICTELEM_PAIR_NEXT = 0x20
-                            GDSOf.DICTELEM_KEYTYPE = 0x0
-                            GDSOf.DICTELEM_KEYVAL = 0x8
-                            GDSOf.DICTELEM_VALTYPE = 0x8
-                            GDSOf.DICTELEM_VALVAL = 0x10
-                            GDSOf.ARRAY_TOVECTOR = 0x8
-                            GDSOf.P_ARRAY_TOARR = GDSOf.P_ARRAY_TOARR or 0x4
-                            GDSOf.P_ARRAY_SIZE = GDSOf.P_ARRAY_SIZE or 0xC
-                            GDSOf.CONSTELEM_KEYVAL = 0x18
-                            GDSOf.CONSTELEM_VALTYPE = 0x20
-                            return 0x90, 0xB0, 0x38, 0x94, 0xE8, 0xDC, 0xF4, 0x10, 0x34, 0x4, 0x1C, 0x38, 0x20, 0x28
+                            -- offsets.VPChildren = offsets.VPChildren+0x48
+                            -- offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                            -- offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                            -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                            -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                            -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                            --  offsets.oVariantVector = offsets.oVariantVector+0x18
                         end
                     end
 
+                    return offsets
+
                 elseif majminVersionStr == "3.4" then
+                    --godot.windows.opt.64.exe 
+                    --Godot Engine v3.4.4.stable.official.419e713a2
+                    offsets.VPChildren = 0x108
+                    offsets.VPObjStringName = 0x120
+                    offsets.NodeGDScriptInstance = 0x58
+                    offsets.NodeGDScriptName = 0x108
+                    offsets.GDScriptFunctionMap = 0x1A8
+                    offsets.GDScriptConstantMap = 0x190
+                    offsets.GDScriptVariantNameHM = 0x1C0
+                    offsets.oVariantVector = 0x20
+                    offsets.GDScriptVariantNameType = nil -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+                    offsets.GDScriptFunctionCode = 0x50
+                    offsets.GDScriptFunctionCodeConsts = 0x20
+                    offsets.GDScriptFunctionCodeGlobals = 0x30
+
                     if GDSOf.DEBUGVER then
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x108+0x8, 0x120+0x8, 0x58+0x8, 0x108+0x8, 0x1A8+0x8, 0x190+0x8, 0x1C0+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x18
                     elseif GDSOf.CUSTOMVER then
                         error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x108+0x48, 0x120+0x48, 0x58, 0x108+0x48, 0x1A8+0x48, 0x190+0x48, 0x1C0+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                    else
-                        --godot.windows.opt.64.exe 
-                        --Godot Engine v3.4.4.stable.official.419e713a2
-                        return 0x108, 0x120, 0x58, 0x108, 0x1A8, 0x190, 0x1C0, 0x20, nil, 0x4, 0x38, 0x50, 0x20, 0x30
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                            offsets.oVariantVector = offsets.oVariantVector+0x18
                     end
+
+                    return offsets
+
                 elseif majminVersionStr == "3.3" then
+                    -- godot.windows.opt.64.exe 
+                    -- Godot Engine v3.3.2.stable.official 
+                    offsets.VPChildren = 0x100
+                    offsets.VPObjStringName = 0x118
+                    offsets.NodeGDScriptInstance = 0x50
+                    offsets.NodeGDScriptName = 0x100
+                    offsets.GDScriptFunctionMap = 0x1A0
+                    offsets.GDScriptConstantMap = 0x188
+                    offsets.GDScriptVariantNameHM = 0x1B8
+                    offsets.oVariantVector = 0x20
+                    offsets.GDScriptVariantNameType = nil -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+                    offsets.GDScriptFunctionCode = 0x50
+                    offsets.GDScriptFunctionCodeConsts = 0x20
+                    offsets.GDScriptFunctionCodeGlobals = 0x30
+
                     if GDSOf.DEBUGVER then
                         -- error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x100+0x8, 0x118+0x8, 0x50+0x8, 0x100+0x8, 0x1A0+0x8, 0x188+0x8, 0x1B8+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x18
                     elseif GDSOf.CUSTOMVER then
                         error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x100+0x48, 0x118+0x48, 0x50, 0x100+0x48, 0x1A0+0x48, 0x188+0x48, 0x1B8+0x48, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                    else
-                        -- godot.windows.opt.64.exe 
-                        -- Godot Engine v3.3.2.stable.official 
-                        return 0x100, 0x118, 0x50, 0x100, 0x1A0, 0x188, 0x1B8, 0x20, nil, 0x4, 0x38, 0x50, 0x20, 0x30
+                        offsets.VPChildren = offsets.VPChildren+0x48
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x48
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                         offsets.oVariantVector = offsets.oVariantVector+0x18
                     end
+
+                    return offsets
+
                 elseif majminVersionStr == "3.2" then
+                    -- error("Not defined yet")
+                    offsets.VPChildren = 0x108
+                    offsets.VPObjStringName = 0x120
+                    offsets.NodeGDScriptInstance = 0x50
+                    offsets.NodeGDScriptName = 0x100
+                    offsets.GDScriptFunctionMap = 0x1B0
+                    offsets.GDScriptConstantMap = 0x198
+                    offsets.GDScriptVariantNameHM = 0x1C8
+                    offsets.oVariantVector = 0x20
+                    offsets.GDScriptVariantNameType = nil -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+                    offsets.GDScriptFunctionCode = 0x50
+                    offsets.GDScriptFunctionCodeConsts = 0x20
+                    offsets.GDScriptFunctionCodeGlobals = 0x30
+
                     if GDSOf.DEBUGVER then
                         error("Not defined yet")
                         GDSOf.STRING = 0x8
-                        return 0x118+0x8, 0x130+0x8, 0x50+0x8, 0x108+0x8, 0x1C0+0x8, 0x1A8+0x8, 0x1D8+0x8, 0x20+0x18, nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                    elseif GDSOf.CUSTOMVER then
-                        -- godot.windows.opt.64.exe
-                        -- Godot Engine v3.2.stable.custom_build 
-                        return 0x110, 0x128, 0x50, 0x100, 0x1B8, 0x1A0, 0x1D0, 0x20, nil, 0x4, 0x38, 0x50, 0x20, 0x30
-                    else
-                        error("Not defined yet")
-                        return 0x118, 0x130, 0x50, 0x108, 0x1C0, 0x1A8, 0x1D8, 0x20, nil, 0x4, 0x38, 0x50, 0x20, 0x30
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x18
                     end
+                    if GDSOf.CUSTOMVER then
+                        -- godot.windows.opt.64.exe
+                        -- Godot Engine v3.2.stable.custom_build
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                    end
+
+                    return offsets
+
                 else
                     print("No recorded version found")
                     error("Not defined yet")
-                    return
+                    return offsets
                 end
             end
 
@@ -863,7 +1250,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
+                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\nmajMinVerStr =          '', -- major.minor godot version if you want hardcoded offsets manually, e.g '4.2'\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1082,21 +1469,21 @@
                 if lregexScan and type(lregexScan) == "function" then defineGDVersion() end
 
                 if bHARDCODEDOFFSETS or not( config.majMinVerStr == nil or config.majMinVerStr == "") then
-                    GDSOf.CHILDREN,
-                    GDSOf.OBJ_STRING_NAME,
-                    GDSOf.GDSCRIPTINSTANCE,
-                    GDSOf.GDSCRIPTNAME,
-                    GDSOf.FUNC_MAP,
-                    GDSOf.CONST_MAP,
-                    GDSOf.VAR_NAMEINDEX_MAP,
-                    GDSOf.VAR_VECTOR,
-                    GDSOf.VAR_NAMEINDEX_VARTYPE,
-                    GDSOf.SIZE_VECTOR,
-                    GDSOf.VAR_NAMEINDEX_I,
-                    GDSOf.FUNC_CODE,
-                    GDSOf.FUNC_CONST,
-                    GDSOf.FUNC_GLOBNAMEPTR
-                      = getStoredOffsetsFromVersion( GDSOf.VERSION_STRING )
+                    local offsets = getStoredOffsetsFromVersion( GDSOf.VERSION_STRING )
+                    GDSOf.CHILDREN = offsets.VPChildren
+                    GDSOf.OBJ_STRING_NAME = offsets.VPObjStringName
+                    GDSOf.GDSCRIPTINSTANCE = offsets.NodeGDScriptInstance
+                    GDSOf.GDSCRIPTNAME = offsets.NodeGDScriptName
+                    GDSOf.FUNC_MAP = offsets.GDScriptFunctionMap
+                    GDSOf.CONST_MAP = offsets.GDScriptConstantMap
+                    GDSOf.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
+                    GDSOf.VAR_VECTOR = offsets.oVariantVector
+                    GDSOf.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
+                    GDSOf.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
+                    GDSOf.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
+                    GDSOf.FUNC_CODE = offsets.GDScriptFunctionCode
+                    GDSOf.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
+                    GDSOf.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
 
                     if GDSOf.MAJOR_VER == 4 then
                         GDSOf.GDSCRIPT_REF = 0x18
@@ -1281,13 +1668,14 @@
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?")
                 table.insert(sigs, "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05")
 
+                table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24")
                 table.insert(sigs, "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 4C 8B 2B")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36")
                 table.insert(sigs, "4C 8B 0D ? ? ? ? 4C 89 B4 24")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B")
-                for _, sig in ipairs(sigs) do if resolveRVA(sig, 3) then return true end end
+                for i, sig in ipairs(sigs) do if resolveRVA(sig, 3) then sendDebugMessage('tryRegSceneTree: hit at: '..tostring(i).."\t"..sig) return true end end
                 return false
             end
 
@@ -1327,8 +1715,9 @@
                 table.insert(sigs, "48 3B 90 ? ? ? ? 0F 84 ? ? ? ? 48 8B 83")
                 table.insert(sigs, "48 39 82 ? ? ? ? 74 ? 48 8B 83")
                 table.insert(sigs, "48 39 86 ? ? ? ? 74 ? C7 44 24")
-                table.insert(sigs, "49 83 BC 24 ? ? ? ? ? 0F 84 ? ? ? ? 48 8B 05")        
-                for _, sig in ipairs(sigs) do if setVPRVA(sig) then return true end end
+                table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 66 2E 0F 1F 84 00")
+                table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
+                for i, sig in ipairs(sigs) do if setVPRVA(sig) then sendDebugMessage('setSTtoVPoffset: hit at: '..tostring(i).."\t"..sig) return true end end
                 return false
             end
 
@@ -7069,9 +7458,9 @@
             --- returns a node dictionary
             function getMainNodeDict()
                 local childrenAddr, childrenSize = getVPChildren()
-                if isNullOrNil(childrenAddr) then return end
-
                 local nodeDict = {}
+
+                if isNullOrNil(childrenAddr) then return end
 
                 for i=0,(childrenSize-1) do
 
