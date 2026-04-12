@@ -592,6 +592,28 @@
                 print(getExportTableName()..'\n'..getGodotVersionString())
             end
             
+            function printGDConfig()
+                print(([[local config = {majorVersion = 0x%X,offsetNodeChildren = 0x%X,offsetNodeStringName = 0x%X, offsetGDScriptInstance = 0x%X,offsetVariantVector = 0x%X,offsetVariantVectorSize = 0x%X,offsetGDScriptName = 0x%X,offsetFuncMap = 0x%X,offsetGDFunctionCode = 0x%X,offsetGDFunctionConst = 0x%X,offsetGDFunctionGlobals = 0x%X,offsetConstMap = 0x%X,offsetVariantMap = 0x%X,offsetVariantMapVarType = 0x%X,offsetVariantMapIndex = 0x%X}]]):format
+                    (
+                    (GDSOf.MAJOR_VER or 0x0),
+                    (GDSOf.CHILDREN or 0x0),
+                    (GDSOf.OBJ_STRING_NAME or 0x0),
+                    (GDSOf.GDSCRIPTINSTANCE or 0x0),
+                    (GDSOf.VAR_VECTOR or 0x0),
+                    (GDSOf.SIZE_VECTOR or 0x0),
+                    (GDSOf.GDSCRIPTNAME or 0x0),
+                    (GDSOf.FUNC_MAP or 0x0),
+                    (GDSOf.FUNC_CODE or 0x0),
+                    (GDSOf.FUNC_CONST or 0x0),
+                    (GDSOf.FUNC_GLOBNAMEPTR or 0x0),
+                    (GDSOf.CONST_MAP or 0x0),
+                    (GDSOf.VAR_NAMEINDEX_MAP or 0x0),
+                    (GDSOf.VAR_NAMEINDEX_VARTYPE or 0x0),
+                    (GDSOf.VAR_NAMEINDEX_I or 0x0)
+                    )
+                )
+            end
+
         --///---///--///---///--///---/// STRUCTURES
 
             --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
@@ -787,14 +809,13 @@
                     addCustomMenuButtonTo( gdMenuItem, 'GD Dissector', GDDissectorSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'Guess log', GDGuessLogSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Debug Mode', GDDebugSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Add Template', addGDMemrecToTable )
                     local menuItem = addCustomMenuButtonTo( gdMenuItem, 'Append Script', appendDumperScript )
                     -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
                     addCustomMenuButtonTo( gdMenuItem, 'Load Script', loadDumperScript )
-                    
-                    addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
+                    addCustomMenuButtonTo( gdMenuItem, 'Print config', printGDConfig )
+                    -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
                 end
             end
 
@@ -815,15 +836,6 @@
                     bDEBUGMode = true
                 else
                     bDEBUGMode = false
-                end
-            end
-
-            function GDGuessLogSwitch(sender)
-                sender.Checked = not sender.Checked
-                if sender.Checked then
-                    bASSUMPTIONLOG = true
-                else
-                    bASSUMPTIONLOG = false
                 end
             end
 
@@ -851,7 +863,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableGuessLog =            false, -- if print heuristic-explored offsets (experimental)\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
+                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -7280,7 +7292,6 @@
                 print('MAIN: DUMP PROCESS FINISHED')
 
             end
-
 
         if not (targetIsGodot) then --[[print('target is not godot')--]] return; end;
         defineGDOffsets( config )
