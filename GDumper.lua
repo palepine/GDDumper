@@ -1507,7 +1507,6 @@
                     GDSOf.FUNC_CODE = offsets.GDScriptFunctionCode
                     GDSOf.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
                     GDSOf.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
-
                     if GDSOf.MAJOR_VER == 4 then
                         GDSOf.GDSCRIPT_REF = 0x18
                         GDSOf.MAXTYPE = 39
@@ -1552,128 +1551,121 @@
                         GDSOf.CONSTELEM_KEYVAL = GDSOf.CONSTELEM_KEYVAL or 0x30
                         GDSOf.CONSTELEM_VALTYPE = GDSOf.CONSTELEM_VALTYPE or 0x38
                     end
-
-                    gdOffsetsDefined = true
-                    checkGDStringType()
-                    defineGDFunctionEnums()
-                    fuckoffPrint()
-                    return
-                end
-
-                local majorVersion = GDSOf.MAJOR_VER or config.majorVersion or 0
-                GDSOf.MINOR_VER = GDSOf.MINOR_VER or config.minorVersion or 0
-                GDSOf.VERSION_STRING = GDSOf.MAJOR_VER..'.'..GDSOf.MINOR_VER
-
-                if majorVersion == 4 then
-
-                    GDSOf.MAJOR_VER = majorVersion
-
-                    GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
-                    GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-                    GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-                    GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-                    GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
-                    GDSOf.CONST_MAP = config.offsetConstMap or 0x0
-                    GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
-
-                    GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x28
-                    GDSOf.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
-                    GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
-
-                    GDSOf.GDSCRIPT_REF = 0x18
-                    GDSOf.MAXTYPE = 39
-                    --GDSOf.SCRIPTFUNC_STRING = GDFunctionString or 0x60
-                    GDSOf.FUNC_MAPVAL = 0x18
-                    GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
-                    GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_CODE+0x20)
-                    GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
-
-                    GDSOf.STRING = GDSOf.STRING or 0x10
-                    GDSOf.CHILDREN_SIZE = 0x8
-
-                    GDSOf.MAP_SIZE = 0x14
-
-                    GDSOf.ARRAY_TOVECTOR = 0x10
-                    GDSOf.P_ARRAY_TOARR = 0x18
-                    GDSOf.P_ARRAY_SIZE = 0x8
-
-                    GDSOf.DICT_HEAD = 0x28
-                    GDSOf.DICT_TAIL = 0x30
-                    GDSOf.DICT_SIZE = 0x3C
-
-                    GDSOf.DICTELEM_KEYTYPE = 0x10
-                    GDSOf.DICTELEM_KEYVAL = 0x18
-                    GDSOf.DICTELEM_VALTYPE = 0x28
-
-                    GDSOf.CONSTELEM_KEYVAL = 0x10
-                    GDSOf.CONSTELEM_VALTYPE = 0x18
-
-                    GDSOf.VAR_NAMEINDEX_I = 0x18
-
-                    -- 3.x [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
-                    if GDSOf.MINOR_VER <= 4 then
-                        GDSOf.GET_TYPE_INDX = 8    
-                    elseif GDSOf.MINOR_VER == 5 then
-                        GDSOf.GET_TYPE_INDX = 9
-                    elseif GDSOf.MINOR_VER == 6 then
-                        GDSOf.GET_TYPE_INDX = 10
-                    end
-
                 else
-                    GDSOf.MAJOR_VER = 3
+                    local majorVersion = GDSOf.MAJOR_VER or config.majorVersion or 0
+                    GDSOf.MINOR_VER = GDSOf.MINOR_VER or config.minorVersion or 0
+                    GDSOf.VERSION_STRING = GDSOf.MAJOR_VER..'.'..GDSOf.MINOR_VER
 
-                    GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
-                    GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-                    GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-                    GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-                    GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
-                    GDSOf.CONST_MAP = config.offsetConstMap or 0x0
-                    GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
+                    if majorVersion == 4 then
 
-                    GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x20
-                    GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
+                        GDSOf.MAJOR_VER = majorVersion
 
-                    GDSOf.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
+                        GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
+                        GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+                        GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+                        GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+                        GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
+                        GDSOf.CONST_MAP = config.offsetConstMap or 0x0
+                        GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
 
-                    GDSOf.MAXTYPE = 27
-                    --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+                        GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x28
+                        GDSOf.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
+                        GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
 
-                    GDSOf.GDSCRIPT_REF = 0x10
+                        GDSOf.GDSCRIPT_REF = 0x18
+                        GDSOf.MAXTYPE = 39
+                        --GDSOf.SCRIPTFUNC_STRING = GDFunctionString or 0x60
+                        GDSOf.FUNC_MAPVAL = 0x18
+                        GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+                        GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_CODE+0x20)
+                        GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
 
-                    GDSOf.FUNC_MAPVAL = 0x38
-                    GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
-                    GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CODE-0x20)
-                    GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_GLOBNAMEPTR-0x10)
-                    GDSOf.STRING = GDSOf.STRING or 0x10
-                    GDSOf.CHILDREN_SIZE = 0x4
+                        GDSOf.STRING = GDSOf.STRING or 0x10
+                        GDSOf.CHILDREN_SIZE = 0x8
 
-                    GDSOf.MAP_SIZE = 0x10
-                    GDSOf.MAP_LELEM = 0x10
-                    GDSOf.MAP_NEXTELEM = 0x20
-                    GDSOf.MAP_KVALUE = 0x30
+                        GDSOf.MAP_SIZE = 0x14
 
-                    GDSOf.DICT_LIST = 0x8
-                    GDSOf.DICT_HEAD = 0x0
-                    GDSOf.DICT_TAIL = 0x8
-                    GDSOf.DICT_SIZE = 0x1C -- GDSOf.DICT_SIZE = 0x10
-                    GDSOf.DICTELEM_PAIR_NEXT = 0x20
+                        GDSOf.ARRAY_TOVECTOR = 0x10
+                        GDSOf.P_ARRAY_TOARR = 0x18
+                        GDSOf.P_ARRAY_SIZE = 0x8
 
-                    GDSOf.DICTELEM_KEYTYPE = 0x0
-                    GDSOf.DICTELEM_KEYVAL = 0x8
-                    GDSOf.DICTELEM_VALTYPE = 0x8
-                    GDSOf.DICTELEM_VALVAL = 0x10
+                        GDSOf.DICT_HEAD = 0x28
+                        GDSOf.DICT_TAIL = 0x30
+                        GDSOf.DICT_SIZE = 0x3C
 
-                    GDSOf.ARRAY_TOVECTOR = 0x10
-                    GDSOf.P_ARRAY_TOARR = 0x8
-                    GDSOf.P_ARRAY_SIZE = 0x18
+                        GDSOf.DICTELEM_KEYTYPE = 0x10
+                        GDSOf.DICTELEM_KEYVAL = 0x18
+                        GDSOf.DICTELEM_VALTYPE = 0x28
 
-                    GDSOf.CONSTELEM_KEYVAL = 0x30
-                    GDSOf.CONSTELEM_VALTYPE = 0x38
+                        GDSOf.CONSTELEM_KEYVAL = 0x10
+                        GDSOf.CONSTELEM_VALTYPE = 0x18
 
-                    GDSOf.GET_TYPE_INDX = 6
+                        GDSOf.VAR_NAMEINDEX_I = 0x18
 
+                        -- 3.x [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
+                        if GDSOf.MINOR_VER <= 4 then
+                            GDSOf.GET_TYPE_INDX = 8    
+                        elseif GDSOf.MINOR_VER == 5 then
+                            GDSOf.GET_TYPE_INDX = 9
+                        elseif GDSOf.MINOR_VER == 6 then
+                            GDSOf.GET_TYPE_INDX = 10
+                        end
+
+                    else
+                        GDSOf.MAJOR_VER = 3
+
+                        GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
+                        GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+                        GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+                        GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+                        GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
+                        GDSOf.CONST_MAP = config.offsetConstMap or 0x0
+                        GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
+
+                        GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x20
+                        GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
+
+                        GDSOf.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
+
+                        GDSOf.MAXTYPE = 27
+                        --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+
+                        GDSOf.GDSCRIPT_REF = 0x10
+
+                        GDSOf.FUNC_MAPVAL = 0x38
+                        GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+                        GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CODE-0x20)
+                        GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_GLOBNAMEPTR-0x10)
+                        GDSOf.STRING = GDSOf.STRING or 0x10
+                        GDSOf.CHILDREN_SIZE = 0x4
+
+                        GDSOf.MAP_SIZE = 0x10
+                        GDSOf.MAP_LELEM = 0x10
+                        GDSOf.MAP_NEXTELEM = 0x20
+                        GDSOf.MAP_KVALUE = 0x30
+
+                        GDSOf.DICT_LIST = 0x8
+                        GDSOf.DICT_HEAD = 0x0
+                        GDSOf.DICT_TAIL = 0x8
+                        GDSOf.DICT_SIZE = 0x1C -- GDSOf.DICT_SIZE = 0x10
+                        GDSOf.DICTELEM_PAIR_NEXT = 0x20
+
+                        GDSOf.DICTELEM_KEYTYPE = 0x0
+                        GDSOf.DICTELEM_KEYVAL = 0x8
+                        GDSOf.DICTELEM_VALTYPE = 0x8
+                        GDSOf.DICTELEM_VALVAL = 0x10
+
+                        GDSOf.ARRAY_TOVECTOR = 0x10
+                        GDSOf.P_ARRAY_TOARR = 0x8
+                        GDSOf.P_ARRAY_SIZE = 0x18
+
+                        GDSOf.CONSTELEM_KEYVAL = 0x30
+                        GDSOf.CONSTELEM_VALTYPE = 0x38
+
+                        GDSOf.GET_TYPE_INDX = 6
+
+                    end
                 end
-
                 if tryRegSceneTree() and setSTtoVPoffset() then 
                     registerSymbol('ptVP','[pSceneTree]+oSTtoVP',false)
                 end
@@ -1741,7 +1733,7 @@
                         local className = getObjectName(candidateAddr)
                         if className == "Viewport" or className == "Window" then
                             registerSymbol('oSTtoVP', i*ptrsize, false)
-                            sendDebugMessage('setSTtoVPoffset: nested loop: '..numtohexstr(i*ptrsize))
+                            sendDebugMessage('setSTtoVPoffset: loop: '..numtohexstr(i*ptrsize))
                             return true
                         end
                         -- for j=13, steps do
@@ -7538,7 +7530,7 @@
                 local className = ''
 
                 if GDSOf.MAJOR_VER == 3 or (GDSOf.MAJOR_VER == 4 and GDSOf.MINOR_VER < 6) then
-                    className = getStringNameStr(metaAddr or 0) or '??'
+                    className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
 
                 else --[[if GDSOf.MAJOR_VER == 4 and GDSOf.MINOR_VER >= 6 then]]
                     metaAddr = getObjectMeta(objAddr)
