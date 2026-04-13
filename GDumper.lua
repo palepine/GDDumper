@@ -198,7 +198,7 @@
                     GDSOf.DICT_TAIL = 0x28
                     GDSOf.DICT_SIZE = 0x3C
                     GDSOf.STRING = 0x8
-
+                    GDSOf.GET_TYPE_INDX = 10
                     -- godot.windows.template_release.x86_64.exe
                     -- Godot Engine v4.6.stable.official.89cea1439
                     offsets.VPChildren = 0x140
@@ -253,11 +253,11 @@
                     return offsets
 
                 elseif majminVersionStr == "4.5" then
-                        GDSOf.DICT_HEAD = 0x20
-                        GDSOf.DICT_TAIL = 0x28
-                        GDSOf.DICT_SIZE = 0x3C
-                        GDSOf.STRING = 0x8
-
+                    GDSOf.DICT_HEAD = 0x20
+                    GDSOf.DICT_TAIL = 0x28
+                    GDSOf.DICT_SIZE = 0x3C
+                    GDSOf.STRING = 0x8
+                    GDSOf.GET_TYPE_INDX = 9
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.5.1.stable.official.f62fdbde1
                     offsets.VPChildren = 0x170
@@ -302,6 +302,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.4" then
+                    GDSOf.GET_TYPE_INDX = 8
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.4.stable.official.4c311cbee
                     offsets.VPChildren = 0x188
@@ -348,6 +349,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.3" then
+                    GDSOf.GET_TYPE_INDX = 8
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.3.stable.official 
                     -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
@@ -396,6 +398,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.2" then
+                    GDSOf.GET_TYPE_INDX = 8
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.2.1.stable.official.b09f793f5 
                     offsets.VPChildren = 0x178
@@ -442,6 +445,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.1" then
+                    GDSOf.GET_TYPE_INDX = 8
                     -- 4.1.2 has some wild offsets however
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.2.1.stable.official.b09f793f5 
@@ -461,7 +465,7 @@
                     offsets.GDScriptFunctionCodeGlobals = 0xF0
 
                     if GDSOf.DEBUGVER then
-                        -- godot.windows.template_debug.x86_64.exe 
+                        -- godot.windows.template_debug.x86_64.exe
                         --  Godot Engine v4.1.1.stable.official
                         GDSOf.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
@@ -482,11 +486,14 @@
                         offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
                         offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+                        offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCode+0x58 -- 0x170
+                        offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeConsts+0x10
                     end
 
                     return offsets
 
                 elseif majminVersionStr == "4.0" then
+                    GDSOf.GET_TYPE_INDX = 8
                     offsets.VPChildren = 0x168
                     offsets.VPObjStringName = 0x1C0
                     offsets.NodeGDScriptInstance = 0x68
@@ -526,6 +533,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.6" then
+                    GDSOf.GET_TYPE_INDX = 6
                     -- godot.windows.opt.64.exe 
                     --  Godot Engine v3.6.stable.custom_build.de2f0f147 
                     offsets.VPChildren = 0x108
@@ -569,7 +577,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.5" then
-                    
+                    GDSOf.GET_TYPE_INDX = 6
                     if GDSOf._x64bit then
                         -- godot.windows.opt.64.exe 
                         -- Godot Engine v3.5.1.stable.official
@@ -676,6 +684,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.4" then
+                    GDSOf.GET_TYPE_INDX = 6
                     --godot.windows.opt.64.exe 
                     --Godot Engine v3.4.4.stable.official.419e713a2
                     offsets.VPChildren = 0x108
@@ -719,6 +728,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.3" then
+                    GDSOf.GET_TYPE_INDX = 6
                     -- godot.windows.opt.64.exe 
                     -- Godot Engine v3.3.2.stable.official 
                     offsets.VPChildren = 0x100
@@ -762,6 +772,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.2" then
+                    GDSOf.GET_TYPE_INDX = 6
                     -- error("Not defined yet")
                     offsets.VPChildren = 0x108
                     offsets.VPObjStringName = 0x120
@@ -906,7 +917,7 @@
 
                     for i=0, 5 do -- 5 pointers
                         local pmethod = readPointer( VTAddr + ptrsize*i )
-                        if not isInsideMMTextSection( pmethod, sectionInfo ) then
+                        if not isInsideSectionRange( pmethod, sectionInfo ) then
                             return false
                         end
                     end
@@ -917,13 +928,24 @@
                 return true
             end
 
-            function isInsideMMTextSection(addr, sectionInfo)
+            function isInsideSectionRange(addr, sectionInfo)
                 if addr == nil or addr == 0 then return false end
-                -- in .text range
                 if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
                     return true
                 end
             end
+
+            function isInsideRDataStatic(strAddr)
+                if strAddr == nil or strAddr == 0 then return false end
+                -- in pck range
+                local sectionInfo = getSectionBounds(".rdata")
+                if sectionInfo == nil then return false end
+                if isInsideSectionRange( strAddr, sectionInfo ) then
+                    return true
+                end
+                return false
+            end
+
 
         --///---///--///---///--///---/// MISC
 
@@ -955,11 +977,11 @@
             end
 
             function debugStepIn()
-                if bDEBUGMode and inMainThread() then debugPrefix = debugPrefix+1 end
+                if bGDDebug and inMainThread() then debugPrefix = debugPrefix+1 end
             end
 
             function debugStepOut()
-                if bDEBUGMode and inMainThread() then debugPrefix = debugPrefix-1 end
+                if bGDDebug and inMainThread() then debugPrefix = debugPrefix-1 end
             end
 
             function getDebugPrefix()
@@ -967,13 +989,13 @@
             end
 
             function sendDebugMessage(msg)
-                if bDEBUGMode and isNotNullOrNil( msg ) and inMainThread()  then
+                if bGDDebug and isNotNullOrNil( msg ) and inMainThread()  then
                     print( getDebugPrefix().. " " .. tostring( msg ) )
                 end
             end
 
             function sendDebugMessageAndStepOut(msg)
-                if bDEBUGMode and isNotNullOrNil( msg ) and inMainThread()  then
+                if bGDDebug and isNotNullOrNil( msg ) and inMainThread()  then
                     print( getDebugPrefix().. " " .. tostring( msg ) )
                     debugStepOut()
                 end
@@ -1145,7 +1167,7 @@
 
                     iterateNodeToStruct( baseaddr, scriptInstStructElem )
 
-                elseif bDISASSEMBLEFUNCTIONS and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+                elseif bDisasmFunc and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
                     disassembleGDFunctionCodeToStruct( baseaddr, struct )
 
                 elseif checkIfGDObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
@@ -1224,27 +1246,27 @@
             function GDDebugSwitch(sender)
                 sender.Checked = not sender.Checked
                 if sender.Checked then
-                    bDEBUGMode = true
+                    bGDDebug = true
                 else
-                    bDEBUGMode = false
+                    bGDDebug = false
                 end
             end
 
             function GDDisasmFuncSwitch(sender)
                 sender.Checked = not sender.Checked
                 if sender.Checked then
-                    bDISASSEMBLEFUNCTIONS = true
+                    bDisasmFunc = true
                 else
-                    bDISASSEMBLEFUNCTIONS = false
+                    bDisasmFunc = false
                 end
             end
 
             function GDStoredOffsetsSwitch(sender)
                 sender.Checked = not sender.Checked
                 if sender.Checked then
-                    bHARDCODEDOFFSETS = true
+                    bHardOffsets = true
                 else
-                    bHARDCODEDOFFSETS = false
+                    bHardOffsets = false
                 end
             end
 
@@ -1254,7 +1276,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\nmajMinVerStr =              '', -- major.minor godot version if you want hardcoded offsets manually, e.g '4.2'\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
+                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n[ENABLE]\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\nminorVersion =              '', -- minor godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n[DISABLE]\nnodeMonitor()"
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1415,22 +1437,25 @@
             ---@param stringNamePtr number
             function getStringNameStr(stringNamePtr)
                 assert((type(stringNamePtr) == 'number'),"string address should be a number, instead got: "..type(stringNamePtr));
-
                 -- debugStepIn()
-
                 local retStringAddr = readPointer(stringNamePtr + GDSOf.STRING)
                 if isNullOrNil(retStringAddr) then
-                    -- sendDebugMessage('getStringNameStr: string address invalid, trying ASCII')
-                    retStringAddr = readPointer( stringNamePtr + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
+                    retStringAddr = readPointer( stringNamePtr + 0x8 ) -- for cases when StringName holds data at 0x8
                     if isNullOrNil(retStringAddr) then
                         -- sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
-                        return '??'
-                    end  -- return an empty string if no string was found
+                        return '??'  -- return an empty string if no string was found
+                    end
 
-                    -- debugStepOut()
-                    return readString( retStringAddr, 100 )
+                    -- sendDebugMessage('getStringNameStr: string address invalid, trying shifting/ASCII')
+                    -- Try ASCII if it's static & in pck
+                    if isInsideRDataStatic(retStringAddr) then
+                        -- debugStepOut()
+                        --a static ASCII string's last resort
+                        return readString( retStringAddr, 100 )
+                    end
+
+                    return readUTFString( retStringAddr ) or '??'
                 end
-
                 -- debugStepOut()
                 return readUTFString( retStringAddr )
             end
@@ -1443,12 +1468,12 @@
 
                 bMonitorNodes = false;
                 bMonitorNodes = config.startMonitoringNodes or bMonitorNodes
-                bDEBUGMode = bDEBUGMode and true or nil
-                bDEBUGMode = config.enableDebugMode or bDEBUGMode                
-                bDISASSEMBLEFUNCTIONS = bDISASSEMBLEFUNCTIONS and true or false
-                bDISASSEMBLEFUNCTIONS = config.enableFunDisasm or bDISASSEMBLEFUNCTIONS
-                bHARDCODEDOFFSETS = bHARDCODEDOFFSETS and true or false
-                bHARDCODEDOFFSETS = config.useHardcodedOffsets or bHARDCODEDOFFSETS
+                bGDDebug = bGDDebug and true or nil
+                bGDDebug = config.enableDebugMode or bGDDebug                
+                bDisasmFunc = bDisasmFunc and true or false
+                bDisasmFunc = config.enableFunDisasm or bDisasmFunc
+                bHardOffsets = bHardOffsets and true or false
+                bHardOffsets = config.useHardcodedOffsets or bHardOffsets
 
                 dumpedMonitorNodes = {};
                 debugPrefix = 1;
@@ -1463,16 +1488,10 @@
                     GDSOf._x64bit = false
                 end
 
-                GDSOf.VERSION_STRING = config.majMinVerStr or nil
-
-                if tryRegSceneTree() and setSTtoVPoffset() then 
-                    registerSymbol('ptVP','[pSceneTree]+oSTtoVP',false)
-                end
-
                 -- a regex plugin must be initialized for that
                 if lregexScan and type(lregexScan) == "function" then defineGDVersion() end
 
-                if bHARDCODEDOFFSETS or not( config.majMinVerStr == nil or config.majMinVerStr == "") then
+                if bHardOffsets or not( config.majMinVerStr == nil or config.majMinVerStr == "") then
                     local offsets = getStoredOffsetsFromVersion( GDSOf.VERSION_STRING )
                     GDSOf.CHILDREN = offsets.VPChildren
                     GDSOf.OBJ_STRING_NAME = offsets.VPObjStringName
@@ -1542,6 +1561,8 @@
                 end
 
                 local majorVersion = GDSOf.MAJOR_VER or config.majorVersion or 0
+                GDSOf.MINOR_VER = GDSOf.MINOR_VER or config.minorVersion or 0
+                GDSOf.VERSION_STRING = GDSOf.MAJOR_VER..'.'..GDSOf.MINOR_VER
 
                 if majorVersion == 4 then
 
@@ -1588,6 +1609,15 @@
                     GDSOf.CONSTELEM_VALTYPE = 0x18
 
                     GDSOf.VAR_NAMEINDEX_I = 0x18
+
+                    -- 3.x [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
+                    if GDSOf.MINOR_VER <= 4 then
+                        GDSOf.GET_TYPE_INDX = 8    
+                    elseif GDSOf.MINOR_VER == 5 then
+                        GDSOf.GET_TYPE_INDX = 9
+                    elseif GDSOf.MINOR_VER == 6 then
+                        GDSOf.GET_TYPE_INDX = 10
+                    end
 
                 else
                     GDSOf.MAJOR_VER = 3
@@ -1640,6 +1670,12 @@
                     GDSOf.CONSTELEM_KEYVAL = 0x30
                     GDSOf.CONSTELEM_VALTYPE = 0x38
 
+                    GDSOf.GET_TYPE_INDX = 6
+
+                end
+
+                if tryRegSceneTree() and setSTtoVPoffset() then 
+                    registerSymbol('ptVP','[pSceneTree]+oSTtoVP',false)
                 end
 
                 gdOffsetsDefined = true
@@ -1656,7 +1692,7 @@
                     local function resolveAddress(instructionAddr, offsetToValue, offsetToNextIntr)
                         local relativeAddr = readInteger( instructionAddr + offsetToValue )
                         local nextAddr = getAddress( instructionAddr + offsetToNextIntr )
-                        registerSymbol('pSceneTree',(nextAddr+relativeAddr),false)
+                        registerSymbol('pSceneTree',(nextAddr+relativeAddr),false) -- TODO: check for classname?
                     end
                     local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
                     if addr == 0 or addr == nil then return false end
@@ -1671,6 +1707,7 @@
                 table.insert(sigs, "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?")
                 table.insert(sigs, "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05")
+                table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26")
 
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24")
                 table.insert(sigs, "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB")
@@ -1685,6 +1722,40 @@
 
             function setSTtoVPoffset()
 
+                local sceneTree = readPointer('pSceneTree')
+                local ptrsize, steps
+
+                if targetIs64Bit() then
+                    ptrsize = 0x8
+                    steps = 0x400 / ptrsize
+                else
+                    ptrsize = 0x4
+                    steps = 0x200 / ptrsize
+                end
+
+                -- isn't elegant either
+                for i=25, steps do
+                    local candidateAddr = readPointer(sceneTree + i*ptrsize)
+                    if isNotNullOrNil(candidateAddr) and isMMVTable( readPointer(candidateAddr) ) then
+
+                        local className = getObjectName(candidateAddr)
+                        if className == "Viewport" or className == "Window" then
+                            registerSymbol('oSTtoVP', i*ptrsize, false)
+                            sendDebugMessage('setSTtoVPoffset: nested loop: '..numtohexstr(i*ptrsize))
+                            return true
+                        end
+                        -- for j=13, steps do
+                        --     if readPointer(candidateAddr + j*ptrsize) == sceneTree then
+                        --         registerSymbol('oSTtoVP', i*ptrsize, false)
+                        --         sendDebugMessage('setSTtoVPoffset: nested loop: '..numtohexstr(i*ptrsize))
+                        --         return true
+                        --     end
+                        -- end
+
+                    end
+                end
+
+                -- the approach based on signatures needs more complexity to be consistent
                 local function setVPRVA(aobSignature)
                     local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
                     if addr == 0 or addr == nil then return false end
@@ -1692,7 +1763,6 @@
                     registerSymbol('oSTtoVP',relativeAddr,false)
                     return true
                 end
-
                 local sigs = {}
                 -- table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8")
                 table.insert(sigs, "48 8B 9? ? ? ? ? 4? 8D 8F ? ? ? ? 45 33 C0 E8")
@@ -1721,7 +1791,7 @@
                 table.insert(sigs, "48 39 86 ? ? ? ? 74 ? C7 44 24")
                 table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 66 2E 0F 1F 84 00")
                 table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
-                for i, sig in ipairs(sigs) do if setVPRVA(sig) then sendDebugMessage('setSTtoVPoffset: hit at: '..tostring(i).."\t"..sig) return true end end
+                for i, sig in ipairs(sigs) do if setVPRVA(sig) then sendDebugMessage('setSTtoVPoffset: hit at: '..tostring(i).."\t"..sig.."\t value: "..numtohexstr(getAddress('oSTtoVP'))) return true end end
                 return false
             end
 
@@ -1927,7 +1997,7 @@
 
             local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
                 local funcRoot
-                if not bDISASSEMBLEFUNCTIONS then
+                if not bDisasmFunc then
                     funcRoot = createChildStructElem( funcStructElement, "func: " .. funcName, GDSOf.FUNC_MAPVAL, vtPointer, "GDFunction" )
                     local funcValueAddr = readPointer(mapElement + GDSOf.FUNC_MAPVAL)
                     emitFunctionCodeStruct(funcRoot, funcName)
@@ -3240,27 +3310,14 @@
             function getGDFunctionName(mapElement)
                 debugStepIn()
                 
-                local mapElementValue = readPointer( mapElement + GDSOf.CONSTELEM_KEYVAL ) -- layout is similar?
+                local mapElementValue = readPointer( mapElement + 0x10 ) -- TODO: GDSOf.CONSTELEM_KEYVAL layout is similar?
                 if isNullOrNil( mapElementValue ) then
                     sendDebugMessageAndStepOut('getGDFunctionName: (hash)mapElementKey invalid');
                     return 'F??'
                 end
-                local functionNameAddr = readPointer( mapElementValue + GDSOf.STRING )
-
-                if isNullOrNil(functionNameAddr) then
-                    sendDebugMessage('getGDFunctionName: functionname invalid')
-                    functionNameAddr = readPointer( mapElementValue + GDSOf.PTRSIZE )
-                    
-                    if isNullOrNil( functionNameAddr ) then
-                        sendDebugMessageAndStepOut('getGDFunctionName: string address invalid, not ASCII either')
-                        return 'F??'
-                    end
-
-                    debugStepOut()
-                    return readString( constNameStr, 100 ) 
-                end
+                
                 debugStepOut()
-                return readUTFString( functionNameAddr )
+                return getStringNameStr( mapElementValue )
             end
 
             --- returns a head element, tail element and (hash)Map size
@@ -6399,25 +6456,34 @@
             end
 
             function checkIfGDFunction( funcAddr )
+                local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
+                local OPCODEMAX = 250
+                if GDSOf.MAJOR_VER == 3 or GDSOf.VERSION_STRING == "4.1" then
+                    funcResStringNameAddr = readPointer( funcAddr ) -- StringName source at 0x0;
+                    funcStringNameAddr = 0xDEADBEEF -- just a placeholder
+                else
+                    funcStringNameAddr = readPointer( funcAddr ) -- StringName funct name;
+                    funcResStringNameAddr = readPointer( funcAddr + GDSOf.PTRSIZE ) -- StringName source;
+                end
+                
+                funcCodeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
+                firstOpcode = readInteger(funcCodeAddr) or 0
 
-                local funcStringNameAddr = readPointer( funcAddr ) -- StringName name;
-                local funcResStringNameAddr = readPointer( funcAddr + GDSOf.PTRSIZE ) -- StringName source;
-                local funcCodeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
-
-                if isNotNullOrNil(funcStringNameAddr) and isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcCodeAddr) --[[ isPointerNotNull( funcAddr + GDSOf.FUNC_CODE ) ]] then
-
-                    local funcStringAddr = readPointer(funcStringNameAddr + GDSOf.STRING)
-                    if isNullOrNil( funcStringAddr ) then
-                        funcStringAddr = readPointer( funcStringNameAddr + 0x8 )
-                        if isNullOrNil( funcStringAddr ) then
-                            return false
-                        end
-                    end
+                if isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcStringNameAddr) and (firstOpcode < OPCODEMAX) then
 
                     local resStringAddr = readPointer( funcResStringNameAddr + GDSOf.STRING )
-
                     if isNullOrNil( resStringAddr ) and readUTFString( resStringAddr, 4 ) ~= 'res:' then
                         return false
+                    end
+
+                    if not (GDSOf.MAJOR_VER == 3 or GDSOf.VERSION_STRING == "4.1") then
+                        local funcStringAddr = readPointer(funcStringNameAddr + GDSOf.STRING)
+                        if isNullOrNil( funcStringAddr ) then
+                            funcStringAddr = readPointer( funcStringNameAddr + 0x8 )
+                            if isNullOrNil( funcStringAddr ) then
+                                return false
+                            end
+                        end
                     end
 
                     return true
@@ -7456,6 +7522,35 @@
                 end
             end
 
+            function getObjectMeta(objAddr)
+                local vtable = readPointer( objAddr )
+                if not isMMVTable(vtable) then return; end
+                local offsetToMethod = GDSOf.PTRSIZE * GDSOf.GET_TYPE_INDX
+                local method = readPointer( vtable + offsetToMethod )
+                return executeMethod( 0, nil, method, objAddr )
+            end
+
+            function getObjectName(objAddr)
+                -- debugStepIn()
+                -- up until 4.6, the method was StringName* Object::_get_class_namev()
+                -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object name
+                local metaAddr = getObjectMeta(objAddr)
+                local className = ''
+
+                if GDSOf.MAJOR_VER == 3 or (GDSOf.MAJOR_VER == 4 and GDSOf.MINOR_VER < 6) then
+                    className = getStringNameStr(metaAddr or 0) or '??'
+
+                else --[[if GDSOf.MAJOR_VER == 4 and GDSOf.MINOR_VER >= 6 then]]
+                    metaAddr = getObjectMeta(objAddr)
+                    local stringNameAddr = readPointer( metaAddr + GDSOf.PTRSIZE )
+                    className = getStringNameStr(stringNameAddr or 0) or '??'
+                end
+
+                -- debugStepOut()
+                return className
+            end
+
+
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dumper
 
             --- returns a node dictionary
@@ -7549,7 +7644,7 @@
             end
 
             function nodeMonitorThread(thr)
-
+                thr.Name = "GDMonitorThread"
                 while(bMonitorNodes) do
                     local mainNodeDict = getMainNodeDict()
                     dumpedMonitorNodes = {};
