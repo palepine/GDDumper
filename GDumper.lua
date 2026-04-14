@@ -832,6 +832,10 @@
                 return success and result ~= nil
             end
 
+            function isInvalidPointer(addr)
+                return isValidPointer(addr) == false
+            end
+
             --- checks if the value is a valid pointer and not nullptr
             ---@param addr number
             ---@return boolean
@@ -1437,10 +1441,11 @@
             --- reads a string from StringName
             ---@param stringNamePtr number
             function getStringNameStr(stringNamePtr)
-                assert((type(stringNamePtr) == 'number'),"string address should be a number, instead got: "..type(stringNamePtr));
+                if isNullOrNil(stringNamePtr) then return 'NaN_strname' end
                 -- debugStepIn()
                 local retStringAddr = readPointer(stringNamePtr + GDSOf.STRING)
-                if isNullOrNil(retStringAddr) then
+
+                if isNullOrNil(retStringAddr) or isInvalidPointer(retStringAddr) then
                     retStringAddr = readPointer( stringNamePtr + 0x8 ) -- for cases when StringName holds data at 0x8
                     if isNullOrNil(retStringAddr) then
                         -- sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
@@ -2158,9 +2163,9 @@
 
             local function getVariantNameFromMapElement(mapElement)
                 if GDSOf.MAJOR_VER == 4 then
-                    return getStringNameStr(readPointer(mapElement + GDSOf.CONSTELEM_KEYVAL))
+                    return getStringNameStr( readPointer(mapElement + GDSOf.CONSTELEM_KEYVAL) )
                 else
-                    return getStringNameStr(readPointer(mapElement + GDSOf.MAP_KVALUE))
+                    return getStringNameStr( readPointer(mapElement + GDSOf.MAP_KVALUE) )
                 end
             end
 
@@ -2192,7 +2197,7 @@
                 if GDSOf.MAJOR_VER == 4 then
                     return getGDFunctionName(mapElement)
                 end
-                return getStringNameStr(readPointer(mapElement + GDSOf.MAP_KVALUE))
+                return getStringNameStr( readPointer(mapElement + GDSOf.MAP_KVALUE) )
             end
 
             local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
@@ -2300,6 +2305,7 @@
                 local keyName = "UNKNOWN"
 
                 if keyTypeName == 'STRING' then
+                    -- immediate String
                     keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
                 elseif keyTypeName == 'STRING_NAME' then
                     keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
@@ -2883,24 +2889,8 @@
                     return 'N??'
                 end
 
-                nodeNamePtr = readPointer( nodeNamePtr + GDSOf.STRING )
-                if isNullOrNil(nodeNamePtr) then
-                    sendDebugMessage('getNodeName: string address invalid, trying ASCII')
-
-                    nodeNamePtr = readPointer( nodeAddr + GDSOf.OBJ_STRING_NAME )
-                    nodeNamePtr = readPointer( nodeNamePtr + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
-                    if isNullOrNil(nodeNamePtr) then
-                        sendDebugMessageAndStepOut('getNodeName: string address invalid, not ASCII either');
-                        return 'N??'
-                    end 
-                    debugStepOut()
-
-                    return readString( nodeNamePtr, 100 )
-
-                end
                 debugStepOut()
-
-                return readUTFString( nodeNamePtr )
+                return getStringNameStr( nodeNamePtr )
             end
 
             function getNodeNameFromGDScript( nodeAddr )
@@ -2925,7 +2915,8 @@
                     sendDebugMessageAndStepOut('getNodeNameFromGDScript: nodeName invalid or not a pointer (?)')
                     return 'N??'
                 end
-
+                
+                -- immediate String
                 local GDScriptName = readUTFString( GDScriptNameAddr )
                 if GDScriptName == nil or GDScriptName == '' then
                     sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
@@ -3213,6 +3204,7 @@
 
                 debugStepOut()
 
+                -- it's immediate String
                 return readUTFString( gdScriptName, strSize )
             end
 
@@ -3311,7 +3303,7 @@
                 end
                 
                 debugStepOut()
-                return getStringNameStr( mapElementValue )
+                return getStringNameStr( readPointer( mapElementValue or 0 ) )
             end
 
             --- returns a head element, tail element and (hash)Map size
@@ -6465,8 +6457,7 @@
 
                 if isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcStringNameAddr) and (firstOpcode < OPCODEMAX) then
 
-                    local resStringAddr = readPointer( funcResStringNameAddr + GDSOf.STRING )
-                    if isNullOrNil( resStringAddr ) and readUTFString( resStringAddr, 4 ) ~= 'res:' then
+                    if getStringNameStr( funcResStringNameAddr ) ~= 'res:' then
                         return false
                     end
 
@@ -6569,23 +6560,8 @@
                     return 'C??'
                 end
 
-                local constNameStr = readPointer( mapElementKey + GDSOf.STRING )
-
-                if isNullOrNil(constNameStr) then
-                    sendDebugMessage('getNodeConstName: string address invalid, trying ASCII');
-                    constNameStr = readPointer( mapElementKey + 0x8 ) -- for cases when StringName holds a static ASCII string at 0x8
-                    if isNullOrNil(constNameStr) then
-                        sendDebugMessageAndStepOut('getNodeName: string address invalid, not ASCII either')
-                        return 'C??'
-                    end
-                    debugStepOut()
-
-                    return readString( constNameStr, 100 )
-                end
-
                 debugStepOut()
-
-                return readUTFString( constNameStr )
+                return getStringNameStr( readPointer( mapElementKey ) or 0 )
             end
 
             -- iterates over const (hash)map of a node and creates addresses for it
