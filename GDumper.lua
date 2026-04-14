@@ -6610,7 +6610,6 @@
                 local function querySignatures()
                     local sigs = {}
                     table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
-                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
                     table.insert(sigs, { sig="48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize= 28 } ) --4.6 ret 64>
                     table.insert(sigs, { sig="48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize=34  } ) --4.5
                     table.insert(sigs, { sig="4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4
