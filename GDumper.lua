@@ -702,6 +702,7 @@
                     offsets.GDScriptFunctionCode = 0x50
                     offsets.GDScriptFunctionCodeConsts = 0x20
                     offsets.GDScriptFunctionCodeGlobals = 0x30
+                    --timer 1E0 (float) waittime 1E8 time_left 1F0 paused?
 
                     if GDSOf.DEBUGVER then
                         -- error("Not defined yet")
@@ -3327,8 +3328,8 @@
             ---@return boolean -- true if the returned pointer was shifted back to get a valid ptr
             function checkForVT( objectPtr )
                 local objectAddr = readPointer( objectPtr ) -- it's either an obj ptr or zero
-
-                if (not isMMVTable( readPointer( objectAddr ) ) ) then -- check for vtable
+                local vtable = readPointer( objectAddr )
+                if not isMMVTable( vtable ) then -- check for vtable
                     -- debugStepIn()
 
                     -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
@@ -3336,12 +3337,13 @@
                     local wrapperAddr = readPointer( adjustedObjectPtr ) -- this will be a wrapped obj ptr
                     objectAddr = readPointer( wrapperAddr )
 
-                    if isNullOrNil(wrapperAddr) or not isValidPointer(wrapperAddr) then -- check the wrapper
+                    if isNullOrNil(wrapperAddr) or isInvalidPointer(wrapperAddr) then -- check the wrapper
                         -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not an obj  ptr, leave it be')
                         return objectPtr, false; -- revert the value, whatever
                     end
-
-                    if isMMVTable( objectAddr ) then -- check for vtable to be safe
+                    
+                    local vtable = readPointer( objectAddr )
+                    if isMMVTable( vtable ) then -- check for vtable to be safe
                         -- sendDebugMessageAndStepOut('checkForVT: shifted OBJ addr is a ptr, returning it')
                         return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
 
@@ -6692,6 +6694,13 @@
                     [rsp+20] int32_t p_argcount
                     [rsp+28] Callable::CallError *r_err (on stack)
                     [rsp+30] CallState *p_state (on stack, usually nullptr)
+                    
+                    [ENABLE]
+                    alloc(dummySpace,$1000,$process)
+                    registersymbol(dummySpace)
+                    [DISABLE]
+                    dealloc(*)
+                    unregistersymbol(*)
 
 
                 ]]
@@ -6746,7 +6755,7 @@
                 end
 
                 debugStepOut()
-                return getStringNameStr( readPointer( mapElementKey ) or 0 )
+                return getStringNameStr( mapElementKey )
             end
 
             -- iterates over const (hash)map of a node and creates addresses for it
