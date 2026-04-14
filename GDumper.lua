@@ -1124,19 +1124,55 @@
 
             --- register our own structure dissector callback
             function enableGDDissect()
-                if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+                -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
                 -- override CE's callback
-                if structDissectID ~= nil then unregisterStructureDissectOverride( structDissectID ) end
-                structDissectID = registerStructureDissectOverride( GDStructureDissect )
+                if GDstructDissectID ~= nil then
+                    unregisterStructureDissectOverride( GDstructDissectID )
+                end
+                GDstructDissectID = registerStructureDissectOverride( GDStructureDissect )
             end
 
             --- unregister our structure dissector callback
             function disableGDDissect()
                 -- restore CE's callback
-                if structDissectID ~= nil then
-                    unregisterStructureDissectOverride( structDissectID )
+                if GDstructDissectID ~= nil then
+                    unregisterStructureDissectOverride( GDstructDissectID )
                 end
-                structDissectID = nil;
+                GDstructDissectID = nil;
+            end
+
+            function enableGDStructNameLookup()
+                -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+                -- override CE's lookup
+                if GDStructNameLookupID ~= nil then
+                    unregisterStructureNameLookup( GDStructNameLookupID )
+                end
+                GDStructNameLookupID = registerStructureNameLookup( GDStructNameLookup )
+            end
+
+            function disableGDStructNameLookup()
+                -- restore CE's lookup
+                if GDStructNameLookupID ~= nil then
+                    unregisterStructureNameLookup( GDStructNameLookupID )
+                end
+                GDStructNameLookupID = nil;
+            end
+
+            function enableGDAddressLookup()
+                -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+                -- override CE's lookup
+                if GDAddressLookupID ~= nil then
+                    unregisterAddressLookupCallback( GDAddressLookupID )
+                end
+                GDAddressLookupID = registerAddressLookupCallback( GDStructNameLookup )
+            end
+
+            function disableGDAddressLookup()
+                -- restore CE's lookup
+                if GDAddressLookupID ~= nil then
+                    unregisterAddressLookupCallback( GDAddressLookupID )
+                end
+                GDAddressLookupID = nil;
             end
 
             --- overriden structure dissector function
@@ -1192,6 +1228,39 @@
                 return true
             end
 
+            --- structname lookup that uses the virtual table to guess the type
+            ---@param addr integer @address to typeguess
+            ---@return string @name; base address isn't returned
+            function GDStructNameLookup(addr)
+                if isInvalidPointer(addr) or not isMMVTable( readPointer(addr) ) then 
+                    return nil
+                end
+
+                local result = getObjectName(addr)
+                if result == nil or result == '??' then
+                    return nil
+                end
+                
+                return result
+            end
+
+            --- address lookup that uses the virtual table to guess the type
+            ---@param addr integer @address to typeguess
+            ---@return string @name;
+            function GDAddressLookup(addr)
+                return nil
+                -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then 
+                --     return nil
+                -- end
+
+                -- local result = getObjectName(addr)
+                -- if result == nil or result == '??' then
+                --     return nil
+                -- end
+
+                -- return result
+            end
+
         --///---///--///---///--///---/// GUI
 
             --- creates a menu button in the main menu
@@ -1225,10 +1294,12 @@
                     mainMenu.Items.add( gdMenuItem )
                     addCustomMenuButtonTo( gdMenuItem, 'VP Struct', createVPStructForm )
                     addCustomMenuButtonTo( gdMenuItem, 'GD Dissector', GDDissectorSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch )
-                    addCustomMenuButtonTo( gdMenuItem, 'Debug Mode', GDDebugSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'GD Stuct Lookup', GDStructNameLookupSwitch )
+                    -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
                     addCustomMenuButtonTo( gdMenuItem, 'Add Template', addGDMemrecToTable )
+                    addCustomMenuButtonTo( gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch )
+                    addCustomMenuButtonTo( gdMenuItem, 'Debug Mode', GDDebugSwitch )
                     local menuItem = addCustomMenuButtonTo( gdMenuItem, 'Append Script', appendDumperScript )
                     -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
                     addCustomMenuButtonTo( gdMenuItem, 'Load Script', loadDumperScript )
@@ -1239,12 +1310,32 @@
 
             --- toggling dissector override
             function GDDissectorSwitch(sender)
-                if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+                -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
                 sender.Checked = not sender.Checked
                 if sender.Checked then
                     enableGDDissect()
                 else
                     disableGDDissect()
+                end
+            end
+
+            function GDStructNameLookupSwitch(sender)
+                if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+                sender.Checked = not sender.Checked
+                if sender.Checked then
+                    enableGDStructNameLookup()
+                else
+                    disableGDStructNameLookup()
+                end
+            end
+
+            function GDAddressLookupSwitch(sender)
+                if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+                sender.Checked = not sender.Checked
+                if sender.Checked then
+                    enableGDAddressLookup()
+                else
+                    disableGDAddressLookup()
                 end
             end
 
@@ -6496,6 +6587,11 @@
             end
 
             function getGDFunctionCall()
+                -- 4.6
+                -- "4C 89 74 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8"
+                -- "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8"
+                -- 4.5
+                -- "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8"
                 -- 4.4
                 -- "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8"
                 -- 4.3
@@ -7559,6 +7655,8 @@
                 -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object name
                 local metaAddr = getObjectMeta(objAddr)
                 local className = ''
+                
+                if isNullOrNil(metaAddr) then return '??' end
 
                 if GDSOf.MAJOR_VER == 3 or (GDSOf.MAJOR_VER == 4 and GDSOf.MINOR_VER < 6) then
                     className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
