@@ -197,7 +197,7 @@
                     GDSOf.DICT_HEAD = 0x20
                     GDSOf.DICT_TAIL = 0x28
                     GDSOf.DICT_SIZE = 0x3C
-                    -- GDSOf.STRING = 0x8
+                    GDSOf.STRING = 0x8 -- we need it for correct addr/struct representation
                     GDSOf.GET_TYPE_INDX = 10
                     -- godot.windows.template_release.x86_64.exe
                     -- Godot Engine v4.6.stable.official.89cea1439
@@ -256,7 +256,7 @@
                     GDSOf.DICT_HEAD = 0x20
                     GDSOf.DICT_TAIL = 0x28
                     GDSOf.DICT_SIZE = 0x3C
-                    -- GDSOf.STRING = 0x8
+                    GDSOf.STRING = 0x8 -- we need it for correct addr/struct representation
                     GDSOf.GET_TYPE_INDX = 9
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.5.1.stable.official.f62fdbde1
@@ -1439,14 +1439,14 @@
             end
 
             --- reads a string from StringName
-            ---@param stringNamePtr number
-            function getStringNameStr(stringNamePtr)
-                if isNullOrNil(stringNamePtr) then return 'NaN_strname' end
+            ---@param stringNameAddr number
+            function getStringNameStr(stringNameAddr)
+                if isNullOrNil(stringNameAddr) then return 'NaN_strname' end
                 -- debugStepIn()
-                local retStringAddr = readPointer(stringNamePtr + GDSOf.STRING)
+                local retStringAddr = readPointer(stringNameAddr + GDSOf.STRING)
 
                 if isNullOrNil(retStringAddr) or isInvalidPointer(retStringAddr) then
-                    retStringAddr = readPointer( stringNamePtr + 0x8 ) -- for cases when StringName holds data at 0x8
+                    retStringAddr = readPointer( stringNameAddr + 0x8 ) -- for cases when StringName holds data at 0x8
                     if isNullOrNil(retStringAddr) then
                         -- sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
                         return '??'  -- return an empty string if no string was found
@@ -3314,14 +3314,14 @@
             function getGDFunctionName(mapElement)
                 debugStepIn()
                 
-                local mapElementValue = readPointer( mapElement + 0x10 ) -- TODO: GDSOf.CONSTELEM_KEYVAL layout is similar?
+                local mapElementValue = readPointer( mapElement + GDSOf.PTRSIZE*2 ) -- it's after next and prev
                 if isNullOrNil( mapElementValue ) then
                     sendDebugMessageAndStepOut('getGDFunctionName: (hash)mapElementKey invalid');
                     return 'F??'
                 end
                 
                 debugStepOut()
-                return getStringNameStr( readPointer( mapElementValue or 0 ) )
+                return getStringNameStr( mapElementValue )
             end
 
             --- returns a head element, tail element and (hash)Map size
