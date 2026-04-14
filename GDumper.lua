@@ -1075,7 +1075,7 @@
                 struct.beginUpdate()
                 for i=0, #mainNodeTable-1 do
                     structElem = struct.addElement()
-                    structElem.BackgroundColor = 0xFF8080
+                    structElem.BackgroundColor = 0x6C3157
                     structElem.Offset = i * GDSOf.PTRSIZE -- GDSOf.PTRSIZE
                     structElem.VarType = vtPointer
                     structElem.Name = getNodeName( mainNodeTable[i+1] )
@@ -1193,7 +1193,7 @@
                     struct.Name = ' Node: '..nodeName
                     local scriptInstStructElem = struct.addElement()
                     scriptInstStructElem.Name = 'GDScriptInstance'
-                    scriptInstStructElem.BackgroundColor = 0xFF0080
+                    scriptInstStructElem.BackgroundColor = 0x400040
                     scriptInstStructElem.Offset = GDSOf.GDSCRIPTINSTANCE
                     scriptInstStructElem.VarType = vtPointer
 
@@ -2691,10 +2691,10 @@
                     if checkForGDScript( readPointer(realPtr) ) then
                         if emitter == GDEmitters.StructEmitter then
                             local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: "..entry.name, realOffset, vtPointer);    
-                            nodeChild.BackgroundColor = 0xFF8080
+                            nodeChild.BackgroundColor = 0x6C3157
                         else
                             local nodeChild = emitter.branch(objectContext, objectParent, "mNode: "..entry.name, realOffset, vtPointer, "Node");
-                            nodeChild.BackgroundColor = 0xFF8080
+                            nodeChild.BackgroundColor = 0x6C3157
 
                             if emitter.recurseNode then -- TODO: redundant?
                                 emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) -- 
@@ -3147,7 +3147,7 @@
                     -- sendDebugMessage("Checking GDScript for "..nodeName)
 
                     if checkForGDScript( nodeAddr ) then
-                        addLayoutStructElem( childrenArrStructElem, objectTypeName..' cNode: '..nodeName, 0xFF8080, (i*GDSOf.PTRSIZE), vtPointer)
+                        addLayoutStructElem( childrenArrStructElem, objectTypeName..' cNode: '..nodeName, 0x6C3157, (i*GDSOf.PTRSIZE), vtPointer)
                     else
                         addStructureElem( childrenArrStructElem, objectTypeName..' cObj: '..nodeName, (i*GDSOf.PTRSIZE), vtPointer)
                     end
@@ -3341,7 +3341,7 @@
                         -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not an obj  ptr, leave it be')
                         return objectPtr, false; -- revert the value, whatever
                     end
-                    
+
                     local vtable = readPointer( objectAddr )
                     if isMMVTable( vtable ) then -- check for vtable to be safe
                         -- sendDebugMessageAndStepOut('checkForVT: shifted OBJ addr is a ptr, returning it')
