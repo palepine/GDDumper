@@ -2590,10 +2590,13 @@
                 end
 
                 GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
-                    sendDebugMessage("OBJECT case: name: "..entry.name.." addr: "..numtohexstr(entry.variantPtr) )
                     local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable);
+                    local objectTypeName = getObjectName( readPointer( realPtr ) )
+                    objectTypeName = '<'..objectTypeName..'>'
 
-                    if checkForGDScript(readPointer(realPtr)) then
+                    sendDebugMessage("OBJECT case: name: "..entry.name.." type: "..objectTypeName.." addr: "..numtohexstr(realPtr) )
+
+                    if checkForGDScript( readPointer(realPtr) ) then
                         if emitter == GDEmitters.StructEmitter then
                             local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: "..entry.name, realOffset, vtPointer);    
                             nodeChild.BackgroundColor = 0xFF8080
@@ -2607,7 +2610,7 @@
                         end
 
                     else
-                        emitter.leaf(objectContext, objectParent, "obj: " .. entry.name, realOffset, vtPointer);
+                        emitter.leaf(objectContext, objectParent, objectTypeName.." obj: " .. entry.name, realOffset, vtPointer);
                     end
                 end
 
@@ -3042,13 +3045,15 @@
                     if nodeName == nil or nodeName == 'N??'then
                         nodeName = getNodeNameFromGDScript( nodeAddr )
                     end
+                    local objectTypeName = getObjectName( nodeAddr )
+                    objectTypeName = '<'..objectTypeName..'>'
 
                     -- sendDebugMessage("Checking GDScript for "..nodeName)
 
                     if checkForGDScript( nodeAddr ) then
-                        addLayoutStructElem( childrenArrStructElem, 'Ch Node: '..nodeName, 0xFF8080, (i*GDSOf.PTRSIZE), vtPointer)
+                        addLayoutStructElem( childrenArrStructElem, objectTypeName..' cNode: '..nodeName, 0xFF8080, (i*GDSOf.PTRSIZE), vtPointer)
                     else
-                        addStructureElem( childrenArrStructElem, 'Ch Obj: '..nodeName, (i*GDSOf.PTRSIZE), vtPointer)
+                        addStructureElem( childrenArrStructElem, objectTypeName..' cObj: '..nodeName, (i*GDSOf.PTRSIZE), vtPointer)
                     end
                 end
 
@@ -3132,25 +3137,38 @@
                 end
                 table.insert( dumpedDissectorNodes , nodeAddr )
 
-                local varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDSOf.VAR_VECTOR, vtPointer )
-                local scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDSOf.GDSCRIPT_REF, vtPointer )
-                local constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', --[[0x400000]] nil, GDSOf.CONST_MAP, vtPointer )
-                local functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', --[[0x400000]] nil, GDSOf.FUNC_MAP, vtPointer )
+                local varVectorStructElem, scriptStructElem, constMapStructElem, functMapStructElem
+                local gdScriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE ) or 0x0
+                local gdScriptAddr = readPointer( gdScriptInstanceAddr + GDSOf.GDSCRIPT_REF )
 
-                sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: '..tostring(nodeName) )
-                varVectorStructElem.ChildStruct = createStructure( 'Vars' )
-                iterateVecVarToStruct( nodeAddr , varVectorStructElem )        
+                scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDSOf.GDSCRIPT_REF, vtPointer )             
 
-                if GDSOf.CONST_MAP ~= 0 then
-                    sendDebugMessage('iterateNodeToStruct: STEP: Constants for: '..tostring(nodeName) )
-                    constMapStructElem.ChildStruct = createStructure( 'Consts' )
-                    iterateNodeConstToStruct( nodeAddr , constMapStructElem )
+                -- we check if consts, funcs, veriants exist
+                if isNotNullOrNil( readPointer( gdScriptInstanceAddr + GDSOf.VAR_VECTOR ) ) then
+                    varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDSOf.VAR_VECTOR, vtPointer )
+                    sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: '..tostring(nodeName) )
+                    varVectorStructElem.ChildStruct = createStructure( 'Vars' )
+                    iterateVecVarToStruct( nodeAddr , varVectorStructElem )
+                else
+                    sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS skipped: nothing to process: '..tostring(nodeName) )
                 end
 
-                if GDSOf.FUNC_MAP ~= 0 then
+                if isNotNullOrNil(GDSOf.CONST_MAP) and isNotNullOrNil( readPointer( gdScriptAddr + GDSOf.CONST_MAP ) ) then
+                    constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', --[[0x400000]] nil, GDSOf.CONST_MAP, vtPointer )
+                    sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: '..tostring(nodeName) )
+                    constMapStructElem.ChildStruct = createStructure( 'Consts' )
+                    iterateNodeConstToStruct( nodeAddr , constMapStructElem )
+                else
+                    sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS skipped: nothing to process: '..tostring(nodeName) )
+                end
+
+                if isNotNullOrNil(GDSOf.FUNC_MAP) and isNotNullOrNil( readPointer( gdScriptAddr + GDSOf.FUNC_MAP ) ) then
+                    functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', --[[0x400000]] nil, GDSOf.FUNC_MAP, vtPointer )
                     sendDebugMessage('iterateNodeToStruct: STEP: Functions for: '..tostring(nodeName) )
                     functMapStructElem.ChildStruct = createStructure( 'Funcs' )
                     iterateNodeFuncMapToStruct( nodeAddr , functMapStructElem )
+                else
+                    sendDebugMessage('iterateNodeToStruct: STEP: FUNC skipped: nothing to process: '..tostring(nodeName) )
                 end
 
                 debugStepOut()
