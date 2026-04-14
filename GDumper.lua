@@ -2970,6 +2970,10 @@
                 return
             end
 
+            function getNodeGDScriptInstance(nodeAddr)
+                -- TODO
+            end
+
             --- get a Node name by addr
             ---@param nodeAddr number
             function getNodeName( nodeAddr )
@@ -3395,7 +3399,6 @@
                 return findMapEntryByName( mapHead, constName, getNodeConstName, getConstMapLookupResult, getNextMapElement )
 
             end
-
 
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// Func
@@ -6586,32 +6589,88 @@
                 return false
             end
 
-            function getGDFunctionCall()
-                -- 4.6
-                -- "4C 89 74 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8"
-                -- "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8"
-                -- 4.5
-                -- "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8"
-                -- 4.4
-                -- "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8"
-                -- 4.3
-                -- "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8"
-                -- 4.4 - 4.3
-                -- "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8"
-                -- 4.2
-                -- "4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8"
-                -- 4.1
-                -- "4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8"
-                -- "48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB"
-                -- 3.6
-                -- "48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8"
-                --3.5
-                -- "4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8"
-                --3.5 - 3.4 3.3
-                -- "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8"
+            function getGDVMCallPtr()
+                
+                local function resolveVM_RELA(aobSignature, sigByteLength, offsetToNextIntr)
+                    local function resolveAddress(instructionAddr, sigByteLength, offsetToNextIntr)
+                        local callInstr = instructionAddr + sigByteLength - 1
+                        local relativeAddr = readInteger( callInstr + 1 )
+                        local nextAddr = getAddress( callInstr + offsetToNextIntr )
+                        local relativeAddr = readInteger( instructionAddr + sigByteLength )
+                        registerSymbol('GDFunctionCall',(nextAddr+relativeAddr),false)
+                    end
+                    local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+                    if addr == 0 or addr == nil then return false end
+                    resolveAddress(addr, sigByteLength, 5)
+                    return true
+                end
+
+                local function querySignatures()
+                    local sigs = {}
+                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
+                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
+                    table.insert(sigs, { sig="48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize= 28 } ) --4.6 ret 64>
+                    table.insert(sigs, { sig="48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize=34  } ) --4.5
+                    table.insert(sigs, { sig="4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4
+                    table.insert(sigs, { sig="4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.3
+                    table.insert(sigs, { sig="4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize= 25 } ) --4.3 ret 64<
+                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4-4.3
+                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize= 16 } ) --4.2
+                    table.insert(sigs, { sig="4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize= 24 } ) --4.1
+                    table.insert(sigs, { sig="48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize= 30 } ) --4.1
+                    table.insert(sigs, { sig="48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize= 32 } ) --3.6
+                    table.insert(sigs, { sig="4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize= 36 } ) --3.5
+                    table.insert(sigs, { sig="48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize= 23 } ) --3.3 - 3.4 - 3.5
+                    for i, sign in ipairs(sigs) do if resolveVM_RELA(sign.sig, sign.sigsize) then sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: '..tostring(i).."\t"..sign.sig) return true end end
+                    return false
+                end
+
+                -- local funcPrologueAddr = getAddress('GDFunctionCall') or nil
+                
+                -- if isNotNullOrNil(funcPrologueAddr) then
+                --     return funcPrologueAddr
+                -- elseif querySignatures() then
+                --     return getAddress('GDFunctionCall') or nil
+                -- end
+                if querySignatures() then 
+                    return getAddress('GDFunctionCall') or nil
+                end
+
+                return nil
+
             end
 
-            function executeGDFunction()
+            function executeGDFunction(func_this, GDScriptInstanceAddr, argsetupCallback, argCount )
+                -- so far the calling conventions match seamlessly
+
+                local dumSpace = getAddress("dummySpace")
+                if isNullOrNil(dumSpace) then error("'stack' space isn't alloced") end
+
+                local vmCallAddr = getGDVMCallPtr()
+                if isNullOrNil(vmCallAddr) then error("::call() isn't found") end
+
+                -- setting up space
+                if argsetupCallback and type(argsetupCallback)=="function" then
+                    argsetupCallback()
+                else
+                    writeQword( dumSpace+0x100 , dumSpace+0x30 ) -- *p_args
+                    writeQword( dumSpace+0x108, dumSpace+0x100 ) -- **p_args
+                end
+
+                local stdcall = 0
+                local timeout = 0
+                local int_t = 0
+                local _rcx =        { type=int_t, value = func_this              }
+                local _rdx =        { type=int_t, value = dumSpace+0x80          } -- *someexcval
+                local _r8 =         { type=int_t, value = GDScriptInstanceAddr   } -- GDScriptInstance *p_instance
+                local _r9 =         { type=int_t, value = dumSpace+0x78          } -- const Variant **p_args
+                local _st1 =        { type=int_t, value = argCount or 0x0        } -- int p_argcount
+                local _st2 =        { type=int_t, value = dumSpace+0x90          } -- Callable::CallError &r_err
+                local _st3 =        { type=int_t, value = 0x0                    } -- CallState *p_state
+
+                local returned = executeCodeEx(stdcall, timeout, vmCallAddr,    _rcx, _rdx, _r8, _r9, _st1, _st2, _st3    )
+
+                if isNotNullOrNil(returned) then writeQword(dumSpace+0x0, returned) return returned end
 
                 --[[
                     Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state)
@@ -6623,6 +6682,18 @@
                     [rsp+20] int32_t p_argcount
                     [rsp+28] Callable::CallError *r_err (on stack)
                     [rsp+30] CallState *p_state (on stack, usually nullptr)
+
+                    in case the return-by-value doesnt fit __ 64bit< Variant __ , return buffer ptr goes to rcx, else shift accordingly
+                    --https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#return-values
+                    rcx - buffer ptr (Variant)
+                    rdx this
+                    r8 GDScriptInstance* p_instance
+                    r9   Variant** p_args (on stack)
+                    [rsp+20] int32_t p_argcount
+                    [rsp+28] Callable::CallError *r_err (on stack)
+                    [rsp+30] CallState *p_state (on stack, usually nullptr)
+
+
                 ]]
             end
 
