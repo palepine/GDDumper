@@ -417,6 +417,7 @@
                     offsets.GDScriptFunctionCode = 0x170
                     offsets.GDScriptFunctionCodeConsts = 0x190
                     offsets.GDScriptFunctionCodeGlobals = 0x1A0
+                    -- timer 3a8 time_left 3b8 waittime 3c0 active
 
                     if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
@@ -465,7 +466,7 @@
                     offsets.GDScriptFunctionCode = 0x118
                     offsets.GDScriptFunctionCodeConsts = 0x100
                     offsets.GDScriptFunctionCodeGlobals = 0xF0
-
+                    -- timer 3a8 time_left 3b8 waittime 3c0 active
                     if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe
                         --  Godot Engine v4.1.1.stable.official
@@ -1010,8 +1011,9 @@
             end
 
             function getGDSemver()
-                if GDDEFS.FULL_GDVERSION_STRING then
+                if GDDEFS and GDDEFS.FULL_GDVERSION_STRING then
                     print(GDDEFS.FULL_GDVERSION_STRING)
+                    print(getExportTableName())
                 else
                     print( (getExportTableName() or "exportnomatch") ..'\n'.. (getGodotVersionString() or "semver not hit"))
                 end
@@ -6631,19 +6633,21 @@
 
                 local function querySignatures()
                     local sigs = {}
-                    table.insert(sigs, { isheavy = true, sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
-                    table.insert(sigs, { isheavy = false, sig="48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize= 28 } ) --4.6 ret 64>
-                    table.insert(sigs, { isheavy = false, sig="48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize=34  } ) --4.5
-                    table.insert(sigs, { isheavy = false, sig="4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4
-                    table.insert(sigs, { isheavy = false, sig="4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.3
-                    table.insert(sigs, { isheavy = false, sig="4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize= 25 } ) --4.3 ret 64<
-                    table.insert(sigs, { isheavy = false, sig="4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4-4.3
-                    table.insert(sigs, { isheavy = false, sig="4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize= 16 } ) --4.2
-                    table.insert(sigs, { isheavy = false, sig="4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize= 24 } ) --4.1
-                    table.insert(sigs, { isheavy = false, sig="48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize= 30 } ) --4.1
-                    table.insert(sigs, { isheavy = false, sig="48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize= 32 } ) --3.6
-                    table.insert(sigs, { isheavy = false, sig="4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize= 36 } ) --3.5
-                    table.insert(sigs, { isheavy = false, sig="48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize= 23 } ) --3.3 - 3.4 - 3.5
+                    table.insert(sigs, { isheavy = true,    sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
+                    table.insert(sigs, { isheavy = false,   sig="48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize= 28 } ) --4.6 ret 64>
+                    table.insert(sigs, { isheavy = false,   sig="48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize=34  } ) --4.5
+                    table.insert(sigs, { isheavy = false,   sig="4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4
+                    table.insert(sigs, { isheavy = false,   sig="4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.3
+                    table.insert(sigs, { isheavy = false,   sig="4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize= 25 } ) --4.3 ret 64<
+                    table.insert(sigs, { isheavy = false,   sig="4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4-4.3
+                    table.insert(sigs, { isheavy = false,   sig="4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize= 16 } ) --4.2
+                    table.insert(sigs, { isheavy = true,    sig="4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8", sigsize= 16 } ) --4.2 Godot Engine v4.2.2.stable.official.15073afe3
+
+                    table.insert(sigs, { isheavy = false,   sig="4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize= 24 } ) --4.1
+                    table.insert(sigs, { isheavy = false,   sig="48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize= 30 } ) --4.1
+                    table.insert(sigs, { isheavy = false,   sig="48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize= 32 } ) --3.6
+                    table.insert(sigs, { isheavy = false,   sig="4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize= 36 } ) --3.5
+                    table.insert(sigs, { isheavy = false,   sig="48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize= 23 } ) --3.3 - 3.4 - 3.5
                     for i, sign in ipairs(sigs) do
                         if resolveVM_RELA(sign.sig, sign.sigsize) then
                             sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: '..tostring(i).."\t"..sign.sig)
