@@ -6,7 +6,6 @@
     --TODO dump nodes schema with the addresslist?
     --TODO add more functionality for function overriding ==>
     --TODO bytecode patching function that assembles a function for return;end. or return true;end It should store the original function (address association?)
-    --TODO always check UTF32>UTF8>ASCII for all strings and both 8/10 offsets
     --TODO addresslist should include node's children of children
 
 --///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
@@ -23,7 +22,7 @@
                 newMemRec.setDescription(memRecName)
                 newMemRec.setType(CEType)
 
-                if GDSOf.GD4_STRING_EXISTS then
+                if GDDEFS.GD4_STRING_EXISTS then
                     if CEType == vtString then newMemRec.setType(vtCustom); newMemRec.CustomTypeName = "GD4 String" newMemRec.setAddress( readPointer( gdPtr) ) else newMemRec.setAddress( gdPtr ) end
                 else
                     if CEType == vtString then newMemRec.String.Size = 100; newMemRec.String.Unicode = true; newMemRec.setAddress( readPointer( gdPtr) ) else newMemRec.setAddress( gdPtr ) end
@@ -95,8 +94,8 @@
                         -- first check via PE -- https://wiki.osdev.org/PE
                         local exportTablename = getExportTableName() or ""
                         if ( exportTablename ):match("([gG][oO][Dd][Oo][Tt])") then
-                            -- if GDSOf == nil then GDSOf = {} end
-                            -- GDSOf.GDEXPORT_TABLE = exportTablename
+                            -- if GDDEFS == nil then GDDEFS = {} end
+                            -- GDDEFS.GDEXPORT_TABLE = exportTablename
                             targetIsGodot = true;
                         end
                         
@@ -153,9 +152,9 @@
             function defineGDVersion()
                 local godotVersionString = getGodotVersionString()
 
-                if isNullOrNil(GDSOf) then GDSOf = {} end
+                if isNullOrNil(GDDEFS) then GDDEFS = {} end
 
-                GDSOf.FULL_GDVERSION_STRING = godotVersionString
+                GDDEFS.FULL_GDVERSION_STRING = godotVersionString
                 local major, minor, patch, tag = (godotVersionString):match( "v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)" )
                 
                 if isNullOrNil(major) or isNullOrNil(minor) then
@@ -165,27 +164,27 @@
                 local exportTableStr = getExportTableName() or ""
                 
                 if (exportTableStr):match( "debug" ) then
-                    GDSOf.DEBUGVER = true
+                    GDDEFS.DEBUGVER = true
                 --elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
                 else
-                    GDSOf.DEBUGVER = false
+                    GDDEFS.DEBUGVER = false
                 end
 
                 if (godotVersionString):match( "custom" ) then -- TODO: for now let it be liek this until custom debug versions
-                    GDSOf.CUSTOMVER = true
+                    GDDEFS.CUSTOMVER = true
                 end
                 
                 if isNotNullOrNil(major) and isNotNullOrNil(minor) then
-                    GDSOf.MAJOR_VER = tonumber(major)
-                    GDSOf.MINOR_VER = tonumber(minor)
-                    GDSOf.VERSION_STRING = major..'.'..minor
+                    GDDEFS.MAJOR_VER = tonumber(major)
+                    GDDEFS.MINOR_VER = tonumber(minor)
+                    GDDEFS.VERSION_STRING = major..'.'..minor
                 end
             end
 
             function getStoredOffsetsFromVersion( majminVersionStr )
 
-                majminVersionStr = majminVersionStr or GDSOf.VERSION_STRING
-                -- TODO: GDSOf.MAXTYPE
+                majminVersionStr = majminVersionStr or GDDEFS.VERSION_STRING
+                -- TODO: GDDEFS.MAXTYPE
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
                 -- TODO: custom debug versions
                 -- TODO: refactor the branching
@@ -194,11 +193,11 @@
 
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
                 if majminVersionStr == "4.6" then
-                    GDSOf.DICT_HEAD = 0x20
-                    GDSOf.DICT_TAIL = 0x28
-                    GDSOf.DICT_SIZE = 0x3C
-                    GDSOf.STRING = 0x8 -- we need it for correct addr/struct representation
-                    GDSOf.GET_TYPE_INDX = 10
+                    GDDEFS.DICT_HEAD = 0x20
+                    GDDEFS.DICT_TAIL = 0x28
+                    GDDEFS.DICT_SIZE = 0x3C
+                    GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+                    GDDEFS.GET_TYPE_INDX = 10
                     -- godot.windows.template_release.x86_64.exe
                     -- Godot Engine v4.6.stable.official.89cea1439
                     offsets.VPChildren = 0x140
@@ -216,7 +215,7 @@
                     offsets.GDScriptFunctionCodeConsts = 0x198
                     offsets.GDScriptFunctionCodeGlobals = 0x1A8
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -233,7 +232,7 @@
                         -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
                     end
 
-                    if GDSOf.CUSTOMVER then
+                    if GDDEFS.CUSTOMVER then
                         offsets.VPChildren = offsets.VPChildren+0x48
                         offsets.VPObjStringName = offsets.VPObjStringName+0x48
                         -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
@@ -253,11 +252,14 @@
                     return offsets
 
                 elseif majminVersionStr == "4.5" then
-                    GDSOf.DICT_HEAD = 0x20
-                    GDSOf.DICT_TAIL = 0x28
-                    GDSOf.DICT_SIZE = 0x3C
-                    GDSOf.STRING = 0x8 -- we need it for correct addr/struct representation
-                    GDSOf.GET_TYPE_INDX = 9
+                    GDDEFS.DICT_HEAD = 0x20
+                    GDDEFS.DICT_TAIL = 0x28
+                    GDDEFS.DICT_SIZE = 0x3C
+                    GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+                    GDDEFS.GET_TYPE_INDX = 9
+                    -- A0 Vector<GDScriptDataType> argument_types; including parameter names
+                    -- f4 argcount
+
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.5.1.stable.official.f62fdbde1
                     offsets.VPChildren = 0x170
@@ -275,7 +277,7 @@
                     offsets.GDScriptFunctionCodeConsts = 0x1A0 -- 0x198
                     offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         -- Godot Engine v4.5.1.stable.official 
                         offsets.VPChildren = offsets.VPChildren+0x8
@@ -288,7 +290,7 @@
                         offsets.oVariantVector = offsets.oVariantVector+0x28
                     end
 
-                    if GDSOf.CUSTOMVER then
+                    if GDDEFS.CUSTOMVER then
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.5.1.stable.custom_build
                         offsets.VPChildren = offsets.VPChildren+0x48
@@ -302,7 +304,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.4" then
-                    GDSOf.GET_TYPE_INDX = 8
+                    GDDEFS.GET_TYPE_INDX = 8
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.4.stable.official.4c311cbee
                     offsets.VPChildren = 0x188
@@ -320,12 +322,12 @@
                     offsets.GDScriptFunctionCodeConsts = 0x198
                     offsets.GDScriptFunctionCodeGlobals = 0x1A8
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         -- Godot Engine v4.4.1.stable.official
                         -- godot.windows.template_debug.x86_64.mono.exe 
                         -- Godot Engine v4.4.stable.mono.official 
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -335,8 +337,8 @@
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                         offsets.oVariantVector = offsets.oVariantVector+0x30
                     end
-                    if GDSOf.CUSTOMVER then
-                        GDSOf.STRING = 0x10
+                    if GDDEFS.CUSTOMVER then
+                        GDDEFS.STRING = 0x10
                         -- godot.windows.template_release.x86_64.exe
                         -- Godot Engine v4.4.1.stable.custom_build.49a5bc7b6
                         offsets.VPChildren = offsets.VPChildren+0x48
@@ -349,7 +351,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.3" then
-                    GDSOf.GET_TYPE_INDX = 8
+                    GDDEFS.GET_TYPE_INDX = 8
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.3.stable.official 
                     -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
@@ -368,10 +370,10 @@
                     offsets.GDScriptFunctionCodeConsts = 0x198
                     offsets.GDScriptFunctionCodeGlobals = 0x1A8
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
                         -- Godot Engine v4.3.stable.official 
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -383,7 +385,7 @@
                          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType+0x8 -- 4.x
 
                     end
-                    if GDSOf.CUSTOMVER then
+                    if GDDEFS.CUSTOMVER then
                         -- godot.windows.template_release.x86_64.exe 
                         -- Godot Engine v4.3.stable.custom_build
                         offsets.VPChildren = offsets.VPChildren+0x48
@@ -398,7 +400,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.2" then
-                    GDSOf.GET_TYPE_INDX = 8
+                    GDDEFS.GET_TYPE_INDX = 8
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.2.1.stable.official.b09f793f5 
                     offsets.VPChildren = 0x178
@@ -416,10 +418,10 @@
                     offsets.GDScriptFunctionCodeConsts = 0x190
                     offsets.GDScriptFunctionCodeGlobals = 0x1A0
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
                         --  Godot Engine v4.2.2.stable.official
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -430,9 +432,9 @@
                         offsets.oVariantVector = offsets.oVariantVector+0x30
                          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType+0x8 -- 4.x
                     end
-                    if GDSOf.CUSTOMVER then
+                    if GDDEFS.CUSTOMVER then
                         error("Not defined yet")
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x48
                         offsets.VPObjStringName = offsets.VPObjStringName+0x48
                         offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
@@ -445,7 +447,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.1" then
-                    GDSOf.GET_TYPE_INDX = 8
+                    GDDEFS.GET_TYPE_INDX = 8
                     -- 4.1.2 has some wild offsets however
                     -- godot.windows.template_release.x86_64.exe 
                     -- Godot Engine v4.2.1.stable.official.b09f793f5 
@@ -464,10 +466,10 @@
                     offsets.GDScriptFunctionCodeConsts = 0x100
                     offsets.GDScriptFunctionCodeGlobals = 0xF0
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe
                         --  Godot Engine v4.1.1.stable.official
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -477,9 +479,9 @@
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                         offsets.oVariantVector = offsets.oVariantVector+0x30
                     end
-                    if GDSOf.CUSTOMVER then
+                    if GDDEFS.CUSTOMVER then
                         -- Godot Engine v4.1.2.rc.custom_build
-                        GDSOf.STRING = 0x10
+                        GDDEFS.STRING = 0x10
                         offsets.VPChildren = offsets.VPChildren+0x48
                         offsets.VPObjStringName = offsets.VPObjStringName+0x48
                         offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
@@ -493,7 +495,7 @@
                     return offsets
 
                 elseif majminVersionStr == "4.0" then
-                    GDSOf.GET_TYPE_INDX = 8
+                    GDDEFS.GET_TYPE_INDX = 8
                     offsets.VPChildren = 0x168
                     offsets.VPObjStringName = 0x1C0
                     offsets.NodeGDScriptInstance = 0x68
@@ -509,9 +511,9 @@
                     offsets.GDScriptFunctionCodeConsts = 0x100
                     offsets.GDScriptFunctionCodeGlobals = 0xF0
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- error("Not defined yet")
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -520,7 +522,7 @@
                         offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                         offsets.oVariantVector = offsets.oVariantVector+0x30
-                    elseif GDSOf.CUSTOMVER then
+                    elseif GDDEFS.CUSTOMVER then
                         error("Not defined yet")
                         offsets.VPChildren = offsets.VPChildren+0x48
                         offsets.VPObjStringName = offsets.VPObjStringName+0x48
@@ -533,7 +535,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.6" then
-                    GDSOf.GET_TYPE_INDX = 6
+                    GDDEFS.GET_TYPE_INDX = 6
                     -- godot.windows.opt.64.exe 
                     --  Godot Engine v3.6.stable.custom_build.de2f0f147 
                     offsets.VPChildren = 0x108
@@ -551,9 +553,9 @@
                     offsets.GDScriptFunctionCodeConsts = 0x20
                     offsets.GDScriptFunctionCodeGlobals = 0x30
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- godot.windows.opt.debug.64.exe 
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -563,9 +565,9 @@
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                         offsets.oVariantVector = offsets.oVariantVector+0x18
                     end
-                    if GDSOf.CUSTOMVER then
+                    if GDDEFS.CUSTOMVER then
                         -- error("Not defined yet")
-                        GDSOf.STRING = 0x10
+                        GDDEFS.STRING = 0x10
                         offsets.VPChildren = offsets.VPChildren--[[+0x48]]
                         offsets.VPObjStringName = offsets.VPObjStringName--[[+0x48]]
                         offsets.NodeGDScriptName = offsets.NodeGDScriptName--[[+0x48]]
@@ -577,8 +579,8 @@
                     return offsets
 
                 elseif majminVersionStr == "3.5" then
-                    GDSOf.GET_TYPE_INDX = 6
-                    if GDSOf._x64bit then
+                    GDDEFS.GET_TYPE_INDX = 6
+                    if GDDEFS._x64bit then
                         -- godot.windows.opt.64.exe 
                         -- Godot Engine v3.5.1.stable.official
                         offsets.VPChildren = 0x108
@@ -596,10 +598,10 @@
                         offsets.GDScriptFunctionCodeConsts = 0x20
                         offsets.GDScriptFunctionCodeGlobals = 0x30
 
-                        if GDSOf.DEBUGVER then
+                        if GDDEFS.DEBUGVER then
                             -- godot.windows.opt.debug.64.exe
                             -- Godot Engine 3.5.2.stable 
-                            -- GDSOf.STRING = 0x8
+                            -- GDDEFS.STRING = 0x8
                             offsets.VPChildren = offsets.VPChildren+0x8
                             offsets.VPObjStringName = offsets.VPObjStringName+0x8
                             offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -609,7 +611,7 @@
                             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                             offsets.oVariantVector = offsets.oVariantVector+0x18
                         end
-                        if GDSOf.CUSTOMVER then
+                        if GDDEFS.CUSTOMVER then
                             -- godot.windows.opt.64.exe
                             -- Godot Engine v3.5.1.stable.custom_build.6fed1ffa3 
                             -- offsets.VPChildren = offsets.VPChildren
@@ -621,27 +623,27 @@
                             --  offsets.oVariantVector = offsets.oVariantVector
                         end
                     else
-                        -- GDSOf.STRING = 0x8 -- ascii
-                        GDSOf.GDSCRIPT_REF = 0x8
-                        GDSOf.MAP_SIZE = 0x10
-                        GDSOf.MAP_LELEM = 0x8
-                        GDSOf.MAP_NEXTELEM = 0x10
-                        GDSOf.MAP_KVALUE = 0x18
-                        GDSOf.FUNC_MAPVAL = 0x1C
-                        GDSOf.DICT_LIST = 0x4
-                        GDSOf.DICT_HEAD = 0x0
-                        GDSOf.DICT_TAIL = 0x4
-                        GDSOf.DICT_SIZE = 0x10
-                        GDSOf.DICTELEM_PAIR_NEXT = 0x20
-                        GDSOf.DICTELEM_KEYTYPE = 0x0
-                        GDSOf.DICTELEM_KEYVAL = 0x8
-                        GDSOf.DICTELEM_VALTYPE = 0x8
-                        GDSOf.DICTELEM_VALVAL = 0x10
-                        GDSOf.ARRAY_TOVECTOR = 0x8
-                        GDSOf.P_ARRAY_TOARR = GDSOf.P_ARRAY_TOARR or 0x4
-                        GDSOf.P_ARRAY_SIZE = GDSOf.P_ARRAY_SIZE or 0xC
-                        GDSOf.CONSTELEM_KEYVAL = 0x18
-                        GDSOf.CONSTELEM_VALTYPE = 0x20
+                        -- GDDEFS.STRING = 0x8 -- ascii
+                        GDDEFS.GDSCRIPT_REF = 0x8
+                        GDDEFS.MAP_SIZE = 0x10
+                        GDDEFS.MAP_LELEM = 0x8
+                        GDDEFS.MAP_NEXTELEM = 0x10
+                        GDDEFS.MAP_KVALUE = 0x18
+                        GDDEFS.FUNC_MAPVAL = 0x1C
+                        GDDEFS.DICT_LIST = 0x4
+                        GDDEFS.DICT_HEAD = 0x0
+                        GDDEFS.DICT_TAIL = 0x4
+                        GDDEFS.DICT_SIZE = 0x10
+                        GDDEFS.DICTELEM_PAIR_NEXT = 0x20
+                        GDDEFS.DICTELEM_KEYTYPE = 0x0
+                        GDDEFS.DICTELEM_KEYVAL = 0x8
+                        GDDEFS.DICTELEM_VALTYPE = 0x8
+                        GDDEFS.DICTELEM_VALVAL = 0x10
+                        GDDEFS.ARRAY_TOVECTOR = 0x8
+                        GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x4
+                        GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0xC
+                        GDDEFS.CONSTELEM_KEYVAL = 0x18
+                        GDDEFS.CONSTELEM_VALTYPE = 0x20
 
                         -- godot.windows.opt.32.exe
                         -- Godot Engine v3.5.3.stable.official
@@ -660,7 +662,7 @@
                         offsets.GDScriptFunctionCodeConsts = 0x20
                         offsets.GDScriptFunctionCodeGlobals = 0x28
 
-                        if GDSOf.DEBUGVER then
+                        if GDDEFS.DEBUGVER then
                             error("Not defined yet")
                             offsets.VPChildren = offsets.VPChildren+0x4
                             offsets.VPObjStringName = offsets.VPObjStringName+0x4
@@ -670,7 +672,7 @@
                             offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x4
                             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x4
                             offsets.oVariantVector = offsets.oVariantVector+0x0C
-                        elseif GDSOf.CUSTOMVER then
+                        elseif GDDEFS.CUSTOMVER then
                             error("Not defined yet")
                             -- offsets.VPChildren = offsets.VPChildren+0x48
                             -- offsets.VPObjStringName = offsets.VPObjStringName+0x48
@@ -685,7 +687,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.4" then
-                    GDSOf.GET_TYPE_INDX = 6
+                    GDDEFS.GET_TYPE_INDX = 6
                     --godot.windows.opt.64.exe 
                     --Godot Engine v3.4.4.stable.official.419e713a2
                     offsets.VPChildren = 0x108
@@ -704,9 +706,9 @@
                     offsets.GDScriptFunctionCodeGlobals = 0x30
                     --timer 1E0 (float) waittime 1E8 time_left 1F0 paused?
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- error("Not defined yet")
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -715,9 +717,9 @@
                         offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                         offsets.oVariantVector = offsets.oVariantVector+0x18
-                    elseif GDSOf.CUSTOMVER then
+                    elseif GDDEFS.CUSTOMVER then
                         error("Not defined yet")
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x48
                         offsets.VPObjStringName = offsets.VPObjStringName+0x48
                         offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
@@ -730,7 +732,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.3" then
-                    GDSOf.GET_TYPE_INDX = 6
+                    GDDEFS.GET_TYPE_INDX = 6
                     -- godot.windows.opt.64.exe 
                     -- Godot Engine v3.3.2.stable.official 
                     offsets.VPChildren = 0x100
@@ -748,9 +750,9 @@
                     offsets.GDScriptFunctionCodeConsts = 0x20
                     offsets.GDScriptFunctionCodeGlobals = 0x30
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         -- error("Not defined yet")
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -759,9 +761,9 @@
                         offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                         offsets.oVariantVector = offsets.oVariantVector+0x18
-                    elseif GDSOf.CUSTOMVER then
+                    elseif GDDEFS.CUSTOMVER then
                         error("Not defined yet")
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x48
                         offsets.VPObjStringName = offsets.VPObjStringName+0x48
                         offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
@@ -774,7 +776,7 @@
                     return offsets
 
                 elseif majminVersionStr == "3.2" then
-                    GDSOf.GET_TYPE_INDX = 6
+                    GDDEFS.GET_TYPE_INDX = 6
                     -- error("Not defined yet")
                     offsets.VPChildren = 0x108
                     offsets.VPObjStringName = 0x120
@@ -791,9 +793,9 @@
                     offsets.GDScriptFunctionCodeConsts = 0x20
                     offsets.GDScriptFunctionCodeGlobals = 0x30
 
-                    if GDSOf.DEBUGVER then
+                    if GDDEFS.DEBUGVER then
                         error("Not defined yet")
-                        -- GDSOf.STRING = 0x8
+                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -803,7 +805,7 @@
                         offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
                         offsets.oVariantVector = offsets.oVariantVector+0x18
                     end
-                    if GDSOf.CUSTOMVER then
+                    if GDDEFS.CUSTOMVER then
                         -- godot.windows.opt.64.exe
                         -- Godot Engine v3.2.stable.custom_build
                         offsets.VPChildren = offsets.VPChildren+0x8
@@ -1014,21 +1016,21 @@
             function printGDConfig()
                 print(([[local config = {majorVersion = 0x%X,offsetNodeChildren = 0x%X,offsetNodeStringName = 0x%X, offsetGDScriptInstance = 0x%X,offsetVariantVector = 0x%X,offsetVariantVectorSize = 0x%X,offsetGDScriptName = 0x%X,offsetFuncMap = 0x%X,offsetGDFunctionCode = 0x%X,offsetGDFunctionConst = 0x%X,offsetGDFunctionGlobals = 0x%X,offsetConstMap = 0x%X,offsetVariantMap = 0x%X,offsetVariantMapVarType = 0x%X,offsetVariantMapIndex = 0x%X}]]):format
                     (
-                    (GDSOf.MAJOR_VER or 0x0),
-                    (GDSOf.CHILDREN or 0x0),
-                    (GDSOf.OBJ_STRING_NAME or 0x0),
-                    (GDSOf.GDSCRIPTINSTANCE or 0x0),
-                    (GDSOf.VAR_VECTOR or 0x0),
-                    (GDSOf.SIZE_VECTOR or 0x0),
-                    (GDSOf.GDSCRIPTNAME or 0x0),
-                    (GDSOf.FUNC_MAP or 0x0),
-                    (GDSOf.FUNC_CODE or 0x0),
-                    (GDSOf.FUNC_CONST or 0x0),
-                    (GDSOf.FUNC_GLOBNAMEPTR or 0x0),
-                    (GDSOf.CONST_MAP or 0x0),
-                    (GDSOf.VAR_NAMEINDEX_MAP or 0x0),
-                    (GDSOf.VAR_NAMEINDEX_VARTYPE or 0x0),
-                    (GDSOf.VAR_NAMEINDEX_I or 0x0)
+                    (GDDEFS.MAJOR_VER or 0x0),
+                    (GDDEFS.CHILDREN or 0x0),
+                    (GDDEFS.OBJ_STRING_NAME or 0x0),
+                    (GDDEFS.GDSCRIPTINSTANCE or 0x0),
+                    (GDDEFS.VAR_VECTOR or 0x0),
+                    (GDDEFS.SIZE_VECTOR or 0x0),
+                    (GDDEFS.GDSCRIPTNAME or 0x0),
+                    (GDDEFS.FUNC_MAP or 0x0),
+                    (GDDEFS.FUNC_CODE or 0x0),
+                    (GDDEFS.FUNC_CONST or 0x0),
+                    (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
+                    (GDDEFS.CONST_MAP or 0x0),
+                    (GDDEFS.VAR_NAMEINDEX_MAP or 0x0),
+                    (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
+                    (GDDEFS.VAR_NAMEINDEX_I or 0x0)
                     )
                 )
             end
@@ -1041,7 +1043,7 @@
                 -- let's ensure VP is found, it will throw an error otherwise
                 getViewport()
 
-                local symbolToChildren = '[[ptVP]+'..numtohexstr(GDSOf.CHILDREN)..']' -- '[[ptVP]+CHILDREN]'
+                local symbolToChildren = '[[ptVP]+'..numtohexstr(GDDEFS.CHILDREN)..']' -- '[[ptVP]+CHILDREN]'
                 local viewportStructForm = createStructureForm( symbolToChildren, 'VP', 'Viewport' ) 
                 local childrenStruct = createVPStructure()
 
@@ -1076,7 +1078,7 @@
                 for i=0, #mainNodeTable-1 do
                     structElem = struct.addElement()
                     structElem.BackgroundColor = 0x6C3157
-                    structElem.Offset = i * GDSOf.PTRSIZE -- GDSOf.PTRSIZE
+                    structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
                     structElem.VarType = vtPointer
                     structElem.Name = getNodeName( mainNodeTable[i+1] )
                 end
@@ -1094,7 +1096,7 @@
                 element.Vartype = CEType
 
                 if CEType == vtUnicodeString then
-                    if GDSOf.GD4_STRING_EXISTS then
+                    if GDDEFS.GD4_STRING_EXISTS then
                         element.Vartype = vtCustom; element.CustomTypeName = "GD4 String"
                     else
                         element.Bytesize = 100;
@@ -1194,14 +1196,14 @@
                     local scriptInstStructElem = struct.addElement()
                     scriptInstStructElem.Name = 'GDScriptInstance'
                     scriptInstStructElem.BackgroundColor = 0x400040
-                    scriptInstStructElem.Offset = GDSOf.GDSCRIPTINSTANCE
+                    scriptInstStructElem.Offset = GDDEFS.GDSCRIPTINSTANCE
                     scriptInstStructElem.VarType = vtPointer
 
-                    if isPointerNotNull( baseaddr + GDSOf.CHILDREN ) then
+                    if isPointerNotNull( baseaddr + GDDEFS.CHILDREN ) then
                         local childrenStructElem = struct.addElement()
                         childrenStructElem.Name = 'Children'
                         childrenStructElem.BackgroundColor = 0xFF0080
-                        childrenStructElem.Offset = GDSOf.CHILDREN
+                        childrenStructElem.Offset = GDDEFS.CHILDREN
                         childrenStructElem.VarType = vtPointer
                         childrenStructElem.ChildStruct = createStructure( 'Children' )
                         iterateNodeChildrenToStruct( childrenStructElem, baseaddr )
@@ -1216,7 +1218,7 @@
                     local childrenStructElem = struct.addElement()
                     childrenStructElem.Name = 'Children'
                     childrenStructElem.BackgroundColor = 0xFF0080
-                    childrenStructElem.Offset = GDSOf.CHILDREN
+                    childrenStructElem.Offset = GDDEFS.CHILDREN
                     childrenStructElem.VarType = vtPointer
                     childrenStructElem.ChildStruct = createStructure( 'Children' )
                     iterateNodeChildrenToStruct( childrenStructElem, baseaddr )
@@ -1459,7 +1461,7 @@
                     return "??" --"ain\'t reading this"  -- we aren't gonna read novels
                 end
                 
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     if readInteger(strAddress) == 0 then
                         --sendDebugMessageAndStepOut('readUTFString: empty string');
                         return "??" --"empt str"
@@ -1472,11 +1474,11 @@
                 local charTable = {}
                 local buff = 0
 
-                if GDSOf.MAJOR_VER == 3 and (strSize and strSize > 0) then
+                if GDDEFS.MAJOR_VER == 3 and (strSize and strSize > 0) then
                     --debugStepOut()
                     return readString( strAddress, strSize * 2 , true ) or "??" -- '???_INVALID_MEM_CAUGHT_WSIZE'
 
-                elseif GDSOf.MAJOR_VER == 3 then
+                elseif GDDEFS.MAJOR_VER == 3 then
                     --debugStepOut()
                     local retString = readString( strAddress, MAX_CHARS_TO_READ , true )
 
@@ -1535,7 +1537,7 @@
             function getStringNameStr(stringNameAddr)
                 if isNullOrNil(stringNameAddr) then return 'NaN_strname' end
                 -- debugStepIn()
-                local retStringAddr = readPointer(stringNameAddr + GDSOf.STRING)
+                local retStringAddr = readPointer(stringNameAddr + GDDEFS.STRING)
 
                 if isNullOrNil(retStringAddr) or isInvalidPointer(retStringAddr) then
                     retStringAddr = readPointer( stringNameAddr + 0x8 ) -- for cases when StringName holds data at 0x8
@@ -1576,192 +1578,192 @@
                 dumpedMonitorNodes = {};
                 debugPrefix = 1;
 
-                if GDSOf == nil then GDSOf = {} end
-                GDSOf.STRING = 0x10 -- TODO: the string issue might be solved for good
+                if GDDEFS == nil then GDDEFS = {} end
+                GDDEFS.STRING = 0x10 -- TODO: the string issue might be solved for good
 
                 if targetIs64Bit() then
-                    GDSOf.PTRSIZE = 0x8
-                    GDSOf._x64bit = true
+                    GDDEFS.PTRSIZE = 0x8
+                    GDDEFS._x64bit = true
                 else  -- TODO: theres a lot more to do with 32bit in the script
-                    GDSOf.PTRSIZE = 0x4
-                    GDSOf._x64bit = false
+                    GDDEFS.PTRSIZE = 0x4
+                    GDDEFS._x64bit = false
                 end
 
                 -- a regex plugin must be initialized for that
                 if lregexScan and type(lregexScan) == "function" then defineGDVersion() end
 
                 if bHardOffsets or not( config.majMinVerStr == nil or config.majMinVerStr == "") then
-                    local offsets = getStoredOffsetsFromVersion( GDSOf.VERSION_STRING )
-                    GDSOf.CHILDREN = offsets.VPChildren
-                    GDSOf.OBJ_STRING_NAME = offsets.VPObjStringName
-                    GDSOf.GDSCRIPTINSTANCE = offsets.NodeGDScriptInstance
-                    GDSOf.GDSCRIPTNAME = offsets.NodeGDScriptName
-                    GDSOf.FUNC_MAP = offsets.GDScriptFunctionMap
-                    GDSOf.CONST_MAP = offsets.GDScriptConstantMap
-                    GDSOf.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
-                    GDSOf.VAR_VECTOR = offsets.oVariantVector
-                    GDSOf.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
-                    GDSOf.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
-                    GDSOf.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
-                    GDSOf.FUNC_CODE = offsets.GDScriptFunctionCode
-                    GDSOf.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
-                    GDSOf.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
-                    if GDSOf.MAJOR_VER == 4 then
-                        GDSOf.GDSCRIPT_REF = 0x18
-                        GDSOf.MAXTYPE = 39
-                        GDSOf.FUNC_MAPVAL = 0x18
-                        GDSOf.STRING = GDSOf.STRING or 0x10
-                        GDSOf.CHILDREN_SIZE = 0x8
-                        GDSOf.MAP_SIZE = 0x14
-                        GDSOf.ARRAY_TOVECTOR = 0x10
-                        GDSOf.P_ARRAY_TOARR = 0x18
-                        GDSOf.P_ARRAY_SIZE = 0x8
-                        GDSOf.DICT_HEAD = GDSOf.DICT_HEAD or 0x28
-                        GDSOf.DICT_TAIL = GDSOf.DICT_TAIL or 0x30
-                        GDSOf.DICT_SIZE = GDSOf.DICT_TAIL or 0x3C
-                        GDSOf.DICTELEM_KEYTYPE = 0x10
-                        GDSOf.DICTELEM_KEYVAL = 0x18
-                        GDSOf.DICTELEM_VALTYPE = 0x28
-                        GDSOf.CONSTELEM_KEYVAL = 0x10
-                        GDSOf.CONSTELEM_VALTYPE = 0x18
-                        GDSOf.VAR_NAMEINDEX_I = 0x18
+                    local offsets = getStoredOffsetsFromVersion( GDDEFS.VERSION_STRING )
+                    GDDEFS.CHILDREN = offsets.VPChildren
+                    GDDEFS.OBJ_STRING_NAME = offsets.VPObjStringName
+                    GDDEFS.GDSCRIPTINSTANCE = offsets.NodeGDScriptInstance
+                    GDDEFS.GDSCRIPTNAME = offsets.NodeGDScriptName
+                    GDDEFS.FUNC_MAP = offsets.GDScriptFunctionMap
+                    GDDEFS.CONST_MAP = offsets.GDScriptConstantMap
+                    GDDEFS.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
+                    GDDEFS.VAR_VECTOR = offsets.oVariantVector
+                    GDDEFS.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
+                    GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
+                    GDDEFS.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
+                    GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
+                    GDDEFS.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
+                    GDDEFS.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
+                    if GDDEFS.MAJOR_VER == 4 then
+                        GDDEFS.GDSCRIPT_REF = 0x18
+                        GDDEFS.MAXTYPE = 39
+                        GDDEFS.FUNC_MAPVAL = 0x18
+                        GDDEFS.STRING = GDDEFS.STRING or 0x10
+                        GDDEFS.CHILDREN_SIZE = 0x8
+                        GDDEFS.MAP_SIZE = 0x14
+                        GDDEFS.ARRAY_TOVECTOR = 0x10
+                        GDDEFS.P_ARRAY_TOARR = 0x18
+                        GDDEFS.P_ARRAY_SIZE = 0x8
+                        GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
+                        GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
+                        GDDEFS.DICT_SIZE = GDDEFS.DICT_TAIL or 0x3C
+                        GDDEFS.DICTELEM_KEYTYPE = 0x10
+                        GDDEFS.DICTELEM_KEYVAL = 0x18
+                        GDDEFS.DICTELEM_VALTYPE = 0x28
+                        GDDEFS.CONSTELEM_KEYVAL = 0x10
+                        GDDEFS.CONSTELEM_VALTYPE = 0x18
+                        GDDEFS.VAR_NAMEINDEX_I = 0x18
                     else
-                        GDSOf.MAXTYPE = 27
-                        GDSOf.GDSCRIPT_REF = GDSOf.GDSCRIPT_REF or 0x10
-                        GDSOf.FUNC_MAPVAL = GDSOf.FUNC_MAPVAL or 0x38
-                        GDSOf.STRING = GDSOf.STRING or 0x10
-                        GDSOf.CHILDREN_SIZE = 0x4
-                        GDSOf.MAP_SIZE = GDSOf.MAP_SIZE or 0x10
-                        GDSOf.MAP_LELEM = GDSOf.MAP_LELEM or 0x10
-                        GDSOf.MAP_NEXTELEM = GDSOf.MAP_NEXTELEM or 0x20
-                        GDSOf.MAP_KVALUE = GDSOf.MAP_KVALUE or 0x30
-                        GDSOf.DICT_LIST = GDSOf.DICT_LIST or 0x8
-                        GDSOf.DICT_HEAD = GDSOf.DICT_HEAD or 0x0
-                        GDSOf.DICT_TAIL = GDSOf.DICT_TAIL or 0x8
-                        GDSOf.DICT_SIZE = GDSOf.DICT_SIZE or 0x1C -- GDSOf.DICT_SIZE = GDSOf.DICT_SIZE or 0x10
-                        GDSOf.DICTELEM_PAIR_NEXT = GDSOf.DICTELEM_PAIR_NEXT or 0x20
-                        GDSOf.DICTELEM_KEYTYPE = GDSOf.DICTELEM_KEYTYPE or 0x0
-                        GDSOf.DICTELEM_KEYVAL = GDSOf.DICTELEM_KEYVAL or 0x8
-                        GDSOf.DICTELEM_VALTYPE = GDSOf.DICTELEM_VALTYPE or 0x8
-                        GDSOf.DICTELEM_VALVAL = GDSOf.DICTELEM_VALVAL or 0x10
-                        GDSOf.ARRAY_TOVECTOR = GDSOf.ARRAY_TOVECTOR or 0x10
-                        GDSOf.P_ARRAY_TOARR = GDSOf.P_ARRAY_TOARR or 0x8
-                        GDSOf.P_ARRAY_SIZE = GDSOf.P_ARRAY_SIZE or 0x18
-                        GDSOf.CONSTELEM_KEYVAL = GDSOf.CONSTELEM_KEYVAL or 0x30
-                        GDSOf.CONSTELEM_VALTYPE = GDSOf.CONSTELEM_VALTYPE or 0x38
+                        GDDEFS.MAXTYPE = 27
+                        GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
+                        GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
+                        GDDEFS.STRING = GDDEFS.STRING or 0x10
+                        GDDEFS.CHILDREN_SIZE = 0x4
+                        GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
+                        GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
+                        GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
+                        GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
+                        GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
+                        GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
+                        GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
+                        GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
+                        GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
+                        GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
+                        GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
+                        GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
+                        GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
+                        GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x10
+                        GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
+                        GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
+                        GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
+                        GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
                     end
                 else
-                    local majorVersion = GDSOf.MAJOR_VER or config.majorVersion or 0
-                    GDSOf.MINOR_VER = GDSOf.MINOR_VER or config.minorVersion or 0
-                    GDSOf.VERSION_STRING = GDSOf.MAJOR_VER..'.'..GDSOf.MINOR_VER
+                    local majorVersion = GDDEFS.MAJOR_VER or config.majorVersion or 0
+                    GDDEFS.MINOR_VER = GDDEFS.MINOR_VER or config.minorVersion or 0
+                    GDDEFS.VERSION_STRING = GDDEFS.MAJOR_VER..'.'..GDDEFS.MINOR_VER
 
                     if majorVersion == 4 then
 
-                        GDSOf.MAJOR_VER = majorVersion
+                        GDDEFS.MAJOR_VER = majorVersion
 
-                        GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
-                        GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-                        GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-                        GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-                        GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
-                        GDSOf.CONST_MAP = config.offsetConstMap or 0x0
-                        GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
+                        GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
+                        GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+                        GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+                        GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+                        GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
+                        GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
+                        GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
 
-                        GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x28
-                        GDSOf.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
-                        GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
+                        GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
+                        GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
+                        GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
 
-                        GDSOf.GDSCRIPT_REF = 0x18
-                        GDSOf.MAXTYPE = 39
-                        --GDSOf.SCRIPTFUNC_STRING = GDFunctionString or 0x60
-                        GDSOf.FUNC_MAPVAL = 0x18
-                        GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
-                        GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_CODE+0x20)
-                        GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
+                        GDDEFS.GDSCRIPT_REF = 0x18
+                        GDDEFS.MAXTYPE = 39
+                        --GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
+                        GDDEFS.FUNC_MAPVAL = 0x18
+                        GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+                        GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE+0x20)
+                        GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
 
-                        GDSOf.STRING = GDSOf.STRING or 0x10
-                        GDSOf.CHILDREN_SIZE = 0x8
+                        GDDEFS.STRING = GDDEFS.STRING or 0x10
+                        GDDEFS.CHILDREN_SIZE = 0x8
 
-                        GDSOf.MAP_SIZE = 0x14
+                        GDDEFS.MAP_SIZE = 0x14
 
-                        GDSOf.ARRAY_TOVECTOR = 0x10
-                        GDSOf.P_ARRAY_TOARR = 0x18
-                        GDSOf.P_ARRAY_SIZE = 0x8
+                        GDDEFS.ARRAY_TOVECTOR = 0x10
+                        GDDEFS.P_ARRAY_TOARR = 0x18
+                        GDDEFS.P_ARRAY_SIZE = 0x8
 
-                        GDSOf.DICT_HEAD = 0x28
-                        GDSOf.DICT_TAIL = 0x30
-                        GDSOf.DICT_SIZE = 0x3C
+                        GDDEFS.DICT_HEAD = 0x28
+                        GDDEFS.DICT_TAIL = 0x30
+                        GDDEFS.DICT_SIZE = 0x3C
 
-                        GDSOf.DICTELEM_KEYTYPE = 0x10
-                        GDSOf.DICTELEM_KEYVAL = 0x18
-                        GDSOf.DICTELEM_VALTYPE = 0x28
+                        GDDEFS.DICTELEM_KEYTYPE = 0x10
+                        GDDEFS.DICTELEM_KEYVAL = 0x18
+                        GDDEFS.DICTELEM_VALTYPE = 0x28
 
-                        GDSOf.CONSTELEM_KEYVAL = 0x10
-                        GDSOf.CONSTELEM_VALTYPE = 0x18
+                        GDDEFS.CONSTELEM_KEYVAL = 0x10
+                        GDDEFS.CONSTELEM_VALTYPE = 0x18
 
-                        GDSOf.VAR_NAMEINDEX_I = 0x18
+                        GDDEFS.VAR_NAMEINDEX_I = 0x18
 
                         -- 3.x [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
-                        if GDSOf.MINOR_VER <= 4 then
-                            GDSOf.GET_TYPE_INDX = 8    
-                        elseif GDSOf.MINOR_VER == 5 then
-                            GDSOf.GET_TYPE_INDX = 9
-                        elseif GDSOf.MINOR_VER == 6 then
-                            GDSOf.GET_TYPE_INDX = 10
+                        if GDDEFS.MINOR_VER <= 4 then
+                            GDDEFS.GET_TYPE_INDX = 8    
+                        elseif GDDEFS.MINOR_VER == 5 then
+                            GDDEFS.GET_TYPE_INDX = 9
+                        elseif GDDEFS.MINOR_VER == 6 then
+                            GDDEFS.GET_TYPE_INDX = 10
                         end
 
                     else
-                        GDSOf.MAJOR_VER = 3
+                        GDDEFS.MAJOR_VER = 3
 
-                        GDSOf.CHILDREN = config.offsetNodeChildren or 0x0
-                        GDSOf.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-                        GDSOf.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-                        GDSOf.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-                        GDSOf.FUNC_MAP = config.offsetFuncMap or 0x0
-                        GDSOf.CONST_MAP = config.offsetConstMap or 0x0
-                        GDSOf.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
+                        GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
+                        GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+                        GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+                        GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+                        GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
+                        GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
+                        GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
 
-                        GDSOf.VAR_VECTOR = config.offsetVariantVector or 0x20
-                        GDSOf.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
+                        GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
+                        GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
 
-                        GDSOf.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
+                        GDDEFS.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
 
-                        GDSOf.MAXTYPE = 27
-                        --GDSOf.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+                        GDDEFS.MAXTYPE = 27
+                        --GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
 
-                        GDSOf.GDSCRIPT_REF = 0x10
+                        GDDEFS.GDSCRIPT_REF = 0x10
 
-                        GDSOf.FUNC_MAPVAL = 0x38
-                        GDSOf.FUNC_CODE = config.offsetGDFunctionCode or 0x0
-                        GDSOf.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDSOf.FUNC_CODE-0x20)
-                        GDSOf.FUNC_CONST = config.offsetGDFunctionConst or (GDSOf.FUNC_GLOBNAMEPTR-0x10)
-                        GDSOf.STRING = GDSOf.STRING or 0x10
-                        GDSOf.CHILDREN_SIZE = 0x4
+                        GDDEFS.FUNC_MAPVAL = 0x38
+                        GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+                        GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE-0x20)
+                        GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR-0x10)
+                        GDDEFS.STRING = GDDEFS.STRING or 0x10
+                        GDDEFS.CHILDREN_SIZE = 0x4
 
-                        GDSOf.MAP_SIZE = 0x10
-                        GDSOf.MAP_LELEM = 0x10
-                        GDSOf.MAP_NEXTELEM = 0x20
-                        GDSOf.MAP_KVALUE = 0x30
+                        GDDEFS.MAP_SIZE = 0x10
+                        GDDEFS.MAP_LELEM = 0x10
+                        GDDEFS.MAP_NEXTELEM = 0x20
+                        GDDEFS.MAP_KVALUE = 0x30
 
-                        GDSOf.DICT_LIST = 0x8
-                        GDSOf.DICT_HEAD = 0x0
-                        GDSOf.DICT_TAIL = 0x8
-                        GDSOf.DICT_SIZE = 0x1C -- GDSOf.DICT_SIZE = 0x10
-                        GDSOf.DICTELEM_PAIR_NEXT = 0x20
+                        GDDEFS.DICT_LIST = 0x8
+                        GDDEFS.DICT_HEAD = 0x0
+                        GDDEFS.DICT_TAIL = 0x8
+                        GDDEFS.DICT_SIZE = 0x1C -- GDDEFS.DICT_SIZE = 0x10
+                        GDDEFS.DICTELEM_PAIR_NEXT = 0x20
 
-                        GDSOf.DICTELEM_KEYTYPE = 0x0
-                        GDSOf.DICTELEM_KEYVAL = 0x8
-                        GDSOf.DICTELEM_VALTYPE = 0x8
-                        GDSOf.DICTELEM_VALVAL = 0x10
+                        GDDEFS.DICTELEM_KEYTYPE = 0x0
+                        GDDEFS.DICTELEM_KEYVAL = 0x8
+                        GDDEFS.DICTELEM_VALTYPE = 0x8
+                        GDDEFS.DICTELEM_VALVAL = 0x10
 
-                        GDSOf.ARRAY_TOVECTOR = 0x10
-                        GDSOf.P_ARRAY_TOARR = 0x8
-                        GDSOf.P_ARRAY_SIZE = 0x18
+                        GDDEFS.ARRAY_TOVECTOR = 0x10
+                        GDDEFS.P_ARRAY_TOARR = 0x8
+                        GDDEFS.P_ARRAY_SIZE = 0x18
 
-                        GDSOf.CONSTELEM_KEYVAL = 0x30
-                        GDSOf.CONSTELEM_VALTYPE = 0x38
+                        GDDEFS.CONSTELEM_KEYVAL = 0x30
+                        GDDEFS.CONSTELEM_VALTYPE = 0x38
 
-                        GDSOf.GET_TYPE_INDX = 6
+                        GDDEFS.GET_TYPE_INDX = 6
 
                     end
                 end
@@ -1902,19 +1904,19 @@
 
                 debugStepIn()
 
-                local childrenPtr = readPointer( viewport + GDSOf.CHILDREN ) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
+                local childrenPtr = readPointer( viewport + GDDEFS.CHILDREN ) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
                 if isNullOrNil(childrenPtr) then
                     sendDebugMessageAndStepOut('getVPChildren: failed to get VP children')
                     return;
                 end
 
                 local childrenSize;
-                if GDSOf.MAJOR_VER == 4 then
-                    childrenSize = readInteger( viewport + GDSOf.CHILDREN - GDSOf.CHILDREN_SIZE ) -- size is 8 bytes behind
-                elseif GDSOf.MAJOR_VER > 4 then
-                    childrenSize = readInteger( childrenPtr - GDSOf.CHILDREN_SIZE ) -- versions before ~4.2 have size inside the array 4 bytes behind
+                if GDDEFS.MAJOR_VER == 4 then
+                    childrenSize = readInteger( viewport + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE ) -- size is 8 bytes behind
+                elseif GDDEFS.MAJOR_VER > 4 then
+                    childrenSize = readInteger( childrenPtr - GDDEFS.CHILDREN_SIZE ) -- versions before ~4.2 have size inside the array 4 bytes behind
                 else
-                    childrenSize = readInteger( childrenPtr - GDSOf.CHILDREN_SIZE )
+                    childrenSize = readInteger( childrenPtr - GDDEFS.CHILDREN_SIZE )
                 end
 
                 if isNullOrNil(childrenSize) then
@@ -2054,7 +2056,7 @@
                 local outer = addStructureElem(parent, label, offset, vtPointer)
                 outer.ChildStruct = createStructure("StringName")
 
-                local innerOffset = bUniShift and GDSOf.STRING or (GDSOf.STRING - GDSOf.PTRSIZE)
+                local innerOffset = bUniShift and GDDEFS.STRING or (GDDEFS.STRING - GDDEFS.PTRSIZE)
                 local inner = addStructureElem(outer, label, innerOffset, vtPointer)
                 inner.ChildStruct = createStructure("stringy")
                 local stringElem = addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0, bUniShift and vtUnicodeString or vtString)
@@ -2067,21 +2069,21 @@
             end
 
             local function emitFunctionCodeStruct(funcParent, funcName)
-                return addStructureElem(funcParent, 'Code: ' .. funcName, GDSOf.FUNC_CODE, vtPointer)
+                return addStructureElem(funcParent, 'Code: ' .. funcName, GDDEFS.FUNC_CODE, vtPointer)
             end
 
             local function emitFunctionConstantsStruct(funcParent, funcName, funcValueAddr)
 
-                local constantsElem = createChildStructElem( funcParent, "Constants: " .. funcName, GDSOf.FUNC_CONST, vtPointer, "GDFConst")
-                local funcConstAddr = readPointer(funcValueAddr + GDSOf.FUNC_CONST)
+                local constantsElem = createChildStructElem( funcParent, "Constants: " .. funcName, GDDEFS.FUNC_CONST, vtPointer, "GDFConst")
+                local funcConstAddr = readPointer(funcValueAddr + GDDEFS.FUNC_CONST)
                 iterateFuncConstantsToStruct(funcConstAddr, constantsElem)
                 return constantsElem
             end
 
             local function emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
 
-                local globalsElem = createChildStructElem( funcParent, "Globals: "..funcName, GDSOf.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals" )
-                local funcGlobalAddr = readPointer(funcValueAddr + GDSOf.FUNC_GLOBNAMEPTR)
+                local globalsElem = createChildStructElem( funcParent, "Globals: "..funcName, GDDEFS.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals" )
+                local funcGlobalAddr = readPointer(funcValueAddr + GDDEFS.FUNC_GLOBNAMEPTR)
                 iterateFuncGlobalsToStruct(funcGlobalAddr, globalsElem)
                 return globalsElem
             end
@@ -2089,33 +2091,33 @@
             local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
                 local funcRoot
                 if not bDisasmFunc then
-                    funcRoot = createChildStructElem( funcStructElement, "func: " .. funcName, GDSOf.FUNC_MAPVAL, vtPointer, "GDFunction" )
-                    local funcValueAddr = readPointer(mapElement + GDSOf.FUNC_MAPVAL)
+                    funcRoot = createChildStructElem( funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer, "GDFunction" )
+                    local funcValueAddr = readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
                     emitFunctionCodeStruct(funcRoot, funcName)
                     emitFunctionConstantsStruct(funcRoot, funcName, funcValueAddr)
                     emitFunctionGlobalsStruct(funcRoot, funcName, funcValueAddr)
                 else
-                    funcRoot = addStructureElem( funcStructElement, "func: " .. funcName, GDSOf.FUNC_MAPVAL, vtPointer )
+                    funcRoot = addStructureElem( funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer )
                 end
                 
                 return funcRoot
             end
 
             local function advanceFunctionMapElement(mapElement)
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     return readPointer(mapElement)
                 end
-                return readPointer(mapElement + GDSOf.MAP_NEXTELEM)
+                return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
             end
 
             local function createNextFunctionContainer(currentContainer, index)
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
                     nextElem.ChildStruct = createStructure("FuncNext")
                     return nextElem
                 end
 
-                local nextElem = addStructureElem(currentContainer, "Next", GDSOf.MAP_NEXTELEM, vtPointer)
+                local nextElem = addStructureElem(currentContainer, "Next", GDDEFS.MAP_NEXTELEM, vtPointer)
                 nextElem.ChildStruct = createStructure('FuncNext')
                 return nextElem
             end
@@ -2197,54 +2199,54 @@
             -- TODO: make magic dereferences more obvious
 
             local function getNextMapElement(mapElement)
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     return readPointer(mapElement)
                 else
-                    return readPointer(mapElement + GDSOf.MAP_NEXTELEM)
+                    return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
                 end
             end
 
             local function getDictElemPairNext(mapElement)
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     return readPointer(mapElement)
                 else
-                    return readPointer(mapElement + GDSOf.DICTELEM_PAIR_NEXT)
+                    return readPointer(mapElement + GDDEFS.DICTELEM_PAIR_NEXT)
                 end
             end
 
             local function getDictionarySizeFromVariantPtr(variantPtr)
-                -- if GDSOf.MAJOR_VER == 4 then
-                --     return readInteger(readPointer(variantPtr) + GDSOf.DICT_SIZE)
+                -- if GDDEFS.MAJOR_VER == 4 then
+                --     return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
                 -- else
-                --     return readInteger(readPointer(readPointer(variantPtr) + GDSOf.DICT_LIST) + GDSOf.DICT_SIZE)
+                --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
                 -- end
-                return readInteger(readPointer(variantPtr) + GDSOf.DICT_SIZE)
+                return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
             end
 
             local function isArrayEmptyFromVariantPtr(variantPtr)
-                return readPointer(readPointer(variantPtr) + GDSOf.ARRAY_TOVECTOR) == 0
+                return readPointer(readPointer(variantPtr) + GDDEFS.ARRAY_TOVECTOR) == 0
             end
 
             local function resolveScriptVariantType(mapElement, runtimeVariantType)
                 
                 -- debugStepIn()
 
-                if GDSOf.MAJOR_VER < 4 then
+                if GDDEFS.MAJOR_VER < 4 then
                     -- debugStepOut()
                     return runtimeVariantType
                 end
 
-                local scriptType = readInteger(mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE)
+                local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
                 
                 -- 4.2.2 may differ TODO: make it version dependent
-                if scriptType > GDSOf.MAXTYPE then
-                    scriptType = readInteger(mapElement + GDSOf.VAR_NAMEINDEX_VARTYPE - 0x8)
+                if scriptType > GDDEFS.MAXTYPE then
+                    scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8)
                 end
 
                 if scriptType == runtimeVariantType then
                     -- debugStepOut()
                     return scriptType
-                elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDSOf.MAXTYPE) then
+                elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDDEFS.MAXTYPE) then
                     -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback1, cached type is used') -- if the source is incorrect
                     return scriptType
                 else
@@ -2254,10 +2256,10 @@
             end
 
             local function getVariantNameFromMapElement(mapElement)
-                if GDSOf.MAJOR_VER == 4 then
-                    return getStringNameStr( readPointer(mapElement + GDSOf.CONSTELEM_KEYVAL) )
+                if GDDEFS.MAJOR_VER == 4 then
+                    return getStringNameStr( readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL) )
                 else
-                    return getStringNameStr( readPointer(mapElement + GDSOf.MAP_KVALUE) )
+                    return getStringNameStr( readPointer(mapElement + GDDEFS.MAP_KVALUE) )
                 end
             end
 
@@ -2273,7 +2275,7 @@
                 ptr, shifted = checkForVT(ptr)
 
                 if shifted then
-                    offset = offset - GDSOf.PTRSIZE
+                    offset = offset - GDDEFS.PTRSIZE
                     currentContext = { nodeAddr = contextTable.nodeAddr, nodeName = contextTable.nodeName, baseAddress = ptr }
                     currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer, "Wrapper")
                     offset = 0x0
@@ -2286,10 +2288,10 @@
             local function getFunctionMapName(mapElement)
                 if isNullOrNil(mapElement) then return nil end
 
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     return getGDFunctionName(mapElement)
                 end
-                return getStringNameStr( readPointer(mapElement + GDSOf.MAP_KVALUE) )
+                return getStringNameStr( readPointer(mapElement + GDDEFS.MAP_KVALUE) )
             end
 
             local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
@@ -2310,30 +2312,30 @@
             end
 
             local function getConstMapLookupResult(mapElement)
-                if GDSOf.MAJOR_VER == 4 then
-                    local constType = readInteger(mapElement + GDSOf.CONSTELEM_VALTYPE)
+                if GDDEFS.MAJOR_VER == 4 then
+                    local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
                     local offsetToValue = getVariantValueOffset(constType)
                     return
-                        getAddress(mapElement + GDSOf.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
+                        getAddress(mapElement + GDDEFS.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
                 else
-                    local constType = readInteger(mapElement + GDSOf.CONSTELEM_VALTYPE)
+                    local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
                     return
-                        getAddress(mapElement + GDSOf.CONSTELEM_VALVAL), getCETypeFromGD(constType)
+                        getAddress(mapElement + GDDEFS.CONSTELEM_VALVAL), getCETypeFromGD(constType)
                 end
             end
 
             local function getFunctionMapLookupResult(mapElement)
-                return readPointer(mapElement + GDSOf.FUNC_MAPVAL)
+                return readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
             end
 
             local function createNextConstContainer(currentContainer, index)
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
                     nextElem.ChildStruct = createStructure('ConstNext')
                     return nextElem
                 end
 
-                local nextElem = addStructureElem(currentContainer, 'Next', GDSOf.MAP_NEXTELEM, vtPointer)
+                local nextElem = addStructureElem(currentContainer, 'Next', GDDEFS.MAP_NEXTELEM, vtPointer)
                 nextElem.ChildStruct = createStructure('ConstNext')
                 return nextElem
             end
@@ -2353,13 +2355,13 @@
                     return nil
                 end
 
-                local arrVectorAddr = readPointer(arrayAddr + GDSOf.ARRAY_TOVECTOR)
+                local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
                 if isNullOrNil(arrVectorAddr) then
                     sendDebugMessageAndStepOut('getArrayVectorInfo: arrVectorAddr uninitialized')
                     return nil
                 end
 
-                local arrVectorSize = readInteger(arrVectorAddr - GDSOf.SIZE_VECTOR)
+                local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
                 if isNullOrNil(arrVectorSize) then
                     sendDebugMessageAndStepOut('getArrayVectorInfo: vector size is invalid')
                     return nil
@@ -2384,13 +2386,13 @@
             local function decodeDictionaryKeyName(mapElement)
                 local keyType, keyValueAddr
 
-                if GDSOf.MAJOR_VER == 3 then
+                if GDDEFS.MAJOR_VER == 3 then
                     local keyPtr = readPointer(mapElement) -- key is a ptr
-                    keyType = readInteger(keyPtr + GDSOf.DICTELEM_KEYTYPE)
-                    keyValueAddr = getAddress(keyPtr + GDSOf.DICTELEM_KEYVAL)
+                    keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEYTYPE)
+                    keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEYVAL)
                 else
-                    keyType = readInteger(mapElement + GDSOf.DICTELEM_KEYTYPE)  -- those can be a key , NodePath, Callable, StringName, etc
-                    keyValueAddr = getAddress(mapElement + GDSOf.DICTELEM_KEYVAL)
+                    keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEYTYPE)  -- those can be a key , NodePath, Callable, StringName, etc
+                    keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEYVAL)
                 end
 
                 local keyTypeName = getGDTypeName(keyType)
@@ -2423,39 +2425,39 @@
                 end 
 
                 local dictRoot = dictAddr
-                if GDSOf.MAJOR_VER == 3 then
-                    dictRoot = readPointer(dictAddr + GDSOf.DICT_LIST)
+                if GDDEFS.MAJOR_VER == 3 then
+                    dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
                     if isNullOrNil(dictRoot) then
                         sendDebugMessageAndStepOut('getDictionaryInfo: dictRoot isnt valid')
                         return nil
                     end
                 end
 
-                -- local dictSize = readInteger(dictRoot + GDSOf.DICT_SIZE)
-                local dictSize = readInteger(dictAddr + GDSOf.DICT_SIZE)
+                -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
+                local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
                 if isNullOrNil(dictSize) then
                     sendDebugMessageAndStepOut('getDictionaryInfo: dictSize isnt valid')
                     return nil
                 end
 
-                local dictHead = readPointer(dictRoot + GDSOf.DICT_HEAD)
+                local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
                 if isNullOrNil(dictHead) then
                     sendDebugMessageAndStepOut('getDictionaryInfo: dictHead isnt valid')
                     return nil
                 end
 
-                local dictTail = readPointer(dictRoot + GDSOf.DICT_TAIL)
+                local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
 
                 debugStepOut()
                 return dictRoot, dictSize, dictHead, dictTail
             end
 
             local function createNextDictContainer(currentContainer, index)
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
                 end
 
-                return createChildStructElem(currentContainer, 'Next', GDSOf.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+                return createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
             end
 
             local function getPackedArrayInfo(packedArrayAddr)
@@ -2466,15 +2468,15 @@
                     return nil
                 end
 
-                local packedDataArrAddr = readPointer(packedArrayAddr + GDSOf.P_ARRAY_TOARR)
+                local packedDataArrAddr = readPointer(packedArrayAddr + GDDEFS.P_ARRAY_TOARR)
                 if isNullOrNil(packedDataArrAddr) then
                     sendDebugMessageAndStepOut('getPackedArrayInfo: packedDataArrAddr isnt pointer')
                     return nil
                 end
 
                 local packedVectorSize
-                if GDSOf.MAJOR_VER == 4 then
-                    packedVectorSize = readInteger(packedDataArrAddr - GDSOf.SIZE_VECTOR)
+                if GDDEFS.MAJOR_VER == 4 then
+                    packedVectorSize = readInteger(packedDataArrAddr - GDDEFS.SIZE_VECTOR)
                     if isNullOrNil(packedVectorSize) or packedVectorSize > 150 then packedVectorSize = 150 end
                 else
                     packedVectorSize = 150 -- no size to rely :(
@@ -2500,7 +2502,7 @@
 
             local function readNodeVariantEntry(mapElement, variantVector, variantSize, bNeedStructOffset)
                 -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
-                local variantIndex = readInteger(mapElement + GDSOf.VAR_NAMEINDEX_I);
+                local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
                 local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize, bNeedStructOffset);
                 
                 local name = getVariantNameFromMapElement(mapElement);
@@ -2548,8 +2550,8 @@
 
             local function readNodeConstEntry(mapElement)
                 local constName = getNodeConstName(mapElement)
-                local constType = readInteger(mapElement + GDSOf.CONSTELEM_VALTYPE)
-                local offsetToValue = GDSOf.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
+                local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+                local offsetToValue = GDDEFS.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
                 local constPtr = getAddress(mapElement + offsetToValue)
 
                 local entry = {
@@ -2617,8 +2619,8 @@
             local function readDictionaryContainerEntry(mapElement)
 
                 local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
-                local valueType = readInteger(mapElement + GDSOf.DICTELEM_VALTYPE)
-                local offsetToValue = GDSOf.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+                local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
+                local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
                 local valueValuePtr = getAddress(mapElement + offsetToValue)
 
                 local entry = {
@@ -2642,8 +2644,8 @@
 
             -- for node search
             local function readDictionaryValueEntry(mapElement)
-                local valueType = readInteger(mapElement + GDSOf.DICTELEM_VALTYPE)
-                local offsetToValue = GDSOf.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+                local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
+                local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
                 return {
                     typeId = valueType,
                     typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
@@ -2719,7 +2721,7 @@
                 GDHandlers.VariantHandlers.STRING_NAME = function(entry, emitter, parent, contextTable)
                     if emitter == GDEmitters.StructEmitter then
                         local outer = emitter.branch(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
-                        local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDSOf.STRING, vtPointer, "stringy")
+                        local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDDEFS.STRING, vtPointer, "stringy")
                         emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString)
                     else
                         local stringNameAddr = readPointer(entry.variantPtr)
@@ -2728,7 +2730,7 @@
                             return
                         end
 
-                        local stringContext = { nodeAddr = contextTable.nodeAddr, nodeName = contextTable.nodeName, baseAddress = stringNameAddr + GDSOf.STRING }
+                        local stringContext = { nodeAddr = contextTable.nodeAddr, nodeName = contextTable.nodeName, baseAddress = stringNameAddr + GDDEFS.STRING }
                         emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
                     end
                     
@@ -2738,7 +2740,7 @@
                     sendDebugMessage("handlePackedArray: "..entry.typeName.." case for name: "..entry.name)
                     local arrayAddr = readPointer( entry.variantPtr )
 
-                    if readPointer( arrayAddr + GDSOf.P_ARRAY_TOARR ) == 0 then
+                    if readPointer( arrayAddr + GDDEFS.P_ARRAY_TOARR ) == 0 then
                         emitter.leaf( contextTable, parent, entry.typeName..' (empty): '..entry.name, rootOffset(entry, emitter), entry.ceType )
                     else
                         local child = emitter.branch( contextTable, parent, entry.typeName..' '..entry.name, rootOffset(entry, emitter), entry.ceType, "P_Array" )
@@ -2851,7 +2853,7 @@
 
                 GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
                     for elemIndex = 0, packedVectorSize - 1 do
-                        local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                        local offsetToValue = elemIndex * GDDEFS.PTRSIZE
                         local arrElement = getAddress(packedDataArrAddr + offsetToValue)
 
                         if readPointer(arrElement) ~= 0 then
@@ -2878,7 +2880,7 @@
 
                 GDHandlers.PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
                     for elemIndex = 0, packedVectorSize - 1 do
-                        local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                        local offsetToValue = elemIndex * GDDEFS.PTRSIZE
                         local arrElement = getAddress(packedDataArrAddr + offsetToValue)
                         emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword)
                     end
@@ -2886,7 +2888,7 @@
 
                 GDHandlers.PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
                     for elemIndex = 0, packedVectorSize - 1 do
-                        local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                        local offsetToValue = elemIndex * GDDEFS.PTRSIZE
                         local arrElement = getAddress(packedDataArrAddr + offsetToValue)
                         emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble)
                     end
@@ -2926,7 +2928,7 @@
 
                 GDHandlers.PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter)
                     for elemIndex = 0, packedVectorSize - 1 do
-                        local offsetToValue = elemIndex * GDSOf.PTRSIZE
+                        local offsetToValue = elemIndex * GDDEFS.PTRSIZE
                         local arrElement = getAddress(packedDataArrAddr + offsetToValue)
                         emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer)
                     end
@@ -2949,14 +2951,14 @@
 
                 for i=0,( childrenSize-1 ) do
 
-                    local nodeAddr = readPointer( childrenPtr + i* GDSOf.PTRSIZE )
+                    local nodeAddr = readPointer( childrenPtr + i* GDDEFS.PTRSIZE )
                     if isNullOrNil(nodeAddr) then
                         sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: nodeAddr invalid')
                         return
                     end
 
                     local nodeNameStr = getNodeName(nodeAddr)
-                    local gdScriptInsance = readQword( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                    local gdScriptInsance = readQword( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                     if isNullOrNil(gdScriptInsance) then
                         sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: ScriptInstance is 0/nil')
                         return
@@ -2982,7 +2984,7 @@
 
                 debugStepIn()
 
-                local nodeNamePtr = readPointer( nodeAddr + GDSOf.OBJ_STRING_NAME )
+                local nodeNamePtr = readPointer( nodeAddr + GDDEFS.OBJ_STRING_NAME )
                 if isNullOrNil(nodeNamePtr) or ( not isValidPointer( nodeNamePtr ) ) then
                     sendDebugMessageAndStepOut('getNodeName: nodeName invalid or not a pointer (?)')
                     return 'N??'
@@ -2997,17 +2999,17 @@
 
                 debugStepIn()
 
-                local GDScriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local GDScriptInstanceAddr = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                 if isNullOrNil(GDScriptInstanceAddr) then
                     sendDebugMessageAndStepOut('getNodeNameFromGDScript: ScriptInstance is 0/nil')
                     return 'N??'
                 end
-                local GDScriptAddr = readPointer( GDScriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                local GDScriptAddr = readPointer( GDScriptInstanceAddr + GDDEFS.GDSCRIPT_REF )
                 if isNullOrNil(GDScriptAddr) then
                     sendDebugMessageAndStepOut(' getNodeNameFromGDScript: GDScript is 0/nil')
                     return 'N??'
                 end
-                local GDScriptNameAddr = readPointer( GDScriptAddr + GDSOf.GDSCRIPTNAME )
+                local GDScriptNameAddr = readPointer( GDScriptAddr + GDDEFS.GDSCRIPTNAME )
 
 
                 if isNullOrNil(GDScriptNameAddr) then
@@ -3049,13 +3051,13 @@
                     return false
                 end
 
-                local scriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local scriptInstance = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                 if isNullOrNil( scriptInstance ) then
                     -- sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance is 0/nil'.." address "..numtohexstr(nodeAddr))
                     return false
                 end
                 
-                local gdscript = readPointer( scriptInstance + GDSOf.GDSCRIPT_REF )
+                local gdscript = readPointer( scriptInstance + GDDEFS.GDSCRIPT_REF )
                 if isNullOrNil(gdscript) then
                     -- sendDebugMessageAndStepOut('checkForGDScript: GDScript is 0/nil'.." address "..numtohexstr(nodeAddr))
                     return false
@@ -3088,22 +3090,22 @@
                 if not isMMVTable( readPointer( objAddr ) ) then return false end
 
                 -- check children
-                local objectChildren = readPointer( objAddr + GDSOf.CHILDREN )
+                local objectChildren = readPointer( objAddr + GDDEFS.CHILDREN )
                 if isNullOrNil(objectChildren) then return false end
 
                 local childrenSize;
-                if GDSOf.MAJOR_VER == 4 then
-                    childrenSize = readInteger( objAddr + GDSOf.CHILDREN - GDSOf.CHILDREN_SIZE ) -- size is 8 bytes behind
-                -- elseif GDSOf.MAJOR_VER > 4 then -- TODO: versions before ~4.2 have size inside the array 4 bytes behind
-                --     childrenSize = readInteger( objectChildren - GDSOf.CHILDREN_SIZE )
+                if GDDEFS.MAJOR_VER == 4 then
+                    childrenSize = readInteger( objAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE ) -- size is 8 bytes behind
+                -- elseif GDDEFS.MAJOR_VER > 4 then -- TODO: versions before ~4.2 have size inside the array 4 bytes behind
+                --     childrenSize = readInteger( objectChildren - GDDEFS.CHILDREN_SIZE )
                 else
-                    childrenSize = readInteger( objectChildren - GDSOf.CHILDREN_SIZE )
+                    childrenSize = readInteger( objectChildren - GDDEFS.CHILDREN_SIZE )
                 end
                 -- if no children, we don't need it
                 if isNullOrNil(childrenSize) then return false end
 
                 -- check for StringName which should always be present?
-                local objectStrNamePtr = readPointer( objAddr + GDSOf.OBJ_STRING_NAME )
+                local objectStrNamePtr = readPointer( objAddr + GDDEFS.OBJ_STRING_NAME )
                 if isNullOrNil(objectStrNamePtr) then return false end
 
                 local objName = getStringNameStr(objectStrNamePtr)
@@ -3117,26 +3119,26 @@
             ---@param nodeAddr number
             function iterateNodeChildrenToStruct( childrenArrStructElem, baseAddress )
 
-                if not isPointerNotNull( readPointer( baseAddress + GDSOf.CHILDREN ) ) then
+                if not isPointerNotNull( readPointer( baseAddress + GDDEFS.CHILDREN ) ) then
                     -- check if the children array points to something
                     return;
                 end 
-                local childrenAddr = readPointer( baseAddress + GDSOf.CHILDREN )
+                local childrenAddr = readPointer( baseAddress + GDDEFS.CHILDREN )
 
                 local childrenSize;
-                if GDSOf.MAJOR_VER == 4 then
-                    childrenSize = readInteger( baseAddress + GDSOf.CHILDREN - GDSOf.CHILDREN_SIZE ) -- size is 8 bytes behind
-                elseif GDSOf.MAJOR_VER > 4 then
-                    childrenSize = readInteger( childrenAddr - GDSOf.CHILDREN_SIZE ) -- versions before ~4.2 have size inside the array 4 bytes behind
+                if GDDEFS.MAJOR_VER == 4 then
+                    childrenSize = readInteger( baseAddress + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE ) -- size is 8 bytes behind
+                elseif GDDEFS.MAJOR_VER > 4 then
+                    childrenSize = readInteger( childrenAddr - GDDEFS.CHILDREN_SIZE ) -- versions before ~4.2 have size inside the array 4 bytes behind
                 else
-                    childrenSize = readInteger( childrenAddr - GDSOf.CHILDREN_SIZE )
+                    childrenSize = readInteger( childrenAddr - GDDEFS.CHILDREN_SIZE )
                 end
                 if isNullOrNil(childrenSize) then
                     return;
                 end
 
                 for i=0,(childrenSize-1) do
-                    local nodeAddr = readPointer( childrenAddr + (i*GDSOf.PTRSIZE) )
+                    local nodeAddr = readPointer( childrenAddr + (i*GDDEFS.PTRSIZE) )
                     local nodeName = getNodeName( nodeAddr )
                     if nodeName == nil or nodeName == 'N??'then
                         nodeName = getNodeNameFromGDScript( nodeAddr )
@@ -3147,9 +3149,9 @@
                     -- sendDebugMessage("Checking GDScript for "..nodeName)
 
                     if checkForGDScript( nodeAddr ) then
-                        addLayoutStructElem( childrenArrStructElem, objectTypeName..' cNode: '..nodeName, 0x6C3157, (i*GDSOf.PTRSIZE), vtPointer)
+                        addLayoutStructElem( childrenArrStructElem, objectTypeName..' cNode: '..nodeName, 0x6C3157, (i*GDDEFS.PTRSIZE), vtPointer)
                     else
-                        addStructureElem( childrenArrStructElem, objectTypeName..' cObj: '..nodeName, (i*GDSOf.PTRSIZE), vtPointer)
+                        addStructureElem( childrenArrStructElem, objectTypeName..' cObj: '..nodeName, (i*GDDEFS.PTRSIZE), vtPointer)
                     end
                 end
 
@@ -3190,7 +3192,7 @@
 
                 sendDebugMessage('iterateMNodeToAddr: STEP: Constants for: '..tostring(nodeName) )
 
-                if GDSOf.CONST_MAP ~= 0 then
+                if GDDEFS.CONST_MAP ~= 0 then
                     local newConstRec = synchronize(function(parent)
                                 local addrList = getAddressList()
                                 local newConstRec = addrList.createMemoryRecord()
@@ -3234,14 +3236,14 @@
                 table.insert( dumpedDissectorNodes , nodeAddr )
 
                 local varVectorStructElem, scriptStructElem, constMapStructElem, functMapStructElem
-                local gdScriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE ) or 0x0
-                local gdScriptAddr = readPointer( gdScriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                local gdScriptInstanceAddr = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE ) or 0x0
+                local gdScriptAddr = readPointer( gdScriptInstanceAddr + GDDEFS.GDSCRIPT_REF )
 
-                scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDSOf.GDSCRIPT_REF, vtPointer )             
+                scriptStructElem = addLayoutStructElem( scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer )             
 
                 -- we check if consts, funcs, veriants exist
-                if isNotNullOrNil( readPointer( gdScriptInstanceAddr + GDSOf.VAR_VECTOR ) ) then
-                    varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDSOf.VAR_VECTOR, vtPointer )
+                if isNotNullOrNil( readPointer( gdScriptInstanceAddr + GDDEFS.VAR_VECTOR ) ) then
+                    varVectorStructElem = addLayoutStructElem( scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer )
                     sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: '..tostring(nodeName) )
                     varVectorStructElem.ChildStruct = createStructure( 'Vars' )
                     iterateVecVarToStruct( nodeAddr , varVectorStructElem )
@@ -3249,8 +3251,8 @@
                     sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS skipped: nothing to process: '..tostring(nodeName) )
                 end
 
-                if isNotNullOrNil(GDSOf.CONST_MAP) and isNotNullOrNil( readPointer( gdScriptAddr + GDSOf.CONST_MAP ) ) then
-                    constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', --[[0x400000]] nil, GDSOf.CONST_MAP, vtPointer )
+                if isNotNullOrNil(GDDEFS.CONST_MAP) and isNotNullOrNil( readPointer( gdScriptAddr + GDDEFS.CONST_MAP ) ) then
+                    constMapStructElem = addLayoutStructElem( scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer )
                     sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: '..tostring(nodeName) )
                     constMapStructElem.ChildStruct = createStructure( 'Consts' )
                     iterateNodeConstToStruct( nodeAddr , constMapStructElem )
@@ -3258,8 +3260,8 @@
                     sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS skipped: nothing to process: '..tostring(nodeName) )
                 end
 
-                if isNotNullOrNil(GDSOf.FUNC_MAP) and isNotNullOrNil( readPointer( gdScriptAddr + GDSOf.FUNC_MAP ) ) then
-                    functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', --[[0x400000]] nil, GDSOf.FUNC_MAP, vtPointer )
+                if isNotNullOrNil(GDDEFS.FUNC_MAP) and isNotNullOrNil( readPointer( gdScriptAddr + GDDEFS.FUNC_MAP ) ) then
+                    functMapStructElem = addLayoutStructElem( scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer )
                     sendDebugMessage('iterateNodeToStruct: STEP: Functions for: '..tostring(nodeName) )
                     functMapStructElem.ChildStruct = createStructure( 'Funcs' )
                     iterateNodeFuncMapToStruct( nodeAddr , functMapStructElem )
@@ -3298,19 +3300,19 @@
 
                 debugStepIn()
 
-                local gdScriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local gdScriptInstance = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                 if isNullOrNil(gdScriptInstance) then
                     sendDebugMessageAndStepOut(' getGDResName: gdScriptInstance invalid')
                     return
                 end
 
-                local gdScript = readPointer( gdScriptInstance + GDSOf.GDSCRIPT_REF )
+                local gdScript = readPointer( gdScriptInstance + GDDEFS.GDSCRIPT_REF )
                 if isNullOrNil(gdScript) then
                     sendDebugMessageAndStepOut('getGDResName: gdScript invalid')
                     return
                 end
 
-                local gdScriptName = readPointer( gdScript + GDSOf.GDSCRIPTNAME )
+                local gdScriptName = readPointer( gdScript + GDDEFS.GDSCRIPTNAME )
                 if isNullOrNil(gdScriptName) then
                     sendDebugMessageAndStepOut('getGDResName: gdScriptName invalid')
                     return
@@ -3333,7 +3335,7 @@
                     -- debugStepIn()
 
                     -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
-                    local adjustedObjectPtr = objectPtr - GDSOf.PTRSIZE; -- shift back to get a ptr
+                    local adjustedObjectPtr = objectPtr - GDDEFS.PTRSIZE; -- shift back to get a ptr
                     local wrapperAddr = readPointer( adjustedObjectPtr ) -- this will be a wrapped obj ptr
                     objectAddr = readPointer( wrapperAddr )
 
@@ -3370,7 +3372,7 @@
 
                 for i=0,( childrenSize-1 ) do
 
-                    local nodeAddr = readPointer( childrenPtr + i * GDSOf.PTRSIZE )
+                    local nodeAddr = readPointer( childrenPtr + i * GDDEFS.PTRSIZE )
                     if isNullOrNil(nodeAddr) then
                         --sendDebugMessage('getNode: nodeAddr invalid' )
                         return
@@ -3410,7 +3412,7 @@
             function getGDFunctionName(mapElement)
                 debugStepIn()
                 
-                local mapElementValue = readPointer( mapElement + GDSOf.PTRSIZE*2 ) -- it's after next and prev
+                local mapElementValue = readPointer( mapElement + GDDEFS.PTRSIZE*2 ) -- it's after next and prev
                 if isNullOrNil( mapElementValue ) then
                     sendDebugMessageAndStepOut('getGDFunctionName: (hash)mapElementKey invalid');
                     return 'F??'
@@ -3426,28 +3428,28 @@
                 assert(type(nodeAddr) == 'number',"getNodeFuncMap: NodePtr should be a number, instead got: "..type(nodeAddr))
                 debugStepIn()
 
-                local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local scriptInstanceAddr = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                 if isNullOrNil(scriptInstanceAddr) then
                     sendDebugMessageAndStepOut('getNodeFuncMap: scriptInstance is invalid')
                     return
                 end
 
-                local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                local gdScriptAddr = readPointer( scriptInstanceAddr + GDDEFS.GDSCRIPT_REF )
                 if isNullOrNil(gdScriptAddr) then
                     sendDebugMessageAndStepOut(' getNodeFuncMap: GDScript is invalid');
                     return;
                 end
 
-                local mainElement = readPointer( gdScriptAddr + GDSOf.FUNC_MAP ) -- head or root depending on the version
-                local lastElement = readPointer( gdScriptAddr + GDSOf.FUNC_MAP + GDSOf.PTRSIZE ) -- tail or end
-                local mapSize = readInteger( gdScriptAddr + GDSOf.FUNC_MAP + GDSOf.MAP_SIZE ) -- hashmap or map
+                local mainElement = readPointer( gdScriptAddr + GDDEFS.FUNC_MAP ) -- head or root depending on the version
+                local lastElement = readPointer( gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.PTRSIZE ) -- tail or end
+                local mapSize = readInteger( gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.MAP_SIZE ) -- hashmap or map
                 if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
                         sendDebugMessageAndStepOut('getNodeFuncMap: Const: (hash)map is not found')
                         return;-- return to skip if the const map is absent
                 end
                 debugStepOut()
                 
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     return mainElement, lastElement, mapSize, funcStructElement
                 else
                     if funcStructElement then funcStructElement.ChildStruct = createStructure('ConstMapRes') end
@@ -3507,7 +3509,7 @@
                     return 
                 end
 
-                local vectorSize = readInteger( funcConstantVect - GDSOf.SIZE_VECTOR )
+                local vectorSize = readInteger( funcConstantVect - GDDEFS.SIZE_VECTOR )
                 if isNullOrNil(vectorSize) then
                     sendDebugMessageAndStepOut('iterateFuncConstantsToStruct vector size invalid')
                     return;
@@ -3540,20 +3542,20 @@
                     return;
                 end
                 
-                local vectorSize = readInteger( funcGlobalVect - GDSOf.SIZE_VECTOR )
+                local vectorSize = readInteger( funcGlobalVect - GDDEFS.SIZE_VECTOR )
                 if isNullOrNil(vectorSize) then
                     sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct vector size invalid')
                     return;
                 end
 
                 for variantIndex=0, (vectorSize-1) do
-                    local entryOffset = variantIndex * GDSOf.PTRSIZE
+                    local entryOffset = variantIndex * GDDEFS.PTRSIZE
                     local label = "GlobName["..variantIndex.."] stringName"
                     local stringFieldLabel = "GlobName["..variantIndex.. "] string"
                     local stringNamePtr = readPointer(funcGlobalVect + entryOffset)
                     local bUniShift = false -- TODO: with version checking that should not be an issue
 
-                    if isPointerNotNull(stringNamePtr) then bUniShift = isPointerNotNull(stringNamePtr + GDSOf.STRING) end
+                    if isPointerNotNull(stringNamePtr) then bUniShift = isPointerNotNull(stringNamePtr + GDDEFS.STRING) end
 
                     -- sendDebugMessage('iterateFuncGlobalsToStruct: Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
 
@@ -3747,7 +3749,7 @@
                     return newDisassembler
                 end
 
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
 
                     GDF.OP = {
                         OPCODE_OPERATOR = "OPCODE_OPERATOR",
@@ -3955,7 +3957,7 @@
                         GDF.DisasmHandlers[GDF.OP.OPCODE_OPERATOR] = {
                             name = "OPCODE_OPERATOR",
                             handler = function(contextTable)
-                                local _pointer_size = GDSOf.PTRSIZE / 0x4
+                                local _pointer_size = GDDEFS.PTRSIZE / 0x4
 
                                 local operation = contextTable.codeInts[contextTable.instrPointer + 4 ] -- operator is 4*0x4 after
                                 addStructureElem( contextTable.codeStructElement, 'Operator: ', (contextTable.instrPointer-1 +4)*0x4, vtDword )
@@ -6475,8 +6477,8 @@
                         GDF.CompiledProfiles[ version ] = createProfileFromVersion( version )
                     end
 
-                    if GDSOf.VERSION_STRING then
-                        GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion( GDSOf.VERSION_STRING )
+                    if GDDEFS.VERSION_STRING then
+                        GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion( GDDEFS.VERSION_STRING )
                     end
 
                 else
@@ -6492,28 +6494,28 @@
                 debugStepIn()
 
                 -- TODO: resolve that with a a helper
-                local codeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
+                local codeAddr = readPointer( funcAddr + GDDEFS.FUNC_CODE )
                 funcStruct.Name = 'ScriptFunc'
                 local codeStructElement = funcStruct.addElement()
                 codeStructElement.Name = 'FuncCode'
-                codeStructElement.Offset = GDSOf.FUNC_CODE
+                codeStructElement.Offset = GDDEFS.FUNC_CODE
                 codeStructElement.VarType = vtPointer
                 codeStructElement.ChildStruct = createStructure( 'FuncCode' )
                 
                 local funcConstantStructElem = funcStruct.addElement()
                 funcConstantStructElem.Name = 'Constants'
-                funcConstantStructElem.Offset = GDSOf.FUNC_CONST
+                funcConstantStructElem.Offset = GDDEFS.FUNC_CONST
                 funcConstantStructElem.VarType = vtPointer
                 funcConstantStructElem.ChildStruct = createStructure('GDFConst')
-                local funcConstAddr = readPointer( funcAddr + GDSOf.FUNC_CONST )
+                local funcConstAddr = readPointer( funcAddr + GDDEFS.FUNC_CONST )
                 iterateFuncConstantsToStruct( funcConstAddr, funcConstantStructElem )
 
                 local funcGlobalNameStructElem = funcStruct.addElement()
                 funcGlobalNameStructElem.Name = 'Globals'
-                funcGlobalNameStructElem.Offset = GDSOf.FUNC_GLOBNAMEPTR
+                funcGlobalNameStructElem.Offset = GDDEFS.FUNC_GLOBNAMEPTR
                 funcGlobalNameStructElem.VarType = vtPointer
                 funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
-                local funcGlobalAddr = readPointer( funcAddr + GDSOf.FUNC_GLOBNAMEPTR )
+                local funcGlobalAddr = readPointer( funcAddr + GDDEFS.FUNC_GLOBNAMEPTR )
                 iterateFuncGlobalsToStruct( funcGlobalAddr, funcGlobalNameStructElem )
 
                 local codeInts = {}
@@ -6558,15 +6560,15 @@
             function checkIfGDFunction( funcAddr )
                 local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
                 local OPCODEMAX = 250
-                if GDSOf.MAJOR_VER == 3 or GDSOf.VERSION_STRING == "4.1" then
+                if GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1" then
                     funcResStringNameAddr = readPointer( funcAddr ) -- StringName source at 0x0;
                     funcStringNameAddr = 0xDEADBEEF -- just a placeholder
                 else
                     funcStringNameAddr = readPointer( funcAddr ) -- StringName funct name;
-                    funcResStringNameAddr = readPointer( funcAddr + GDSOf.PTRSIZE ) -- StringName source;
+                    funcResStringNameAddr = readPointer( funcAddr + GDDEFS.PTRSIZE ) -- StringName source;
                 end
                 
-                funcCodeAddr = readPointer( funcAddr + GDSOf.FUNC_CODE )
+                funcCodeAddr = readPointer( funcAddr + GDDEFS.FUNC_CODE )
                 firstOpcode = readInteger(funcCodeAddr) or 0
 
                 if isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcStringNameAddr) and (firstOpcode < OPCODEMAX) then
@@ -6575,8 +6577,8 @@
                         return false
                     end
 
-                    if not (GDSOf.MAJOR_VER == 3 or GDSOf.VERSION_STRING == "4.1") then
-                        local funcStringAddr = readPointer(funcStringNameAddr + GDSOf.STRING)
+                    if not (GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1") then
+                        local funcStringAddr = readPointer(funcStringNameAddr + GDDEFS.STRING)
                         if isNullOrNil( funcStringAddr ) then
                             funcStringAddr = readPointer( funcStringNameAddr + 0x8 )
                             if isNullOrNil( funcStringAddr ) then
@@ -6609,33 +6611,39 @@
 
                 local function querySignatures()
                     local sigs = {}
-                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
-                    table.insert(sigs, { sig="48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize= 28 } ) --4.6 ret 64>
-                    table.insert(sigs, { sig="48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize=34  } ) --4.5
-                    table.insert(sigs, { sig="4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4
-                    table.insert(sigs, { sig="4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.3
-                    table.insert(sigs, { sig="4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize= 25 } ) --4.3 ret 64<
-                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4-4.3
-                    table.insert(sigs, { sig="4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize= 16 } ) --4.2
-                    table.insert(sigs, { sig="4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize= 24 } ) --4.1
-                    table.insert(sigs, { sig="48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize= 30 } ) --4.1
-                    table.insert(sigs, { sig="48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize= 32 } ) --3.6
-                    table.insert(sigs, { sig="4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize= 36 } ) --3.5
-                    table.insert(sigs, { sig="48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize= 23 } ) --3.3 - 3.4 - 3.5
-                    for i, sign in ipairs(sigs) do if resolveVM_RELA(sign.sig, sign.sigsize) then sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: '..tostring(i).."\t"..sign.sig) return true end end
+                    table.insert(sigs, { isheavy = true, sig="4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize= 24 } ) --4.6 ret 64<
+                    table.insert(sigs, { isheavy = false, sig="48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize= 28 } ) --4.6 ret 64>
+                    table.insert(sigs, { isheavy = false, sig="48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize=34  } ) --4.5
+                    table.insert(sigs, { isheavy = false, sig="4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4
+                    table.insert(sigs, { isheavy = false, sig="4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.3
+                    table.insert(sigs, { isheavy = false, sig="4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize= 25 } ) --4.3 ret 64<
+                    table.insert(sigs, { isheavy = false, sig="4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize= 19 } ) --4.4-4.3
+                    table.insert(sigs, { isheavy = false, sig="4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize= 16 } ) --4.2
+                    table.insert(sigs, { isheavy = false, sig="4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize= 24 } ) --4.1
+                    table.insert(sigs, { isheavy = false, sig="48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize= 30 } ) --4.1
+                    table.insert(sigs, { isheavy = false, sig="48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize= 32 } ) --3.6
+                    table.insert(sigs, { isheavy = false, sig="4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize= 36 } ) --3.5
+                    table.insert(sigs, { isheavy = false, sig="48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize= 23 } ) --3.3 - 3.4 - 3.5
+                    for i, sign in ipairs(sigs) do
+                        if resolveVM_RELA(sign.sig, sign.sigsize) then
+                            sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: '..tostring(i).."\t"..sign.sig)
+                            if sign.isheavy then GDDEFS.VM_CALL_HEAVY = true end
+                            return true 
+                        end
+                    end
                     return false
                 end
 
-                -- local funcPrologueAddr = getAddress('GDFunctionCall') or nil
+                local funcPrologueAddr = getAddress('GDFunctionCall') or nil
                 
-                -- if isNotNullOrNil(funcPrologueAddr) then
-                --     return funcPrologueAddr
-                -- elseif querySignatures() then
-                --     return getAddress('GDFunctionCall') or nil
-                -- end
-                if querySignatures() then 
+                if isNotNullOrNil(funcPrologueAddr) then
+                    return funcPrologueAddr
+                elseif querySignatures() then
                     return getAddress('GDFunctionCall') or nil
                 end
+                -- if querySignatures() then 
+                --     return getAddress('GDFunctionCall') or nil
+                -- end
 
                 return nil
 
@@ -6661,13 +6669,24 @@
                 local stdcall = 0
                 local timeout = 0
                 local int_t = 0
-                local _rcx =        { type=int_t, value = func_this              }
-                local _rdx =        { type=int_t, value = dumSpace+0x80          } -- *someexcval
-                local _r8 =         { type=int_t, value = GDScriptInstanceAddr   } -- GDScriptInstance *p_instance
-                local _r9 =         { type=int_t, value = dumSpace+0x78          } -- const Variant **p_args
-                local _st1 =        { type=int_t, value = argCount or 0x0        } -- int p_argcount
-                local _st2 =        { type=int_t, value = dumSpace+0x90          } -- Callable::CallError &r_err
-                local _st3 =        { type=int_t, value = 0x0                    } -- CallState *p_state
+                local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3
+                if GDDEFS.VM_CALL_HEAVY then
+
+                _rcx =        { type=int_t, value = dumSpace+0x80          } -- return buffer ptr
+                _rdx =        { type=int_t, value = func_this              }
+                
+                else
+
+                _rcx =        { type=int_t, value = func_this              }
+                _rdx =        { type=int_t, value = dumSpace+0x80          } -- *someexcval
+                
+                end
+
+                _r8 =         { type=int_t, value = GDScriptInstanceAddr   } -- GDScriptInstance *p_instance
+                _r9 =         { type=int_t, value = dumSpace+0x78          } -- const Variant **p_args
+                _st1 =        { type=int_t, value = argCount or 0x0        } -- int p_argcount
+                _st2 =        { type=int_t, value = dumSpace+0x90          } -- Callable::CallError &r_err
+                _st3 =        { type=int_t, value = 0x0                    } -- CallState *p_state
 
                 local returned = executeCodeEx(stdcall, timeout, vmCallAddr,    _rcx, _rdx, _r8, _r9, _st1, _st2, _st3    )
 
@@ -6713,28 +6732,28 @@
                 assert(type(nodeAddr) == 'number',"getNodeConstMap: NodePtr should be a number, instead got: "..type(nodeAddr))
                 debugStepIn()
 
-                local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local scriptInstanceAddr = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                 if isNullOrNil(scriptInstanceAddr) then
                     sendDebugMessageAndStepOut('getNodeConstMap: scriptInstance is invalid');
                     return;
                 end
 
-                local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                local gdScriptAddr = readPointer( scriptInstanceAddr + GDDEFS.GDSCRIPT_REF )
                 if isNullOrNil(gdScriptAddr) then
                     sendDebugMessageAndStepOut('getNodeConstMap: GDScript is invalid')
                     return;
                 end
 
-                local mainElement = readPointer( gdScriptAddr + GDSOf.CONST_MAP ) -- head or root depending on the version
-                local lastElement = readPointer( gdScriptAddr + GDSOf.CONST_MAP + GDSOf.PTRSIZE ) -- tail or end
-                local mapSize = readInteger( gdScriptAddr + GDSOf.CONST_MAP + GDSOf.MAP_SIZE ) -- hashmap or map
+                local mainElement = readPointer( gdScriptAddr + GDDEFS.CONST_MAP ) -- head or root depending on the version
+                local lastElement = readPointer( gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.PTRSIZE ) -- tail or end
+                local mapSize = readInteger( gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.MAP_SIZE ) -- hashmap or map
                 if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
                         sendDebugMessageAndStepOut('getNodeConstMap: Const: (hash)map is not found')
                         return;
                 end
                 debugStepOut()
                 
-                if GDSOf.MAJOR_VER == 4 then  -- TODO: the function can be segmented
+                if GDDEFS.MAJOR_VER == 4 then  -- TODO: the function can be segmented
                     return mainElement, lastElement, mapSize, constStructElement
                 else
                     if constStructElement then constStructElement.ChildStruct = createStructure('ConstMapRes') end
@@ -6747,7 +6766,7 @@
             function getNodeConstName(mapElement)
                 debugStepIn()
 
-                local mapElementKey = readPointer( mapElement + GDSOf.CONSTELEM_KEYVAL )
+                local mapElementKey = readPointer( mapElement + GDDEFS.CONSTELEM_KEYVAL )
                 if isNullOrNil(mapElementKey) then
                     sendDebugMessageAndStepOut('getNodeConstName: (hash)mapElementKey invalid');
                     return 'C??'
@@ -6885,11 +6904,11 @@
                 if isNullOrNil(dictRoot) then return end
                 local currentRoot = dictStructElement
 
-                if GDSOf.MAJOR_VER == 3 then
-                    currentRoot = createChildStructElem(currentRoot, 'dictList', GDSOf.DICT_LIST, vtPointer, 'dictList')
+                if GDDEFS.MAJOR_VER == 3 then
+                    currentRoot = createChildStructElem(currentRoot, 'dictList', GDDEFS.DICT_LIST, vtPointer, 'dictList')
                 end
 
-                local headContainer = createChildStructElem(currentRoot, 'dictHead', GDSOf.DICT_HEAD, vtPointer, 'dictHead')
+                local headContainer = createChildStructElem(currentRoot, 'dictHead', GDDEFS.DICT_HEAD, vtPointer, 'dictHead')
 
                 iterateDictionary( dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer }, { nodeAddr = 0, nodeName = "Dictionary" } )
 
@@ -6903,18 +6922,18 @@
                 if (not (dictAddr > 0)) then return; end
 
                 local dictRoot = dictAddr
-                if GDSOf.MAJOR_VER == 3 then
-                    dictRoot = readPointer( dictAddr + GDSOf.DICT_LIST ) -- for 3.x it's dictList actually
+                if GDDEFS.MAJOR_VER == 3 then
+                    dictRoot = readPointer( dictAddr + GDDEFS.DICT_LIST ) -- for 3.x it's dictList actually
                 end
 
-                -- local dictSize = readInteger(dictRoot + GDSOf.DICT_SIZE)
-                local dictSize = readInteger( dictAddr + GDSOf.DICT_SIZE )
+                -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
+                local dictSize = readInteger( dictAddr + GDDEFS.DICT_SIZE )
 
                 if isNullOrNil(dictSize) then
                     return;
                 end
 
-                local mapElement = readPointer( dictRoot + GDSOf.DICT_HEAD )
+                local mapElement = readPointer( dictRoot + GDDEFS.DICT_HEAD )
                 if isNullOrNil(mapElement) then
                     return
                 end
@@ -6974,7 +6993,7 @@
                     return;
                 end
 
-                arrayStructElement = addStructureElem( arrayStructElement, 'VectorArray', GDSOf.ARRAY_TOVECTOR, vtPointer )
+                arrayStructElement = addStructureElem( arrayStructElement, 'VectorArray', GDDEFS.ARRAY_TOVECTOR, vtPointer )
                 arrayStructElement.ChildStruct = createStructure('ArrayData')
                 iterateArray( arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array" } )
                 return
@@ -6985,9 +7004,9 @@
             function iterateArrayForNodes(arrayAddr)
                 assert(type(arrayAddr) == 'number',"iterateArrayForNodes: array "..tostring(arrayAddr).." has to be a number, instead got: "..type(arrayAddr))
 
-                local arrVectorAddr = readPointer( arrayAddr + GDSOf.ARRAY_TOVECTOR )
+                local arrVectorAddr = readPointer( arrayAddr + GDDEFS.ARRAY_TOVECTOR )
                 if isNullOrNil(arrVectorAddr) then return; end        
-                local arrVectorSize = readInteger(arrVectorAddr - GDSOf.SIZE_VECTOR )
+                local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR )
                 if isNullOrNil(arrVectorSize) then return; end
 
                 local variantArrSize, ok = redefineVariantSizeByVector( arrVectorAddr , arrVectorSize )
@@ -7031,7 +7050,7 @@
 
                 local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
                 if isNullOrNil(packedDataArrAddr) then return end;
-                pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDSOf.P_ARRAY_TOARR, vtPointer)
+                pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDDEFS.P_ARRAY_TOARR, vtPointer)
                 pArrayStructElement.ChildStruct = createStructure('PArrayData')
 
                 iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, GDEmitters.PackedStructEmitter)
@@ -7131,14 +7150,14 @@
 
                 debugStepIn()
 
-                local scriptInstance = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local scriptInstance = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                 if isNullOrNil(scriptInstance) then
                     sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for '..string.format(' %x', nodeAddr))
                     return;
                 end
 
-                local vectorPtr = readPointer( scriptInstance + GDSOf.VAR_VECTOR )
-                local vectorSize = readInteger( vectorPtr - GDSOf.SIZE_VECTOR )
+                local vectorPtr = readPointer( scriptInstance + GDDEFS.VAR_VECTOR )
+                local vectorSize = readInteger( vectorPtr - GDDEFS.SIZE_VECTOR )
 
                 if isNullOrNil(vectorPtr) then
                     sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for '..string.format(' %x', nodeAddr))
@@ -7162,21 +7181,21 @@
 
                 debugStepIn()
 
-                local scriptInstanceAddr = readPointer( nodeAddr + GDSOf.GDSCRIPTINSTANCE )
+                local scriptInstanceAddr = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                 if isNullOrNil(scriptInstanceAddr) then
                     sendDebugMessageAndStepOut('getNodeVariantMap: scriptInstance is absent for '..string.format(' %x', nodeAddr));
                     return;
                 end
 
-                local gdScriptAddr = readPointer( scriptInstanceAddr + GDSOf.GDSCRIPT_REF )
+                local gdScriptAddr = readPointer( scriptInstanceAddr + GDDEFS.GDSCRIPT_REF )
                 if isNullOrNil(gdScriptAddr) then
                     sendDebugMessageAndStepOut('getNodeVariantMap: GDScript is absent for '..string.format(' %x', nodeAddr));
                     return;
                 end
 
-                local mainElement = readPointer( gdScriptAddr + GDSOf.VAR_NAMEINDEX_MAP ) -- head / root
-                local endElement = readPointer( gdScriptAddr + GDSOf.VAR_NAMEINDEX_MAP + GDSOf.PTRSIZE ) -- tail / end
-                local mapSize = readInteger( gdScriptAddr + GDSOf.VAR_NAMEINDEX_MAP + GDSOf.MAP_SIZE )
+                local mainElement = readPointer( gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP ) -- head / root
+                local endElement = readPointer( gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.PTRSIZE ) -- tail / end
+                local mapSize = readInteger( gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.MAP_SIZE )
 
                 if isNullOrNil(mainElement) or isNullOrNil(endElement) or isNullOrNil(mapSize) then    
                     sendDebugMessage('getNodeVariantMap: Variant: (hash)map is not found')
@@ -7184,7 +7203,7 @@
                 end
 
                 debugStepOut()
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     return mainElement, endElement, mapSize
                 else
                     return getLeftmostMapElem( mainElement, endElement, mapSize )
@@ -7202,8 +7221,8 @@
 
                 debugStepIn()
 
-                if ( index > ( readInteger( vectorAddr - GDSOf.SIZE_VECTOR) - 1 ) ) then
-                    sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: "..tostring(index)..' VecSize: '..tostring(( readInteger( vectorAddr - GDSOf.SIZE_VECTOR) - 1 )) )
+                if ( index > ( readInteger( vectorAddr - GDDEFS.SIZE_VECTOR) - 1 ) ) then
+                    sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: "..tostring(index)..' VecSize: '..tostring(( readInteger( vectorAddr - GDDEFS.SIZE_VECTOR) - 1 )) )
                 end
 
                 local variantType = readInteger( vectorAddr + varSize * index )
@@ -7233,7 +7252,7 @@
             function getLeftmostMapElem(rootElement, endElement, mapSize, struct)
                 debugStepIn()
 
-                local mapElement = readPointer( rootElement + GDSOf.MAP_LELEM )
+                local mapElement = readPointer( rootElement + GDDEFS.MAP_LELEM )
                 if isNullOrNil(mapElement) then
                     sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : '..numtohexstr(rootElement)..' last '..numtohexstr(endElement)..' size '..numtohexstr(mapSize)  );
                     return 0, endElement, mapSize  -- return 0 as a head element
@@ -7241,7 +7260,7 @@
 
                 local leftStructElem
                 if struct then
-                    leftStructElem = addStructureElem( struct, 'rootElem', GDSOf.MAP_LELEM, vtPointer )
+                    leftStructElem = addStructureElem( struct, 'rootElem', GDDEFS.MAP_LELEM, vtPointer )
                     leftStructElem.ChildStruct = createStructure('rootElem')
                 end
 
@@ -7249,10 +7268,10 @@
                     debugStepOut();
                     return mapElement, endElement, mapSize -- not sure that's possible
                 else
-                    while readPointer( mapElement + GDSOf.MAP_LELEM ) ~= endElement do
-                        mapElement = readPointer( mapElement + GDSOf.MAP_LELEM )
+                    while readPointer( mapElement + GDDEFS.MAP_LELEM ) ~= endElement do
+                        mapElement = readPointer( mapElement + GDDEFS.MAP_LELEM )
                         if struct then
-                            leftStructElem = addStructureElem( leftStructElem, 'goLeft', GDSOf.MAP_LELEM, vtPointer )
+                            leftStructElem = addStructureElem( leftStructElem, 'goLeft', GDDEFS.MAP_LELEM, vtPointer )
                             leftStructElem.ChildStruct = createStructure('goLeft')
                         end
                     end
@@ -7288,7 +7307,7 @@
                     return 0x18, true;
                 end
 
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
 
                     if (vectorSize == 1) and ( readInteger(vectorPtr) == 27 ) then
                         --sendDebugMessageAndStepOut(" 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
@@ -7406,7 +7425,7 @@
             function getCETypeFromGD(gdType)
                 assert(type(gdType) == "number",'getCETypeFromGD Type from enum should be a number, instead got: '..type(gdType))
 
-                if GDSOf.MAJOR_VER == 4 then -- TODO make it patchable 
+                if GDDEFS.MAJOR_VER == 4 then -- TODO make it patchable 
                     if (gdType == 2) then return vtDword end
                     if (gdType == 1) then return vtByte end
                     if (gdType == 3) then return vtDouble end
@@ -7508,7 +7527,7 @@
                     return false;
                 end
 
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     if (typeInt == 2) then return "INT" end -- these go first
                     if (typeInt == 1) then return "BOOL" end
                     if (typeInt == 3) then return "FLOAT" end
@@ -7708,22 +7727,22 @@
                 end
 
 
-                if GDSOf.MAJOR_VER == 4 then
+                if GDDEFS.MAJOR_VER == 4 then
                     if getCustomType("GD4 String") then
-                        GDSOf.GD4_STRING_EXISTS = true
+                        GDDEFS.GD4_STRING_EXISTS = true
                     else
                         registerCustomTypeLua('GD4 String', 1, gd4string_bytestovalue, gd4string_valuetobytes, false, true)
-                        GDSOf.GD4_STRING_EXISTS = true
+                        GDDEFS.GD4_STRING_EXISTS = true
                     end
                 else
-                    GDSOf.GD4_STRING_EXISTS = false
+                    GDDEFS.GD4_STRING_EXISTS = false
                 end
             end
 
             function getObjectMeta(objAddr)
                 local vtable = readPointer( objAddr )
                 if not isMMVTable(vtable) then return; end
-                local offsetToMethod = GDSOf.PTRSIZE * GDSOf.GET_TYPE_INDX
+                local offsetToMethod = GDDEFS.PTRSIZE * GDDEFS.GET_TYPE_INDX
                 local method = readPointer( vtable + offsetToMethod )
                 return executeMethod( 0, nil, method, objAddr )
             end
@@ -7737,12 +7756,12 @@
                 
                 if isNullOrNil(metaAddr) then return '??' end
 
-                if GDSOf.MAJOR_VER == 3 or (GDSOf.MAJOR_VER == 4 and GDSOf.MINOR_VER < 6) then
+                if GDDEFS.MAJOR_VER == 3 or (GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER < 6) then
                     className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
 
-                else --[[if GDSOf.MAJOR_VER == 4 and GDSOf.MINOR_VER >= 6 then]]
+                else --[[if GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER >= 6 then]]
                     metaAddr = getObjectMeta(objAddr)
-                    local stringNameAddr = readPointer( metaAddr + GDSOf.PTRSIZE )
+                    local stringNameAddr = readPointer( metaAddr + GDDEFS.PTRSIZE )
                     className = getStringNameStr(stringNameAddr or 0) or '??'
                 end
 
@@ -7762,14 +7781,14 @@
 
                 for i=0,(childrenSize-1) do
 
-                    local nodePtr = readPointer( childrenAddr + i * GDSOf.PTRSIZE )
+                    local nodePtr = readPointer( childrenAddr + i * GDDEFS.PTRSIZE )
                     if isNullOrNil(nodePtr) then error('getMainNodeDict: NO MAIN NODES') end
 
                     local nodeNameStr = getNodeName(nodePtr)
                     nodeNameStr = tostring(nodeNameStr)
                     registerSymbol( nodeNameStr , nodePtr , true) -- let's have them registered
 
-                    if GDSOf.MAJOR_VER == 4 then
+                    if GDDEFS.MAJOR_VER == 4 then
 
                         nodeDict[ nodeNameStr ] = {
                                                     NAME = nodeNameStr,
@@ -7799,7 +7818,7 @@
 
                 for i=0,(childrenSize-1) do
 
-                    local nodeAddr = readPointer( childrenAddr + i * GDSOf.PTRSIZE )
+                    local nodeAddr = readPointer( childrenAddr + i * GDDEFS.PTRSIZE )
                     if isNullOrNil(nodeAddr) then error('getMainNodeDict: NO MAIN NODES') end
 
                     local nodeNameStr = getNodeName( nodeAddr )
@@ -7894,7 +7913,7 @@
                     end, parentMemrec
                 )
 
-                if bDoConstants and (GDSOf.CONST_MAP ~= 0) then
+                if bDoConstants and (GDDEFS.CONST_MAP ~= 0) then
                     --sendDebugMessage('DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) )
 
                     local newConstRec = synchronize(function(parentMemrec)
@@ -7955,7 +7974,7 @@
                     table.insert( dumpedNodes , value.PTR )
                     sendDebugMessage('MAIN: loop. STEP: Constants for: '..key)
 
-                    if GDSOf.CONST_MAP ~= 0 then
+                    if GDDEFS.CONST_MAP ~= 0 then
                         local newConstRec = synchronize(function(value)
                                     local newConstRec = getAddressList().createMemoryRecord()
                                     newConstRec.setDescription( "Consts:" )
