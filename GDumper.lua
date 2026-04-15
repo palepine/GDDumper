@@ -2350,7 +2350,7 @@
             local function getArrayVectorInfo(arrayAddr)
                 debugStepIn()
 
-                if not isValidPointer(arrayAddr) then
+                if isInvalidPointer(arrayAddr) then
                     sendDebugMessageAndStepOut('getArrayVectorInfo: arrayAddr invalid')
                     return nil
                 end
@@ -2419,7 +2419,7 @@
             local function getDictionaryInfo(dictAddr)
                 debugStepIn()
 
-                if not isValidPointer(dictAddr) then
+                if isInvalidPointer(dictAddr) then
                     sendDebugMessageAndStepOut('getDictionaryInfo: dictAddr isnt pointer')
                     return nil
                 end 
@@ -2463,7 +2463,7 @@
             local function getPackedArrayInfo(packedArrayAddr)
                 debugStepIn()
 
-                if not isValidPointer(packedArrayAddr) then
+                if isInvalidPointer(packedArrayAddr) then
                     sendDebugMessageAndStepOut('getPackedArrayInfo: packedArrayAddr isnt pointer')
                     return nil
                 end
@@ -2985,7 +2985,7 @@
                 debugStepIn()
 
                 local nodeNamePtr = readPointer( nodeAddr + GDDEFS.OBJ_STRING_NAME )
-                if isNullOrNil(nodeNamePtr) or ( not isValidPointer( nodeNamePtr ) ) then
+                if isNullOrNil(nodeNamePtr) or isInvalidPointer( nodeNamePtr ) then
                     sendDebugMessageAndStepOut('getNodeName: nodeName invalid or not a pointer (?)')
                     return 'N??'
                 end
@@ -3046,7 +3046,7 @@
                     return false
                 end
 
-                if (not isValidPointer( readPointer( nodeAddr ) ) ) then
+                if isInvalidPointer( readPointer( nodeAddr ) ) then
                     -- sendDebugMessageAndStepOut('checkForGDScript: Node vTable invalid'.." address "..numtohexstr(nodeAddr))
                     return false
                 end
