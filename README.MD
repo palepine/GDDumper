@@ -6,12 +6,14 @@ THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY
 
 ## Features
 - Godot 3.x and 4.x. support
+- Automatic offset resolution
 - `x64` and `x32` support
-- Dumping nodes to Cheat Engine's AddressList.
+- Dumping nodes to Cheat Engine's AddressList
 - Root node structure dissecting
 - Updating node symbollist
 - Basic API functions
 - GDScriptFunction disassembler (structure-based)
+- Arbitrary GDFunction calling (experimental)
 
 ## Making it work
 The script works only with godot apps with `GDScript` used (C# applications aren't supported).
