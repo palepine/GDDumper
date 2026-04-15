@@ -186,9 +186,7 @@
                 majminVersionStr = majminVersionStr or GDDEFS.VERSION_STRING
                 -- TODO: GDDEFS.MAXTYPE
                 -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
-                -- TODO: custom debug versions
-                -- TODO: refactor the branching
-                
+
                 local offsets = {}
 
                 -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
@@ -198,6 +196,8 @@
                     GDDEFS.DICT_SIZE = 0x3C
                     GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
                     GDDEFS.GET_TYPE_INDX = 10
+                    -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
+
                     -- godot.windows.template_release.x86_64.exe
                     -- Godot Engine v4.6.stable.official.89cea1439
                     offsets.VPChildren = 0x140
@@ -993,24 +993,28 @@
             end
 
             function getDebugPrefix()
-                return strMul('>', debugPrefix)
+                return strMul('>', debugPrefix)..'\t'
             end
 
             function sendDebugMessage(msg)
-                if bGDDebug and isNotNullOrNil( msg ) and inMainThread()  then
+                if bGDDebug and isNotNullOrNil( msg ) and inMainThread() then
                     print( getDebugPrefix().. " " .. tostring( msg ) )
                 end
             end
 
             function sendDebugMessageAndStepOut(msg)
-                if bGDDebug and isNotNullOrNil( msg ) and inMainThread()  then
+                if bGDDebug and isNotNullOrNil( msg ) and inMainThread() then
                     print( getDebugPrefix().. " " .. tostring( msg ) )
                     debugStepOut()
                 end
             end
 
             function getGDSemver()
-                print(getExportTableName()..'\n'..getGodotVersionString())
+                if GDDEFS.FULL_GDVERSION_STRING then
+                    print(GDDEFS.FULL_GDVERSION_STRING)
+                else
+                    print( (getExportTableName() or "exportnomatch") ..'\n'.. (getGodotVersionString() or "semver not hit"))
+                end
             end
             
             function printGDConfig()
@@ -1247,7 +1251,7 @@
                 return result
             end
 
-            --- address lookup that uses the virtual table to guess the type
+            --- address lookup, not implemented
             ---@param addr integer @address to typeguess
             ---@return string @name;
             function GDAddressLookup(addr)
@@ -1781,7 +1785,7 @@
 
 
             function tryRegSceneTree()
-                local function resolveRVA(aobSignature, offsetToValue, offsetToNextIntr)
+                local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
                     local function resolveAddress(instructionAddr, offsetToValue, offsetToNextIntr)
                         local relativeAddr = readInteger( instructionAddr + offsetToValue )
                         local nextAddr = getAddress( instructionAddr + offsetToNextIntr )
@@ -1809,7 +1813,7 @@
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36")
                 table.insert(sigs, "4C 8B 0D ? ? ? ? 4C 89 B4 24")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B")
-                for i, sig in ipairs(sigs) do if resolveRVA(sig, 3) then sendDebugMessage('tryRegSceneTree: hit at: '..tostring(i).."\t"..sig) return true end end
+                for i, sig in ipairs(sigs) do if resolveRelAddr(sig, 3) then sendDebugMessage('tryRegSceneTree: hit at: '..tostring(i).."\t"..sig) return true end end
                 return false
             end
 
@@ -2939,14 +2943,14 @@
 
             --- returns a code with a ScriptInstance initialized
             ---@param nodeName string
-            function getNodeWithGDScriptInstance(nodeName)
+            function getNodeWithGDScriptInstance( nodeName ) -- TODO: should query node children
                 assert(type(nodeName) == "string",'Node name should be a string, instead got: '..type(nodeName))
                 debugStepIn()
 
                 local childrenPtr, childrenSize = getVPChildren()
                 if isNullOrNil(childrenPtr) then
                     debugStepOut()
-                    return
+                    return nil
                 end
 
                 for i=0,( childrenSize-1 ) do
@@ -2954,14 +2958,14 @@
                     local nodeAddr = readPointer( childrenPtr + i* GDDEFS.PTRSIZE )
                     if isNullOrNil(nodeAddr) then
                         sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: nodeAddr invalid')
-                        return
+                        return nil
                     end
 
                     local nodeNameStr = getNodeName(nodeAddr)
-                    local gdScriptInsance = readQword( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
+                    local gdScriptInsance = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
                     if isNullOrNil(gdScriptInsance) then
                         sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: ScriptInstance is 0/nil')
-                        return
+                        return nil
                     end
 
                     if nodeNameStr == nodeName then
@@ -2970,11 +2974,24 @@
                     end
                 end
                 debugStepOut()
-                return
+                return nil
             end
 
-            function getNodeGDScriptInstance(nodeAddr)
-                -- TODO
+            --- gets a Node's GDScriptInstance addr
+            ---@param nodeAddr number
+            function getNodeGDScriptInstance( nodeAddr )
+                debugStepIn()
+                if isNullOrNil(nodeAddr) then
+                    sendDebugMessageAndStepOut('getNodeGDScriptInstance: nodeAddr invalid')
+                    return nil
+                end
+
+                local gdScriptInsance = readPointer( nodeAddr + GDDEFS.GDSCRIPTINSTANCE )
+                if isNullOrNil(gdScriptInsance) then
+                    sendDebugMessageAndStepOut('getNodeGDScriptInstance: ScriptInstance is 0/nil')
+                    return nil
+                end
+                return gdScriptInsance
             end
 
             --- get a Node name by addr
@@ -3035,7 +3052,7 @@
                 return GDScriptName
             end
 
-            --- Used to validate an object as a Node, returns true if valid
+            --- Used to validate an object as a Node with GDScript, returns true if valid
             ---@param nodeAddr number
             function checkForGDScript(nodeAddr)
 
@@ -5675,7 +5692,7 @@
                                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1] )
                                 addStructureElem( contextTable.codeStructElement, operand1, (contextTable.instrPointer-1 +1)*0x4, vtDword )
 
-                                local operand2 = 'String::num_int64('..(contextTable.codeInts[contextTable.instrPointer+2])..')' -- TODO number to string representation, is it base 10 here?
+                                local operand2 = (contextTable.codeInts[contextTable.instrPointer+2])
                                 addStructureElem( contextTable.codeStructElement, operand2, (contextTable.instrPointer-1 +2)*0x4, vtDword )
                                 contextTable.opcodeName = contextTable.opcodeName..' '..operand1..' = '..operand2
                                 addLayoutStructElem( contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer-1 )*0x4, vtDword )
@@ -6558,6 +6575,8 @@
             end
 
             function checkIfGDFunction( funcAddr )
+                debugStepIn()
+
                 local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
                 local OPCODEMAX = 250
                 if GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1" then
@@ -6573,11 +6592,11 @@
 
                 if isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcStringNameAddr) and (firstOpcode < OPCODEMAX) then
 
-                    if getStringNameStr( funcResStringNameAddr ) ~= 'res:' then
+                    if not ( getStringNameStr( funcResStringNameAddr ) ):match("res://") then
                         return false
                     end
 
-                    if not (GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1") then
+                    if GDDEFS.MAJOR_VER ~= 3 and GDDEFS.VERSION_STRING ~= "4.1" then
                         local funcStringAddr = readPointer(funcStringNameAddr + GDDEFS.STRING)
                         if isNullOrNil( funcStringAddr ) then
                             funcStringAddr = readPointer( funcStringNameAddr + 0x8 )
@@ -7750,7 +7769,7 @@
             function getObjectName(objAddr)
                 -- debugStepIn()
                 -- up until 4.6, the method was StringName* Object::_get_class_namev()
-                -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object name
+                -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object class name
                 local metaAddr = getObjectMeta(objAddr)
                 local className = ''
                 
