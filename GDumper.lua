@@ -62,21 +62,38 @@
 
             function getGodotVersionString()
                 local reStr = [[Godot\sEngine\s(\(.{4,35}\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
-                local godotVersionStringTable = lregexScan({   pattern = reStr,
-                                                                protection = "RW-E-C", -- sometimes it's not in rdata
-                                                                encoding = "ASCII",
-                                                                engine = "RE2",
-                                                                findOne = true,
-                                                                caseSensitive = true,
-                                                                minLength = 15,
-                                                                maxLength = 60
-                                                            }) or {}
-                
+                local fallbackreStr = [[[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))(?:\.(0|[1-9]\d*))(?:[\.]((?:dev|alpha|beta|rc|stable)\d*))(?:[\.+-]((?:[\w\-+\.]*)))?]]
+                local godotVersionStringTable, fallbackGDSemVerTable;
+
+                godotVersionStringTable = lregexScan({  pattern = reStr,
+                                                        protection = "RW-E-C", -- sometimes it's not in rdata
+                                                        encoding = "ASCII",
+                                                        engine = "RE2",
+                                                        findOne = true,
+                                                        caseSensitive = true,
+                                                        minLength = 15,
+                                                        maxLength = 60
+                                                    }) or {}
+
                 if isNotNullOrNil(godotVersionStringTable[1]) then
                     return godotVersionStringTable[1].text
                 else
-                    print("Version string not found")
-                    return "SEMVER_NOT_FOUND"
+                    -- let's test the fallback pattern for now (some 3.0 versions, might adjust for them), e.g. 4D Minesweeper
+                    fallbackGDSemVerTable = lregexScan({    pattern = fallbackreStr,
+                                                            protection = "R-W-E-C", -- let's assume rdata all the time
+                                                            encoding = "ASCII",
+                                                            engine = "RE2",
+                                                            findOne = true,
+                                                            caseSensitive = true,
+                                                            minLength = 15,
+                                                            maxLength = 60
+                                                        }) or {}
+                    if isNotNullOrNil(fallbackGDSemVerTable) then
+                        return fallbackGDSemVerTable[1].text
+                    else
+                        print("Version string not found")
+                        return "SEMVER_NOT_FOUND"
+                    end
                 end
             end
 
@@ -170,7 +187,7 @@
                     GDDEFS.DEBUGVER = false
                 end
 
-                if (godotVersionString):match( "custom" ) then -- TODO: for now let it be liek this until custom debug versions
+                if (godotVersionString):match( "custom" ) then
                     GDDEFS.CUSTOMVER = true
                 end
                 
@@ -819,6 +836,55 @@
 
                     return offsets
 
+                elseif majminVersionStr == "3.1" then
+                    print("No recorded version found")
+                    error("Not defined yet")
+                elseif majminVersionStr == "3.0" then
+                    -- 3.0.6.stable.official
+                    print("No recorded version found")
+                    error("Not defined yet")
+
+                    GDDEFS.GET_TYPE_INDX = 6
+                    offsets.VPChildren = 0x108
+                    offsets.VPObjStringName = 0x100
+                    offsets.NodeGDScriptInstance = 0x50
+                    offsets.NodeGDScriptName = 0x100
+                    offsets.GDScriptFunctionMap = 0x1B0
+                    offsets.GDScriptConstantMap = 0x198
+                    offsets.GDScriptVariantNameHM = 0x1C8
+                    offsets.oVariantVector = 0x20
+                    offsets.GDScriptVariantNameType = nil -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+                    offsets.GDScriptFunctionCode = 0x50
+                    offsets.GDScriptFunctionCodeConsts = 0x20
+                    offsets.GDScriptFunctionCodeGlobals = 0x30
+
+                    if GDDEFS.DEBUGVER then
+                        error("Not defined yet")
+                        -- GDDEFS.STRING = 0x8
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x18
+                    end
+                    if GDDEFS.CUSTOMVER then
+                        -- godot.windows.opt.64.exe
+                        -- Godot Engine v3.2.stable.custom_build
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                    end
+
+                    return offsets
+
                 else
                     print("No recorded version found")
                     error("Not defined yet")
@@ -1020,9 +1086,12 @@
             end
             
             function printGDConfig()
-                print(([[local config = {majorVersion = 0x%X,offsetNodeChildren = 0x%X,offsetNodeStringName = 0x%X, offsetGDScriptInstance = 0x%X,offsetVariantVector = 0x%X,offsetVariantVectorSize = 0x%X,offsetGDScriptName = 0x%X,offsetFuncMap = 0x%X,offsetGDFunctionCode = 0x%X,offsetGDFunctionConst = 0x%X,offsetGDFunctionGlobals = 0x%X,offsetConstMap = 0x%X,offsetVariantMap = 0x%X,offsetVariantMapVarType = 0x%X,offsetVariantMapIndex = 0x%X}]]):format
+                print(([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format
                     (
                     (GDDEFS.MAJOR_VER or 0x0),
+                    (GDDEFS.MINOR_VER or 0x0),
+                    (GDDEFS.CUSTOMVER or tostring(nil)),
+                    (GDDEFS.DEBUGVER or tostring(nil)),
                     (GDDEFS.CHILDREN or 0x0),
                     (GDDEFS.OBJ_STRING_NAME or 0x0),
                     (GDDEFS.GDSCRIPTINSTANCE or 0x0),
@@ -1382,7 +1451,7 @@
                 mainMemrec.Description = "Dumper"
                 mainMemrec.Type = vtAutoAssembler
                 mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n{$asm}\n\n[ENABLE]\n\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n\n{$lua}\nlocal config = {\n-- replace nil with hex offsets according to the instruction\nmajorVersion =              nil, -- major godot version\nminorVersion =              nil, -- minor godot version\n\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil,\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\nstartMonitoringNodes =      false, -- if start a Node visitor thread\nenableDebugMode =           false, -- if print debug logs\nenableFunDisasm =           false, -- if disassemble function into opcodes (experimental)\nuseHardcodedOffsets =       false, -- if use version-hardcoded offsets, requires a regex plugin (experimental)\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n\n[DISABLE]\n\ndealloc(*)\nunregistersymbol(*)\n\n{$lua}\nnodeMonitor()\n{$asm}"
+                mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n{$asm}\n[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- IMPORTANT: if you define all, you can 'Use stored offsets' to try to relieve yourself from defining the OFFSETS\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver\nGDDebugVer =                nil, -- if it's template_debug ver\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nnodeMonitor()\n{$asm}"
                 
                 local dumpMemrec = addrList.createMemoryRecord()
                 dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1571,35 +1640,33 @@
 
             --- initializes and assigns offsets
             function defineGDOffsets( config )
+                -- TODO: redo the flow of manual and version based definition
+
+                -- -- -- -- -- --
                 if config == nil then config = {} end
-
-                bMonitorNodes = false;
-                bMonitorNodes = config.startMonitoringNodes or bMonitorNodes
-                bGDDebug = bGDDebug and true or nil
-                bGDDebug = config.enableDebugMode or bGDDebug                
-                bDisasmFunc = bDisasmFunc and true or false
-                bDisasmFunc = config.enableFunDisasm or bDisasmFunc
-                bHardOffsets = bHardOffsets and true or false
-                bHardOffsets = config.useHardcodedOffsets or bHardOffsets
-
+                if GDDEFS == nil then GDDEFS = {} end
+                GDDEFS.STRING = 0x10
                 dumpedMonitorNodes = {};
                 debugPrefix = 1;
+                if targetIs64Bit() then GDDEFS.PTRSIZE = 0x8 GDDEFS._x64bit = true else GDDEFS.PTRSIZE = 0x4 GDDEFS._x64bit = false end -- for auto offsetdef and ptr arithmetics
+                -- -- -- -- -- --
 
-                if GDDEFS == nil then GDDEFS = {} end
-                GDDEFS.STRING = 0x10 -- TODO: the string issue might be solved for good
-
-                if targetIs64Bit() then
-                    GDDEFS.PTRSIZE = 0x8
-                    GDDEFS._x64bit = true
-                else  -- TODO: theres a lot more to do with 32bit in the script
-                    GDDEFS.PTRSIZE = 0x4
-                    GDDEFS._x64bit = false
+                if isNotNullOrNil(config.majorVersion) and isNotNullOrNil(config.minorVersion) and isNotNullOrNil(config.GDCustomver) and isNotNullOrNil(config.GDDebugVer) then
+                    GDDEFS.VERSION_STRING = tostring(config.majorVersion)..'.'..tostring(config.minorVersion)
+                    GDDEFS.DEBUGVER = config.GDDebugVer
+                    GDDEFS.CUSTOMVER = config.GDCustomver
+                    GDDEFS.MAJOR_VER = config.majorVersion
+                    GDDEFS.MINOR_VER = config.minorVersion
+                else
+                    if lregexScan and type(lregexScan) == "function" then
+                        defineGDVersion()
+                    else
+                        -- a regex plugin must be initialized for that
+                        error("CERegEx plugin not installed: https://github.com/palepine/CERegEx/releases")
+                    end
                 end
 
-                -- a regex plugin must be initialized for that
-                if lregexScan and type(lregexScan) == "function" then defineGDVersion() end
-
-                if bHardOffsets or not( config.majMinVerStr == nil or config.majMinVerStr == "") then
+                if bHardOffsets then
                     local offsets = getStoredOffsetsFromVersion( GDDEFS.VERSION_STRING )
                     GDDEFS.CHILDREN = offsets.VPChildren
                     GDDEFS.OBJ_STRING_NAME = offsets.VPObjStringName
@@ -1619,7 +1686,6 @@
                         GDDEFS.GDSCRIPT_REF = 0x18
                         GDDEFS.MAXTYPE = 39
                         GDDEFS.FUNC_MAPVAL = 0x18
-                        GDDEFS.STRING = GDDEFS.STRING or 0x10
                         GDDEFS.CHILDREN_SIZE = 0x8
                         GDDEFS.MAP_SIZE = 0x14
                         GDDEFS.ARRAY_TOVECTOR = 0x10
@@ -1634,11 +1700,10 @@
                         GDDEFS.CONSTELEM_KEYVAL = 0x10
                         GDDEFS.CONSTELEM_VALTYPE = 0x18
                         GDDEFS.VAR_NAMEINDEX_I = 0x18
-                    else
+                    elseif GDDEFS.MAJOR_VER == 3 then
                         GDDEFS.MAXTYPE = 27
                         GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
                         GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
-                        GDDEFS.STRING = GDDEFS.STRING or 0x10
                         GDDEFS.CHILDREN_SIZE = 0x4
                         GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
                         GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
@@ -1658,16 +1723,11 @@
                         GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
                         GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
                         GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
+                    else
+                        error("Unexpected version")
                     end
                 else
-                    local majorVersion = GDDEFS.MAJOR_VER or config.majorVersion or 0
-                    GDDEFS.MINOR_VER = GDDEFS.MINOR_VER or config.minorVersion or 0
-                    GDDEFS.VERSION_STRING = GDDEFS.MAJOR_VER..'.'..GDDEFS.MINOR_VER
-
-                    if majorVersion == 4 then
-
-                        GDDEFS.MAJOR_VER = majorVersion
-
+                    if GDDEFS.MAJOR_VER == 4 then
                         GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
                         GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
                         GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
@@ -1686,9 +1746,9 @@
                         GDDEFS.FUNC_MAPVAL = 0x18
                         GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
                         GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE+0x20)
-                        GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST+0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
+                        -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
+                        GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST+0x10)
 
-                        GDDEFS.STRING = GDDEFS.STRING or 0x10
                         GDDEFS.CHILDREN_SIZE = 0x8
 
                         GDDEFS.MAP_SIZE = 0x14
@@ -1710,16 +1770,7 @@
 
                         GDDEFS.VAR_NAMEINDEX_I = 0x18
 
-                        -- 3.x [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
-                        if GDDEFS.MINOR_VER <= 4 then
-                            GDDEFS.GET_TYPE_INDX = 8    
-                        elseif GDDEFS.MINOR_VER == 5 then
-                            GDDEFS.GET_TYPE_INDX = 9
-                        elseif GDDEFS.MINOR_VER == 6 then
-                            GDDEFS.GET_TYPE_INDX = 10
-                        end
-
-                    else
+                    elseif GDDEFS.MAJOR_VER == 3 then
                         GDDEFS.MAJOR_VER = 3
 
                         GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
@@ -1744,7 +1795,6 @@
                         GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
                         GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE-0x20)
                         GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR-0x10)
-                        GDDEFS.STRING = GDDEFS.STRING or 0x10
                         GDDEFS.CHILDREN_SIZE = 0x4
 
                         GDDEFS.MAP_SIZE = 0x10
@@ -1771,15 +1821,30 @@
                         GDDEFS.CONSTELEM_VALTYPE = 0x38
 
                         GDDEFS.GET_TYPE_INDX = 6
-
+                    else
+                        error("Unexpected version")
                     end
                 end
+
+                -- for Object vtable
+                -- 3.x [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
+                if GDDEFS.MINOR_VER <= 4 then
+                    GDDEFS.GET_TYPE_INDX = 8
+                elseif GDDEFS.MINOR_VER == 5 then
+                    GDDEFS.GET_TYPE_INDX = 9
+                elseif GDDEFS.MINOR_VER == 6 then
+                    GDDEFS.GET_TYPE_INDX = 10
+                end
+
+                -- try finding SceneTree and Viewport/Window
                 if tryRegSceneTree() and setSTtoVPoffset() then 
                     registerSymbol('ptVP','[pSceneTree]+oSTtoVP',false)
                 end
 
                 gdOffsetsDefined = true
+                -- check if 4.x string type reged, otherwise define it
                 checkGDStringType()
+                -- build disassembler
                 defineGDFunctionEnums()
                 fuckoffPrint()
             end
