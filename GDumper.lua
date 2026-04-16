@@ -6712,6 +6712,10 @@
                     table.insert(sigs, { isheavy = false,   sig="48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize= 32 } ) --3.6
                     table.insert(sigs, { isheavy = false,   sig="4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize= 36 } ) --3.5
                     table.insert(sigs, { isheavy = false,   sig="48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize= 23 } ) --3.3 - 3.4 - 3.5
+                    table.insert(sigs, { isheavy = true,   sig="4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8", sigsize= 17 } ) --3.0 prefixed by 48 C7 44 24 30 ? 000000
+
+
+
                     for i, sign in ipairs(sigs) do
                         if resolveVM_RELA(sign.sig, sign.sigsize) then
                             sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: '..tostring(i).."\t"..sign.sig)
