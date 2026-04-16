@@ -841,18 +841,15 @@
                     error("Not defined yet")
                 elseif majminVersionStr == "3.0" then
                     -- 3.0.6.stable.official
-                    print("No recorded version found")
-                    error("Not defined yet")
-
                     GDDEFS.GET_TYPE_INDX = 6
-                    offsets.VPChildren = 0x108
-                    offsets.VPObjStringName = 0x100
+                    offsets.VPChildren = 0x100
+                    offsets.VPObjStringName = 0x118
                     offsets.NodeGDScriptInstance = 0x50
-                    offsets.NodeGDScriptName = 0x100
+                    offsets.NodeGDScriptName = 0xF8
                     offsets.GDScriptFunctionMap = 0x1B0
                     offsets.GDScriptConstantMap = 0x198
                     offsets.GDScriptVariantNameHM = 0x1C8
-                    offsets.oVariantVector = 0x20
+                    offsets.oVariantVector = 0x18
                     offsets.GDScriptVariantNameType = nil -- 4.x
                     offsets.NodeVariantVectorSizeOffset = 0x4
                     offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
@@ -862,7 +859,6 @@
 
                     if GDDEFS.DEBUGVER then
                         error("Not defined yet")
-                        -- GDDEFS.STRING = 0x8
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
@@ -873,8 +869,7 @@
                         offsets.oVariantVector = offsets.oVariantVector+0x18
                     end
                     if GDDEFS.CUSTOMVER then
-                        -- godot.windows.opt.64.exe
-                        -- Godot Engine v3.2.stable.custom_build
+                        error("Not defined yet")
                         offsets.VPChildren = offsets.VPChildren+0x8
                         offsets.VPObjStringName = offsets.VPObjStringName+0x8
                         offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
@@ -887,7 +882,7 @@
 
                 else
                     print("No recorded version found")
-                    error("Not defined yet")
+                    error("No recorded version found")
                     return offsets
                 end
             end
@@ -1769,6 +1764,15 @@
                         GDDEFS.CONSTELEM_VALTYPE = 0x18
 
                         GDDEFS.VAR_NAMEINDEX_I = 0x18
+                        -- for Object vtable
+                        -- 3.0-3.6 [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
+                        if GDDEFS.MINOR_VER <= 4 then
+                            GDDEFS.GET_TYPE_INDX = 8
+                        elseif GDDEFS.MINOR_VER == 5 then
+                            GDDEFS.GET_TYPE_INDX = 9
+                        elseif GDDEFS.MINOR_VER == 6 then
+                            GDDEFS.GET_TYPE_INDX = 10
+                        end
 
                     elseif GDDEFS.MAJOR_VER == 3 then
                         GDDEFS.MAJOR_VER = 3
@@ -1826,19 +1830,11 @@
                     end
                 end
 
-                -- for Object vtable
-                -- 3.x [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
-                if GDDEFS.MINOR_VER <= 4 then
-                    GDDEFS.GET_TYPE_INDX = 8
-                elseif GDDEFS.MINOR_VER == 5 then
-                    GDDEFS.GET_TYPE_INDX = 9
-                elseif GDDEFS.MINOR_VER == 6 then
-                    GDDEFS.GET_TYPE_INDX = 10
-                end
-
                 -- try finding SceneTree and Viewport/Window
                 if tryRegSceneTree() and setSTtoVPoffset() then 
                     registerSymbol('ptVP','[pSceneTree]+oSTtoVP',false)
+                else
+                    sendDebugMessage("Couldn't find SceneTree & toVP offset")
                 end
 
                 gdOffsetsDefined = true
@@ -1881,6 +1877,8 @@
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36")
                 table.insert(sigs, "4C 8B 0D ? ? ? ? 4C 89 B4 24")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B")
+                table.insert(sigs, "48 8B 0D ? ? ? ? 48 83 C4 ?   5?" ) -- 3.0
+
                 for i, sig in ipairs(sigs) do if resolveRelAddr(sig, 3) then sendDebugMessage('tryRegSceneTree: hit at: '..tostring(i).."\t"..sig) return true end end
                 return false
             end
@@ -1892,17 +1890,18 @@
 
                 if targetIs64Bit() then
                     ptrsize = 0x8
-                    steps = 0x400 / ptrsize
+                    steps = 0x350 / ptrsize
                 else
                     ptrsize = 0x4
                     steps = 0x200 / ptrsize
                 end
 
                 -- isn't elegant either
-                for i=25, steps do
+                for i=23, steps do
                     local candidateAddr = readPointer(sceneTree + i*ptrsize)
                     if isNotNullOrNil(candidateAddr) and isMMVTable( readPointer(candidateAddr) ) then
-
+                        
+                        sendDebugMessage("setSTtoVPoffset: calling a virtual method if I happen to crash: ofs\t"..numtohexstr(i*ptrsize).."\taddr: "..numtohexstr(candidateAddr))
                         local className = getObjectName(candidateAddr)
                         if className == "Viewport" or className == "Window" then
                             registerSymbol('oSTtoVP', i*ptrsize, false)
