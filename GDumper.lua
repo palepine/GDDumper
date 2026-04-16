@@ -1462,7 +1462,7 @@
                 dumpMemrec.appendToEntry(mainMemrec)
 
                 local dumpMemrec = addrList.createMemoryRecord()
-                dumpMemrec.Description = 'Dump All Nodes'
+                dumpMemrec.Description = 'Dump All Nodes (main)'
                 dumpMemrec.Type = vtAutoAssembler
                 dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
                 dumpMemrec.Async = true
@@ -1470,7 +1470,7 @@
                 dumpMemrec.appendToEntry(mainMemrec)
 
                 local supportPalique = addrList.createMemoryRecord()
-                supportPalique.Description = 'Support the author'
+                supportPalique.Description = 'Support the development & author'
                 supportPalique.Type = vtAutoAssembler
                 supportPalique.Color = 0x8F379F
                 supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
