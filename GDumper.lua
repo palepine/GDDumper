@@ -885,6 +885,11 @@
                     error("No recorded version found")
                     return offsets
                 end
+                --[[
+                    Godot Engine v2.1.4.beta.custom_build 
+                    godot.windows.opt.32.exe 
+                ]]
+
             end
 
         --///---///--///---///--///---/// POINTER HANDLERS
@@ -1998,6 +2003,8 @@
                 debugStepOut();
                 return childrenPtr, childrenSize
             end
+
+            -- TODO: split to specific engine internals
 
         --///---///--///---///--///---///--///--///---///--///---///--///---///--/// VISITORS
             
