@@ -150,6 +150,7 @@
                                         end
                                     end
                                     GDGUIInit = false
+                                    MainForm.setCaption( "Cheat Engine" )
                                 end)
                         end
 
@@ -196,6 +197,8 @@
                     GDDEFS.MINOR_VER = tonumber(minor)
                     GDDEFS.VERSION_STRING = major..'.'..minor
                 end
+
+                MainForm.setCaption( GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN" )
             end
 
             function getStoredOffsetsFromVersion( majminVersionStr )
@@ -842,6 +845,49 @@
                 elseif majminVersionStr == "3.0" then
                     -- 3.0.6.stable.official
                     GDDEFS.GET_TYPE_INDX = 6
+                    offsets.VPChildren = 0x100
+                    offsets.VPObjStringName = 0x118
+                    offsets.NodeGDScriptInstance = 0x50
+                    offsets.NodeGDScriptName = 0xF8
+                    offsets.GDScriptFunctionMap = 0x1B0
+                    offsets.GDScriptConstantMap = 0x198
+                    offsets.GDScriptVariantNameHM = 0x1C8
+                    offsets.oVariantVector = 0x18
+                    offsets.GDScriptVariantNameType = nil -- 4.x
+                    offsets.NodeVariantVectorSizeOffset = 0x4
+                    offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+                    offsets.GDScriptFunctionCode = 0x50
+                    offsets.GDScriptFunctionCodeConsts = 0x20
+                    offsets.GDScriptFunctionCodeGlobals = 0x30
+
+                    if GDDEFS.DEBUGVER then
+                        error("Not defined yet")
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                        offsets.oVariantVector = offsets.oVariantVector+0x18
+                    end
+                    if GDDEFS.CUSTOMVER then
+                        error("Not defined yet")
+                        offsets.VPChildren = offsets.VPChildren+0x8
+                        offsets.VPObjStringName = offsets.VPObjStringName+0x8
+                        offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x8
+                        offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x8
+                        offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x8
+                        offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x8
+                    end
+
+                    return offsets
+                elseif majminVersionStr == "2.1" then
+                    -- Godot Engine v2.1.7.rc.custom_build
+                    -- godot.windows.opt.64.exe
+                    error("Not defined yet")
+
+                    GDDEFS.GET_TYPE_INDX = 7
                     offsets.VPChildren = 0x100
                     offsets.VPObjStringName = 0x118
                     offsets.NodeGDScriptInstance = 0x50
@@ -1855,19 +1901,24 @@
 
             function tryRegSceneTree()
                 local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
-                    local function resolveAddress(instructionAddr, offsetToValue, offsetToNextIntr)
-                        local relativeAddr = readInteger( instructionAddr + offsetToValue )
-                        local nextAddr = getAddress( instructionAddr + offsetToNextIntr )
-                        registerSymbol('pSceneTree',(nextAddr+relativeAddr),false) -- TODO: check for classname?
-                    end
                     local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
                     if addr == 0 or addr == nil then return false end
                     offsetToNextIntr = offsetToNextIntr or getInstructionSize(addr)
                     offsetToValue = offsetToValue or (offsetToNextIntr - 4)
-                    resolveAddress(addr, offsetToValue, offsetToNextIntr)
-                    return true
+                    local relativeAddr = readInteger( addr + offsetToValue )
+                    local nextAddr = getAddress( addr + offsetToNextIntr )
+                    local resolvedAddr = nextAddr+relativeAddr
+                    sendDebugMessage("tryRegSceneTree: calling a virtual method if I happen to crash:\tstatic ptr: "..numtohexstr(resolvedAddr))
+                    local className = getObjectName( readPointer(resolvedAddr) )
+                    if className == "SceneTree" then
+                        registerSymbol('pSceneTree',resolvedAddr,false)
+                        return true
+                    else
+                        return false
+                    end
                 end
                 local sigs = {}
+                
                 table.insert(sigs, "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?")
                 table.insert(sigs, "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?")
                 table.insert(sigs, "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00")
