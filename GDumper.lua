@@ -1631,6 +1631,19 @@
         end
     end
 
+    function loadGDDumperForm()
+        local gdform = createFormFromFile(getCheatEngineDir()..[[autorun\gdform\GDForm.FRM]])
+        gdform.setDoNotSaveInTable(true)
+        -- TODO: setup
+        local gdtreeview = gdform.ComponentByName["treeviewNodes"]
+
+        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNode
+        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNodes
+        local rootNode = gdtreeview.getItems().add("root")
+        rootNode.getItem().Text = "NodeChild"
+        
+    end
+
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
 
   function initDumper(config)
