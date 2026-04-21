@@ -341,6 +341,7 @@
                     offsets.GDScriptFunctionCode = 0x178
                     offsets.GDScriptFunctionCodeConsts = 0x198
                     offsets.GDScriptFunctionCodeGlobals = 0x1A8
+                    -- timer 3B8 time_left | 3C0 isactive | 3A8 waittime
 
                     if GDDEFS.DEBUGVER then
                         -- godot.windows.template_debug.x86_64.exe 
@@ -1925,6 +1926,7 @@
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?")
                 table.insert(sigs, "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05")
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26")
+                table.insert(sigs, "48 C7 05 ? ? ? ? 00 00 00 00 E9 ? ? ? ? 85 C0" )
 
                 table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24")
                 table.insert(sigs, "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB")
