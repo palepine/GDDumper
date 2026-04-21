@@ -3794,9 +3794,9 @@
               advanceFunctionMapElement)
       end
 
-      --- iterates a function map and adds it to a struct
-      ---@param nodeAddr number
-      ---@param funcStructElement userdata
+    --- iterates a function map and adds it to a struct
+    ---@param nodeAddr number
+    ---@param funcStructElement userdata
       function iterateNodeFuncMapToStruct(nodeAddr, funcStructElement)
           assert(type(nodeAddr) == 'number',
               'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeAddr))
@@ -7704,7 +7704,7 @@
           local stdcall = 0
           local timeout = 0
           local int_t = 0
-          local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3
+          local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3, _rax
           if GDDEFS.VM_CALL_HEAVY then
 
               _rcx = {
@@ -7749,14 +7749,17 @@
               type = int_t,
               value = 0x0
           } -- CallState *p_state
-
-          local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3)
+          _rax = {
+              type = int_t,
+              value = 0x0
+          } -- lastArgument
+          local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
 
           if isNotNullOrNil(returned) then
               writeQword(dumSpace + 0x0, returned)
               return returned
           else
-              return true
+              return true, "noret"
           end
 
           --[[
