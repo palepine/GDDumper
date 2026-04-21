@@ -6,6 +6,9 @@
   -- TODO add more functionality for function overriding ==>
   -- TODO bytecode patching function that assembles a function for return;end. or return true;end It should store the original function (address association?)
   -- TODO addresslist should include node's children of children
+  -- TODO tree view form with polling
+  -- TODO symbol handler with polling
+  -- TODO more offsets for non-GDI objects
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
   -- ///---///--///---///--///---/// MEMRECS
     --- adds a memrec to parent
@@ -2167,9 +2170,9 @@
           return childrenPtr, childrenSize
       end
 
-      -- TODO: split to specific engine internals
+        -- TODO: split to specific engine internals
 
-      -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// VISITORS
+    -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// VISITORS
 
       local NodeVisitor = {}
 
@@ -2190,9 +2193,8 @@
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// EMITTERS
-
-      -- leaves just add entries
-      -- layouts are basically leaves with colors (where it makes sense)
+        -- leaves just add entries
+        -- layouts are basically leaves with colors (where it makes sense)
         -- branches are developing tree structures/recursion
 
         GDEmitters = {}
@@ -2242,7 +2244,9 @@
         function GDEmitters.StructEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
             iteratePackedArrayToStruct(arrayAddr, typeName, parent)
         end
+
         ---------------------------------------------------------------------------------
+
         GDEmitters.AddrEmitter = {}
 
         local function makeAddr(base, offset)
@@ -2929,297 +2933,297 @@
       GDHandlers = {}
       GDHandlers.VariantHandlers = {}
 
-      GDHandlers.VariantHandlers.DICTIONARY = function(entry, emitter, parent, contextTable)
-          sendDebugMessage("DICTIONARY case for name: " .. entry.name .. " address: " .. numtohexstr(entry.variantPtr) ..
-                              " offset: " .. numtohexstr(entry.offsetToValue))
-          local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+        GDHandlers.VariantHandlers.DICTIONARY = function(entry, emitter, parent, contextTable)
+            sendDebugMessage("DICTIONARY case for name: " .. entry.name .. " address: " .. numtohexstr(entry.variantPtr) ..
+                                " offset: " .. numtohexstr(entry.offsetToValue))
+            local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
 
-          if isNullOrNil(dictSize) then
-              emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType)
-              return;
-          end
+            if isNullOrNil(dictSize) then
+                emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType)
+                return;
+            end
 
-          local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, rootOffset(entry, emitter),
-              entry.ceType, "Dict")
-          emitter.recurseDictionary(contextTable, child, readPointer(entry.variantPtr)) -- we pass the actual base addr
+            local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, rootOffset(entry, emitter),
+                entry.ceType, "Dict")
+            emitter.recurseDictionary(contextTable, child, readPointer(entry.variantPtr)) -- we pass the actual base addr
 
-      end
+        end
 
-      GDHandlers.VariantHandlers.ARRAY = function(entry, emitter, parent, contextTable)
-          sendDebugMessage("ARRAY case for name: " .. entry.name)
-          if isArrayEmptyFromVariantPtr(entry.variantPtr) then
-              emitter.leaf(contextTable, parent, "array (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType);
-              return;
-          end
+        GDHandlers.VariantHandlers.ARRAY = function(entry, emitter, parent, contextTable)
+            sendDebugMessage("ARRAY case for name: " .. entry.name)
+            if isArrayEmptyFromVariantPtr(entry.variantPtr) then
+                emitter.leaf(contextTable, parent, "array (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType);
+                return;
+            end
 
-          local child = emitter.branch(contextTable, parent, "array: " .. entry.name, rootOffset(entry, emitter),
-              entry.ceType, "Array");
-          emitter.recurseArray(contextTable, child, readPointer(entry.variantPtr))
-      end
+            local child = emitter.branch(contextTable, parent, "array: " .. entry.name, rootOffset(entry, emitter),
+                entry.ceType, "Array");
+            emitter.recurseArray(contextTable, child, readPointer(entry.variantPtr))
+        end
 
-      GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
-          local objectParent, realPtr, realOffset, objectContext =
-              prepareObjectParent(entry, emitter, parent, contextTable);
-          local objectTypeName = getObjectName(readPointer(realPtr))
-          objectTypeName = '<' .. objectTypeName .. '>'
+        GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
+            local objectParent, realPtr, realOffset, objectContext =
+                prepareObjectParent(entry, emitter, parent, contextTable);
+            local objectTypeName = getObjectName(readPointer(realPtr))
+            objectTypeName = '<' .. objectTypeName .. '>'
 
-          sendDebugMessage("OBJECT case: name: " .. entry.name .. " type: " .. objectTypeName .. " addr: " ..
-                              numtohexstr(realPtr))
+            sendDebugMessage("OBJECT case: name: " .. entry.name .. " type: " .. objectTypeName .. " addr: " ..
+                                numtohexstr(realPtr))
 
-          if checkForGDScript(readPointer(realPtr)) then
-              if emitter == GDEmitters.StructEmitter then
-                  local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: " .. entry.name, realOffset,
-                      vtPointer);
-                  nodeChild.BackgroundColor = 0x6C3157
-              else
-                  local nodeChild = emitter.branch(objectContext, objectParent, "mNode: " .. entry.name, realOffset,
-                      vtPointer, "Node");
-                  nodeChild.BackgroundColor = 0x6C3157
+            if checkForGDScript(readPointer(realPtr)) then
+                if emitter == GDEmitters.StructEmitter then
+                    local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: " .. entry.name, realOffset,
+                        vtPointer);
+                    nodeChild.BackgroundColor = 0x6C3157
+                else
+                    local nodeChild = emitter.branch(objectContext, objectParent, "mNode: " .. entry.name, realOffset,
+                        vtPointer, "Node");
+                    nodeChild.BackgroundColor = 0x6C3157
 
-                  if emitter.recurseNode then -- TODO: redundant?
-                      emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) -- 
-                  end
-              end
+                    if emitter.recurseNode then -- TODO: redundant?
+                        emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) -- 
+                    end
+                end
 
-          else
-              emitter.leaf(objectContext, objectParent, objectTypeName .. " obj: " .. entry.name, realOffset, vtPointer);
-          end
-      end
+            else
+                emitter.leaf(objectContext, objectParent, objectTypeName .. " obj: " .. entry.name, realOffset, vtPointer);
+            end
+        end
 
-      GDHandlers.VariantHandlers.STRING = function(entry, emitter, parent, contextTable)
-          if emitter == GDEmitters.StructEmitter then
-              local outer = emitter.branch(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter),
-                  vtPointer, "String")
-              local inner = emitter.branch(contextTable, outer, "StringData: " .. entry.name, 0x0, vtUnicodeString,
-                  "stringy")
-              -- emitter.leaf( contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString )
-          else
-              emitter.leaf(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtString)
-          end
-      end
+        GDHandlers.VariantHandlers.STRING = function(entry, emitter, parent, contextTable)
+            if emitter == GDEmitters.StructEmitter then
+                local outer = emitter.branch(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter),
+                    vtPointer, "String")
+                local inner = emitter.branch(contextTable, outer, "StringData: " .. entry.name, 0x0, vtUnicodeString,
+                    "stringy")
+                -- emitter.leaf( contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString )
+            else
+                emitter.leaf(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtString)
+            end
+        end
 
-      GDHandlers.VariantHandlers.STRING_NAME = function(entry, emitter, parent, contextTable)
-          if emitter == GDEmitters.StructEmitter then
-              local outer = emitter.branch(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter),
-                  vtPointer, "StringName")
-              local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDDEFS.STRING, vtPointer,
-                  "stringy")
-              emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString)
-          else
-              local stringNameAddr = readPointer(entry.variantPtr)
-              if isNullOrNil(stringNameAddr) then
-                  emitter.leaf(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer)
-                  return
-              end
+        GDHandlers.VariantHandlers.STRING_NAME = function(entry, emitter, parent, contextTable)
+            if emitter == GDEmitters.StructEmitter then
+                local outer = emitter.branch(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter),
+                    vtPointer, "StringName")
+                local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDDEFS.STRING, vtPointer,
+                    "stringy")
+                emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString)
+            else
+                local stringNameAddr = readPointer(entry.variantPtr)
+                if isNullOrNil(stringNameAddr) then
+                    emitter.leaf(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer)
+                    return
+                end
 
-              local stringContext = {
-                  nodeAddr = contextTable.nodeAddr,
-                  nodeName = contextTable.nodeName,
-                  baseAddress = stringNameAddr + GDDEFS.STRING
-              }
-              emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
-          end
+                local stringContext = {
+                    nodeAddr = contextTable.nodeAddr,
+                    nodeName = contextTable.nodeName,
+                    baseAddress = stringNameAddr + GDDEFS.STRING
+                }
+                emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
+            end
 
-      end
+        end
 
-      GDHandlers.VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
-          sendDebugMessage("handlePackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
-          local arrayAddr = readPointer(entry.variantPtr)
+        GDHandlers.VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
+            sendDebugMessage("handlePackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
+            local arrayAddr = readPointer(entry.variantPtr)
 
-          if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
-              emitter.leaf(contextTable, parent, entry.typeName .. ' (empty): ' .. entry.name, rootOffset(entry, emitter),
-                  entry.ceType)
-          else
-              local child = emitter.branch(contextTable, parent, entry.typeName .. ' ' .. entry.name,
-                  rootOffset(entry, emitter), entry.ceType, "P_Array")
-              emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
-          end
-      end
+            if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
+                emitter.leaf(contextTable, parent, entry.typeName .. ' (empty): ' .. entry.name, rootOffset(entry, emitter),
+                    entry.ceType)
+            else
+                local child = emitter.branch(contextTable, parent, entry.typeName .. ' ' .. entry.name,
+                    rootOffset(entry, emitter), entry.ceType, "P_Array")
+                emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
+            end
+        end
 
-      GDHandlers.VariantHandlers.PACKED_BYTE_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_INT32_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_INT64_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_FLOAT32_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_FLOAT64_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_VECTOR2_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_VECTOR3_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_COLOR_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
-      GDHandlers.VariantHandlers.PACKED_VECTOR4_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_BYTE_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_INT32_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_INT64_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_FLOAT32_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_FLOAT64_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_VECTOR2_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_VECTOR3_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_COLOR_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
+        GDHandlers.VariantHandlers.PACKED_VECTOR4_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
 
-      GDHandlers.VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
-          local typeName = "Color: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
-      end
+        GDHandlers.VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
+            local typeName = "Color: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
+        end
 
-      GDHandlers.VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec2: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-      end
+        GDHandlers.VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
+            local typeName = "Vec2: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+        end
 
-      GDHandlers.VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
-          local typeName = "vec2I: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-      end
+        GDHandlers.VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
+            local typeName = "vec2I: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+        end
 
-      GDHandlers.VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
-          local typeName = "Rect2: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtSingle)
-      end
+        GDHandlers.VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
+            local typeName = "Rect2: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtSingle)
+        end
 
-      GDHandlers.VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
-          local typeName = "Rect2I: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtDword)
-      end
+        GDHandlers.VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
+            local typeName = "Rect2I: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtDword)
+        end
 
-      GDHandlers.VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec3: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
-      end
+        GDHandlers.VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
+            local typeName = "Vec3: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+        end
 
-      GDHandlers.VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec3I: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
-      end
+        GDHandlers.VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
+            local typeName = "Vec3I: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
+        end
 
-      GDHandlers.VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec4: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtSingle)
-      end
+        GDHandlers.VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
+            local typeName = "Vec4: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtSingle)
+        end
 
-      GDHandlers.VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec4I: "
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
-          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtDword)
-      end
+        GDHandlers.VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
+            local typeName = "Vec4I: "
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
+            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtDword)
+        end
 
-      GDHandlers.VariantHandlers.DEFAULT = function(entry, emitter, parent, contextTable)
-          emitter.leaf(contextTable, parent, "var: " .. entry.name .. " (" .. entry.typeName .. ")",
-              rootOffset(entry, emitter), entry.ceType)
-      end
+        GDHandlers.VariantHandlers.DEFAULT = function(entry, emitter, parent, contextTable)
+            emitter.leaf(contextTable, parent, "var: " .. entry.name .. " (" .. entry.typeName .. ")",
+                rootOffset(entry, emitter), entry.ceType)
+        end
 
       GDHandlers.NodeDiscoveryHandlers = {}
 
-      GDHandlers.NodeDiscoveryHandlers.DICTIONARY = function(entry, visitor)
-          local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
-          if isNotNullOrNil(dictSize) then
-              visitor.recurseDictionary(readPointer(entry.variantPtr))
-          end
-      end
+        GDHandlers.NodeDiscoveryHandlers.DICTIONARY = function(entry, visitor)
+            local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+            if isNotNullOrNil(dictSize) then
+                visitor.recurseDictionary(readPointer(entry.variantPtr))
+            end
+        end
 
-      GDHandlers.NodeDiscoveryHandlers.ARRAY = function(entry, visitor)
-          if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
-              visitor.recurseArray(readPointer(entry.variantPtr))
-          end
-      end
+        GDHandlers.NodeDiscoveryHandlers.ARRAY = function(entry, visitor)
+            if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
+                visitor.recurseArray(readPointer(entry.variantPtr))
+            end
+        end
 
-      GDHandlers.NodeDiscoveryHandlers.OBJECT = function(entry, visitor)
-          visitor.visitObject(entry.variantPtr)
-      end
+        GDHandlers.NodeDiscoveryHandlers.OBJECT = function(entry, visitor)
+            visitor.visitObject(entry.variantPtr)
+        end
 
       GDHandlers.PackedArrayHandlers = {}
 
-      GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+        GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
 
-              if readPointer(arrElement) ~= 0 then
-                  emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
-              end
-          end
-      end
+                if readPointer(arrElement) ~= 0 then
+                    emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+                end
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_INT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * 0x4
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_INT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * 0x4
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_FLOAT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * 0x4
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_FLOAT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * 0x4
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_BYTE_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * 0x1
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_BYTE_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * 0x1
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_VECTOR2_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * 0x8
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_VECTOR2_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * 0x8
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_VECTOR3_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * 0xC
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_VECTOR3_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * 0xC
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.PACKED_COLOR_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * 0x10
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.PACKED_COLOR_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * 0x10
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement)
+            end
+        end
 
-      GDHandlers.PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-          for elemIndex = 0, packedVectorSize - 1 do
-              local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-              local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-              emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer)
-          end
-      end
+        GDHandlers.PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+            for elemIndex = 0, packedVectorSize - 1 do
+                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+                emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer)
+            end
+        end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
 
@@ -3794,9 +3798,9 @@
               advanceFunctionMapElement)
       end
 
-    --- iterates a function map and adds it to a struct
-    ---@param nodeAddr number
-    ---@param funcStructElement userdata
+      --- iterates a function map and adds it to a struct
+      ---@param nodeAddr number
+      ---@param funcStructElement userdata
       function iterateNodeFuncMapToStruct(nodeAddr, funcStructElement)
           assert(type(nodeAddr) == 'number',
               'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeAddr))
@@ -3805,7 +3809,7 @@
           local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeAddr, funcStructElement)
           if isNullOrNil(headElement) or isNullOrNil(mapSize) then
               sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: ' .. " Address " ..
-                                            numtohexstr(nodeAddr))
+                                              numtohexstr(nodeAddr))
               return;
           end
           local mapElement = headElement
@@ -4316,7 +4320,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' ..
-                                                    operationName .. ' ' .. operand2
+                                                      operationName .. ' ' .. operand2
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
 
@@ -4342,7 +4346,7 @@
                       addStructureElem(contextTable.codeStructElement, operand3,
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' ..
-                                                    operationName .. ' ' .. operand2
+                                                      operationName .. ' ' .. operand2
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
 
@@ -4401,7 +4405,7 @@
                           (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 ..
-                                                    ' is Dictionary[' .. operand3 .. ']'
+                                                      ' is Dictionary[' .. operand3 .. ']'
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
 
@@ -4461,7 +4465,7 @@
                           (contextTable.instrPointer - 1 + 8) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 ..
-                                                    ' is Dictionary[' .. operand5 .. ']' .. ', ' .. operand7 .. ']'
+                                                      ' is Dictionary[' .. operand5 .. ']' .. ', ' .. operand7 .. ']'
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
                       return contextTable.instrPointer + 9
@@ -4523,7 +4527,7 @@
                       addStructureElem(contextTable.codeStructElement, operand3,
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' ..
-                                                    operand3
+                                                      operand3
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
                       return contextTable.instrPointer + 4
@@ -4544,7 +4548,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' ..
-                                                    operand3
+                                                      operand3
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4566,7 +4570,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' ..
-                                                    operand3
+                                                      operand3
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4588,7 +4592,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' ..
-                                                    operand2
+                                                      operand2
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4611,7 +4615,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' ..
-                                                    operand2
+                                                      operand2
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4634,7 +4638,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' ..
-                                                    operand2
+                                                      operand2
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4703,7 +4707,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' ..
-                                                    operand3 .. '"]'
+                                                      operand3 .. '"]'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4726,7 +4730,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' ..
-                                                    operand3 .. '"]'
+                                                      operand3 .. '"]'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4787,7 +4791,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' script(scriptname)[' .. operand3 .. '] = ' ..
-                                                    operand1
+                                                      operand1
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4810,7 +4814,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = script(scriptname)[' ..
-                                                    operand3 .. ']'
+                                                      operand3 .. ']'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -4961,7 +4965,7 @@
                           (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ')' .. operand1 .. ' = ' ..
-                                                    operand2
+                                                      operand2
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
@@ -5095,7 +5099,7 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '(' ..
-                                                    operandArg .. ')'
+                                                      operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5138,7 +5142,7 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' ..
-                                                    operandArg .. ')'
+                                                      operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5296,28 +5300,28 @@
                           (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
 
                       local operand2_2 = 'get_constant(' ..
-                                            (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 2] &
-                                                GDF.EADDRESS["ADDR_MASK"]) .. ')'
+                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 2] &
+                                                  GDF.EADDRESS["ADDR_MASK"]) .. ')'
                       addStructureElem(contextTable.codeStructElement, operand2_2,
                           (contextTable.instrPointer - 1 + argc * 2 + 2) * 0x4, vtDword)
                       local operand2_5 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc * 2 + 5])
                       addStructureElem(contextTable.codeStructElement, operand2_5,
                           (contextTable.instrPointer - 1 + argc * 2 + 5) * 0x4, vtDword)
                       local operand2_6 = 'get_global_name(' ..
-                                            (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 6]) .. ')'
+                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 6]) .. ')'
                       addStructureElem(contextTable.codeStructElement, operand2_6,
                           (contextTable.instrPointer - 1 + argc * 2 + 6) * 0x4, vtDword)
 
                       local operand2_3 = 'get_constant(' ..
-                                            (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 3] &
-                                                GDF.EADDRESS["ADDR_MASK"]) .. ')'
+                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 3] &
+                                                  GDF.EADDRESS["ADDR_MASK"]) .. ')'
                       addStructureElem(contextTable.codeStructElement, operand2_3,
                           (contextTable.instrPointer - 1 + argc * 2 + 3) * 0x4, vtDword)
                       local operand2_7 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc * 2 + 7])
                       addStructureElem(contextTable.codeStructElement, operand2_7,
                           (contextTable.instrPointer - 1 + argc * 2 + 7) * 0x4, vtDword)
                       local operand2_8 = 'get_global_name(' ..
-                                            (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 8]) .. ')'
+                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 8]) .. ')'
                       addStructureElem(contextTable.codeStructElement, operand2_8,
                           (contextTable.instrPointer - 1 + argc * 2 + 8) * 0x4, vtDword)
 
@@ -5347,7 +5351,7 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2_5 .. ', ' .. operand2_7 ..
-                                                    ') ' .. operand2 .. ' = {' .. operandArg .. '}'
+                                                      ') ' .. operand2 .. ' = {' .. operandArg .. '}'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5362,7 +5366,7 @@
                       local ret = contextTable.codeInts[contextTable.instrPointer] ==
                                       GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_RETURN)
                       local async = contextTable.codeInts[contextTable.instrPointer] ==
-                                        GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_ASYNC)
+                                          GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_ASYNC)
 
                       contextTable.instrPointer = contextTable.instrPointer + 1
                       local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
@@ -5463,7 +5467,7 @@
                           (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. '(' ..
-                                                    operandArg .. ')'
+                                                      operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5508,7 +5512,7 @@
                           (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' ..
-                                                    operandArg .. ')'
+                                                      operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5552,7 +5556,7 @@
                           (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' ..
-                                                    operandArg .. ')'
+                                                      operandArg .. ')'
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -5599,7 +5603,7 @@
                           (contextTable.instrPointer - 1 + 4 + argc) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' ..
-                                                    operand4 .. '(' .. operandArg .. ')'
+                                                      operand4 .. '(' .. operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5643,7 +5647,7 @@
                           (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand3 .. '(' ..
-                                                    operandArg .. ')'
+                                                      operandArg .. ')'
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -5699,7 +5703,7 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. '(' ..
-                                                    operandArg .. ')' -- TODO retrieve the funciton name
+                                                      operandArg .. ')' -- TODO retrieve the funciton name
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -5751,7 +5755,7 @@
                           (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '.' ..
-                                                    operand2 .. '.operator String()' .. '(' .. operandArg .. ')'
+                                                      operand2 .. '.operator String()' .. '(' .. operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5790,8 +5794,8 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' ..
-                                                    'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
-                                                    operandArg .. ')'
+                                                      'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
+                                                      operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5830,8 +5834,8 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' ..
-                                                    'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
-                                                    operandArg .. ')'
+                                                      'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
+                                                      operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5870,8 +5874,8 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' ..
-                                                    'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
-                                                    operandArg .. ')'
+                                                      'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
+                                                      operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5920,7 +5924,7 @@
                           (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' ..
-                                                    operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
+                                                      operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -5964,7 +5968,7 @@
                           (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 ..
-                                                    '->get_name()' .. '(' .. operandArg .. ')'
+                                                      '->get_name()' .. '(' .. operandArg .. ')'
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -6026,8 +6030,8 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' ..
-                                                    operand2 .. '->name.operator String()' .. ' function, captures (' ..
-                                                    operandArg .. ')'
+                                                      operand2 .. '->name.operator String()' .. ' function, captures (' ..
+                                                      operandArg .. ')'
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -6069,8 +6073,8 @@
                       end
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' ..
-                                                    operand2 .. '->name.operator String()' .. ' function, captures (' ..
-                                                    operandArg .. ')'
+                                                      operand2 .. '->name.operator String()' .. ' function, captures (' ..
+                                                      operandArg .. ')'
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -6228,7 +6232,7 @@
                           (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' (' .. 'GDScript::debug_get_script_name(' ..
-                                                    operand2 .. ')' .. ') ' .. operand1
+                                                      operand2 .. ')' .. ') ' .. operand1
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
 
@@ -6278,8 +6282,8 @@
 
                       local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_BEGIN_', '')
                       contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' ..
-                                                    operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' ..
-                                                    tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                                                      operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' ..
+                                                      tostring(contextTable.codeInts[contextTable.instrPointer + 4])
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
 
@@ -6442,8 +6446,8 @@
 
                       local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_', '')
                       contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' ..
-                                                    operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' ..
-                                                    tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                                                      operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' ..
+                                                      tostring(contextTable.codeInts[contextTable.instrPointer + 4])
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
 
@@ -6550,8 +6554,8 @@
                           vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' for-loop ' .. operand4 .. ' in range to ' ..
-                                                    operand2 .. ' step ' .. operand3 .. ' counter ' .. operand1 .. ' end ' ..
-                                                    tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                                                      operand2 .. ' step ' .. operand3 .. ' counter ' .. operand1 .. ' end ' ..
+                                                      tostring(contextTable.codeInts[contextTable.instrPointer + 4])
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1) * 0x4, vtDword)
 
@@ -6847,7 +6851,7 @@
                           (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. operand3 .. '->getname()' ..
-                                                    '(' .. operandArg .. ')' -- TODO: retrieve the funciton name
+                                                      '(' .. operandArg .. ')' -- TODO: retrieve the funciton name
 
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
@@ -6901,8 +6905,8 @@
 
                       local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
                       contextTable.opcodeName = contextTable.opcodeName .. '(return ' .. opcodeType .. ') ' .. operand2 ..
-                                                    ' = ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg ..
-                                                    ')'
+                                                      ' = ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg ..
+                                                      ')'
                       addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
                           (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7075,109 +7079,109 @@
                   ["4.0"] = {
                       decoderName = "BytecodeV0",
                       orderedOpcodes = {GDF.OP.OPCODE_OPERATOR, GDF.OP.OPCODE_OPERATOR_VALIDATED,
-                                        GDF.OP.OPCODE_TYPE_TEST_BUILTIN, GDF.OP.OPCODE_TYPE_TEST_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_TEST_NATIVE, GDF.OP.OPCODE_TYPE_TEST_SCRIPT,
-                                        GDF.OP.OPCODE_SET_KEYED, GDF.OP.OPCODE_SET_KEYED_VALIDATED,
-                                        GDF.OP.OPCODE_SET_INDEXED_VALIDATED, GDF.OP.OPCODE_GET_KEYED,
-                                        GDF.OP.OPCODE_GET_KEYED_VALIDATED, GDF.OP.OPCODE_GET_INDEXED_VALIDATED,
-                                        GDF.OP.OPCODE_SET_NAMED, GDF.OP.OPCODE_SET_NAMED_VALIDATED,
-                                        GDF.OP.OPCODE_GET_NAMED, GDF.OP.OPCODE_GET_NAMED_VALIDATED,
-                                        GDF.OP.OPCODE_SET_MEMBER, GDF.OP.OPCODE_GET_MEMBER, GDF.OP.OPCODE_ASSIGN,
-                                        GDF.OP.OPCODE_ASSIGN_TRUE, GDF.OP.OPCODE_ASSIGN_FALSE,
-                                        GDF.OP.OPCODE_ASSIGN_TYPED_BUILTIN, GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY,
-                                        GDF.OP.OPCODE_ASSIGN_TYPED_NATIVE, GDF.OP.OPCODE_ASSIGN_TYPED_SCRIPT,
-                                        GDF.OP.OPCODE_CAST_TO_BUILTIN, GDF.OP.OPCODE_CAST_TO_NATIVE,
-                                        GDF.OP.OPCODE_CAST_TO_SCRIPT, GDF.OP.OPCODE_CONSTRUCT,
-                                        GDF.OP.OPCODE_CONSTRUCT_VALIDATED, GDF.OP.OPCODE_CONSTRUCT_ARRAY,
-                                        GDF.OP.OPCODE_CONSTRUCT_TYPED_ARRAY, GDF.OP.OPCODE_CONSTRUCT_DICTIONARY,
-                                        GDF.OP.OPCODE_CALL, GDF.OP.OPCODE_CALL_RETURN, GDF.OP.OPCODE_CALL_ASYNC,
-                                        GDF.OP.OPCODE_CALL_UTILITY, GDF.OP.OPCODE_CALL_UTILITY_VALIDATED,
-                                        GDF.OP.OPCODE_CALL_GDSCRIPT_UTILITY, GDF.OP.OPCODE_CALL_BUILTIN_TYPE_VALIDATED,
-                                        GDF.OP.OPCODE_CALL_SELF_BASE, GDF.OP.OPCODE_CALL_METHOD_BIND,
-                                        GDF.OP.OPCODE_CALL_METHOD_BIND_RET, GDF.OP.OPCODE_CALL_BUILTIN_STATIC,
-                                        GDF.OP.OPCODE_CALL_NATIVE_STATIC, GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_BOOL, GDF.OP.OPCODE_CALL_PTRCALL_INT,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_FLOAT, GDF.OP.OPCODE_CALL_PTRCALL_STRING,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_RECT2, GDF.OP.OPCODE_CALL_PTRCALL_RECT2I,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I, GDF.OP.OPCODE_CALL_PTRCALL_PLANE,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION, GDF.OP.OPCODE_CALL_PTRCALL_AABB,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_BASIS, GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION, GDF.OP.OPCODE_CALL_PTRCALL_COLOR,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME, GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_RID, GDF.OP.OPCODE_CALL_PTRCALL_OBJECT,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE, GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY, GDF.OP.OPCODE_CALL_PTRCALL_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY,
-                                        GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_AWAIT,
-                                        GDF.OP.OPCODE_AWAIT_RESUME, GDF.OP.OPCODE_CREATE_LAMBDA,
-                                        GDF.OP.OPCODE_CREATE_SELF_LAMBDA, GDF.OP.OPCODE_JUMP, GDF.OP.OPCODE_JUMP_IF,
-                                        GDF.OP.OPCODE_JUMP_IF_NOT, GDF.OP.OPCODE_JUMP_TO_DEF_ARGUMENT,
-                                        GDF.OP.OPCODE_JUMP_IF_SHARED, GDF.OP.OPCODE_RETURN,
-                                        GDF.OP.OPCODE_RETURN_TYPED_BUILTIN, GDF.OP.OPCODE_RETURN_TYPED_ARRAY,
-                                        GDF.OP.OPCODE_RETURN_TYPED_NATIVE, GDF.OP.OPCODE_RETURN_TYPED_SCRIPT,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN, GDF.OP.OPCODE_ITERATE_BEGIN_INT,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_FLOAT, GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2I, GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3I, GDF.OP.OPCODE_ITERATE_BEGIN_STRING,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_DICTIONARY, GDF.OP.OPCODE_ITERATE_BEGIN_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT, GDF.OP.OPCODE_ITERATE,
-                                        GDF.OP.OPCODE_ITERATE_INT, GDF.OP.OPCODE_ITERATE_FLOAT,
-                                        GDF.OP.OPCODE_ITERATE_VECTOR2, GDF.OP.OPCODE_ITERATE_VECTOR2I,
-                                        GDF.OP.OPCODE_ITERATE_VECTOR3, GDF.OP.OPCODE_ITERATE_VECTOR3I,
-                                        GDF.OP.OPCODE_ITERATE_STRING, GDF.OP.OPCODE_ITERATE_DICTIONARY,
-                                        GDF.OP.OPCODE_ITERATE_ARRAY, GDF.OP.OPCODE_ITERATE_PACKED_BYTE_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_INT32_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_INT64_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_FLOAT32_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_FLOAT64_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_STRING_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_VECTOR2_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_VECTOR3_ARRAY,
-                                        GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_ITERATE_OBJECT,
-                                        GDF.OP.OPCODE_STORE_GLOBAL, GDF.OP.OPCODE_STORE_NAMED_GLOBAL,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_BOOL, GDF.OP.OPCODE_TYPE_ADJUST_INT,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_FLOAT, GDF.OP.OPCODE_TYPE_ADJUST_STRING,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2I,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_RECT2, GDF.OP.OPCODE_TYPE_ADJUST_RECT2I,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3I,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM2D, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4I, GDF.OP.OPCODE_TYPE_ADJUST_PLANE,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_QUATERNION, GDF.OP.OPCODE_TYPE_ADJUST_AABB,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_BASIS, GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM3D,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PROJECTION, GDF.OP.OPCODE_TYPE_ADJUST_COLOR,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_STRING_NAME, GDF.OP.OPCODE_TYPE_ADJUST_NODE_PATH,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_RID, GDF.OP.OPCODE_TYPE_ADJUST_OBJECT,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_CALLABLE, GDF.OP.OPCODE_TYPE_ADJUST_SIGNAL,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_DICTIONARY, GDF.OP.OPCODE_TYPE_ADJUST_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY,
-                                        GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_ASSERT,
-                                        GDF.OP.OPCODE_BREAKPOINT, GDF.OP.OPCODE_LINE, GDF.OP.OPCODE_END}
+                                          GDF.OP.OPCODE_TYPE_TEST_BUILTIN, GDF.OP.OPCODE_TYPE_TEST_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_TEST_NATIVE, GDF.OP.OPCODE_TYPE_TEST_SCRIPT,
+                                          GDF.OP.OPCODE_SET_KEYED, GDF.OP.OPCODE_SET_KEYED_VALIDATED,
+                                          GDF.OP.OPCODE_SET_INDEXED_VALIDATED, GDF.OP.OPCODE_GET_KEYED,
+                                          GDF.OP.OPCODE_GET_KEYED_VALIDATED, GDF.OP.OPCODE_GET_INDEXED_VALIDATED,
+                                          GDF.OP.OPCODE_SET_NAMED, GDF.OP.OPCODE_SET_NAMED_VALIDATED,
+                                          GDF.OP.OPCODE_GET_NAMED, GDF.OP.OPCODE_GET_NAMED_VALIDATED,
+                                          GDF.OP.OPCODE_SET_MEMBER, GDF.OP.OPCODE_GET_MEMBER, GDF.OP.OPCODE_ASSIGN,
+                                          GDF.OP.OPCODE_ASSIGN_TRUE, GDF.OP.OPCODE_ASSIGN_FALSE,
+                                          GDF.OP.OPCODE_ASSIGN_TYPED_BUILTIN, GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY,
+                                          GDF.OP.OPCODE_ASSIGN_TYPED_NATIVE, GDF.OP.OPCODE_ASSIGN_TYPED_SCRIPT,
+                                          GDF.OP.OPCODE_CAST_TO_BUILTIN, GDF.OP.OPCODE_CAST_TO_NATIVE,
+                                          GDF.OP.OPCODE_CAST_TO_SCRIPT, GDF.OP.OPCODE_CONSTRUCT,
+                                          GDF.OP.OPCODE_CONSTRUCT_VALIDATED, GDF.OP.OPCODE_CONSTRUCT_ARRAY,
+                                          GDF.OP.OPCODE_CONSTRUCT_TYPED_ARRAY, GDF.OP.OPCODE_CONSTRUCT_DICTIONARY,
+                                          GDF.OP.OPCODE_CALL, GDF.OP.OPCODE_CALL_RETURN, GDF.OP.OPCODE_CALL_ASYNC,
+                                          GDF.OP.OPCODE_CALL_UTILITY, GDF.OP.OPCODE_CALL_UTILITY_VALIDATED,
+                                          GDF.OP.OPCODE_CALL_GDSCRIPT_UTILITY, GDF.OP.OPCODE_CALL_BUILTIN_TYPE_VALIDATED,
+                                          GDF.OP.OPCODE_CALL_SELF_BASE, GDF.OP.OPCODE_CALL_METHOD_BIND,
+                                          GDF.OP.OPCODE_CALL_METHOD_BIND_RET, GDF.OP.OPCODE_CALL_BUILTIN_STATIC,
+                                          GDF.OP.OPCODE_CALL_NATIVE_STATIC, GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_BOOL, GDF.OP.OPCODE_CALL_PTRCALL_INT,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_FLOAT, GDF.OP.OPCODE_CALL_PTRCALL_STRING,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_RECT2, GDF.OP.OPCODE_CALL_PTRCALL_RECT2I,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I, GDF.OP.OPCODE_CALL_PTRCALL_PLANE,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION, GDF.OP.OPCODE_CALL_PTRCALL_AABB,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_BASIS, GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION, GDF.OP.OPCODE_CALL_PTRCALL_COLOR,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME, GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_RID, GDF.OP.OPCODE_CALL_PTRCALL_OBJECT,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE, GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY, GDF.OP.OPCODE_CALL_PTRCALL_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY,
+                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_AWAIT,
+                                          GDF.OP.OPCODE_AWAIT_RESUME, GDF.OP.OPCODE_CREATE_LAMBDA,
+                                          GDF.OP.OPCODE_CREATE_SELF_LAMBDA, GDF.OP.OPCODE_JUMP, GDF.OP.OPCODE_JUMP_IF,
+                                          GDF.OP.OPCODE_JUMP_IF_NOT, GDF.OP.OPCODE_JUMP_TO_DEF_ARGUMENT,
+                                          GDF.OP.OPCODE_JUMP_IF_SHARED, GDF.OP.OPCODE_RETURN,
+                                          GDF.OP.OPCODE_RETURN_TYPED_BUILTIN, GDF.OP.OPCODE_RETURN_TYPED_ARRAY,
+                                          GDF.OP.OPCODE_RETURN_TYPED_NATIVE, GDF.OP.OPCODE_RETURN_TYPED_SCRIPT,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN, GDF.OP.OPCODE_ITERATE_BEGIN_INT,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_FLOAT, GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2I, GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3I, GDF.OP.OPCODE_ITERATE_BEGIN_STRING,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_DICTIONARY, GDF.OP.OPCODE_ITERATE_BEGIN_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT, GDF.OP.OPCODE_ITERATE,
+                                          GDF.OP.OPCODE_ITERATE_INT, GDF.OP.OPCODE_ITERATE_FLOAT,
+                                          GDF.OP.OPCODE_ITERATE_VECTOR2, GDF.OP.OPCODE_ITERATE_VECTOR2I,
+                                          GDF.OP.OPCODE_ITERATE_VECTOR3, GDF.OP.OPCODE_ITERATE_VECTOR3I,
+                                          GDF.OP.OPCODE_ITERATE_STRING, GDF.OP.OPCODE_ITERATE_DICTIONARY,
+                                          GDF.OP.OPCODE_ITERATE_ARRAY, GDF.OP.OPCODE_ITERATE_PACKED_BYTE_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_INT32_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_INT64_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_FLOAT32_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_FLOAT64_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_STRING_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_VECTOR2_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_VECTOR3_ARRAY,
+                                          GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_ITERATE_OBJECT,
+                                          GDF.OP.OPCODE_STORE_GLOBAL, GDF.OP.OPCODE_STORE_NAMED_GLOBAL,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_BOOL, GDF.OP.OPCODE_TYPE_ADJUST_INT,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_FLOAT, GDF.OP.OPCODE_TYPE_ADJUST_STRING,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2I,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_RECT2, GDF.OP.OPCODE_TYPE_ADJUST_RECT2I,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3I,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM2D, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4I, GDF.OP.OPCODE_TYPE_ADJUST_PLANE,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_QUATERNION, GDF.OP.OPCODE_TYPE_ADJUST_AABB,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_BASIS, GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM3D,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PROJECTION, GDF.OP.OPCODE_TYPE_ADJUST_COLOR,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_STRING_NAME, GDF.OP.OPCODE_TYPE_ADJUST_NODE_PATH,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_RID, GDF.OP.OPCODE_TYPE_ADJUST_OBJECT,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_CALLABLE, GDF.OP.OPCODE_TYPE_ADJUST_SIGNAL,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_DICTIONARY, GDF.OP.OPCODE_TYPE_ADJUST_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY,
+                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_ASSERT,
+                                          GDF.OP.OPCODE_BREAKPOINT, GDF.OP.OPCODE_LINE, GDF.OP.OPCODE_END}
                   },
 
                   ["4.1"] = {
