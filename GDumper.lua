@@ -1779,32 +1779,8 @@
 
       --- initializes and assigns offsets
       function defineGDOffsets(config)
-        -- TODO: redo the flow of manual and version based definition
-
-        -- -- -- -- -- --
         if config == nil then config = {} end
-        
-        if GDDEFS == nil then -- TODO: replace with a function
-          GDDEFS = {}
-          GDDEFS.SCRIPT_TYPES =
-          {
-            ["UNDEFINED"] = 0,
-            ["GD"] = 1,
-            ["CS"] = 2
-          }
-        end
-
-        GDDEFS.STRING = 0x10
-        dumpedMonitorNodes = {};
-        debugPrefix = 1;
-        if targetIs64Bit() then
-          GDDEFS.PTRSIZE = 0x8
-          GDDEFS._x64bit = true
-        else
-          GDDEFS.PTRSIZE = 0x4
-          GDDEFS._x64bit = false
-        end -- for auto offsetdef and ptr arithmetics
-        -- -- -- -- -- --
+        initGDDefs()
 
         if isNotNullOrNil(config.majorVersion) and isNotNullOrNil(config.minorVersion) and
           isNotNullOrNil(config.GDCustomver) and isNotNullOrNil(config.GDDebugVer) then
@@ -1822,6 +1798,7 @@
           end
         end
 
+        -- AUTOMATIC START
         if bHardOffsets then
           local offsets = getStoredOffsetsFromVersion(GDDEFS.VERSION_STRING)
           GDDEFS.CHILDREN = offsets.VPChildren
@@ -1838,51 +1815,9 @@
           GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
           GDDEFS.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
           GDDEFS.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
-          if GDDEFS.MAJOR_VER == 4 then
-            GDDEFS.GDSCRIPT_REF = 0x18
-            GDDEFS.MAXTYPE = 39
-            GDDEFS.FUNC_MAPVAL = 0x18
-            GDDEFS.CHILDREN_SIZE = 0x8
-            GDDEFS.MAP_SIZE = 0x14
-            GDDEFS.ARRAY_TOVECTOR = 0x10
-            GDDEFS.P_ARRAY_TOARR = 0x18
-            GDDEFS.P_ARRAY_SIZE = 0x8
-            GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
-            GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
-            GDDEFS.DICT_SIZE = GDDEFS.DICT_TAIL or 0x3C
-            GDDEFS.DICTELEM_KEYTYPE = 0x10
-            GDDEFS.DICTELEM_KEYVAL = 0x18
-            GDDEFS.DICTELEM_VALTYPE = 0x28
-            GDDEFS.CONSTELEM_KEYVAL = 0x10
-            GDDEFS.CONSTELEM_VALTYPE = 0x18
-            GDDEFS.VAR_NAMEINDEX_I = 0x18
-          elseif GDDEFS.MAJOR_VER == 3 then
-            GDDEFS.MAXTYPE = 27
-            GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
-            GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
-            GDDEFS.CHILDREN_SIZE = 0x4
-            GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
-            GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
-            GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
-            GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
-            GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
-            GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
-            GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
-            GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
-            GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
-            GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
-            GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
-            GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
-            GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
-            GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x10
-            GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
-            GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
-            GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
-            GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
-          else
-            error("Unexpected version")
-          end
+        -- AUTOMATIC END
         else
+        -- MANUAL START
           if GDDEFS.MAJOR_VER == 4 then
             GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
             GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
@@ -1891,42 +1826,13 @@
             GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
             GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
             GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
-
             GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
             GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
             GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
-
-            GDDEFS.GDSCRIPT_REF = 0x18
-            GDDEFS.MAXTYPE = 39
-            -- GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
-            GDDEFS.FUNC_MAPVAL = 0x18
             GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
             GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE + 0x20)
-            -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
-            GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10)
-
-            GDDEFS.CHILDREN_SIZE = 0x8
-
-            GDDEFS.MAP_SIZE = 0x14
-
-            GDDEFS.ARRAY_TOVECTOR = 0x10
-            GDDEFS.P_ARRAY_TOARR = 0x18
-            GDDEFS.P_ARRAY_SIZE = 0x8
-
-            GDDEFS.DICT_HEAD = 0x28
-            GDDEFS.DICT_TAIL = 0x30
-            GDDEFS.DICT_SIZE = 0x3C
-
-            GDDEFS.DICTELEM_KEYTYPE = 0x10
-            GDDEFS.DICTELEM_KEYVAL = 0x18
-            GDDEFS.DICTELEM_VALTYPE = 0x28
-
-            GDDEFS.CONSTELEM_KEYVAL = 0x10
-            GDDEFS.CONSTELEM_VALTYPE = 0x18
-
-            GDDEFS.VAR_NAMEINDEX_I = 0x18
-            -- for Object vtable
-            -- 3.0-3.6 [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
+            GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
+            -- for Object vtable 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
             if GDDEFS.MINOR_VER <= 4 then
               GDDEFS.GET_TYPE_INDX = 8
             elseif GDDEFS.MINOR_VER == 5 then
@@ -1934,10 +1840,8 @@
             elseif GDDEFS.MINOR_VER == 6 then
               GDDEFS.GET_TYPE_INDX = 10
             end
-
           elseif GDDEFS.MAJOR_VER == 3 then
             GDDEFS.MAJOR_VER = 3
-
             GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
             GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
             GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
@@ -1945,51 +1849,69 @@
             GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
             GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
             GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
-
             GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
             GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
-
             GDDEFS.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
-
-            GDDEFS.MAXTYPE = 27
-            -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
-
-            GDDEFS.GDSCRIPT_REF = 0x10
-
-            GDDEFS.FUNC_MAPVAL = 0x38
             GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
             GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
             GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR - 0x10)
-            GDDEFS.CHILDREN_SIZE = 0x4
-
-            GDDEFS.MAP_SIZE = 0x10
-            GDDEFS.MAP_LELEM = 0x10
-            GDDEFS.MAP_NEXTELEM = 0x20
-            GDDEFS.MAP_KVALUE = 0x30
-
-            GDDEFS.DICT_LIST = 0x8
-            GDDEFS.DICT_HEAD = 0x0
-            GDDEFS.DICT_TAIL = 0x8
-            GDDEFS.DICT_SIZE = 0x1C -- GDDEFS.DICT_SIZE = 0x10
-            GDDEFS.DICTELEM_PAIR_NEXT = 0x20
-
-            GDDEFS.DICTELEM_KEYTYPE = 0x0
-            GDDEFS.DICTELEM_KEYVAL = 0x8
-            GDDEFS.DICTELEM_VALTYPE = 0x8
-            GDDEFS.DICTELEM_VALVAL = 0x10
-
-            GDDEFS.ARRAY_TOVECTOR = 0x10
-            GDDEFS.P_ARRAY_TOARR = 0x8
-            GDDEFS.P_ARRAY_SIZE = 0x18
-
-            GDDEFS.CONSTELEM_KEYVAL = 0x30
-            GDDEFS.CONSTELEM_VALTYPE = 0x38
-
+            -- for Object vtable 3.0-3.6 [6]
             GDDEFS.GET_TYPE_INDX = 6
           else
             error("Unexpected version")
           end
         end
+        -- MANUAL END
+
+        -- COMMON START
+        if GDDEFS.MAJOR_VER == 4 then
+          GDDEFS.GDSCRIPT_REF = 0x18
+          GDDEFS.MAXTYPE = 39
+          GDDEFS.FUNC_MAPVAL = 0x18
+          GDDEFS.CHILDREN_SIZE = 0x8
+          GDDEFS.MAP_SIZE = 0x14
+          GDDEFS.ARRAY_TOVECTOR = 0x10
+          GDDEFS.P_ARRAY_TOARR = 0x18
+          GDDEFS.P_ARRAY_SIZE = 0x8
+          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
+          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
+          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x3C
+          GDDEFS.DICTELEM_KEYTYPE = 0x10
+          GDDEFS.DICTELEM_KEYVAL = 0x18
+          GDDEFS.DICTELEM_VALTYPE = 0x28
+          GDDEFS.CONSTELEM_KEYVAL = 0x10
+          GDDEFS.CONSTELEM_VALTYPE = 0x18
+          GDDEFS.VAR_NAMEINDEX_I = 0x18
+          GDDEFS.CLR_PTR = 0x20
+          -- GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
+        elseif GDDEFS.MAJOR_VER == 3 then
+          GDDEFS.MAXTYPE = 27
+          GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
+          GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
+          GDDEFS.CHILDREN_SIZE = 0x4
+          GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
+          GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
+          GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
+          GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
+          GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
+          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
+          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
+          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
+          GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
+          GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
+          GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
+          GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
+          GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
+          GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x10
+          GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
+          GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
+          GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
+          GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
+          -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+        else
+          error("Unexpected version")
+        end
+        -- COMMON END
 
         -- try finding SceneTree and Viewport/Window
         if tryRegSceneTree() and setSTtoVPoffset() then
@@ -2004,6 +1926,31 @@
         -- build disassembler
         defineGDFunctionEnums()
         fuckoffPrint()
+      end
+
+      --- inits the GDDEFS object
+      function initGDDefs()
+        if GDDEFS == nil then
+          GDDEFS = {}
+          GDDEFS.SCRIPT_TYPES =
+            {
+              ["UNDEFINED"] = 0,
+              ["GD"] = 1,
+              ["CS"] = 2
+            }
+
+          GDDEFS.STRING = 0x10
+        end
+        
+        dumpedMonitorNodes = {};
+        debugPrefix = 1;
+        if targetIs64Bit() then
+          GDDEFS.PTRSIZE = 0x8
+          GDDEFS._x64bit = true
+        else
+          GDDEFS.PTRSIZE = 0x4
+          GDDEFS._x64bit = false
+        end -- for auto offsetdef and ptr arithmetics
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Viewport / Window / SceneTree
@@ -3592,7 +3539,7 @@
         if GDDEFS.MONO then -- TODO: temp
           if checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
             sendDebugMessage("iterateNodeToStruct: Node " .. nodeName .. " has csharp script type")
-            local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", 0x20, vtPointer, "CLRPtr")  -- TODO: magic constant
+            local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")  -- TODO: magic constant
             addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
           end
         end
@@ -7913,45 +7860,45 @@
       ---@param nodeAddr number
       ---@param constStructElement userdata
       function iterateNodeConstToStruct(nodeAddr, constStructElement) -- TODO: MAKE IT UNIVERSAL
-          assert(type(nodeAddr) == 'number',
-              "iterateNodeConstToStruct Node addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number',
+        "iterateNodeConstToStruct Node addr has to be a number, instead got: " .. type(nodeAddr))
+        if GDDEFS.MONO and (checkScriptType(nodeAddr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
+        
+        debugStepIn()
 
-          debugStepIn()
+        local headElement, _, mapSize, constStructElement = getNodeConstMap(nodeAddr, constStructElement)
+        if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+            sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeAddr)) return;
+        end
 
-          local headElement, _, mapSize, constStructElement = getNodeConstMap(nodeAddr, constStructElement)
-          if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-              sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: ' .. 'Address: ' ..
-                                            numtohexstr(nodeAddr))
-              return;
+        local mapElement = headElement
+        local emitter = GDEmitters.StructEmitter
+        local currentContainer = constStructElement
+        local index = 0;
+        local nodeName = getNodeName(nodeAddr) or "UnknownNode"
+
+        repeat
+          local entry = readNodeConstEntry(mapElement)
+          entry.name = "CONST: " .. entry.name
+          local contextTable =
+          {
+            nodeAddr = nodeAddr,
+            nodeName = nodeName,
+            baseAddress = entry.variantPtr
+          }
+          local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
+          handler(entry, emitter, currentContainer, contextTable)
+
+          mapElement = getNextMapElement(mapElement)
+          index = index + 1
+
+          if mapElement ~= 0 then
+              currentContainer = createNextConstContainer(currentContainer, index)
           end
 
-          local mapElement = headElement
-          local emitter = GDEmitters.StructEmitter
-          local currentContainer = constStructElement
-          local index = 0;
-          local nodeName = getNodeName(nodeAddr) or "UnknownNode"
-
-          repeat
-              local entry = readNodeConstEntry(mapElement)
-              entry.name = "CONST: " .. entry.name
-              local contextTable = {
-                  nodeAddr = nodeAddr,
-                  nodeName = nodeName,
-                  baseAddress = entry.variantPtr
-              }
-              local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
-              handler(entry, emitter, currentContainer, contextTable)
-
-              mapElement = getNextMapElement(mapElement)
-              index = index + 1
-
-              if mapElement ~= 0 then
-                  currentContainer = createNextConstContainer(currentContainer, index)
-              end
-
-          until (mapElement == 0)
-          debugStepOut()
-          return
+        until (mapElement == 0)
+        debugStepOut()
+        return
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dictionary
