@@ -1407,8 +1407,8 @@
             childrenStructElem.ChildStruct = createStructure('Children')
             iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
         else
-            -- otherwise just let CE decide, btw why the hell the base address should be a fucking hex string?
-            struct.autoGuess(numtohexstr(baseaddr), 0x0, 0x500 --[[0x200]] ) -- 0x500 for researching
+            -- otherwise just let CE decide, btw the base address must be a fucking hex string?
+            struct.autoGuess(numtohexstr(baseaddr), 0x0, 0x500 ) -- 0x500 for researching
         end
 
         struct.endUpdate()
@@ -3349,6 +3349,8 @@
 
       --- Used to validate an object as a Node with GDScript, returns true if valid
       ---@param nodeAddr number
+      ---@return boolean @ if GD/CSScript attached
+      ---@return number @ script type enum -- TODO: implement script type enum
       function checkForGDScript(nodeAddr)
 
         -- debugStepIn()
@@ -3389,46 +3391,41 @@
       end
 
       function checkIfGDObjectWithChildren(objAddr)
-          if isNullOrNil(objAddr) then
-              return false
-          end
+        
+        -- if object itself is valid & has a vtable
+        if isNullOrNil(objAddr) or not isMMVTable( readPointer(objAddr) ) then return false end
 
-          -- check vTable
-          if not isMMVTable(readPointer(objAddr)) then
-              return false
-          end
+        -- check children & if it's a valid pointer
+        local objectChildren = readPointer(objAddr + GDDEFS.CHILDREN)
+        if isNullOrNil(objectChildren) or isInvalidPointer(objectChildren) then return false end
 
-          -- check children
-          local objectChildren = readPointer(objAddr + GDDEFS.CHILDREN)
-          if isNullOrNil(objectChildren) then
-              return false
-          end
+        local childrenSize;
+        if GDDEFS.MAJOR_VER == 4 then
+          childrenSize = readInteger(objAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
 
-          local childrenSize;
-          if GDDEFS.MAJOR_VER == 4 then
-              childrenSize = readInteger(objAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-              -- elseif GDDEFS.MAJOR_VER > 4 then -- TODO: versions before ~4.2 have size inside the array 4 bytes behind
-              --     childrenSize = readInteger( objectChildren - GDDEFS.CHILDREN_SIZE )
-          else
-              childrenSize = readInteger(objectChildren - GDDEFS.CHILDREN_SIZE)
-          end
-          -- if no children, we don't need it
-          if isNullOrNil(childrenSize) then
-              return false
-          end
+        -- elseif GDDEFS.MAJOR_VER > 4 then -- TODO: versions before ~4.2 have size inside the array 4 bytes behind
+        --     childrenSize = readInteger( objectChildren - GDDEFS.CHILDREN_SIZE )
 
-          -- check for StringName which should always be present?
-          local objectStrNamePtr = readPointer(objAddr + GDDEFS.OBJ_STRING_NAME)
-          if isNullOrNil(objectStrNamePtr) then
-              return false
-          end
+        else
+          childrenSize = readInteger(objectChildren - GDDEFS.CHILDREN_SIZE)
+        end
 
-          local objName = getStringNameStr(objectStrNamePtr)
-          if isNullOrNil(objName) or objName == "??" then
-              return false
-          end
+        -- if no children, we don't need it
+        if isNullOrNil(childrenSize) then return false end
 
-          return true
+        -- let's check the 0th object for vtable
+        local childAddr = readPointer(objectChildren)
+        if isNullOrNil(childAddr) or not isMMVTable( readPointer(childAddr) ) then return false end
+
+        --[[
+        local objectStrNamePtr = readPointer(objAddr + GDDEFS.OBJ_STRING_NAME)
+        if isNullOrNil(objectStrNamePtr) then return false end
+
+        local objName = getStringNameStr(objectStrNamePtr)
+        if isNullOrNil(objName) or objName == "??" then return false end
+        ]]
+
+        return true
       end
 
       --- builds a structure layout for a node's children array
