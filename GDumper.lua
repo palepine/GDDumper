@@ -9,6 +9,7 @@
   -- TODO tree view form with polling
   -- TODO symbol handler with polling
   -- TODO more offsets for non-GDI objects
+  -- TODO MONO implementation: .cs resource, etc
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
   -- ///---///--///---///--///---/// MEMRECS
     --- adds a memrec to parent
@@ -193,39 +194,44 @@
     end
 
     function defineGDVersion()
-        local godotVersionString = getGodotVersionString()
+      local godotVersionString = getGodotVersionString()
 
-        if isNullOrNil(GDDEFS) then
-            GDDEFS = {}
-        end
+      if isNullOrNil(GDDEFS) then
+          GDDEFS = {}
+      end
 
-        GDDEFS.FULL_GDVERSION_STRING = godotVersionString
-        local major, minor, patch, tag = (godotVersionString):match("v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)")
+      GDDEFS.FULL_GDVERSION_STRING = godotVersionString
+      local major, minor, patch, tag = (godotVersionString):match("v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)")
 
-        if isNullOrNil(major) or isNullOrNil(minor) then
-            major, minor, patch = (godotVersionString):match("Godot Engine v?(%d+)%.(%d+)%.?(%a*)")
-        end
+      if isNullOrNil(major) or isNullOrNil(minor) then
+          major, minor, patch = (godotVersionString):match("Godot Engine v?(%d+)%.(%d+)%.?(%a*)")
+      end
 
-        local exportTableStr = getExportTableName() or ""
+      local exportTableStr = getExportTableName() or ""
 
-        if (exportTableStr):match("debug") then
-            GDDEFS.DEBUGVER = true
-            -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
-        else
-            GDDEFS.DEBUGVER = false
-        end
+      if (exportTableStr):match("debug") then
+          GDDEFS.DEBUGVER = true
+      else
+          GDDEFS.DEBUGVER = false
+      end
 
-        if (godotVersionString):match("custom") then
-            GDDEFS.CUSTOMVER = true
-        end
+      if (exportTableStr):match("mono") then
+          GDDEFS.MONO = true
+      end
+      
+      -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
 
-        if isNotNullOrNil(major) and isNotNullOrNil(minor) then
-            GDDEFS.MAJOR_VER = tonumber(major)
-            GDDEFS.MINOR_VER = tonumber(minor)
-            GDDEFS.VERSION_STRING = major .. '.' .. minor
-        end
+      if (godotVersionString):match("custom") then
+          GDDEFS.CUSTOMVER = true
+      end
 
-        MainForm.setCaption(GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN")
+      if isNotNullOrNil(major) and isNotNullOrNil(minor) then
+          GDDEFS.MAJOR_VER = tonumber(major)
+          GDDEFS.MINOR_VER = tonumber(minor)
+          GDDEFS.VERSION_STRING = major .. '.' .. minor
+      end
+
+      MainForm.setCaption(GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN")
     end
 
     function getStoredOffsetsFromVersion(majminVersionStr)
@@ -307,7 +313,7 @@
             -- A0 Vector<GDScriptDataType> argument_types; including parameter names
             -- f4 argcount
 
-            -- godot.windows.template_release.x86_64.exe 
+            -- godot.windows.template_release.x86_64.exe
             -- Godot Engine v4.5.1.stable.official.f62fdbde1
             offsets.VPChildren = 0x170
             offsets.VPObjStringName = 0x1C0
@@ -325,8 +331,8 @@
             offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
 
             if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe 
-                -- Godot Engine v4.5.1.stable.official 
+                -- godot.windows.template_debug.x86_64.exe
+                -- Godot Engine v4.5.1.stable.official
                 offsets.VPChildren = offsets.VPChildren + 0x8
                 offsets.VPObjStringName = offsets.VPObjStringName + 0x8
                 offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
@@ -338,7 +344,7 @@
             end
 
             if GDDEFS.CUSTOMVER then
-                -- godot.windows.template_release.x86_64.exe 
+                -- godot.windows.template_release.x86_64.exe
                 -- Godot Engine v4.5.1.stable.custom_build
                 offsets.VPChildren = offsets.VPChildren + 0x48
                 offsets.VPObjStringName = offsets.VPObjStringName + 0x48
@@ -352,7 +358,7 @@
 
         elseif majminVersionStr == "4.4" then
             GDDEFS.GET_TYPE_INDX = 8
-            -- godot.windows.template_release.x86_64.exe 
+            -- godot.windows.template_release.x86_64.exe
             -- Godot Engine v4.4.stable.official.4c311cbee
             offsets.VPChildren = 0x188
             offsets.VPObjStringName = 0x1E0
@@ -371,10 +377,10 @@
             -- timer 3B8 time_left | 3C0 isactive | 3A8 waittime
 
             if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe 
+                -- godot.windows.template_debug.x86_64.exe
                 -- Godot Engine v4.4.1.stable.official
-                -- godot.windows.template_debug.x86_64.mono.exe 
-                -- Godot Engine v4.4.stable.mono.official 
+                -- godot.windows.template_debug.x86_64.mono.exe
+                -- Godot Engine v4.4.stable.mono.official
                 -- GDDEFS.STRING = 0x8
                 offsets.VPChildren = offsets.VPChildren + 0x8
                 offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -400,8 +406,8 @@
 
         elseif majminVersionStr == "4.3" then
             GDDEFS.GET_TYPE_INDX = 8
-            -- godot.windows.template_release.x86_64.exe 
-            -- Godot Engine v4.3.stable.official 
+            -- godot.windows.template_release.x86_64.exe
+            -- Godot Engine v4.3.stable.official
             -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
             offsets.VPChildren = 0x178
             offsets.VPObjStringName = 0x1D0
@@ -420,7 +426,7 @@
 
             if GDDEFS.DEBUGVER then
                 -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
-                -- Godot Engine v4.3.stable.official 
+                -- Godot Engine v4.3.stable.official
                 -- GDDEFS.STRING = 0x8
                 offsets.VPChildren = offsets.VPChildren + 0x8
                 offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -434,7 +440,7 @@
 
             end
             if GDDEFS.CUSTOMVER then
-                -- godot.windows.template_release.x86_64.exe 
+                -- godot.windows.template_release.x86_64.exe
                 -- Godot Engine v4.3.stable.custom_build
                 offsets.VPChildren = offsets.VPChildren + 0x48
                 offsets.VPObjStringName = offsets.VPObjStringName + 0x48
@@ -449,8 +455,8 @@
 
         elseif majminVersionStr == "4.2" then
             GDDEFS.GET_TYPE_INDX = 8
-            -- godot.windows.template_release.x86_64.exe 
-            -- Godot Engine v4.2.1.stable.official.b09f793f5 
+            -- godot.windows.template_release.x86_64.exe
+            -- Godot Engine v4.2.1.stable.official.b09f793f5
             offsets.VPChildren = 0x178
             offsets.VPObjStringName = 0x1D0
             offsets.NodeGDScriptInstance = 0x68
@@ -468,7 +474,7 @@
             -- timer 3a8 time_left 3b8 waittime 3c0 active
 
             if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe 
+                -- godot.windows.template_debug.x86_64.exe
                 --  Godot Engine v4.2.2.stable.official
                 -- GDDEFS.STRING = 0x8
                 offsets.VPChildren = offsets.VPChildren + 0x8
@@ -498,8 +504,8 @@
         elseif majminVersionStr == "4.1" then
             GDDEFS.GET_TYPE_INDX = 8
             -- 4.1.2 has some wild offsets however
-            -- godot.windows.template_release.x86_64.exe 
-            -- Godot Engine v4.2.1.stable.official.b09f793f5 
+            -- godot.windows.template_release.x86_64.exe
+            -- Godot Engine v4.2.1.stable.official.b09f793f5
             offsets.VPChildren = 0x178
             offsets.VPObjStringName = 0x1D0
             offsets.NodeGDScriptInstance = 0x68
@@ -585,8 +591,8 @@
 
         elseif majminVersionStr == "3.6" then
             GDDEFS.GET_TYPE_INDX = 6
-            -- godot.windows.opt.64.exe 
-            --  Godot Engine v3.6.stable.custom_build.de2f0f147 
+            -- godot.windows.opt.64.exe
+            --  Godot Engine v3.6.stable.custom_build.de2f0f147
             offsets.VPChildren = 0x108
             offsets.VPObjStringName = 0x130
             offsets.NodeGDScriptInstance = 0x58
@@ -603,7 +609,7 @@
             offsets.GDScriptFunctionCodeGlobals = 0x30
 
             if GDDEFS.DEBUGVER then
-                -- godot.windows.opt.debug.64.exe 
+                -- godot.windows.opt.debug.64.exe
                 -- GDDEFS.STRING = 0x8
                 offsets.VPChildren = offsets.VPChildren + 0x8
                 offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -630,7 +636,7 @@
         elseif majminVersionStr == "3.5" then
             GDDEFS.GET_TYPE_INDX = 6
             if GDDEFS._x64bit then
-                -- godot.windows.opt.64.exe 
+                -- godot.windows.opt.64.exe
                 -- Godot Engine v3.5.1.stable.official
                 offsets.VPChildren = 0x108
                 offsets.VPObjStringName = 0x130
@@ -649,7 +655,7 @@
 
                 if GDDEFS.DEBUGVER then
                     -- godot.windows.opt.debug.64.exe
-                    -- Godot Engine 3.5.2.stable 
+                    -- Godot Engine 3.5.2.stable
                     -- GDDEFS.STRING = 0x8
                     offsets.VPChildren = offsets.VPChildren + 0x8
                     offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -662,7 +668,7 @@
                 end
                 if GDDEFS.CUSTOMVER then
                     -- godot.windows.opt.64.exe
-                    -- Godot Engine v3.5.1.stable.custom_build.6fed1ffa3 
+                    -- Godot Engine v3.5.1.stable.custom_build.6fed1ffa3
                     -- offsets.VPChildren = offsets.VPChildren
                     -- offsets.VPObjStringName = offsets.VPObjStringName
                     -- offsets.NodeGDScriptName = offsets.NodeGDScriptName
@@ -737,7 +743,7 @@
 
         elseif majminVersionStr == "3.4" then
             GDDEFS.GET_TYPE_INDX = 6
-            -- godot.windows.opt.64.exe 
+            -- godot.windows.opt.64.exe
             -- Godot Engine v3.4.4.stable.official.419e713a2
             offsets.VPChildren = 0x108
             offsets.VPObjStringName = 0x120
@@ -782,8 +788,8 @@
 
         elseif majminVersionStr == "3.3" then
             GDDEFS.GET_TYPE_INDX = 6
-            -- godot.windows.opt.64.exe 
-            -- Godot Engine v3.3.2.stable.official 
+            -- godot.windows.opt.64.exe
+            -- Godot Engine v3.3.2.stable.official
             offsets.VPChildren = 0x100
             offsets.VPObjStringName = 0x118
             offsets.NodeGDScriptInstance = 0x50
@@ -960,8 +966,8 @@
             return offsets
         end
         --[[
-                        Godot Engine v2.1.4.beta.custom_build 
-                        godot.windows.opt.32.exe 
+                        Godot Engine v2.1.4.beta.custom_build
+                        godot.windows.opt.32.exe
                     ]]
 
     end
@@ -1059,6 +1065,9 @@
         if VTAddr == 0 or VTAddr == nil then
             return false
         end
+
+        -- TODO: calculate the bounds once and store
+
         -- the vtables are stored in some readonly data section, text included too
         local moduleStart = getAddress(process) or 0
         local moduleEnd;
@@ -1427,7 +1436,7 @@
     ---@return string @name;
     function GDAddressLookup(addr)
         return nil
-        -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then 
+        -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then
         --     return nil
         -- end
 
@@ -1644,7 +1653,7 @@
         -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNodes
         local rootNode = gdtreeview.getItems().add("root")
         rootNode.getItem().Text = "NodeChild"
-        
+
     end
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
@@ -2981,7 +2990,7 @@
                     nodeChild.BackgroundColor = 0x6C3157
 
                     if emitter.recurseNode then -- TODO: redundant?
-                        emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) -- 
+                        emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) --
                     end
                 end
 
@@ -3342,48 +3351,41 @@
       ---@param nodeAddr number
       function checkForGDScript(nodeAddr)
 
-          -- debugStepIn()
+        -- debugStepIn()
 
-          if isNullOrNil(nodeAddr) then
-              -- sendDebugMessageAndStepOut('checkForGDScript: nodeAddr invalid'.." address "..numtohexstr(nodeAddr))
-              return false
+        if isNullOrNil(nodeAddr) or isMMVTable( readPointer(nodeAddr) ) then
+          -- sendDebugMessageAndStepOut('checkForGDScript: nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
+          return false
+        end
+
+        local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(scriptInstance) or isMMVTable( readPointer(scriptInstance) ) then
+          -- sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+          return false
+        end
+
+        local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
+        if isNullOrNil(gdscript) or isMMVTable( readPointer(gdscript) ) then
+          -- sendDebugMessageAndStepOut('checkForGDScript: GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+          return false
+        end
+        
+        local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
+        if isNullOrNil(gdScriptName) then
+          -- sendDebugMessageAndStepOut('checkForGDScript: gdScriptName invalid')
+          return false
+        end
+        local gdScriptName = readUTFString(gdScriptName)
+
+        if (gdScriptName):sub(1,4) == 'res:' then
+          if      (gdScriptName):sub(-3) == '.gd' then  return true
+          elseif  (gdScriptName):sub(-3) == '.cs' then  return false -- skip until implemented
+          else                                          return false
           end
+        else
+          return false
+        end
 
-          if isInvalidPointer(readPointer(nodeAddr)) then
-              -- sendDebugMessageAndStepOut('checkForGDScript: Node vTable invalid'.." address "..numtohexstr(nodeAddr))
-              return false
-          end
-
-          local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(scriptInstance) then
-              -- sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance is 0/nil'.." address "..numtohexstr(nodeAddr))
-              return false
-          end
-
-          local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-          if isNullOrNil(gdscript) then
-              -- sendDebugMessageAndStepOut('checkForGDScript: GDScript is 0/nil'.." address "..numtohexstr(nodeAddr))
-              return false
-          end
-
-          if isValidPointer(gdscript) and isValidPointer(scriptInstance) then
-
-              if getGDResName(nodeAddr, 4) == 'res:' then
-                  -- debugStepOut()
-                  return true;
-              else
-
-                  -- sendDebugMessageAndStepOut('checkForGDScript: getGDResName returned false for res://')
-                  return false;
-
-              end
-
-          else
-              -- sendDebugMessageAndStepOut('checkForGDScript: Script/Instance probably not a pointer: '..string.format('gdScript %x ', gdscript)..string.format('ScriptInstance %x ', scriptInstance))
-
-              return false;
-
-          end
       end
 
       function checkIfGDObjectWithChildren(objAddr)
@@ -3554,13 +3556,11 @@
           local gdScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE) or 0x0
           local gdScriptAddr = readPointer(gdScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
 
-          scriptStructElem = addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil,
-              GDDEFS.GDSCRIPT_REF, vtPointer)
+          scriptStructElem = addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer)
 
           -- we check if consts, funcs, veriants exist
           if isNotNullOrNil(readPointer(gdScriptInstanceAddr + GDDEFS.VAR_VECTOR)) then
-              varVectorStructElem = addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil,
-                  GDDEFS.VAR_VECTOR, vtPointer)
+              varVectorStructElem = addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer)
               sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: ' .. tostring(nodeName))
               varVectorStructElem.ChildStruct = createStructure('Vars')
               iterateVecVarToStruct(nodeAddr, varVectorStructElem)
@@ -3569,8 +3569,7 @@
           end
 
           if isNotNullOrNil(GDDEFS.CONST_MAP) and isNotNullOrNil(readPointer(gdScriptAddr + GDDEFS.CONST_MAP)) then
-              constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP,
-                  vtPointer)
+              constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
               sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: ' .. tostring(nodeName))
               constMapStructElem.ChildStruct = createStructure('Consts')
               iterateNodeConstToStruct(nodeAddr, constMapStructElem)
@@ -3579,8 +3578,7 @@
           end
 
           if isNotNullOrNil(GDDEFS.FUNC_MAP) and isNotNullOrNil(readPointer(gdScriptAddr + GDDEFS.FUNC_MAP)) then
-              functMapStructElem = addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP,
-                  vtPointer)
+              functMapStructElem = addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer)
               sendDebugMessage('iterateNodeToStruct: STEP: Functions for: ' .. tostring(nodeName))
               functMapStructElem.ChildStruct = createStructure('Funcs')
               iterateNodeFuncMapToStruct(nodeAddr, functMapStructElem)
@@ -3595,90 +3593,90 @@
       --- go over child nodes in the main nodes
       ---@param nodeAddr number
       function iterateMNode(nodeAddr)
-          if type(nodeAddr) ~= 'number' then
-              return
-          end
+        if type(nodeAddr) ~= 'number' then
+          return
+        end
 
-          for i, storedNode in ipairs(dumpedMonitorNodes) do -- check if a node was already dumped
-              if storedNode == nodeAddr then
-                  return
-              end
+        for i, storedNode in ipairs(dumpedMonitorNodes) do -- check if a node was already dumped
+          if storedNode == nodeAddr then
+            return
           end
-          table.insert(dumpedMonitorNodes, nodeAddr)
-          local name = getNodeName(nodeAddr)
-          if name == nil or name == "N??" then
-              name = getNodeNameFromGDScript(nodeAddr)
-          end
+        end
+        table.insert(dumpedMonitorNodes, nodeAddr)
+        local name = getNodeName(nodeAddr)
+        if name == nil or name == "N??" then
+          name = getNodeNameFromGDScript(nodeAddr)
+        end
 
-          registerSymbol(tostring(name), nodeAddr, true)
+        registerSymbol(tostring(name), nodeAddr, true)
 
-          iterateVecVarForNodes(nodeAddr)
+        iterateVecVarForNodes(nodeAddr)
       end
 
       --- gets a GDScript name, best use to return 1st 3 chars for 'res'
       ---@param nodeAddr number
       ---@param strSize number
       function getGDResName(nodeAddr, strSize)
-          assert(type(nodeAddr) == 'number', "getGDResName: nodeAddr should be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', "getGDResName: nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
-          debugStepIn()
+        debugStepIn()
 
-          local gdScriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(gdScriptInstance) then
-              sendDebugMessageAndStepOut(' getGDResName: gdScriptInstance invalid')
-              return
-          end
+        local gdScriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(gdScriptInstance) then
+          -- sendDebugMessageAndStepOut(' getGDResName: gdScriptInstance invalid')
+          return
+        end
 
-          local gdScript = readPointer(gdScriptInstance + GDDEFS.GDSCRIPT_REF)
-          if isNullOrNil(gdScript) then
-              sendDebugMessageAndStepOut('getGDResName: gdScript invalid')
-              return
-          end
+        local gdScript = readPointer(gdScriptInstance + GDDEFS.GDSCRIPT_REF)
+        if isNullOrNil(gdScript) then
+          -- sendDebugMessageAndStepOut('getGDResName: gdScript invalid')
+          return
+        end
 
-          local gdScriptName = readPointer(gdScript + GDDEFS.GDSCRIPTNAME)
-          if isNullOrNil(gdScriptName) then
-              sendDebugMessageAndStepOut('getGDResName: gdScriptName invalid')
-              return
-          end
+        local gdScriptName = readPointer(gdScript + GDDEFS.GDSCRIPTNAME)
+        if isNullOrNil(gdScriptName) then
+          -- sendDebugMessageAndStepOut('getGDResName: gdScriptName invalid')
+          return
+        end
 
-          debugStepOut()
+        debugStepOut()
 
-          -- it's immediate String
-          return readUTFString(gdScriptName, strSize)
+        -- it's immediate String
+        return readUTFString(gdScriptName, strSize)
       end
 
       -- this monstrosity is used to check for a valid poitner and its vtable
       ---@param objectPtr number -- a ptr to an object or nullptr
       ---@return number -- returns a more valid pointer to an object
       ---@return boolean -- true if the returned pointer was shifted back to get a valid ptr
-      function checkForVT(objectPtr)
-          local objectAddr = readPointer(objectPtr) -- it's either an obj ptr or zero
-          local vtable = readPointer(objectAddr)
-          if not isMMVTable(vtable) then -- check for vtable
-              -- debugStepIn()
+      function checkForVT(objectPtr) -- TODO: rename for consistency
+        local objectAddr = readPointer(objectPtr) -- it's either an obj ptr or zero
+        local vtable = readPointer(objectAddr)
+        if not isMMVTable(vtable) then -- check for vtable
+          -- debugStepIn()
 
-              -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
-              local adjustedObjectPtr = objectPtr - GDDEFS.PTRSIZE; -- shift back to get a ptr
-              local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
-              objectAddr = readPointer(wrapperAddr)
+          -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
+          local adjustedObjectPtr = objectPtr - GDDEFS.PTRSIZE; -- shift back to get a ptr
+          local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
+          objectAddr = readPointer(wrapperAddr)
 
-              if isNullOrNil(wrapperAddr) or isInvalidPointer(wrapperAddr) then -- check the wrapper
-                  -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not an obj  ptr, leave it be')
-                  return objectPtr, false; -- revert the value, whatever
-              end
-
-              local vtable = readPointer(objectAddr)
-              if isMMVTable(vtable) then -- check for vtable to be safe
-                  -- sendDebugMessageAndStepOut('checkForVT: shifted OBJ addr is a ptr, returning it')
-                  return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
-
-              else
-                  -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not a ptr, leave it be')
-                  return objectPtr, false; -- revert the value, whatever
-              end
-          else -- vtable valid
-              return objectPtr, false
+          if isNullOrNil(wrapperAddr) or isInvalidPointer(wrapperAddr) then -- check the wrapper
+            -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not an obj  ptr, leave it be')
+            return objectPtr, false; -- revert the value, whatever
           end
+
+          local vtable = readPointer(objectAddr)
+          if isMMVTable(vtable) then -- check for vtable to be safe
+            -- sendDebugMessageAndStepOut('checkForVT: shifted OBJ addr is a ptr, returning it')
+            return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
+
+          else
+            -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not a ptr, leave it be')
+            return objectPtr, false; -- revert the value, whatever
+          end
+        else -- vtable valid
+          return objectPtr, false
+        end
       end
 
       --- gets a Node by name
@@ -7676,7 +7674,7 @@
           elseif querySignatures() then
               return getAddress('GDFunctionCall') or nil
           end
-          -- if querySignatures() then 
+          -- if querySignatures() then
           --     return getAddress('GDFunctionCall') or nil
           -- end
 
@@ -7786,7 +7784,7 @@
                       [rsp+20] int32_t p_argcount
                       [rsp+28] Callable::CallError *r_err (on stack)
                       [rsp+30] CallState *p_state (on stack, usually nullptr)
-                      
+
                       [ENABLE]
                       alloc(dummySpace,$1000,$process)
                       registersymbol(dummySpace)
@@ -8267,11 +8265,11 @@
       ---@param nodeAddr number
       ---@param parent userdata
       function iterateVecVarToAddr(nodeAddr, parent)
-          local options = {
-              bNeedStructOffset = false,
-              requireGDScript = true
-          };
-          iterateVectorVariants(nodeAddr, parent, GDEmitters.AddrEmitter, options);
+        local options = {
+          bNeedStructOffset = false,
+          requireGDScript = true
+        };
+        iterateVectorVariants(nodeAddr, parent, GDEmitters.AddrEmitter, options);
       end
 
       --- nodeAddr and ownerStruct to append to
@@ -8288,8 +8286,7 @@
       --- iterate nodes only and owner to append to
       ---@param nodeAddr number
       function iterateVecVarForNodes(nodeAddr)
-          assert(type(nodeAddr) == 'number',
-              "iterateVecVarToAddr: Node addr has to be a number, instead got: " .. type(nodeAddr))
+          assert(type(nodeAddr) == 'number', "iterateVecVarForNodes: Node addr has to be a number, instead got: " .. type(nodeAddr))
 
           if not checkForGDScript(nodeAddr) then
               return;
@@ -8408,7 +8405,7 @@
           local offset = varSize * index + offsetToValue
           local variantAddr = getAddress(vectorAddr + offset)
 
-          if (variantType == nil) or (variantAddr == nil) then -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or 
+          if (variantType == nil) or (variantAddr == nil) then -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or
               sendDebugMessage('getVariantByIndex: variant ptr or type invalid');
               error('getVariantByIndex: variant ptr or type invalid')
           end
@@ -8623,7 +8620,7 @@
           assert(type(gdType) == "number",
               'getCETypeFromGD Type from enum should be a number, instead got: ' .. type(gdType))
 
-          if GDDEFS.MAJOR_VER == 4 then -- TODO make it patchable 
+          if GDDEFS.MAJOR_VER == 4 then -- TODO make it patchable
               if (gdType == 2) then
                   return vtDword
               end
@@ -9270,51 +9267,46 @@
 
       --- returns a node dictionary
       function getMainNodeDict()
-          local childrenAddr, childrenSize = getVPChildren()
-          local nodeDict = {}
+        local childrenAddr, childrenSize = getVPChildren()
+        local nodeDict = {}
 
-          if isNullOrNil(childrenAddr) then
-              return
+        if isNullOrNil(childrenAddr) then return end
+
+        for i = 0, (childrenSize - 1) do
+
+          local nodePtr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
+          if isNullOrNil(nodePtr) then error('getMainNodeDict: NO MAIN NODES') end
+
+          local nodeNameStr = getNodeName(nodePtr)
+          nodeNameStr = tostring(nodeNameStr)
+          registerSymbol(nodeNameStr, nodePtr, true) -- TODO: remove when
+
+          if GDDEFS.MAJOR_VER == 4 then
+            nodeDict[nodeNameStr] =
+            {
+              NAME = nodeNameStr,
+              PTR = nodePtr,
+              TYPE = 24, -- node
+              MEMREC = 0
+            }
+          else
+            nodeDict[nodeNameStr] =
+            {
+              NAME = nodeNameStr,
+              PTR = nodePtr,
+              TYPE = 17, -- node
+              MEMREC = 0
+            }
           end
 
-          for i = 0, (childrenSize - 1) do
-
-              local nodePtr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
-              if isNullOrNil(nodePtr) then
-                  error('getMainNodeDict: NO MAIN NODES')
-              end
-
-              local nodeNameStr = getNodeName(nodePtr)
-              nodeNameStr = tostring(nodeNameStr)
-              registerSymbol(nodeNameStr, nodePtr, true) -- let's have them registered
-
-              if GDDEFS.MAJOR_VER == 4 then
-
-                  nodeDict[nodeNameStr] = {
-                      NAME = nodeNameStr,
-                      PTR = nodePtr,
-                      TYPE = 24, -- node
-                      MEMREC = 0
-                  }
-              else
-                  nodeDict[nodeNameStr] = {
-                      NAME = nodeNameStr,
-                      PTR = nodePtr,
-                      TYPE = 17, -- node
-                      MEMREC = 0
-                  }
-              end
-
-          end
-          return nodeDict
+        end
+        return nodeDict
       end
 
       --- returns a node table
       function getMainNodeTable()
           local childrenAddr, childrenSize = getVPChildren()
-          if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then
-              error('getMainNodeDict: VP Children not valid')
-          end
+          if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('getMainNodeDict: VP Children not valid') end
 
           local nodeTable = {}
 
@@ -9377,7 +9369,7 @@
           while (bMonitorNodes) do
               local mainNodeDict = getMainNodeDict()
               dumpedMonitorNodes = {};
-              for key, value in pairs(mainNodeDict) do
+              for key, value in ipairs(mainNodeDict) do
 
                   table.insert(dumpedMonitorNodes, value.PTR)
                   iterateVecVarForNodes(value.PTR)
@@ -9393,6 +9385,9 @@
               print('define the offsets first, silly')
               return
           end
+          
+          if true then print('disabled so far') return end
+
           bMonitorNodes = not bMonitorNodes
           if bMonitorNodes then
               createThread(nodeMonitorThread)
@@ -9483,7 +9478,7 @@
 
           local mainNodeDict = getMainNodeDict()
 
-          for key, value in pairs(mainNodeDict) do
+          for key, value in ipairs(mainNodeDict) do
 
               value.MEMREC = synchronize(function(value, key, parentRec)
                   local newNodeMemRec = addMemRecTo(key, value.PTR, getCETypeFromGD(value.TYPE), parentRec)
