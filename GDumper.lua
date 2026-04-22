@@ -19,216 +19,216 @@
     ---@param parent userdata -- to append to
     ---@return userdata
     function addMemRecTo(memRecName, gdPtr, CEType, parent)
-        local newMemRec = getAddressList().createMemoryRecord()
-        newMemRec.setDescription(memRecName)
-        newMemRec.setType(CEType)
+      local newMemRec = getAddressList().createMemoryRecord()
+      newMemRec.setDescription(memRecName)
+      newMemRec.setType(CEType)
 
-        if GDDEFS.GD4_STRING_EXISTS then
-            if CEType == vtString then
-                newMemRec.setType(vtCustom);
-                newMemRec.CustomTypeName = "GD4 String"
-                newMemRec.setAddress(readPointer(gdPtr))
-            else
-                newMemRec.setAddress(gdPtr)
-            end
+      if GDDEFS.GD4_STRING_EXISTS then
+          if CEType == vtString then
+            newMemRec.setType(vtCustom);
+            newMemRec.CustomTypeName = "GD4 String"
+            newMemRec.setAddress(readPointer(gdPtr))
+          else
+            newMemRec.setAddress(gdPtr)
+          end
+      else
+        if CEType == vtString then
+          newMemRec.String.Size = 100;
+          newMemRec.String.Unicode = true;
+          newMemRec.setAddress(readPointer(gdPtr))
         else
-            if CEType == vtString then
-                newMemRec.String.Size = 100;
-                newMemRec.String.Unicode = true;
-                newMemRec.setAddress(readPointer(gdPtr))
-            else
-                newMemRec.setAddress(gdPtr)
-            end
+          newMemRec.setAddress(gdPtr)
         end
+      end
 
-        if CEType == vtQword then
-            newMemRec.ShowAsHex = true;
-        end
-        if CEType == vtDword then
-            newMemRec.ShowAsSigned = true;
-        end -- color and int
+      if CEType == vtQword then
+        newMemRec.ShowAsHex = true;
+      end
+      if CEType == vtDword then
+        newMemRec.ShowAsSigned = true;
+      end -- color and int
 
-        newMemRec.DontSave = true
-        newMemRec.appendToEntry(parent)
-        return newMemRec
+      newMemRec.DontSave = true
+      newMemRec.appendToEntry(parent)
+      return newMemRec
     end
 
   -- ///---///--///---///--///---/// GD preinit
 
     function getExportTableName()
-        local base = getAddress(process)
+      local base = getAddress(process)
 
-        -- cases when getAddress fails
-        if isNullOrNil(base) then
-            base = enumModules()[1].Address
+      -- cases when getAddress fails
+      if isNullOrNil(base) then
+        base = enumModules()[1].Address
+      end
+
+      -- first check via PE -- https://wiki.osdev.org/PE
+      if isNotNullOrNil(base) then
+        local PE = base + readInteger(base + 0x3C) -- MZ.e_lfanew has an offset to PE
+        local optPE = PE + 0x18 -- just skip to optional header
+        local magic = readSmallInteger(optPE) -- Pe32OptionalHeader.mMagic
+        local dataDirOffset = (magic == 0x10B) and 0x60 or 0x70 -- 32/64 bit
+        local exportRVA = readInteger(optPE + dataDirOffset) -- skip directly to DataDirectory
+        if (exportRVA) and exportRVA ~= 0 then
+          local exportVA = base + exportRVA -- jump to exportRVA (.edata)
+          local nameRVA = readInteger(exportVA + 0xC) -- 12 is PEExportsTableHeader.mNameRVA, offset to name's virtual address
+
+          return readString((base + nameRVA), 60) or "ExportTableNotFound"
         end
-
-        -- first check via PE -- https://wiki.osdev.org/PE
-        if isNotNullOrNil(base) then
-            local PE = base + readInteger(base + 0x3C) -- MZ.e_lfanew has an offset to PE
-            local optPE = PE + 0x18 -- just skip to optional header
-            local magic = readSmallInteger(optPE) -- Pe32OptionalHeader.mMagic
-            local dataDirOffset = (magic == 0x10B) and 0x60 or 0x70 -- 32/64 bit
-            local exportRVA = readInteger(optPE + dataDirOffset) -- skip directly to DataDirectory
-            if (exportRVA) and exportRVA ~= 0 then
-                local exportVA = base + exportRVA -- jump to exportRVA (.edata)
-                local nameRVA = readInteger(exportVA + 0xC) -- 12 is PEExportsTableHeader.mNameRVA, offset to name's virtual address
-
-                return readString((base + nameRVA), 60) or "ExportTableNotFound"
-            end
-        end
+      end
     end
 
     function getGodotVersionString()
-        local reStr =
-            [[Godot\sEngine\s(\(.{4,35}\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
-        local fallbackreStr =
-            [[[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))(?:\.(0|[1-9]\d*))(?:[\.]((?:dev|alpha|beta|rc|stable)\d*))(?:[\.+-]((?:[\w\-+\.]*)))?]]
-        local godotVersionStringTable, fallbackGDSemVerTable;
+      local reStr = [[Godot\sEngine\s(\(.{4,35}\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
+      local fallbackreStr = [[[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))(?:\.(0|[1-9]\d*))(?:[\.]((?:dev|alpha|beta|rc|stable)\d*))(?:[\.+-]((?:[\w\-+\.]*)))?]]
+      local godotVersionStringTable, fallbackGDSemVerTable;
 
-        godotVersionStringTable = lregexScan({
-            pattern = reStr,
-            protection = "RW-E-C", -- sometimes it's not in rdata
-            encoding = "ASCII",
-            engine = "RE2",
-            findOne = true,
-            caseSensitive = true,
-            minLength = 15,
-            maxLength = 60
+      godotVersionStringTable = lregexScan({
+        pattern = reStr,
+        protection = "RW-E-C", -- sometimes it's not in rdata
+        encoding = "ASCII",
+        engine = "RE2",
+        findOne = true,
+        caseSensitive = true,
+        minLength = 15,
+        maxLength = 60
+      }) or {}
+
+      if isNotNullOrNil(godotVersionStringTable[1]) then
+        return godotVersionStringTable[1].text
+      else
+        -- let's test the fallback pattern for now (some 3.0 versions, might adjust for them), e.g. 4D Minesweeper
+        fallbackGDSemVerTable = lregexScan({
+          pattern = fallbackreStr,
+          protection = "R-W-E-C", -- let's assume rdata all the time
+          encoding = "ASCII",
+          engine = "RE2",
+          findOne = true,
+          caseSensitive = true,
+          minLength = 15,
+          maxLength = 60
         }) or {}
-
-        if isNotNullOrNil(godotVersionStringTable[1]) then
-            return godotVersionStringTable[1].text
+        if isNotNullOrNil(fallbackGDSemVerTable) then
+          return fallbackGDSemVerTable[1].text
         else
-            -- let's test the fallback pattern for now (some 3.0 versions, might adjust for them), e.g. 4D Minesweeper
-            fallbackGDSemVerTable = lregexScan({
-                pattern = fallbackreStr,
-                protection = "R-W-E-C", -- let's assume rdata all the time
-                encoding = "ASCII",
-                engine = "RE2",
-                findOne = true,
-                caseSensitive = true,
-                minLength = 15,
-                maxLength = 60
-            }) or {}
-            if isNotNullOrNil(fallbackGDSemVerTable) then
-                return fallbackGDSemVerTable[1].text
-            else
-                print("Version string not found")
-                return "SEMVER_NOT_FOUND"
-            end
+          print("Version string not found")
+          return "SEMVER_NOT_FOUND"
         end
+      end
     end
 
     --- heuristic to identify whether the process is godot
     function godotOnProcessOpened(processid, processhandle, caption)
-        -- similar to monoscript.lua in implementation
-        if GD_OldOnProcessOpened ~= nil then
-            GD_OldOnProcessOpened(processid, processhandle, caption)
-        end
+      -- similar to monoscript.lua in implementation
+      if GD_OldOnProcessOpened ~= nil then
+        GD_OldOnProcessOpened(processid, processhandle, caption)
+      end
 
-        if godot_ProcessMonitorThread == nil then
-            godot_ProcessMonitorThread = createThread(function(thr)
-                thr.Name = 'GDDumper_ProcessMonitorThread'
-                targetIsGodot = false
-                -- first check via PE -- https://wiki.osdev.org/PE
-                local exportTablename = getExportTableName() or ""
-                if (exportTablename):match("([gG][oO][Dd][Oo][Tt])") then
-                    -- if GDDEFS == nil then GDDEFS = {} end
-                    -- GDDEFS.GDEXPORT_TABLE = exportTablename
+      if godot_ProcessMonitorThread == nil then
+          godot_ProcessMonitorThread = createThread
+          (
+            function(thr)
+              thr.Name = 'GDDumper_ProcessMonitorThread'
+              targetIsGodot = false
+              -- first check via PE -- https://wiki.osdev.org/PE
+              local exportTablename = getExportTableName() or ""
+              if (exportTablename):match("([gG][oO][Dd][Oo][Tt])") then
+                -- if GDDEFS == nil then GDDEFS = {} end
+                -- GDDEFS.GDEXPORT_TABLE = exportTablename
+                targetIsGodot = true;
+              end
+
+              -- secondly, check if there's a package file, many apps do
+              if not targetIsGodot then
+                local pathToExe = enumModules()[1].PathToFile
+                local gameDir, exeName = extractFilePath(pathToExe),
+                  string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
+                local pathList = getFileList(gameDir)
+                local pckName = exeName .. '.pck'
+
+                for _, path in ipairs(pathList) do
+                  if (extractFileName(path) == pckName) then
                     targetIsGodot = true;
+                  end
                 end
+              end
 
-                -- secondly, check if there's a package file, many apps do
-                if not targetIsGodot then
-                    local pathToExe = enumModules()[1].PathToFile
-                    local gameDir, exeName = extractFilePath(pathToExe),
-                        string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
-                    local pathList = getFileList(gameDir)
-                    local pckName = exeName .. '.pck'
+              -- -- via powershell, which also isn't reliable and slow
+              -- if not targetIsGodot then
+              --     local out, code = runCommand("cmd.exe", { "/c", ([[powershell -NoProfile -Command "(Get-Item '%s').VersionInfo.FileDescription"]]):format(pathToExe) })
+              --     if code ~= 0 then targetIsGodot = false
+              --     else
+              --         if (out or ""):match("([gG][oO][Dd][Oo][Tt])") then targetIsGodot = true; end
+              --     end
+              -- end
 
-                    for _, path in ipairs(pathList) do
-                        if (extractFileName(path) == pckName) then
-                            targetIsGodot = true;
-                        end
+              if targetIsGodot then
+                synchronize(buildGDGUI())
+
+              elseif targetIsGodot == false and GDGUIInit == true then
+                synchronize(function()
+                  disableGDDissect()
+                  local mainMenu = getMainForm().Menu
+                  for i = 0, mainMenu.Items.Count - 1 do
+                    if mainMenu.Items.Item[i].Caption == 'GDDumper' then
+                      mainMenu.Items.Item[i].Destroy()
+                      break
                     end
-                end
+                  end
+                  GDGUIInit = false
+                  MainForm.setCaption("Cheat Engine")
+                end)
+              end
+            end
+          )
+          godot_ProcessMonitorThread = nil
+      end
 
-                -- -- via powershell, which also isn't reliable and slow
-                -- if not targetIsGodot then
-                --     local out, code = runCommand("cmd.exe", { "/c", ([[powershell -NoProfile -Command "(Get-Item '%s').VersionInfo.FileDescription"]]):format(pathToExe) })
-                --     if code ~= 0 then targetIsGodot = false
-                --     else
-                --         if (out or ""):match("([gG][oO][Dd][Oo][Tt])") then targetIsGodot = true; end
-                --     end
-                -- end
-
-                if targetIsGodot then
-                    synchronize(buildGDGUI())
-
-                elseif targetIsGodot == false and GDGUIInit == true then
-                    synchronize(function()
-                        disableGDDissect()
-                        local mainMenu = getMainForm().Menu
-                        for i = 0, mainMenu.Items.Count - 1 do
-                            if mainMenu.Items.Item[i].Caption == 'GDDumper' then
-                                mainMenu.Items.Item[i].Destroy()
-                                break
-                            end
-                        end
-                        GDGUIInit = false
-                        MainForm.setCaption("Cheat Engine")
-                    end)
-                end
-
-            end)
-            godot_ProcessMonitorThread = nil
-        end
-
-        return nil
+      return nil
     end
 
     function godotRegisterPreinit()
-        GD_OldOnProcessOpened = MainForm.OnProcessOpened
-        MainForm.OnProcessOpened = godotOnProcessOpened
+      GD_OldOnProcessOpened = MainForm.OnProcessOpened
+      MainForm.OnProcessOpened = godotOnProcessOpened
     end
 
     function defineGDVersion()
       local godotVersionString = getGodotVersionString()
 
       if isNullOrNil(GDDEFS) then
-          GDDEFS = {}
+        GDDEFS = {}
       end
 
       GDDEFS.FULL_GDVERSION_STRING = godotVersionString
       local major, minor, patch, tag = (godotVersionString):match("v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)")
 
       if isNullOrNil(major) or isNullOrNil(minor) then
-          major, minor, patch = (godotVersionString):match("Godot Engine v?(%d+)%.(%d+)%.?(%a*)")
+        major, minor, patch = (godotVersionString):match("Godot Engine v?(%d+)%.(%d+)%.?(%a*)")
       end
 
       local exportTableStr = getExportTableName() or ""
 
       if (exportTableStr):match("debug") then
-          GDDEFS.DEBUGVER = true
+        GDDEFS.DEBUGVER = true
       else
-          GDDEFS.DEBUGVER = false
+        GDDEFS.DEBUGVER = false
       end
 
       if (exportTableStr):match("mono") then
-          GDDEFS.MONO = true
+        GDDEFS.MONO = true
       end
       
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
 
       if (godotVersionString):match("custom") then
-          GDDEFS.CUSTOMVER = true
+        GDDEFS.CUSTOMVER = true
       end
 
       if isNotNullOrNil(major) and isNotNullOrNil(minor) then
-          GDDEFS.MAJOR_VER = tonumber(major)
-          GDDEFS.MINOR_VER = tonumber(minor)
-          GDDEFS.VERSION_STRING = major .. '.' .. minor
+        GDDEFS.MAJOR_VER = tonumber(major)
+        GDDEFS.MINOR_VER = tonumber(minor)
+        GDDEFS.VERSION_STRING = major .. '.' .. minor
       end
 
       MainForm.setCaption(GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN")
@@ -236,739 +236,739 @@
 
     function getStoredOffsetsFromVersion(majminVersionStr)
 
-        majminVersionStr = majminVersionStr or GDDEFS.VERSION_STRING
-        -- TODO: GDDEFS.MAXTYPE
-        -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
+      majminVersionStr = majminVersionStr or GDDEFS.VERSION_STRING
+      -- TODO: GDDEFS.MAXTYPE
+      -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
 
-        local offsets = {}
+      local offsets = {}
 
-        -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
-        if majminVersionStr == "4.6" then
-            GDDEFS.DICT_HEAD = 0x20
-            GDDEFS.DICT_TAIL = 0x28
-            GDDEFS.DICT_SIZE = 0x3C
-            GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
-            GDDEFS.GET_TYPE_INDX = 10
-            -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
+      -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
+      if majminVersionStr == "4.6" then
+        GDDEFS.DICT_HEAD = 0x20
+        GDDEFS.DICT_TAIL = 0x28
+        GDDEFS.DICT_SIZE = 0x3C
+        GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+        GDDEFS.GET_TYPE_INDX = 10
+        -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
-            -- godot.windows.template_release.x86_64.exe
-            -- Godot Engine v4.6.stable.official.89cea1439
-            offsets.VPChildren = 0x140
-            offsets.VPObjStringName = 0x190
-            offsets.NodeGDScriptInstance = 0x60
-            offsets.NodeGDScriptName = 0xF0
-            offsets.GDScriptFunctionMap = 0x230
-            offsets.GDScriptConstantMap = 0x208
-            offsets.GDScriptVariantNameHM = 0x180
-            offsets.oVariantVector = 0x28
-            offsets.GDScriptVariantNameType = 0x44 -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x10
-            offsets.GDScriptVariantNamesIndex = nil -- 3.x
-            offsets.GDScriptFunctionCode = 0x178
-            offsets.GDScriptFunctionCodeConsts = 0x198
-            offsets.GDScriptFunctionCodeGlobals = 0x1A8
+        -- godot.windows.template_release.x86_64.exe
+        -- Godot Engine v4.6.stable.official.89cea1439
+        offsets.VPChildren = 0x140
+        offsets.VPObjStringName = 0x190
+        offsets.NodeGDScriptInstance = 0x60
+        offsets.NodeGDScriptName = 0xF0
+        offsets.GDScriptFunctionMap = 0x230
+        offsets.GDScriptConstantMap = 0x208
+        offsets.GDScriptVariantNameHM = 0x180
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x44 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x10
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x178
+        offsets.GDScriptFunctionCodeConsts = 0x198
+        offsets.GDScriptFunctionCodeGlobals = 0x1A8
 
-            if GDDEFS.DEBUGVER then
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x28
-                -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-                -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-                -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-                -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-                -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-                -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-            end
-
-            if GDDEFS.CUSTOMVER then
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-                -- offsets.oVariantVector = offsets.oVariantVector
-                -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-                -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-                -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-                -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-                -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-                -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "4.5" then
-            GDDEFS.DICT_HEAD = 0x20
-            GDDEFS.DICT_TAIL = 0x28
-            GDDEFS.DICT_SIZE = 0x3C
-            GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
-            GDDEFS.GET_TYPE_INDX = 9
-            -- A0 Vector<GDScriptDataType> argument_types; including parameter names
-            -- f4 argcount
-
-            -- godot.windows.template_release.x86_64.exe
-            -- Godot Engine v4.5.1.stable.official.f62fdbde1
-            offsets.VPChildren = 0x170
-            offsets.VPObjStringName = 0x1C0
-            offsets.NodeGDScriptInstance = 0x68
-            offsets.NodeGDScriptName = 0x120
-            offsets.GDScriptFunctionMap = 0x268
-            offsets.GDScriptConstantMap = 0x208
-            offsets.GDScriptVariantNameHM = 0x1B8
-            offsets.oVariantVector = 0x28
-            offsets.GDScriptVariantNameType = 0x48 -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x8
-            offsets.GDScriptVariantNamesIndex = nil -- 3.x
-            offsets.GDScriptFunctionCode = 0x180 -- 0x178
-            offsets.GDScriptFunctionCodeConsts = 0x1A0 -- 0x198
-            offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
-
-            if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe
-                -- Godot Engine v4.5.1.stable.official
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x28
-            end
-
-            if GDDEFS.CUSTOMVER then
-                -- godot.windows.template_release.x86_64.exe
-                -- Godot Engine v4.5.1.stable.custom_build
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "4.4" then
-            GDDEFS.GET_TYPE_INDX = 8
-            -- godot.windows.template_release.x86_64.exe
-            -- Godot Engine v4.4.stable.official.4c311cbee
-            offsets.VPChildren = 0x188
-            offsets.VPObjStringName = 0x1E0
-            offsets.NodeGDScriptInstance = 0x68
-            offsets.NodeGDScriptName = 0x130
-            offsets.GDScriptFunctionMap = 0x2D8
-            offsets.GDScriptConstantMap = 0x2A8
-            offsets.GDScriptVariantNameHM = 0x210
-            offsets.oVariantVector = 0x28
-            offsets.GDScriptVariantNameType = 0x48 -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x8
-            offsets.GDScriptVariantNamesIndex = nil -- 3.x
-            offsets.GDScriptFunctionCode = 0x178
-            offsets.GDScriptFunctionCodeConsts = 0x198
-            offsets.GDScriptFunctionCodeGlobals = 0x1A8
-            -- timer 3B8 time_left | 3C0 isactive | 3A8 waittime
-
-            if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe
-                -- Godot Engine v4.4.1.stable.official
-                -- godot.windows.template_debug.x86_64.mono.exe
-                -- Godot Engine v4.4.stable.mono.official
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x30
-            end
-            if GDDEFS.CUSTOMVER then
-                GDDEFS.STRING = 0x10
-                -- godot.windows.template_release.x86_64.exe
-                -- Godot Engine v4.4.1.stable.custom_build.49a5bc7b6
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-            end
-            return offsets
-
-        elseif majminVersionStr == "4.3" then
-            GDDEFS.GET_TYPE_INDX = 8
-            -- godot.windows.template_release.x86_64.exe
-            -- Godot Engine v4.3.stable.official
-            -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
-            offsets.VPChildren = 0x178
-            offsets.VPObjStringName = 0x1D0
-            offsets.NodeGDScriptInstance = 0x68
-            offsets.NodeGDScriptName = 0x120
-            offsets.GDScriptFunctionMap = 0x280
-            offsets.GDScriptConstantMap = 0x250
-            offsets.GDScriptVariantNameHM = 0x1B8
-            offsets.oVariantVector = 0x28
-            offsets.GDScriptVariantNameType = 0x40 -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x8
-            offsets.GDScriptVariantNamesIndex = nil -- 3.x
-            offsets.GDScriptFunctionCode = 0x178
-            offsets.GDScriptFunctionCodeConsts = 0x198
-            offsets.GDScriptFunctionCodeGlobals = 0x1A8
-
-            if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
-                -- Godot Engine v4.3.stable.official
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x30
-                offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
-
-            end
-            if GDDEFS.CUSTOMVER then
-                -- godot.windows.template_release.x86_64.exe
-                -- Godot Engine v4.3.stable.custom_build
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-                offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "4.2" then
-            GDDEFS.GET_TYPE_INDX = 8
-            -- godot.windows.template_release.x86_64.exe
-            -- Godot Engine v4.2.1.stable.official.b09f793f5
-            offsets.VPChildren = 0x178
-            offsets.VPObjStringName = 0x1D0
-            offsets.NodeGDScriptInstance = 0x68
-            offsets.NodeGDScriptName = 0x120
-            offsets.GDScriptFunctionMap = 0x280
-            offsets.GDScriptConstantMap = 0x250
-            offsets.GDScriptVariantNameHM = 0x1B8
-            offsets.oVariantVector = 0x28
-            offsets.GDScriptVariantNameType = 0x40 -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = nil -- 3.x
-            offsets.GDScriptFunctionCode = 0x170
-            offsets.GDScriptFunctionCodeConsts = 0x190
-            offsets.GDScriptFunctionCodeGlobals = 0x1A0
-            -- timer 3a8 time_left 3b8 waittime 3c0 active
-
-            if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe
-                --  Godot Engine v4.2.2.stable.official
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x30
-                offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
-            end
-            if GDDEFS.CUSTOMVER then
-                error("Not defined yet")
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-                offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "4.1" then
-            GDDEFS.GET_TYPE_INDX = 8
-            -- 4.1.2 has some wild offsets however
-            -- godot.windows.template_release.x86_64.exe
-            -- Godot Engine v4.2.1.stable.official.b09f793f5
-            offsets.VPChildren = 0x178
-            offsets.VPObjStringName = 0x1D0
-            offsets.NodeGDScriptInstance = 0x68
-            offsets.NodeGDScriptName = 0x148
-            offsets.GDScriptFunctionMap = 0x260
-            offsets.GDScriptConstantMap = 0x1F0
-            offsets.GDScriptVariantNameHM = 0x290
-            offsets.oVariantVector = 0x28
-            offsets.GDScriptVariantNameType = 0x40 -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = nil -- 3.x
-            offsets.GDScriptFunctionCode = 0x118
-            offsets.GDScriptFunctionCodeConsts = 0x100
-            offsets.GDScriptFunctionCodeGlobals = 0xF0
-            -- timer 3a8 time_left 3b8 waittime 3c0 active
-            if GDDEFS.DEBUGVER then
-                -- godot.windows.template_debug.x86_64.exe
-                --  Godot Engine v4.1.1.stable.official
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x30
-            end
-            if GDDEFS.CUSTOMVER then
-                -- Godot Engine v4.1.2.rc.custom_build
-                GDDEFS.STRING = 0x10
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-                offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCode + 0x58 -- 0x170
-                offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeConsts + 0x10
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "4.0" then
-            GDDEFS.GET_TYPE_INDX = 8
-            offsets.VPChildren = 0x168
-            offsets.VPObjStringName = 0x1C0
-            offsets.NodeGDScriptInstance = 0x68
-            offsets.NodeGDScriptName = 0x178
-            offsets.GDScriptFunctionMap = 0x270
-            offsets.GDScriptConstantMap = 0x238
-            offsets.GDScriptVariantNameHM = 0x2A8
-            offsets.oVariantVector = 0x28
-            offsets.GDScriptVariantNameType = 0x40 -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x8
-            offsets.GDScriptVariantNamesIndex = nil -- 3.x
-            offsets.GDScriptFunctionCode = 0x118
-            offsets.GDScriptFunctionCodeConsts = 0x100
-            offsets.GDScriptFunctionCodeGlobals = 0xF0
-
-            if GDDEFS.DEBUGVER then
-                -- error("Not defined yet")
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x30
-            elseif GDDEFS.CUSTOMVER then
-                error("Not defined yet")
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "3.6" then
-            GDDEFS.GET_TYPE_INDX = 6
-            -- godot.windows.opt.64.exe
-            --  Godot Engine v3.6.stable.custom_build.de2f0f147
-            offsets.VPChildren = 0x108
-            offsets.VPObjStringName = 0x130
-            offsets.NodeGDScriptInstance = 0x58
-            offsets.NodeGDScriptName = 0x108
-            offsets.GDScriptFunctionMap = 0x1A8
-            offsets.GDScriptConstantMap = 0x190
-            offsets.GDScriptVariantNameHM = 0x1C0
-            offsets.oVariantVector = 0x20
-            offsets.GDScriptVariantNameType = nil -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
-            offsets.GDScriptFunctionCode = 0x50
-            offsets.GDScriptFunctionCodeConsts = 0x20
-            offsets.GDScriptFunctionCodeGlobals = 0x30
-
-            if GDDEFS.DEBUGVER then
-                -- godot.windows.opt.debug.64.exe
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            end
-            if GDDEFS.CUSTOMVER then
-                -- error("Not defined yet")
-                GDDEFS.STRING = 0x10
-                offsets.VPChildren = offsets.VPChildren --[[+0x48]]
-                offsets.VPObjStringName = offsets.VPObjStringName --[[+0x48]]
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName --[[+0x48]]
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap --[[+0x48]]
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap --[[+0x48]]
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM --[[+0x48]]
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "3.5" then
-            GDDEFS.GET_TYPE_INDX = 6
-            if GDDEFS._x64bit then
-                -- godot.windows.opt.64.exe
-                -- Godot Engine v3.5.1.stable.official
-                offsets.VPChildren = 0x108
-                offsets.VPObjStringName = 0x130
-                offsets.NodeGDScriptInstance = 0x58
-                offsets.NodeGDScriptName = 0x108
-                offsets.GDScriptFunctionMap = 0x1A8
-                offsets.GDScriptConstantMap = 0x190
-                offsets.GDScriptVariantNameHM = 0x1C0
-                offsets.oVariantVector = 0x20
-                offsets.GDScriptVariantNameType = nil -- 4.x
-                offsets.NodeVariantVectorSizeOffset = 0x4
-                offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
-                offsets.GDScriptFunctionCode = 0x50
-                offsets.GDScriptFunctionCodeConsts = 0x20
-                offsets.GDScriptFunctionCodeGlobals = 0x30
-
-                if GDDEFS.DEBUGVER then
-                    -- godot.windows.opt.debug.64.exe
-                    -- Godot Engine 3.5.2.stable
-                    -- GDDEFS.STRING = 0x8
-                    offsets.VPChildren = offsets.VPChildren + 0x8
-                    offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                    offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                    offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                    offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                    offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                    offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                    offsets.oVariantVector = offsets.oVariantVector + 0x18
-                end
-                if GDDEFS.CUSTOMVER then
-                    -- godot.windows.opt.64.exe
-                    -- Godot Engine v3.5.1.stable.custom_build.6fed1ffa3
-                    -- offsets.VPChildren = offsets.VPChildren
-                    -- offsets.VPObjStringName = offsets.VPObjStringName
-                    -- offsets.NodeGDScriptName = offsets.NodeGDScriptName
-                    -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap
-                    -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap
-                    -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM
-                    --  offsets.oVariantVector = offsets.oVariantVector
-                end
-            else
-                -- GDDEFS.STRING = 0x8 -- ascii
-                GDDEFS.GDSCRIPT_REF = 0x8
-                GDDEFS.MAP_SIZE = 0x10
-                GDDEFS.MAP_LELEM = 0x8
-                GDDEFS.MAP_NEXTELEM = 0x10
-                GDDEFS.MAP_KVALUE = 0x18
-                GDDEFS.FUNC_MAPVAL = 0x1C
-                GDDEFS.DICT_LIST = 0x4
-                GDDEFS.DICT_HEAD = 0x0
-                GDDEFS.DICT_TAIL = 0x4
-                GDDEFS.DICT_SIZE = 0x10
-                GDDEFS.DICTELEM_PAIR_NEXT = 0x20
-                GDDEFS.DICTELEM_KEYTYPE = 0x0
-                GDDEFS.DICTELEM_KEYVAL = 0x8
-                GDDEFS.DICTELEM_VALTYPE = 0x8
-                GDDEFS.DICTELEM_VALVAL = 0x10
-                GDDEFS.ARRAY_TOVECTOR = 0x8
-                GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x4
-                GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0xC
-                GDDEFS.CONSTELEM_KEYVAL = 0x18
-                GDDEFS.CONSTELEM_VALTYPE = 0x20
-
-                -- godot.windows.opt.32.exe
-                -- Godot Engine v3.5.3.stable.official
-                offsets.VPChildren = 0x90
-                offsets.VPObjStringName = 0xB0
-                offsets.NodeGDScriptInstance = 0x38
-                offsets.NodeGDScriptName = 0x94
-                offsets.GDScriptFunctionMap = 0xE8
-                offsets.GDScriptConstantMap = 0xDC
-                offsets.GDScriptVariantNameHM = 0xF4
-                offsets.oVariantVector = 0x10
-                offsets.GDScriptVariantNameType = 0x34 -- 4.x
-                offsets.NodeVariantVectorSizeOffset = 0x4
-                offsets.GDScriptVariantNamesIndex = 0x1C -- 3.x
-                offsets.GDScriptFunctionCode = 0x38
-                offsets.GDScriptFunctionCodeConsts = 0x20
-                offsets.GDScriptFunctionCodeGlobals = 0x28
-
-                if GDDEFS.DEBUGVER then
-                    error("Not defined yet")
-                    offsets.VPChildren = offsets.VPChildren + 0x4
-                    offsets.VPObjStringName = offsets.VPObjStringName + 0x4
-                    offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x4
-                    offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x4
-                    offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x4
-                    offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x4
-                    offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x4
-                    offsets.oVariantVector = offsets.oVariantVector + 0x0C
-                elseif GDDEFS.CUSTOMVER then
-                    error("Not defined yet")
-                    -- offsets.VPChildren = offsets.VPChildren+0x48
-                    -- offsets.VPObjStringName = offsets.VPObjStringName+0x48
-                    -- offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
-                    -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
-                    -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
-                    -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
-                    --  offsets.oVariantVector = offsets.oVariantVector+0x18
-                end
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "3.4" then
-            GDDEFS.GET_TYPE_INDX = 6
-            -- godot.windows.opt.64.exe
-            -- Godot Engine v3.4.4.stable.official.419e713a2
-            offsets.VPChildren = 0x108
-            offsets.VPObjStringName = 0x120
-            offsets.NodeGDScriptInstance = 0x58
-            offsets.NodeGDScriptName = 0x108
-            offsets.GDScriptFunctionMap = 0x1A8
-            offsets.GDScriptConstantMap = 0x190
-            offsets.GDScriptVariantNameHM = 0x1C0
-            offsets.oVariantVector = 0x20
-            offsets.GDScriptVariantNameType = nil -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
-            offsets.GDScriptFunctionCode = 0x50
-            offsets.GDScriptFunctionCodeConsts = 0x20
-            offsets.GDScriptFunctionCodeGlobals = 0x30
-            -- timer 1E0 (float) waittime 1E8 time_left 1F0 paused?
-
-            if GDDEFS.DEBUGVER then
-                -- error("Not defined yet")
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            elseif GDDEFS.CUSTOMVER then
-                error("Not defined yet")
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "3.3" then
-            GDDEFS.GET_TYPE_INDX = 6
-            -- godot.windows.opt.64.exe
-            -- Godot Engine v3.3.2.stable.official
-            offsets.VPChildren = 0x100
-            offsets.VPObjStringName = 0x118
-            offsets.NodeGDScriptInstance = 0x50
-            offsets.NodeGDScriptName = 0x100
-            offsets.GDScriptFunctionMap = 0x1A0
-            offsets.GDScriptConstantMap = 0x188
-            offsets.GDScriptVariantNameHM = 0x1B8
-            offsets.oVariantVector = 0x20
-            offsets.GDScriptVariantNameType = nil -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
-            offsets.GDScriptFunctionCode = 0x50
-            offsets.GDScriptFunctionCodeConsts = 0x20
-            offsets.GDScriptFunctionCodeGlobals = 0x30
-
-            if GDDEFS.DEBUGVER then
-                -- error("Not defined yet")
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            elseif GDDEFS.CUSTOMVER then
-                error("Not defined yet")
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x48
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "3.2" then
-            GDDEFS.GET_TYPE_INDX = 6
-            -- error("Not defined yet")
-            offsets.VPChildren = 0x108
-            offsets.VPObjStringName = 0x120
-            offsets.NodeGDScriptInstance = 0x50
-            offsets.NodeGDScriptName = 0x100
-            offsets.GDScriptFunctionMap = 0x1B0
-            offsets.GDScriptConstantMap = 0x198
-            offsets.GDScriptVariantNameHM = 0x1C8
-            offsets.oVariantVector = 0x20
-            offsets.GDScriptVariantNameType = nil -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
-            offsets.GDScriptFunctionCode = 0x50
-            offsets.GDScriptFunctionCodeConsts = 0x20
-            offsets.GDScriptFunctionCodeGlobals = 0x30
-
-            if GDDEFS.DEBUGVER then
-                error("Not defined yet")
-                -- GDDEFS.STRING = 0x8
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            end
-            if GDDEFS.CUSTOMVER then
-                -- godot.windows.opt.64.exe
-                -- Godot Engine v3.2.stable.custom_build
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-            end
-
-            return offsets
-
-        elseif majminVersionStr == "3.1" then
-            print("No recorded version found")
-            error("Not defined yet")
-        elseif majminVersionStr == "3.0" then
-            -- 3.0.6.stable.official
-            GDDEFS.GET_TYPE_INDX = 6
-            offsets.VPChildren = 0x100
-            offsets.VPObjStringName = 0x118
-            offsets.NodeGDScriptInstance = 0x50
-            offsets.NodeGDScriptName = 0xF8
-            offsets.GDScriptFunctionMap = 0x1B0
-            offsets.GDScriptConstantMap = 0x198
-            offsets.GDScriptVariantNameHM = 0x1C8
-            offsets.oVariantVector = 0x18
-            offsets.GDScriptVariantNameType = nil -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
-            offsets.GDScriptFunctionCode = 0x50
-            offsets.GDScriptFunctionCodeConsts = 0x20
-            offsets.GDScriptFunctionCodeGlobals = 0x30
-
-            if GDDEFS.DEBUGVER then
-                error("Not defined yet")
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            end
-            if GDDEFS.CUSTOMVER then
-                error("Not defined yet")
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-            end
-
-            return offsets
-        elseif majminVersionStr == "2.1" then
-            -- Godot Engine v2.1.7.rc.custom_build
-            -- godot.windows.opt.64.exe
-            error("Not defined yet")
-
-            GDDEFS.GET_TYPE_INDX = 7
-            offsets.VPChildren = 0x100
-            offsets.VPObjStringName = 0x118
-            offsets.NodeGDScriptInstance = 0x50
-            offsets.NodeGDScriptName = 0xF8
-            offsets.GDScriptFunctionMap = 0x1B0
-            offsets.GDScriptConstantMap = 0x198
-            offsets.GDScriptVariantNameHM = 0x1C8
-            offsets.oVariantVector = 0x18
-            offsets.GDScriptVariantNameType = nil -- 4.x
-            offsets.NodeVariantVectorSizeOffset = 0x4
-            offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
-            offsets.GDScriptFunctionCode = 0x50
-            offsets.GDScriptFunctionCodeConsts = 0x20
-            offsets.GDScriptFunctionCodeGlobals = 0x30
-
-            if GDDEFS.DEBUGVER then
-                error("Not defined yet")
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-                offsets.oVariantVector = offsets.oVariantVector + 0x18
-            end
-            if GDDEFS.CUSTOMVER then
-                error("Not defined yet")
-                offsets.VPChildren = offsets.VPChildren + 0x8
-                offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-                offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-                offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-                offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-                offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-            end
-
-            return offsets
-
-        else
-            print("No recorded version found")
-            error("No recorded version found")
-            return offsets
+        if GDDEFS.DEBUGVER then
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x28
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
         end
+
+        if GDDEFS.CUSTOMVER then
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.oVariantVector = offsets.oVariantVector
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "4.5" then
+        GDDEFS.DICT_HEAD = 0x20
+        GDDEFS.DICT_TAIL = 0x28
+        GDDEFS.DICT_SIZE = 0x3C
+        GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+        GDDEFS.GET_TYPE_INDX = 9
+        -- A0 Vector<GDScriptDataType> argument_types; including parameter names
+        -- f4 argcount
+
+        -- godot.windows.template_release.x86_64.exe
+        -- Godot Engine v4.5.1.stable.official.f62fdbde1
+        offsets.VPChildren = 0x170
+        offsets.VPObjStringName = 0x1C0
+        offsets.NodeGDScriptInstance = 0x68
+        offsets.NodeGDScriptName = 0x120
+        offsets.GDScriptFunctionMap = 0x268
+        offsets.GDScriptConstantMap = 0x208
+        offsets.GDScriptVariantNameHM = 0x1B8
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x48 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x8
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x180 -- 0x178
+        offsets.GDScriptFunctionCodeConsts = 0x1A0 -- 0x198
+        offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
+
+        if GDDEFS.DEBUGVER then
+          -- godot.windows.template_debug.x86_64.exe
+          -- Godot Engine v4.5.1.stable.official
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x28
+        end
+
+        if GDDEFS.CUSTOMVER then
+          -- godot.windows.template_release.x86_64.exe
+          -- Godot Engine v4.5.1.stable.custom_build
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "4.4" then
+        GDDEFS.GET_TYPE_INDX = 8
+        -- godot.windows.template_release.x86_64.exe
+        -- Godot Engine v4.4.stable.official.4c311cbee
+        offsets.VPChildren = 0x188
+        offsets.VPObjStringName = 0x1E0
+        offsets.NodeGDScriptInstance = 0x68
+        offsets.NodeGDScriptName = 0x130
+        offsets.GDScriptFunctionMap = 0x2D8
+        offsets.GDScriptConstantMap = 0x2A8
+        offsets.GDScriptVariantNameHM = 0x210
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x48 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x8
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x178
+        offsets.GDScriptFunctionCodeConsts = 0x198
+        offsets.GDScriptFunctionCodeGlobals = 0x1A8
+        -- timer 3B8 time_left | 3C0 isactive | 3A8 waittime
+
+        if GDDEFS.DEBUGVER then
+          -- godot.windows.template_debug.x86_64.exe
+          -- Godot Engine v4.4.1.stable.official
+          -- godot.windows.template_debug.x86_64.mono.exe
+          -- Godot Engine v4.4.stable.mono.official
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x30
+        end
+        if GDDEFS.CUSTOMVER then
+          GDDEFS.STRING = 0x10
+          -- godot.windows.template_release.x86_64.exe
+          -- Godot Engine v4.4.1.stable.custom_build.49a5bc7b6
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+        end
+        return offsets
+
+      elseif majminVersionStr == "4.3" then
+        GDDEFS.GET_TYPE_INDX = 8
+        -- godot.windows.template_release.x86_64.exe
+        -- Godot Engine v4.3.stable.official
+        -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
+        offsets.VPChildren = 0x178
+        offsets.VPObjStringName = 0x1D0
+        offsets.NodeGDScriptInstance = 0x68
+        offsets.NodeGDScriptName = 0x120
+        offsets.GDScriptFunctionMap = 0x280
+        offsets.GDScriptConstantMap = 0x250
+        offsets.GDScriptVariantNameHM = 0x1B8
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x8
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x178
+        offsets.GDScriptFunctionCodeConsts = 0x198
+        offsets.GDScriptFunctionCodeGlobals = 0x1A8
+
+        if GDDEFS.DEBUGVER then
+          -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
+          -- Godot Engine v4.3.stable.official
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x30
+          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+
+        end
+        if GDDEFS.CUSTOMVER then
+          -- godot.windows.template_release.x86_64.exe
+          -- Godot Engine v4.3.stable.custom_build
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "4.2" then
+        GDDEFS.GET_TYPE_INDX = 8
+        -- godot.windows.template_release.x86_64.exe
+        -- Godot Engine v4.2.1.stable.official.b09f793f5
+        offsets.VPChildren = 0x178
+        offsets.VPObjStringName = 0x1D0
+        offsets.NodeGDScriptInstance = 0x68
+        offsets.NodeGDScriptName = 0x120
+        offsets.GDScriptFunctionMap = 0x280
+        offsets.GDScriptConstantMap = 0x250
+        offsets.GDScriptVariantNameHM = 0x1B8
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x170
+        offsets.GDScriptFunctionCodeConsts = 0x190
+        offsets.GDScriptFunctionCodeGlobals = 0x1A0
+        -- timer 3a8 time_left 3b8 waittime 3c0 active
+
+        if GDDEFS.DEBUGVER then
+          -- godot.windows.template_debug.x86_64.exe
+          --  Godot Engine v4.2.2.stable.official
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x30
+          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+        end
+        if GDDEFS.CUSTOMVER then
+          error("Not defined yet")
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "4.1" then
+        GDDEFS.GET_TYPE_INDX = 8
+        -- 4.1.2 has some wild offsets however
+        -- godot.windows.template_release.x86_64.exe
+        -- Godot Engine v4.2.1.stable.official.b09f793f5
+        offsets.VPChildren = 0x178
+        offsets.VPObjStringName = 0x1D0
+        offsets.NodeGDScriptInstance = 0x68
+        offsets.NodeGDScriptName = 0x148
+        offsets.GDScriptFunctionMap = 0x260
+        offsets.GDScriptConstantMap = 0x1F0
+        offsets.GDScriptVariantNameHM = 0x290
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x118
+        offsets.GDScriptFunctionCodeConsts = 0x100
+        offsets.GDScriptFunctionCodeGlobals = 0xF0
+        -- timer 3a8 time_left 3b8 waittime 3c0 active
+        if GDDEFS.DEBUGVER then
+          -- godot.windows.template_debug.x86_64.exe
+          --  Godot Engine v4.1.1.stable.official
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x30
+        end
+        if GDDEFS.CUSTOMVER then
+          -- Godot Engine v4.1.2.rc.custom_build
+          GDDEFS.STRING = 0x10
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCode + 0x58 -- 0x170
+          offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeConsts + 0x10
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "4.0" then
+        GDDEFS.GET_TYPE_INDX = 8
+        offsets.VPChildren = 0x168
+        offsets.VPObjStringName = 0x1C0
+        offsets.NodeGDScriptInstance = 0x68
+        offsets.NodeGDScriptName = 0x178
+        offsets.GDScriptFunctionMap = 0x270
+        offsets.GDScriptConstantMap = 0x238
+        offsets.GDScriptVariantNameHM = 0x2A8
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x8
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x118
+        offsets.GDScriptFunctionCodeConsts = 0x100
+        offsets.GDScriptFunctionCodeGlobals = 0xF0
+
+        if GDDEFS.DEBUGVER then
+          -- error("Not defined yet")
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x30
+        elseif GDDEFS.CUSTOMVER then
+          error("Not defined yet")
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+        end
+
+          return offsets
+
+      elseif majminVersionStr == "3.6" then
+        GDDEFS.GET_TYPE_INDX = 6
+        -- godot.windows.opt.64.exe
+        --  Godot Engine v3.6.stable.custom_build.de2f0f147
+        offsets.VPChildren = 0x108
+        offsets.VPObjStringName = 0x130
+        offsets.NodeGDScriptInstance = 0x58
+        offsets.NodeGDScriptName = 0x108
+        offsets.GDScriptFunctionMap = 0x1A8
+        offsets.GDScriptConstantMap = 0x190
+        offsets.GDScriptVariantNameHM = 0x1C0
+        offsets.oVariantVector = 0x20
+        offsets.GDScriptVariantNameType = nil -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+        offsets.GDScriptFunctionCode = 0x50
+        offsets.GDScriptFunctionCodeConsts = 0x20
+        offsets.GDScriptFunctionCodeGlobals = 0x30
+
+        if GDDEFS.DEBUGVER then
+          -- godot.windows.opt.debug.64.exe
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        end
+        if GDDEFS.CUSTOMVER then
+          -- error("Not defined yet")
+          GDDEFS.STRING = 0x10
+          offsets.VPChildren = offsets.VPChildren --[[+0x48]]
+          offsets.VPObjStringName = offsets.VPObjStringName --[[+0x48]]
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName --[[+0x48]]
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap --[[+0x48]]
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap --[[+0x48]]
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM --[[+0x48]]
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "3.5" then
+        GDDEFS.GET_TYPE_INDX = 6
+        if GDDEFS._x64bit then
+          -- godot.windows.opt.64.exe
+          -- Godot Engine v3.5.1.stable.official
+          offsets.VPChildren = 0x108
+          offsets.VPObjStringName = 0x130
+          offsets.NodeGDScriptInstance = 0x58
+          offsets.NodeGDScriptName = 0x108
+          offsets.GDScriptFunctionMap = 0x1A8
+          offsets.GDScriptConstantMap = 0x190
+          offsets.GDScriptVariantNameHM = 0x1C0
+          offsets.oVariantVector = 0x20
+          offsets.GDScriptVariantNameType = nil -- 4.x
+          offsets.NodeVariantVectorSizeOffset = 0x4
+          offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+          offsets.GDScriptFunctionCode = 0x50
+          offsets.GDScriptFunctionCodeConsts = 0x20
+          offsets.GDScriptFunctionCodeGlobals = 0x30
+
+          if GDDEFS.DEBUGVER then
+            -- godot.windows.opt.debug.64.exe
+            -- Godot Engine 3.5.2.stable
+            -- GDDEFS.STRING = 0x8
+            offsets.VPChildren = offsets.VPChildren + 0x8
+            offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+            offsets.oVariantVector = offsets.oVariantVector + 0x18
+          end
+          if GDDEFS.CUSTOMVER then
+            -- godot.windows.opt.64.exe
+            -- Godot Engine v3.5.1.stable.custom_build.6fed1ffa3
+            -- offsets.VPChildren = offsets.VPChildren
+            -- offsets.VPObjStringName = offsets.VPObjStringName
+            -- offsets.NodeGDScriptName = offsets.NodeGDScriptName
+            -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap
+            -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap
+            -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM
+            --  offsets.oVariantVector = offsets.oVariantVector
+          end
+        else
+          -- GDDEFS.STRING = 0x8 -- ascii
+          GDDEFS.GDSCRIPT_REF = 0x8
+          GDDEFS.MAP_SIZE = 0x10
+          GDDEFS.MAP_LELEM = 0x8
+          GDDEFS.MAP_NEXTELEM = 0x10
+          GDDEFS.MAP_KVALUE = 0x18
+          GDDEFS.FUNC_MAPVAL = 0x1C
+          GDDEFS.DICT_LIST = 0x4
+          GDDEFS.DICT_HEAD = 0x0
+          GDDEFS.DICT_TAIL = 0x4
+          GDDEFS.DICT_SIZE = 0x10
+          GDDEFS.DICTELEM_PAIR_NEXT = 0x20
+          GDDEFS.DICTELEM_KEYTYPE = 0x0
+          GDDEFS.DICTELEM_KEYVAL = 0x8
+          GDDEFS.DICTELEM_VALTYPE = 0x8
+          GDDEFS.DICTELEM_VALVAL = 0x10
+          GDDEFS.ARRAY_TOVECTOR = 0x8
+          GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x4
+          GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0xC
+          GDDEFS.CONSTELEM_KEYVAL = 0x18
+          GDDEFS.CONSTELEM_VALTYPE = 0x20
+
+          -- godot.windows.opt.32.exe
+          -- Godot Engine v3.5.3.stable.official
+          offsets.VPChildren = 0x90
+          offsets.VPObjStringName = 0xB0
+          offsets.NodeGDScriptInstance = 0x38
+          offsets.NodeGDScriptName = 0x94
+          offsets.GDScriptFunctionMap = 0xE8
+          offsets.GDScriptConstantMap = 0xDC
+          offsets.GDScriptVariantNameHM = 0xF4
+          offsets.oVariantVector = 0x10
+          offsets.GDScriptVariantNameType = 0x34 -- 4.x
+          offsets.NodeVariantVectorSizeOffset = 0x4
+          offsets.GDScriptVariantNamesIndex = 0x1C -- 3.x
+          offsets.GDScriptFunctionCode = 0x38
+          offsets.GDScriptFunctionCodeConsts = 0x20
+          offsets.GDScriptFunctionCodeGlobals = 0x28
+
+          if GDDEFS.DEBUGVER then
+            error("Not defined yet")
+            offsets.VPChildren = offsets.VPChildren + 0x4
+            offsets.VPObjStringName = offsets.VPObjStringName + 0x4
+            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x4
+            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x4
+            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x4
+            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x4
+            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x4
+            offsets.oVariantVector = offsets.oVariantVector + 0x0C
+          elseif GDDEFS.CUSTOMVER then
+            error("Not defined yet")
+            -- offsets.VPChildren = offsets.VPChildren+0x48
+            -- offsets.VPObjStringName = offsets.VPObjStringName+0x48
+            -- offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
+            -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap+0x48
+            -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
+            -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
+            --  offsets.oVariantVector = offsets.oVariantVector+0x18
+          end
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "3.4" then
+        GDDEFS.GET_TYPE_INDX = 6
+        -- godot.windows.opt.64.exe
+        -- Godot Engine v3.4.4.stable.official.419e713a2
+        offsets.VPChildren = 0x108
+        offsets.VPObjStringName = 0x120
+        offsets.NodeGDScriptInstance = 0x58
+        offsets.NodeGDScriptName = 0x108
+        offsets.GDScriptFunctionMap = 0x1A8
+        offsets.GDScriptConstantMap = 0x190
+        offsets.GDScriptVariantNameHM = 0x1C0
+        offsets.oVariantVector = 0x20
+        offsets.GDScriptVariantNameType = nil -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+        offsets.GDScriptFunctionCode = 0x50
+        offsets.GDScriptFunctionCodeConsts = 0x20
+        offsets.GDScriptFunctionCodeGlobals = 0x30
+        -- timer 1E0 (float) waittime 1E8 time_left 1F0 paused?
+
+        if GDDEFS.DEBUGVER then
+          -- error("Not defined yet")
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        elseif GDDEFS.CUSTOMVER then
+          error("Not defined yet")
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "3.3" then
+        GDDEFS.GET_TYPE_INDX = 6
+        -- godot.windows.opt.64.exe
+        -- Godot Engine v3.3.2.stable.official
+        offsets.VPChildren = 0x100
+        offsets.VPObjStringName = 0x118
+        offsets.NodeGDScriptInstance = 0x50
+        offsets.NodeGDScriptName = 0x100
+        offsets.GDScriptFunctionMap = 0x1A0
+        offsets.GDScriptConstantMap = 0x188
+        offsets.GDScriptVariantNameHM = 0x1B8
+        offsets.oVariantVector = 0x20
+        offsets.GDScriptVariantNameType = nil -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+        offsets.GDScriptFunctionCode = 0x50
+        offsets.GDScriptFunctionCodeConsts = 0x20
+        offsets.GDScriptFunctionCodeGlobals = 0x30
+
+        if GDDEFS.DEBUGVER then
+          -- error("Not defined yet")
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        elseif GDDEFS.CUSTOMVER then
+          error("Not defined yet")
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "3.2" then
+        GDDEFS.GET_TYPE_INDX = 6
+        -- error("Not defined yet")
+        offsets.VPChildren = 0x108
+        offsets.VPObjStringName = 0x120
+        offsets.NodeGDScriptInstance = 0x50
+        offsets.NodeGDScriptName = 0x100
+        offsets.GDScriptFunctionMap = 0x1B0
+        offsets.GDScriptConstantMap = 0x198
+        offsets.GDScriptVariantNameHM = 0x1C8
+        offsets.oVariantVector = 0x20
+        offsets.GDScriptVariantNameType = nil -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+        offsets.GDScriptFunctionCode = 0x50
+        offsets.GDScriptFunctionCodeConsts = 0x20
+        offsets.GDScriptFunctionCodeGlobals = 0x30
+
+        if GDDEFS.DEBUGVER then
+          error("Not defined yet")
+          -- GDDEFS.STRING = 0x8
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        end
+        if GDDEFS.CUSTOMVER then
+          -- godot.windows.opt.64.exe
+          -- Godot Engine v3.2.stable.custom_build
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "3.1" then
+        print("No recorded version found")
+        error("Not defined yet")
+      elseif majminVersionStr == "3.0" then
+        -- 3.0.6.stable.official
+        GDDEFS.GET_TYPE_INDX = 6
+        offsets.VPChildren = 0x100
+        offsets.VPObjStringName = 0x118
+        offsets.NodeGDScriptInstance = 0x50
+        offsets.NodeGDScriptName = 0xF8
+        offsets.GDScriptFunctionMap = 0x1B0
+        offsets.GDScriptConstantMap = 0x198
+        offsets.GDScriptVariantNameHM = 0x1C8
+        offsets.oVariantVector = 0x18
+        offsets.GDScriptVariantNameType = nil -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+        offsets.GDScriptFunctionCode = 0x50
+        offsets.GDScriptFunctionCodeConsts = 0x20
+        offsets.GDScriptFunctionCodeGlobals = 0x30
+
+        if GDDEFS.DEBUGVER then
+          error("Not defined yet")
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        end
+        if GDDEFS.CUSTOMVER then
+          error("Not defined yet")
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+        end
+
+        return offsets
+      elseif majminVersionStr == "2.1" then
+        -- Godot Engine v2.1.7.rc.custom_build
+        -- godot.windows.opt.64.exe
+        error("Not defined yet")
+
+        GDDEFS.GET_TYPE_INDX = 7
+        offsets.VPChildren = 0x100
+        offsets.VPObjStringName = 0x118
+        offsets.NodeGDScriptInstance = 0x50
+        offsets.NodeGDScriptName = 0xF8
+        offsets.GDScriptFunctionMap = 0x1B0
+        offsets.GDScriptConstantMap = 0x198
+        offsets.GDScriptVariantNameHM = 0x1C8
+        offsets.oVariantVector = 0x18
+        offsets.GDScriptVariantNameType = nil -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x4
+        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
+        offsets.GDScriptFunctionCode = 0x50
+        offsets.GDScriptFunctionCodeConsts = 0x20
+        offsets.GDScriptFunctionCodeGlobals = 0x30
+
+        if GDDEFS.DEBUGVER then
+          error("Not defined yet")
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x18
+        end
+        if GDDEFS.CUSTOMVER then
+          error("Not defined yet")
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+        end
+
+        return offsets
+
+      else
+        print("No recorded version found")
+        error("No recorded version found")
+        return offsets
+      end
         --[[
-                        Godot Engine v2.1.4.beta.custom_build
-                        godot.windows.opt.32.exe
-                    ]]
+          Godot Engine v2.1.4.beta.custom_build
+          godot.windows.opt.32.exe
+        ]]
 
     end
 
@@ -978,167 +978,168 @@
     ---@param addr number
     ---@return boolean
     function isValidPointer(addr)
-        local success, result = pcall(readPointer, addr)
-        return success and result ~= nil
+      local success, result = pcall(readPointer, addr)
+      return success and result ~= nil
     end
 
     function isInvalidPointer(addr)
-        return isValidPointer(addr) == false
+      return isValidPointer(addr) == false
     end
 
     --- checks if the value is a valid pointer and not nullptr
     ---@param addr number
     ---@return boolean
     function isPointerNotNull(addr)
-        return isValidPointer(addr) and readPointer(addr) ~= 0
+      return isValidPointer(addr) and readPointer(addr) ~= 0
     end
 
     --- gets some section info (bounds)
     ---@param sectionName number
     ---@return table
     function getSectionBounds(sectionName)
-        local base = getAddress(process)
-        if base == 0 or base == nil then
-            base = enumModules()[1].Address
-        end -- for cases when getAddress fails
-        if not base then
-            return nil
-        end -- if it's still failing, quit
-
-        -- DOS header -> e_lfanew
-        local peOffset = readInteger(base + 0x3C)
-        if not peOffset then
-            return nil
-        end
-
-        local PE = base + peOffset
-
-        local signature = readInteger(PE)
-        if signature ~= 0x00004550 then
-            return nil
-        end
-
-        -- IMAGE_FILE_HEADER
-        local numberOfSections = readSmallInteger(PE + 0x6)
-        local sizeOfOptionalHdr = readSmallInteger(PE + 0x14)
-
-        if not numberOfSections or not sizeOfOptionalHdr then
-            return nil
-        end
-
-        -- Section table starts after:
-        -- 4 bytes PE signature + 20 bytes IMAGE_FILE_HEADER + optional header
-        local sectionTable = PE + 0x18 + sizeOfOptionalHdr
-
-        for i = 0, numberOfSections - 1 do
-            local sec = sectionTable + (i * 0x28) -- IMAGE_SECTION_HEADER = 40 bytes
-
-            local name = readString(sec, 8) or ""
-            name = name:gsub("%z.*", "") -- strip trailing nulls
-
-            if name == sectionName then
-                local virtualSize = readInteger(sec + 0x8)
-                local virtualAddress = readInteger(sec + 0xC)
-
-                if not virtualSize or not virtualAddress then
-                    return nil
-                end
-
-                return {
-                    name = name,
-                    base = base,
-                    virtualAddress = virtualAddress, -- RVA
-                    virtualSize = virtualSize,
-                    startAddress = base + virtualAddress,
-                    endAddress = base + virtualAddress + virtualSize - 1
-                }
-            end
-        end
-
+      local base = getAddress(process)
+      if base == 0 or base == nil then
+        base = enumModules()[1].Address
+      end -- for cases when getAddress fails
+      if not base then
         return nil
+      end -- if it's still failing, quit
+
+      -- DOS header -> e_lfanew
+      local peOffset = readInteger(base + 0x3C)
+      if not peOffset then
+        return nil
+      end
+
+      local PE = base + peOffset
+
+      local signature = readInteger(PE)
+      if signature ~= 0x00004550 then
+        return nil
+      end
+
+      -- IMAGE_FILE_HEADER
+      local numberOfSections = readSmallInteger(PE + 0x6)
+      local sizeOfOptionalHdr = readSmallInteger(PE + 0x14)
+
+      if not numberOfSections or not sizeOfOptionalHdr then
+        return nil
+      end
+
+      -- Section table starts after:
+      -- 4 bytes PE signature + 20 bytes IMAGE_FILE_HEADER + optional header
+      local sectionTable = PE + 0x18 + sizeOfOptionalHdr
+
+      for i = 0, numberOfSections - 1 do
+        local sec = sectionTable + (i * 0x28) -- IMAGE_SECTION_HEADER = 40 bytes
+
+        local name = readString(sec, 8) or ""
+        name = name:gsub("%z.*", "") -- strip trailing nulls
+
+        if name == sectionName then
+          local virtualSize = readInteger(sec + 0x8)
+          local virtualAddress = readInteger(sec + 0xC)
+
+          if not virtualSize or not virtualAddress then
+            return nil
+          end
+
+          return
+          {
+            name = name,
+            base = base,
+            virtualAddress = virtualAddress, -- RVA
+            virtualSize = virtualSize,
+            startAddress = base + virtualAddress,
+            endAddress = base + virtualAddress + virtualSize - 1
+          }
+        end
+      end
+
+      return nil
     end
 
     -- check VTable validity for main module (MM)
     ---@param VTAddr number
     ---@return boolean
     function isMMVTable(VTAddr)
-        if VTAddr == 0 or VTAddr == nil then
+      if VTAddr == 0 or VTAddr == nil then
+        return false
+      end
+
+      -- TODO: calculate the bounds once and store
+
+      -- the vtables are stored in some readonly data section, text included too
+      local moduleStart = getAddress(process) or 0
+      local moduleEnd;
+      local moduleSize = getModuleSize(process)
+
+      -- for cases when getAddress fails
+      if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
+        moduleStart = enumModules()[1].Address
+        moduleEnd = moduleStart + enumModules()[1].Size
+      else
+        moduleEnd = moduleStart + moduleSize
+      end
+
+      if moduleStart < VTAddr and VTAddr < moduleEnd then
+        -- iterate a few pointers and confirm if they are executable
+        local ptrsize = targetIs64Bit() and 0x8 or 0x4
+        local sectionInfo = getSectionBounds(".text")
+        if sectionInfo == nil then
+          return false
+        end
+
+        for i = 0, 5 do -- 5 pointers
+          local pmethod = readPointer(VTAddr + ptrsize * i)
+          if not isInsideSectionRange(pmethod, sectionInfo) then
             return false
+          end
         end
+      else -- outside the main module
+        return false
+      end
 
-        -- TODO: calculate the bounds once and store
-
-        -- the vtables are stored in some readonly data section, text included too
-        local moduleStart = getAddress(process) or 0
-        local moduleEnd;
-        local moduleSize = getModuleSize(process)
-
-        -- for cases when getAddress fails
-        if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
-            moduleStart = enumModules()[1].Address
-            moduleEnd = moduleStart + enumModules()[1].Size
-        else
-            moduleEnd = moduleStart + moduleSize
-        end
-
-        if moduleStart < VTAddr and VTAddr < moduleEnd then
-            -- iterate a few pointers and confirm if they are executable
-            local ptrsize = targetIs64Bit() and 0x8 or 0x4
-            local sectionInfo = getSectionBounds(".text")
-            if sectionInfo == nil then
-                return false
-            end
-
-            for i = 0, 5 do -- 5 pointers
-                local pmethod = readPointer(VTAddr + ptrsize * i)
-                if not isInsideSectionRange(pmethod, sectionInfo) then
-                    return false
-                end
-            end
-        else -- outside the main module
-            return false
-        end
-
-        return true
+      return true
     end
 
     function isInsideSectionRange(addr, sectionInfo)
-        if addr == nil or addr == 0 then
-            return false
-        end
-        if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
-            return true
-        end
+      if addr == nil or addr == 0 then
+        return false
+      end
+      if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
+        return true
+      end
     end
 
     function isInsideRDataStatic(strAddr)
-        if strAddr == nil or strAddr == 0 then
-            return false
-        end
-        -- in pck range
-        local sectionInfo = getSectionBounds(".rdata")
-        if sectionInfo == nil then
-            return false
-        end
-        if isInsideSectionRange(strAddr, sectionInfo) then
-            return true
-        end
+      if strAddr == nil or strAddr == 0 then
         return false
+      end
+      -- in pck range
+      local sectionInfo = getSectionBounds(".rdata")
+      if sectionInfo == nil then
+        return false
+      end
+      if isInsideSectionRange(strAddr, sectionInfo) then
+        return true
+      end
+      return false
     end
 
   -- ///---///--///---///--///---/// MISC
 
     --- turns off showOnPrint
     function fuckoffPrint()
-        GetLuaEngine().cbShowOnPrint.Checked = false
+      GetLuaEngine().cbShowOnPrint.Checked = false
     end
 
     function isNullOrNil(toCheck)
-        return toCheck == nil or toCheck == 0
+      return toCheck == nil or toCheck == 0
     end
 
     function isNotNullOrNil(toCheck)
-        return not isNullOrNil(toCheck)
+      return not isNullOrNil(toCheck)
     end
 
   -- ///---///--///---///--///---/// DEBUG
@@ -1148,304 +1149,305 @@
     ---@param times number
     ---@return string
     function strMul(str, times)
-        return string.rep(str, times)
+      return string.rep(str, times)
     end
 
     function numtohexstr(num)
-        return ("%X"):format(num or -1)
+      return ("%X"):format(num or -1)
     end
 
     function debugStepIn()
-        if bGDDebug and inMainThread() then
-            debugPrefix = debugPrefix + 1
-        end
+      if bGDDebug and inMainThread() then
+        debugPrefix = debugPrefix + 1
+      end
     end
 
     function debugStepOut()
-        if bGDDebug and inMainThread() then
-            debugPrefix = debugPrefix - 1
-        end
+      if bGDDebug and inMainThread() then
+        debugPrefix = debugPrefix - 1
+      end
     end
 
     function getDebugPrefix()
-        return strMul('>', debugPrefix) .. '\t'
+      return strMul('>', debugPrefix) .. '\t'
     end
 
     function sendDebugMessage(msg)
-        if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
-            print(getDebugPrefix() .. " " .. tostring(msg))
-        end
+      if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
+        print(getDebugPrefix() .. " " .. tostring(msg))
+      end
     end
 
     function sendDebugMessageAndStepOut(msg)
-        if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
-            print(getDebugPrefix() .. " " .. tostring(msg))
-            debugStepOut()
-        end
+      if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
+        print(getDebugPrefix() .. " " .. tostring(msg))
+        debugStepOut()
+      end
     end
 
     function getGDSemver()
-        if GDDEFS and GDDEFS.FULL_GDVERSION_STRING then
-            print(GDDEFS.FULL_GDVERSION_STRING)
-            print(getExportTableName())
-        else
-            print((getExportTableName() or "exportnomatch") .. '\n' .. (getGodotVersionString() or "semver not hit"))
-        end
+      if GDDEFS and GDDEFS.FULL_GDVERSION_STRING then
+        print(GDDEFS.FULL_GDVERSION_STRING)
+        print(getExportTableName())
+      else
+        print((getExportTableName() or "exportnomatch") .. '\n' .. (getGodotVersionString() or "semver not hit"))
+      end
     end
 
     function printGDConfig()
-        print(
-            ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
-                (GDDEFS.MAJOR_VER or 0x0), (GDDEFS.MINOR_VER or 0x0), (GDDEFS.CUSTOMVER or tostring(nil)),
-                (GDDEFS.DEBUGVER or tostring(nil)), (GDDEFS.CHILDREN or 0x0), (GDDEFS.OBJ_STRING_NAME or 0x0),
-                (GDDEFS.GDSCRIPTINSTANCE or 0x0), (GDDEFS.VAR_VECTOR or 0x0), (GDDEFS.SIZE_VECTOR or 0x0),
-                (GDDEFS.GDSCRIPTNAME or 0x0), (GDDEFS.FUNC_MAP or 0x0), (GDDEFS.FUNC_CODE or 0x0),
-                (GDDEFS.FUNC_CONST or 0x0), (GDDEFS.FUNC_GLOBNAMEPTR or 0x0), (GDDEFS.CONST_MAP or 0x0),
-                (GDDEFS.VAR_NAMEINDEX_MAP or 0x0), (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0), (GDDEFS.VAR_NAMEINDEX_I or 0x0)))
+      print
+      (
+        ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
+        (GDDEFS.MAJOR_VER or 0x0), (GDDEFS.MINOR_VER or 0x0), (GDDEFS.CUSTOMVER or tostring(nil)),
+        (GDDEFS.DEBUGVER or tostring(nil)), (GDDEFS.CHILDREN or 0x0), (GDDEFS.OBJ_STRING_NAME or 0x0),
+        (GDDEFS.GDSCRIPTINSTANCE or 0x0), (GDDEFS.VAR_VECTOR or 0x0), (GDDEFS.SIZE_VECTOR or 0x0),
+        (GDDEFS.GDSCRIPTNAME or 0x0), (GDDEFS.FUNC_MAP or 0x0), (GDDEFS.FUNC_CODE or 0x0),
+        (GDDEFS.FUNC_CONST or 0x0), (GDDEFS.FUNC_GLOBNAMEPTR or 0x0), (GDDEFS.CONST_MAP or 0x0),
+        (GDDEFS.VAR_NAMEINDEX_MAP or 0x0), (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0), (GDDEFS.VAR_NAMEINDEX_I or 0x0))
+        )
     end
 
   -- ///---///--///---///--///---/// STRUCTURES
 
     --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
     function createVPStructForm()
-        if not (gdOffsetsDefined) then
-            print('define the offsets first, silly')
-            return
-        end
-        -- let's ensure VP is found, it will throw an error otherwise
-        getViewport()
+      if not (gdOffsetsDefined) then
+        print('define the offsets first, silly')
+        return
+      end
+      -- let's ensure VP is found, it will throw an error otherwise
+      getViewport()
 
-        local symbolToChildren = '[[ptVP]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[ptVP]+CHILDREN]'
-        local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
-        local childrenStruct = createVPStructure()
+      local symbolToChildren = '[[ptVP]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[ptVP]+CHILDREN]'
+      local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
+      local childrenStruct = createVPStructure()
 
-        -- I couldn't find a better way to select a structure inside a StructDissect form
-        for i = 0, viewportStructForm.Structures1.Count - 1 do
-            local menuItem = viewportStructForm.Structures1.Item[i]
-            if menuItem.Caption == 'GDNODES' then
-                menuItem.doClick()
-            end
+      -- I couldn't find a better way to select a structure inside a StructDissect form
+      for i = 0, viewportStructForm.Structures1.Count - 1 do
+        local menuItem = viewportStructForm.Structures1.Item[i]
+        if menuItem.Caption == 'GDNODES' then
+          menuItem.doClick()
         end
+      end
 
     end
 
     --- called by createVPStructForm, deletes ALL structures, constructs a children structure of the viewport
     function createVPStructure()
-        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
+      -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
 
-        -- remove all structures
-        -- structure.miClear if you want a confirmation
-        while getStructureCount() > 0 do -- getStructure(n).Name, getStructure(n).Destroy()
-            getStructure(0).Destroy()
-        end
+      -- remove all structures
+      -- structure.miClear if you want a confirmation
+      while getStructureCount() > 0 do -- getStructure(n).Name, getStructure(n).Destroy()
+        getStructure(0).Destroy()
+      end
 
-        -- Structure class related functions:
-        -- getStructureCount(): Returns the number of Global structures. (Global structures are the visible structures)
-        -- getStructure(index): Returns the Structure object at the given index
-        -- createStructure(name): Returns an empty structure object (Not yet added to the Global list. Call structure.addToGlobalStructureList manually)
+      -- Structure class related functions:
+      -- getStructureCount(): Returns the number of Global structures. (Global structures are the visible structures)
+      -- getStructure(index): Returns the Structure object at the given index
+      -- createStructure(name): Returns an empty structure object (Not yet added to the Global list. Call structure.addToGlobalStructureList manually)
 
-        local struct = createStructure('GDNODES')
-        local structElem, childElem;
-        local mainNodeTable = getMainNodeTable()
+      local struct = createStructure('GDNODES')
+      local structElem, childElem;
+      local mainNodeTable = getMainNodeTable()
 
-        struct.beginUpdate()
-        for i = 0, #mainNodeTable - 1 do
-            structElem = struct.addElement()
-            structElem.BackgroundColor = 0x6C3157
-            structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
-            structElem.VarType = vtPointer
-            structElem.Name = getNodeName(mainNodeTable[i + 1])
-        end
-        struct.endUpdate()
-        struct.addToGlobalStructureList() -- so we can use it
+      struct.beginUpdate()
+      for i = 0, #mainNodeTable - 1 do
+        structElem = struct.addElement()
+        structElem.BackgroundColor = 0x6C3157
+        structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
+        structElem.VarType = vtPointer
+        structElem.Name = getNodeName(mainNodeTable[i + 1])
+      end
+      struct.endUpdate()
+      struct.addToGlobalStructureList() -- so we can use it
 
-        return struct
+      return struct
     end
 
     --- creates an element in a parent structure
     function addStructureElem(parentStructElement, elementName, offset, CEType)
-        local element = parentStructElement.ChildStruct.addElement()
-        element.Name = elementName
-        element.Offset = offset
-        element.Vartype = CEType
+      local element = parentStructElement.ChildStruct.addElement()
+      element.Name = elementName
+      element.Offset = offset
+      element.Vartype = CEType
 
-        if CEType == vtUnicodeString then
-            if GDDEFS.GD4_STRING_EXISTS then
-                element.Vartype = vtCustom;
-                element.CustomTypeName = "GD4 String"
-            else
-                element.Bytesize = 100;
-            end
-        elseif CEType == vtDword then
-            element.DisplayMethod = 'dtSignedInteger'
+      if CEType == vtUnicodeString then
+        if GDDEFS.GD4_STRING_EXISTS then
+          element.Vartype = vtCustom;
+          element.CustomTypeName = "GD4 String"
+        else
+          element.Bytesize = 100;
         end
+      elseif CEType == vtDword then
+        element.DisplayMethod = 'dtSignedInteger'
+      end
 
-        return element
+      return element
     end
 
     --- for node layout creation
     function addLayoutStructElem(parentStructElement, childName, backgroundColor, offset, CEType)
-        parentStructElement.ChildStruct = parentStructElement.ChildStruct and parentStructElement.ChildStruct or
-                                              createStructure(parentStructElement.parent.Name or 'ChStructure')
-        local childStructElement = parentStructElement.ChildStruct.addElement()
-        childStructElement.Name = childName
-        if backgroundColor ~= nil then
-            childStructElement.BackgroundColor = backgroundColor
-        end
-        childStructElement.Offset = offset or 0x0
-        childStructElement.VarType = CEType
-        return childStructElement
+      parentStructElement.ChildStruct = parentStructElement.ChildStruct and parentStructElement.ChildStruct or createStructure(parentStructElement.parent.Name or 'ChStructure')
+      local childStructElement = parentStructElement.ChildStruct.addElement()
+      childStructElement.Name = childName
+      if backgroundColor ~= nil then
+        childStructElement.BackgroundColor = backgroundColor
+      end
+      childStructElement.Offset = offset or 0x0
+      childStructElement.VarType = CEType
+      return childStructElement
     end
 
     local function createChildStructElem(parent, label, offset, ceType, structName)
-        local elem = addStructureElem(parent, label, offset, ceType)
-        elem.ChildStruct = createStructure(structName)
-        return elem
+      local elem = addStructureElem(parent, label, offset, ceType)
+      elem.ChildStruct = createStructure(structName)
+      return elem
     end
 
     --- register our own structure dissector callback
     function enableGDDissect()
-        -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
-        -- override CE's callback
-        if GDstructDissectID ~= nil then
-            unregisterStructureDissectOverride(GDstructDissectID)
-        end
-        GDstructDissectID = registerStructureDissectOverride(GDStructureDissect)
+      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+      -- override CE's callback
+      if GDstructDissectID ~= nil then
+        unregisterStructureDissectOverride(GDstructDissectID)
+      end
+      GDstructDissectID = registerStructureDissectOverride(GDStructureDissect)
     end
 
     --- unregister our structure dissector callback
     function disableGDDissect()
-        -- restore CE's callback
-        if GDstructDissectID ~= nil then
-            unregisterStructureDissectOverride(GDstructDissectID)
-        end
-        GDstructDissectID = nil;
+      -- restore CE's callback
+      if GDstructDissectID ~= nil then
+        unregisterStructureDissectOverride(GDstructDissectID)
+      end
+      GDstructDissectID = nil;
     end
 
     function enableGDStructNameLookup()
-        -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
-        -- override CE's lookup
-        if GDStructNameLookupID ~= nil then
-            unregisterStructureNameLookup(GDStructNameLookupID)
-        end
-        GDStructNameLookupID = registerStructureNameLookup(GDStructNameLookup)
+      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+      -- override CE's lookup
+      if GDStructNameLookupID ~= nil then
+        unregisterStructureNameLookup(GDStructNameLookupID)
+      end
+      GDStructNameLookupID = registerStructureNameLookup(GDStructNameLookup)
     end
 
     function disableGDStructNameLookup()
-        -- restore CE's lookup
-        if GDStructNameLookupID ~= nil then
-            unregisterStructureNameLookup(GDStructNameLookupID)
-        end
-        GDStructNameLookupID = nil;
+      -- restore CE's lookup
+      if GDStructNameLookupID ~= nil then
+        unregisterStructureNameLookup(GDStructNameLookupID)
+      end
+      GDStructNameLookupID = nil;
     end
 
     function enableGDAddressLookup()
-        -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
-        -- override CE's lookup
-        if GDAddressLookupID ~= nil then
-            unregisterAddressLookupCallback(GDAddressLookupID)
-        end
-        GDAddressLookupID = registerAddressLookupCallback(GDStructNameLookup)
+      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+      -- override CE's lookup
+      if GDAddressLookupID ~= nil then
+        unregisterAddressLookupCallback(GDAddressLookupID)
+      end
+      GDAddressLookupID = registerAddressLookupCallback(GDStructNameLookup)
     end
 
     function disableGDAddressLookup()
-        -- restore CE's lookup
-        if GDAddressLookupID ~= nil then
-            unregisterAddressLookupCallback(GDAddressLookupID)
-        end
-        GDAddressLookupID = nil;
+      -- restore CE's lookup
+      if GDAddressLookupID ~= nil then
+        unregisterAddressLookupCallback(GDAddressLookupID)
+      end
+      GDAddressLookupID = nil;
     end
 
     --- overriden structure dissector function
     ---@param struct userdata @the newly created struct
     ---@param baseaddr number  @the address form the parent pointer
     function GDStructureDissect(struct, baseaddr)
-        if not (gdOffsetsDefined) then
-            print('define the offsets first, silly')
-            return
+      if not (gdOffsetsDefined) then
+        print('define the offsets first, silly')
+        return
+      end
+
+      if isNullOrNil(baseaddr) then
+        return false
+      end
+      struct = struct and struct or createStructure('') -- should not happen though?
+      struct.beginUpdate()
+
+      if checkForGDScript(baseaddr) and isMMVTable(readPointer(baseaddr)) then
+        dumpedDissectorNodes = {} -- redundant?
+        -- safe to assume, that's a starting point
+        local nodeName = getNodeName(baseaddr)
+        nodeName = nodeName and nodeName or 'Anon Node'
+        struct.Name = ' Node: ' .. nodeName
+        local scriptInstStructElem = struct.addElement()
+        scriptInstStructElem.Name = 'GDScriptInstance'
+        scriptInstStructElem.BackgroundColor = 0x400040
+        scriptInstStructElem.Offset = GDDEFS.GDSCRIPTINSTANCE
+        scriptInstStructElem.VarType = vtPointer
+
+        if isPointerNotNull(baseaddr + GDDEFS.CHILDREN) then
+          local childrenStructElem = struct.addElement()
+          childrenStructElem.Name = 'Children'
+          childrenStructElem.BackgroundColor = 0xFF0080
+          childrenStructElem.Offset = GDDEFS.CHILDREN
+          childrenStructElem.VarType = vtPointer
+          childrenStructElem.ChildStruct = createStructure('Children')
+          iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
         end
 
-        if isNullOrNil(baseaddr) then
-            return false
-        end
-        struct = struct and struct or createStructure('') -- should not happen though?
-        struct.beginUpdate()
+        iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-        if checkForGDScript(baseaddr) and isMMVTable(readPointer(baseaddr)) then
-            dumpedDissectorNodes = {} -- redundant?
-            -- safe to assume, that's a starting point
-            local nodeName = getNodeName(baseaddr)
-            nodeName = nodeName and nodeName or 'Anon Node'
-            struct.Name = ' Node: ' .. nodeName
-            local scriptInstStructElem = struct.addElement()
-            scriptInstStructElem.Name = 'GDScriptInstance'
-            scriptInstStructElem.BackgroundColor = 0x400040
-            scriptInstStructElem.Offset = GDDEFS.GDSCRIPTINSTANCE
-            scriptInstStructElem.VarType = vtPointer
+      elseif bDisasmFunc and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+        disassembleGDFunctionCodeToStruct(baseaddr, struct)
 
-            if isPointerNotNull(baseaddr + GDDEFS.CHILDREN) then
-                local childrenStructElem = struct.addElement()
-                childrenStructElem.Name = 'Children'
-                childrenStructElem.BackgroundColor = 0xFF0080
-                childrenStructElem.Offset = GDDEFS.CHILDREN
-                childrenStructElem.VarType = vtPointer
-                childrenStructElem.ChildStruct = createStructure('Children')
-                iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
-            end
+      elseif checkIfGDObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
+        local childrenStructElem = struct.addElement()
+        childrenStructElem.Name = 'Children'
+        childrenStructElem.BackgroundColor = 0xFF0080
+        childrenStructElem.Offset = GDDEFS.CHILDREN
+        childrenStructElem.VarType = vtPointer
+        childrenStructElem.ChildStruct = createStructure('Children')
+        iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
+      else
+        -- otherwise just let CE decide, btw the base address must be a fucking hex string?
+        struct.autoGuess(numtohexstr(baseaddr), 0x0, 0x500 ) -- 0x500 for researching
+      end
 
-            iterateNodeToStruct(baseaddr, scriptInstStructElem)
-
-        elseif bDisasmFunc and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
-            disassembleGDFunctionCodeToStruct(baseaddr, struct)
-
-        elseif checkIfGDObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
-            local childrenStructElem = struct.addElement()
-            childrenStructElem.Name = 'Children'
-            childrenStructElem.BackgroundColor = 0xFF0080
-            childrenStructElem.Offset = GDDEFS.CHILDREN
-            childrenStructElem.VarType = vtPointer
-            childrenStructElem.ChildStruct = createStructure('Children')
-            iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
-        else
-            -- otherwise just let CE decide, btw the base address must be a fucking hex string?
-            struct.autoGuess(numtohexstr(baseaddr), 0x0, 0x500 ) -- 0x500 for researching
-        end
-
-        struct.endUpdate()
-        return true
+      struct.endUpdate()
+      return true
     end
 
     --- structname lookup that uses the virtual table to guess the type
     ---@param addr integer @address to typeguess
     ---@return string @name; base address isn't returned
     function GDStructNameLookup(addr)
-        if isInvalidPointer(addr) or not isMMVTable(readPointer(addr)) then
-            return nil
-        end
+      if isInvalidPointer(addr) or not isMMVTable(readPointer(addr)) then
+        return nil
+      end
 
-        local result = getObjectName(addr)
-        if result == nil or result == '??' then
-            return nil
-        end
+      local result = getObjectName(addr)
+      if result == nil or result == '??' then
+        return nil
+      end
 
-        return result
+      return result
     end
 
     --- address lookup, not implemented
     ---@param addr integer @address to typeguess
     ---@return string @name;
     function GDAddressLookup(addr)
-        return nil
-        -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then
-        --     return nil
-        -- end
+      return nil
+      -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then
+      --     return nil
+      -- end
 
-        -- local result = getObjectName(addr)
-        -- if result == nil or result == '??' then
-        --     return nil
-        -- end
+      -- local result = getObjectName(addr)
+      -- if result == nil or result == '??' then
+      --     return nil
+      -- end
 
-        -- return result
+      -- return result
     end
 
   -- ///---///--///---///--///---/// GUI
@@ -1665,541 +1667,540 @@
       ---@param strAddress number
       ---@param strSize number
       function readUTFString(strAddress, strSize)
-          assert(type(strAddress) == 'number', "string address should be a number, instead got: " .. type(strAddress));
+        assert(type(strAddress) == 'number', "string address should be a number, instead got: " .. type(strAddress));
 
-          -- debugStepIn()
-          local MAX_CHARS_TO_READ = 1500 * 2
+        -- debugStepIn()
+        local MAX_CHARS_TO_READ = 1500 * 2
 
-          if strSize and (strSize > MAX_CHARS_TO_READ) then
-              -- sendDebugMessageAndStepOut('readUTFString: chars to read is bigger than MAX_CHARS_TO_READ')
-              return "??" -- "ain\'t reading this"  -- we aren't gonna read novels
+        if strSize and (strSize > MAX_CHARS_TO_READ) then
+          -- sendDebugMessageAndStepOut('readUTFString: chars to read is bigger than MAX_CHARS_TO_READ')
+          return "??" -- "ain\'t reading this"  -- we aren't gonna read novels
+        end
+
+        if GDDEFS.MAJOR_VER == 4 then
+          if readInteger(strAddress) == 0 then
+            -- sendDebugMessageAndStepOut('readUTFString: empty string');
+            return "??" -- "empt str"
           end
+        elseif readSmallInteger(strAddress) == 0 then
+          -- sendDebugMessageAndStepOut(' readUTFString: empty string')
+          return "??" -- "empt str"
+        end
 
-          if GDDEFS.MAJOR_VER == 4 then
-              if readInteger(strAddress) == 0 then
-                  -- sendDebugMessageAndStepOut('readUTFString: empty string');
-                  return "??" -- "empt str"
-              end
-          elseif readSmallInteger(strAddress) == 0 then
-              -- sendDebugMessageAndStepOut(' readUTFString: empty string')
-              return "??" -- "empt str"
-          end
+        local charTable = {}
+        local buff = 0
 
-          local charTable = {}
-          local buff = 0
-
-          if GDDEFS.MAJOR_VER == 3 and (strSize and strSize > 0) then
-              -- debugStepOut()
-              return readString(strAddress, strSize * 2, true) or "??" -- '???_INVALID_MEM_CAUGHT_WSIZE'
-
-          elseif GDDEFS.MAJOR_VER == 3 then
-              -- debugStepOut()
-              local retString = readString(strAddress, MAX_CHARS_TO_READ, true)
-
-              while MAX_CHARS_TO_READ > 0 and retString == nil do -- https://github.com/cheat-engine/cheat-engine/issues/2602
-                  MAX_CHARS_TO_READ = MAX_CHARS_TO_READ - 100 -- quite a stride
-                  retString = readString(strAddress, MAX_CHARS_TO_READ, true)
-              end
-              -- debugStepOut()
-              return retString or "??" -- '???_INVALID_MEM_CAUGHT'
-
-          end
-
-          if (strSize and strSize > 0) then
-
-              for i = 0, strSize - 1 do
-                  buff = readInteger(strAddress + i * 0x4) or 0x0
-                  if buff == 0 then
-                      break
-                  end
-                  charTable[#charTable + 1] = codePointToUTF8(buff)
-              end
-
-          else
-              -- null terminator
-              for i = 0, MAX_CHARS_TO_READ do
-                  buff = readInteger(strAddress + i * 0x4) or 0x0
-                  if buff == 0 then
-                      break
-                  end
-                  charTable[#charTable + 1] = codePointToUTF8(buff)
-              end
-          end
-
+        if GDDEFS.MAJOR_VER == 3 and (strSize and strSize > 0) then
           -- debugStepOut()
-          return table.concat(charTable) or "??" -- '???_UNKNSTR'
+          return readString(strAddress, strSize * 2, true) or "??" -- '???_INVALID_MEM_CAUGHT_WSIZE'
+
+        elseif GDDEFS.MAJOR_VER == 3 then
+          -- debugStepOut()
+          local retString = readString(strAddress, MAX_CHARS_TO_READ, true)
+
+          while MAX_CHARS_TO_READ > 0 and retString == nil do -- https://github.com/cheat-engine/cheat-engine/issues/2602
+            MAX_CHARS_TO_READ = MAX_CHARS_TO_READ - 100 -- quite a stride
+            retString = readString(strAddress, MAX_CHARS_TO_READ, true)
+          end
+          -- debugStepOut()
+          return retString or "??" -- '???_INVALID_MEM_CAUGHT'
+        end
+
+        if (strSize and strSize > 0) then
+
+          for i = 0, strSize - 1 do
+            buff = readInteger(strAddress + i * 0x4) or 0x0
+            if buff == 0 then
+              break
+            end
+            charTable[#charTable + 1] = codePointToUTF8(buff)
+          end
+
+        else
+          -- null terminator
+          for i = 0, MAX_CHARS_TO_READ do
+            buff = readInteger(strAddress + i * 0x4) or 0x0
+            if buff == 0 then
+              break
+            end
+            charTable[#charTable + 1] = codePointToUTF8(buff)
+          end
+        end
+
+        -- debugStepOut()
+        return table.concat(charTable) or "??" -- '???_UNKNSTR'
       end
 
       function codePointToUTF8(codePoint)
-          if (codePoint < 0 or codePoint > 0x10FFFF) or (codePoint >= 0xD800 and codePoint <= 0xDFFF) then
-              return 'w-t-f'
-          elseif codePoint <= 0x7F then
-              return string.char(codePoint)
-          elseif codePoint <= 0x7FF then
-              return string.char(0xC0 | (codePoint >> 6), 0x80 | (codePoint & 0x3F))
-          elseif codePoint <= 0xFFFF then
-              return string.char(0xE0 | (codePoint >> 12), 0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
-          else
-              return string.char(0xF0 | (codePoint >> 18), 0x80 | ((codePoint >> 12) & 0x3F),
-                  0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
-          end
+        if (codePoint < 0 or codePoint > 0x10FFFF) or (codePoint >= 0xD800 and codePoint <= 0xDFFF) then
+          return 'w-t-f'
+        elseif codePoint <= 0x7F then
+          return string.char(codePoint)
+        elseif codePoint <= 0x7FF then
+          return string.char(0xC0 | (codePoint >> 6), 0x80 | (codePoint & 0x3F))
+        elseif codePoint <= 0xFFFF then
+          return string.char(0xE0 | (codePoint >> 12), 0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
+        else
+          return string.char(0xF0 | (codePoint >> 18), 0x80 | ((codePoint >> 12) & 0x3F), 0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
+        end
       end
 
       --- reads a string from StringName
       ---@param stringNameAddr number
       function getStringNameStr(stringNameAddr)
-          if isNullOrNil(stringNameAddr) then
-              return 'NaN_strname'
+        if isNullOrNil(stringNameAddr) then
+          return 'NaN_strname'
+        end
+        -- debugStepIn()
+        local retStringAddr = readPointer(stringNameAddr + GDDEFS.STRING)
+
+        if isNullOrNil(retStringAddr) or isInvalidPointer(retStringAddr) then
+          retStringAddr = readPointer(stringNameAddr + 0x8) -- for cases when StringName holds data at 0x8
+          if isNullOrNil(retStringAddr) then
+            -- sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
+            return '??' -- return an empty string if no string was found
           end
-          -- debugStepIn()
-          local retStringAddr = readPointer(stringNameAddr + GDDEFS.STRING)
 
-          if isNullOrNil(retStringAddr) or isInvalidPointer(retStringAddr) then
-              retStringAddr = readPointer(stringNameAddr + 0x8) -- for cases when StringName holds data at 0x8
-              if isNullOrNil(retStringAddr) then
-                  -- sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
-                  return '??' -- return an empty string if no string was found
-              end
-
-              -- sendDebugMessage('getStringNameStr: string address invalid, trying shifting/ASCII')
-              -- Try ASCII if it's static & in pck
-              if isInsideRDataStatic(retStringAddr) then
-                  -- debugStepOut()
-                  -- a static ASCII string's last resort
-                  return readString(retStringAddr, 100)
-              end
-
-              return readUTFString(retStringAddr) or '??'
+          -- sendDebugMessage('getStringNameStr: string address invalid, trying shifting/ASCII')
+          -- Try ASCII if it's static & in pck
+          if isInsideRDataStatic(retStringAddr) then
+            -- debugStepOut()
+            -- a static ASCII string's last resort
+            return readString(retStringAddr, 100)
           end
-          -- debugStepOut()
-          return readUTFString(retStringAddr)
+
+          return readUTFString(retStringAddr) or '??'
+        end
+        -- debugStepOut()
+        return readUTFString(retStringAddr)
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// DEFINE
 
       --- initializes and assigns offsets
       function defineGDOffsets(config)
-          -- TODO: redo the flow of manual and version based definition
+        -- TODO: redo the flow of manual and version based definition
 
-          -- -- -- -- -- --
-          if config == nil then
-              config = {}
-          end
-          if GDDEFS == nil then
-              GDDEFS = {}
-          end
-          GDDEFS.STRING = 0x10
-          dumpedMonitorNodes = {};
-          debugPrefix = 1;
-          if targetIs64Bit() then
-              GDDEFS.PTRSIZE = 0x8
-              GDDEFS._x64bit = true
+        -- -- -- -- -- --
+        if config == nil then config = {} end
+        
+        if GDDEFS == nil then -- TODO: replace with a function
+          GDDEFS = {}
+          GDDEFS.SCRIPT_TYPES =
+          {
+            ["UNDEFINED"] = 0,
+            ["GD"] = 1,
+            ["CS"] = 2
+          }
+        end
+
+        GDDEFS.STRING = 0x10
+        dumpedMonitorNodes = {};
+        debugPrefix = 1;
+        if targetIs64Bit() then
+          GDDEFS.PTRSIZE = 0x8
+          GDDEFS._x64bit = true
+        else
+          GDDEFS.PTRSIZE = 0x4
+          GDDEFS._x64bit = false
+        end -- for auto offsetdef and ptr arithmetics
+        -- -- -- -- -- --
+
+        if isNotNullOrNil(config.majorVersion) and isNotNullOrNil(config.minorVersion) and
+          isNotNullOrNil(config.GDCustomver) and isNotNullOrNil(config.GDDebugVer) then
+          GDDEFS.VERSION_STRING = tostring(config.majorVersion) .. '.' .. tostring(config.minorVersion)
+          GDDEFS.DEBUGVER = config.GDDebugVer
+          GDDEFS.CUSTOMVER = config.GDCustomver
+          GDDEFS.MAJOR_VER = config.majorVersion
+          GDDEFS.MINOR_VER = config.minorVersion
+        else
+          if lregexScan and type(lregexScan) == "function" then
+            defineGDVersion()
           else
-              GDDEFS.PTRSIZE = 0x4
-              GDDEFS._x64bit = false
-          end -- for auto offsetdef and ptr arithmetics
-          -- -- -- -- -- --
-
-          if isNotNullOrNil(config.majorVersion) and isNotNullOrNil(config.minorVersion) and
-              isNotNullOrNil(config.GDCustomver) and isNotNullOrNil(config.GDDebugVer) then
-              GDDEFS.VERSION_STRING = tostring(config.majorVersion) .. '.' .. tostring(config.minorVersion)
-              GDDEFS.DEBUGVER = config.GDDebugVer
-              GDDEFS.CUSTOMVER = config.GDCustomver
-              GDDEFS.MAJOR_VER = config.majorVersion
-              GDDEFS.MINOR_VER = config.minorVersion
-          else
-              if lregexScan and type(lregexScan) == "function" then
-                  defineGDVersion()
-              else
-                  -- a regex plugin must be initialized for that
-                  error("CERegEx plugin not installed: https://github.com/palepine/CERegEx/releases")
-              end
+            -- a regex plugin must be initialized for that
+            error("CERegEx plugin not installed: https://github.com/palepine/CERegEx/releases")
           end
+        end
 
-          if bHardOffsets then
-              local offsets = getStoredOffsetsFromVersion(GDDEFS.VERSION_STRING)
-              GDDEFS.CHILDREN = offsets.VPChildren
-              GDDEFS.OBJ_STRING_NAME = offsets.VPObjStringName
-              GDDEFS.GDSCRIPTINSTANCE = offsets.NodeGDScriptInstance
-              GDDEFS.GDSCRIPTNAME = offsets.NodeGDScriptName
-              GDDEFS.FUNC_MAP = offsets.GDScriptFunctionMap
-              GDDEFS.CONST_MAP = offsets.GDScriptConstantMap
-              GDDEFS.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
-              GDDEFS.VAR_VECTOR = offsets.oVariantVector
-              GDDEFS.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
-              GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
-              GDDEFS.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
-              GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
-              GDDEFS.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
-              GDDEFS.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
-              if GDDEFS.MAJOR_VER == 4 then
-                  GDDEFS.GDSCRIPT_REF = 0x18
-                  GDDEFS.MAXTYPE = 39
-                  GDDEFS.FUNC_MAPVAL = 0x18
-                  GDDEFS.CHILDREN_SIZE = 0x8
-                  GDDEFS.MAP_SIZE = 0x14
-                  GDDEFS.ARRAY_TOVECTOR = 0x10
-                  GDDEFS.P_ARRAY_TOARR = 0x18
-                  GDDEFS.P_ARRAY_SIZE = 0x8
-                  GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
-                  GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
-                  GDDEFS.DICT_SIZE = GDDEFS.DICT_TAIL or 0x3C
-                  GDDEFS.DICTELEM_KEYTYPE = 0x10
-                  GDDEFS.DICTELEM_KEYVAL = 0x18
-                  GDDEFS.DICTELEM_VALTYPE = 0x28
-                  GDDEFS.CONSTELEM_KEYVAL = 0x10
-                  GDDEFS.CONSTELEM_VALTYPE = 0x18
-                  GDDEFS.VAR_NAMEINDEX_I = 0x18
-              elseif GDDEFS.MAJOR_VER == 3 then
-                  GDDEFS.MAXTYPE = 27
-                  GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
-                  GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
-                  GDDEFS.CHILDREN_SIZE = 0x4
-                  GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
-                  GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
-                  GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
-                  GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
-                  GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
-                  GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
-                  GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
-                  GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
-                  GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
-                  GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
-                  GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
-                  GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
-                  GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
-                  GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x10
-                  GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
-                  GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
-                  GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
-                  GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
-              else
-                  error("Unexpected version")
-              end
+        if bHardOffsets then
+          local offsets = getStoredOffsetsFromVersion(GDDEFS.VERSION_STRING)
+          GDDEFS.CHILDREN = offsets.VPChildren
+          GDDEFS.OBJ_STRING_NAME = offsets.VPObjStringName
+          GDDEFS.GDSCRIPTINSTANCE = offsets.NodeGDScriptInstance
+          GDDEFS.GDSCRIPTNAME = offsets.NodeGDScriptName
+          GDDEFS.FUNC_MAP = offsets.GDScriptFunctionMap
+          GDDEFS.CONST_MAP = offsets.GDScriptConstantMap
+          GDDEFS.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
+          GDDEFS.VAR_VECTOR = offsets.oVariantVector
+          GDDEFS.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
+          GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
+          GDDEFS.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
+          GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
+          GDDEFS.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
+          GDDEFS.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
+          if GDDEFS.MAJOR_VER == 4 then
+            GDDEFS.GDSCRIPT_REF = 0x18
+            GDDEFS.MAXTYPE = 39
+            GDDEFS.FUNC_MAPVAL = 0x18
+            GDDEFS.CHILDREN_SIZE = 0x8
+            GDDEFS.MAP_SIZE = 0x14
+            GDDEFS.ARRAY_TOVECTOR = 0x10
+            GDDEFS.P_ARRAY_TOARR = 0x18
+            GDDEFS.P_ARRAY_SIZE = 0x8
+            GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
+            GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
+            GDDEFS.DICT_SIZE = GDDEFS.DICT_TAIL or 0x3C
+            GDDEFS.DICTELEM_KEYTYPE = 0x10
+            GDDEFS.DICTELEM_KEYVAL = 0x18
+            GDDEFS.DICTELEM_VALTYPE = 0x28
+            GDDEFS.CONSTELEM_KEYVAL = 0x10
+            GDDEFS.CONSTELEM_VALTYPE = 0x18
+            GDDEFS.VAR_NAMEINDEX_I = 0x18
+          elseif GDDEFS.MAJOR_VER == 3 then
+            GDDEFS.MAXTYPE = 27
+            GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
+            GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
+            GDDEFS.CHILDREN_SIZE = 0x4
+            GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
+            GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
+            GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
+            GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
+            GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
+            GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
+            GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
+            GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
+            GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
+            GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
+            GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
+            GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
+            GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
+            GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x10
+            GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
+            GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
+            GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
+            GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
           else
-              if GDDEFS.MAJOR_VER == 4 then
-                  GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
-                  GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-                  GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-                  GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-                  GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
-                  GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
-                  GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
-
-                  GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
-                  GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
-                  GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
-
-                  GDDEFS.GDSCRIPT_REF = 0x18
-                  GDDEFS.MAXTYPE = 39
-                  -- GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
-                  GDDEFS.FUNC_MAPVAL = 0x18
-                  GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
-                  GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE + 0x20)
-                  -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
-                  GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10)
-
-                  GDDEFS.CHILDREN_SIZE = 0x8
-
-                  GDDEFS.MAP_SIZE = 0x14
-
-                  GDDEFS.ARRAY_TOVECTOR = 0x10
-                  GDDEFS.P_ARRAY_TOARR = 0x18
-                  GDDEFS.P_ARRAY_SIZE = 0x8
-
-                  GDDEFS.DICT_HEAD = 0x28
-                  GDDEFS.DICT_TAIL = 0x30
-                  GDDEFS.DICT_SIZE = 0x3C
-
-                  GDDEFS.DICTELEM_KEYTYPE = 0x10
-                  GDDEFS.DICTELEM_KEYVAL = 0x18
-                  GDDEFS.DICTELEM_VALTYPE = 0x28
-
-                  GDDEFS.CONSTELEM_KEYVAL = 0x10
-                  GDDEFS.CONSTELEM_VALTYPE = 0x18
-
-                  GDDEFS.VAR_NAMEINDEX_I = 0x18
-                  -- for Object vtable
-                  -- 3.0-3.6 [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
-                  if GDDEFS.MINOR_VER <= 4 then
-                      GDDEFS.GET_TYPE_INDX = 8
-                  elseif GDDEFS.MINOR_VER == 5 then
-                      GDDEFS.GET_TYPE_INDX = 9
-                  elseif GDDEFS.MINOR_VER == 6 then
-                      GDDEFS.GET_TYPE_INDX = 10
-                  end
-
-              elseif GDDEFS.MAJOR_VER == 3 then
-                  GDDEFS.MAJOR_VER = 3
-
-                  GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
-                  GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-                  GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-                  GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-                  GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
-                  GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
-                  GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
-
-                  GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
-                  GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
-
-                  GDDEFS.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
-
-                  GDDEFS.MAXTYPE = 27
-                  -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
-
-                  GDDEFS.GDSCRIPT_REF = 0x10
-
-                  GDDEFS.FUNC_MAPVAL = 0x38
-                  GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
-                  GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
-                  GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR - 0x10)
-                  GDDEFS.CHILDREN_SIZE = 0x4
-
-                  GDDEFS.MAP_SIZE = 0x10
-                  GDDEFS.MAP_LELEM = 0x10
-                  GDDEFS.MAP_NEXTELEM = 0x20
-                  GDDEFS.MAP_KVALUE = 0x30
-
-                  GDDEFS.DICT_LIST = 0x8
-                  GDDEFS.DICT_HEAD = 0x0
-                  GDDEFS.DICT_TAIL = 0x8
-                  GDDEFS.DICT_SIZE = 0x1C -- GDDEFS.DICT_SIZE = 0x10
-                  GDDEFS.DICTELEM_PAIR_NEXT = 0x20
-
-                  GDDEFS.DICTELEM_KEYTYPE = 0x0
-                  GDDEFS.DICTELEM_KEYVAL = 0x8
-                  GDDEFS.DICTELEM_VALTYPE = 0x8
-                  GDDEFS.DICTELEM_VALVAL = 0x10
-
-                  GDDEFS.ARRAY_TOVECTOR = 0x10
-                  GDDEFS.P_ARRAY_TOARR = 0x8
-                  GDDEFS.P_ARRAY_SIZE = 0x18
-
-                  GDDEFS.CONSTELEM_KEYVAL = 0x30
-                  GDDEFS.CONSTELEM_VALTYPE = 0x38
-
-                  GDDEFS.GET_TYPE_INDX = 6
-              else
-                  error("Unexpected version")
-              end
+            error("Unexpected version")
           end
+        else
+          if GDDEFS.MAJOR_VER == 4 then
+            GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
+            GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+            GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+            GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+            GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
+            GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
+            GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
 
-          -- try finding SceneTree and Viewport/Window
-          if tryRegSceneTree() and setSTtoVPoffset() then
-              registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false)
+            GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
+            GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
+            GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
+
+            GDDEFS.GDSCRIPT_REF = 0x18
+            GDDEFS.MAXTYPE = 39
+            -- GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
+            GDDEFS.FUNC_MAPVAL = 0x18
+            GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+            GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE + 0x20)
+            -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
+            GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10)
+
+            GDDEFS.CHILDREN_SIZE = 0x8
+
+            GDDEFS.MAP_SIZE = 0x14
+
+            GDDEFS.ARRAY_TOVECTOR = 0x10
+            GDDEFS.P_ARRAY_TOARR = 0x18
+            GDDEFS.P_ARRAY_SIZE = 0x8
+
+            GDDEFS.DICT_HEAD = 0x28
+            GDDEFS.DICT_TAIL = 0x30
+            GDDEFS.DICT_SIZE = 0x3C
+
+            GDDEFS.DICTELEM_KEYTYPE = 0x10
+            GDDEFS.DICTELEM_KEYVAL = 0x18
+            GDDEFS.DICTELEM_VALTYPE = 0x28
+
+            GDDEFS.CONSTELEM_KEYVAL = 0x10
+            GDDEFS.CONSTELEM_VALTYPE = 0x18
+
+            GDDEFS.VAR_NAMEINDEX_I = 0x18
+            -- for Object vtable
+            -- 3.0-3.6 [6] | 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
+            if GDDEFS.MINOR_VER <= 4 then
+              GDDEFS.GET_TYPE_INDX = 8
+            elseif GDDEFS.MINOR_VER == 5 then
+              GDDEFS.GET_TYPE_INDX = 9
+            elseif GDDEFS.MINOR_VER == 6 then
+              GDDEFS.GET_TYPE_INDX = 10
+            end
+
+          elseif GDDEFS.MAJOR_VER == 3 then
+            GDDEFS.MAJOR_VER = 3
+
+            GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
+            GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+            GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+            GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+            GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
+            GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
+            GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
+
+            GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
+            GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
+
+            GDDEFS.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
+
+            GDDEFS.MAXTYPE = 27
+            -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+
+            GDDEFS.GDSCRIPT_REF = 0x10
+
+            GDDEFS.FUNC_MAPVAL = 0x38
+            GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+            GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
+            GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR - 0x10)
+            GDDEFS.CHILDREN_SIZE = 0x4
+
+            GDDEFS.MAP_SIZE = 0x10
+            GDDEFS.MAP_LELEM = 0x10
+            GDDEFS.MAP_NEXTELEM = 0x20
+            GDDEFS.MAP_KVALUE = 0x30
+
+            GDDEFS.DICT_LIST = 0x8
+            GDDEFS.DICT_HEAD = 0x0
+            GDDEFS.DICT_TAIL = 0x8
+            GDDEFS.DICT_SIZE = 0x1C -- GDDEFS.DICT_SIZE = 0x10
+            GDDEFS.DICTELEM_PAIR_NEXT = 0x20
+
+            GDDEFS.DICTELEM_KEYTYPE = 0x0
+            GDDEFS.DICTELEM_KEYVAL = 0x8
+            GDDEFS.DICTELEM_VALTYPE = 0x8
+            GDDEFS.DICTELEM_VALVAL = 0x10
+
+            GDDEFS.ARRAY_TOVECTOR = 0x10
+            GDDEFS.P_ARRAY_TOARR = 0x8
+            GDDEFS.P_ARRAY_SIZE = 0x18
+
+            GDDEFS.CONSTELEM_KEYVAL = 0x30
+            GDDEFS.CONSTELEM_VALTYPE = 0x38
+
+            GDDEFS.GET_TYPE_INDX = 6
           else
-              sendDebugMessage("Couldn't find SceneTree & toVP offset")
+            error("Unexpected version")
           end
+        end
 
-          gdOffsetsDefined = true
-          -- check if 4.x string type reged, otherwise define it
-          checkGDStringType()
-          -- build disassembler
-          defineGDFunctionEnums()
-          fuckoffPrint()
+        -- try finding SceneTree and Viewport/Window
+        if tryRegSceneTree() and setSTtoVPoffset() then
+          registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false)
+        else
+          sendDebugMessage("Couldn't find SceneTree & toVP offset")
+        end
+
+        gdOffsetsDefined = true
+        -- check if 4.x string type reged, otherwise define it
+        checkGDStringType()
+        -- build disassembler
+        defineGDFunctionEnums()
+        fuckoffPrint()
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Viewport / Window / SceneTree
 
       function tryRegSceneTree()
-          local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
-              local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
-              if addr == 0 or addr == nil then
-                  return false
-              end
-              offsetToNextIntr = offsetToNextIntr or getInstructionSize(addr)
-              offsetToValue = offsetToValue or (offsetToNextIntr - 4)
-              local relativeAddr = readInteger(addr + offsetToValue)
-              local nextAddr = getAddress(addr + offsetToNextIntr)
-              local resolvedAddr = nextAddr + relativeAddr
-              sendDebugMessage("tryRegSceneTree: calling a virtual method if I happen to crash:\tstatic ptr: " ..
-                                  numtohexstr(resolvedAddr))
-              local className = getObjectName(readPointer(resolvedAddr))
-              if className == "SceneTree" then
-                  registerSymbol('pSceneTree', resolvedAddr, false)
-                  return true
-              else
-                  return false
-              end
+        local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
+          local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+          if addr == 0 or addr == nil then
+            return false
           end
-          local sigs = {}
-
-          table.insert(sigs, "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?")
-          table.insert(sigs, "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?")
-          table.insert(sigs, "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00")
-          table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?")
-          table.insert(sigs, "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05")
-          table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26")
-          table.insert(sigs, "48 C7 05 ? ? ? ? 00 00 00 00 E9 ? ? ? ? 85 C0")
-
-          table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24")
-          table.insert(sigs, "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB")
-          table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D")
-          table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 4C 8B 2B")
-          table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36")
-          table.insert(sigs, "4C 8B 0D ? ? ? ? 4C 89 B4 24")
-          table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B")
-          table.insert(sigs, "48 8B 0D ? ? ? ? 48 83 C4 ?   5?") -- 3.0
-
-          for i, sig in ipairs(sigs) do
-              if resolveRelAddr(sig, 3) then
-                  sendDebugMessage('tryRegSceneTree: hit at: ' .. tostring(i) .. "\t" .. sig)
-                  return true
-              end
+          offsetToNextIntr = offsetToNextIntr or getInstructionSize(addr)
+          offsetToValue = offsetToValue or (offsetToNextIntr - 4)
+          local relativeAddr = readInteger(addr + offsetToValue)
+          local nextAddr = getAddress(addr + offsetToNextIntr)
+          local resolvedAddr = nextAddr + relativeAddr
+          sendDebugMessage("tryRegSceneTree: calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
+          local className = getObjectName(readPointer(resolvedAddr))
+          if className == "SceneTree" then
+            registerSymbol('pSceneTree', resolvedAddr, false)
+            return true
+          else
+            return false
           end
-          return false
+        end
+        local sigs = {}
+
+        table.insert(sigs, "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?")
+        table.insert(sigs, "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?")
+        table.insert(sigs, "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00")
+        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?")
+        table.insert(sigs, "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05")
+        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26")
+        table.insert(sigs, "48 C7 05 ? ? ? ? 00 00 00 00 E9 ? ? ? ? 85 C0")
+
+        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24")
+        table.insert(sigs, "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB")
+        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D")
+        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 4C 8B 2B")
+        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36")
+        table.insert(sigs, "4C 8B 0D ? ? ? ? 4C 89 B4 24")
+        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B")
+        table.insert(sigs, "48 8B 0D ? ? ? ? 48 83 C4 ?   5?") -- 3.0
+
+        for i, sig in ipairs(sigs) do
+          if resolveRelAddr(sig, 3) then
+            sendDebugMessage('tryRegSceneTree: hit at: ' .. tostring(i) .. "\t" .. sig)
+            return true
+          end
+        end
+        return false
       end
 
       function setSTtoVPoffset()
 
-          local sceneTree = readPointer('pSceneTree')
-          local ptrsize, steps
+        local sceneTree = readPointer('pSceneTree')
+        local ptrsize, steps
 
-          if targetIs64Bit() then
-              ptrsize = 0x8
-              steps = 0x350 / ptrsize
-          else
-              ptrsize = 0x4
-              steps = 0x200 / ptrsize
-          end
+        if targetIs64Bit() then
+          ptrsize = 0x8
+          steps = 0x350 / ptrsize
+        else
+          ptrsize = 0x4
+          steps = 0x200 / ptrsize
+        end
 
-          -- isn't elegant either
-          for i = 23, steps do
-              local candidateAddr = readPointer(sceneTree + i * ptrsize)
-              if isNotNullOrNil(candidateAddr) and isMMVTable(readPointer(candidateAddr)) then
+        -- isn't elegant either
+        for i = 23, steps do
+          local candidateAddr = readPointer(sceneTree + i * ptrsize)
+          if isNotNullOrNil(candidateAddr) and isMMVTable(readPointer(candidateAddr)) then
 
-                  sendDebugMessage("setSTtoVPoffset: calling a virtual method if I happen to crash: ofs\t" ..
-                                      numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
-                  local className = getObjectName(candidateAddr)
-                  if className == "Viewport" or className == "Window" then
-                      registerSymbol('oSTtoVP', i * ptrsize, false)
-                      sendDebugMessage('setSTtoVPoffset: loop: ' .. numtohexstr(i * ptrsize))
-                      return true
-                  end
-                  -- for j=13, steps do
-                  --     if readPointer(candidateAddr + j*ptrsize) == sceneTree then
-                  --         registerSymbol('oSTtoVP', i*ptrsize, false)
-                  --         sendDebugMessage('setSTtoVPoffset: nested loop: '..numtohexstr(i*ptrsize))
-                  --         return true
-                  --     end
-                  -- end
-
-              end
-          end
-
-          -- the approach based on signatures needs more complexity to be consistent
-          local function setVPRVA(aobSignature)
-              local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
-              if addr == 0 or addr == nil then
-                  return false
-              end
-              local relativeAddr = readInteger(addr + 3)
-              registerSymbol('oSTtoVP', relativeAddr, false)
+            sendDebugMessage("setSTtoVPoffset: calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
+            local className = getObjectName(candidateAddr)
+            if className == "Viewport" or className == "Window" then
+              registerSymbol('oSTtoVP', i * ptrsize, false)
+              sendDebugMessage('setSTtoVPoffset: loop: ' .. numtohexstr(i * ptrsize))
               return true
+            end
+            -- for j=13, steps do
+            --     if readPointer(candidateAddr + j*ptrsize) == sceneTree then
+            --         registerSymbol('oSTtoVP', i*ptrsize, false)
+            --         sendDebugMessage('setSTtoVPoffset: nested loop: '..numtohexstr(i*ptrsize))
+            --         return true
+            --     end
+            -- end
           end
-          local sigs = {}
-          -- table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8")
-          table.insert(sigs, "48 8B 9? ? ? ? ? 4? 8D 8F ? ? ? ? 45 33 C0 E8")
-          table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8 ? ? ? ? 80 3D ? ? ? ? 00")
-          table.insert(sigs, "48 8B B0 ? ? ? ? 80 BB")
-          table.insert(sigs, "48 8B 88 ? ? ? ? E8 ? ? ? ? 84 C0 74 ? 48 8B 03")
-          table.insert(sigs, "48 8B B9 ? ? ? ? 89 DA")
-          table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E")
-          table.insert(sigs, "48 8B BF ? ? ? ? 74") -- might be too short
-          table.insert(sigs, "48 8B 80 ? ? ? ? 40 38 B8 ? ? ? ? 0F 85")
-          table.insert(sigs, "48 8B B0 ? ? ? ? 48 39 BE")
-          table.insert(sigs, "48 8B 80 ? ? ? ? 80 B8 ? ? ? ? ? 0F 85 ? ? ? ? 48 8B 03")
-          table.insert(sigs, "48 8B 89 ? ? ? ? E9 ? ? ? ? 0F 1F 80 ? ? ? ? 81 FA")
-          table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E ? ? ? ? 48 85 C9 74")
-          table.insert(sigs, "48 8B 88 ? ? ? ? E8 ? ? ? ? 84 C0 0F 85 ? ? ? ? 48 8B 03")
-          table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E ? ? ? ? 48 85 C9 0F 84")
-          table.insert(sigs, "48 8B 8? ? ? ? ? E8 ? ? ? ? 48 8B 5C 24 ? 48 83 C4 ? 5F C3 90")
-          table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F E9 ? ? ? ? 0F 1F 80")
-          table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F E9 ? ? ? ? 0F 1F 44 00 ? 48 8B 05")
-          table.insert(sigs, "48 8B 8B ? ? ? ? 45 31 C0 48 89 F2 48 89 B3")
-          table.insert(sigs, "48 8B 8B ? ? ? ? 45 31 C0 4C 89 E2 4C 89 A3")
-          table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 41 5C 41 5D 41 5E")
+        end
 
-          table.insert(sigs, "48 3B 90 ? ? ? ? 0F 84 ? ? ? ? 48 8B 83")
-          table.insert(sigs, "48 39 82 ? ? ? ? 74 ? 48 8B 83")
-          table.insert(sigs, "48 39 86 ? ? ? ? 74 ? C7 44 24")
-          table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 66 2E 0F 1F 84 00")
-          table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
-          for i, sig in ipairs(sigs) do
-              if setVPRVA(sig) then
-                  sendDebugMessage('setSTtoVPoffset: hit at: ' .. tostring(i) .. "\t" .. sig .. "\t value: " ..
-                                      numtohexstr(getAddress('oSTtoVP')))
-                  return true
-              end
+        -- the approach based on signatures needs more complexity to be consistent
+        local function setVPRVA(aobSignature)
+          local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+          if addr == 0 or addr == nil then
+            return false
           end
-          return false
+          local relativeAddr = readInteger(addr + 3)
+          registerSymbol('oSTtoVP', relativeAddr, false)
+          return true
+        end
+        local sigs = {}
+        -- table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8")
+        table.insert(sigs, "48 8B 9? ? ? ? ? 4? 8D 8F ? ? ? ? 45 33 C0 E8")
+        table.insert(sigs, "48 8B 9? ? ? ? ? 4? 31 C0 48 89 E9 E8 ? ? ? ? 80 3D ? ? ? ? 00")
+        table.insert(sigs, "48 8B B0 ? ? ? ? 80 BB")
+        table.insert(sigs, "48 8B 88 ? ? ? ? E8 ? ? ? ? 84 C0 74 ? 48 8B 03")
+        table.insert(sigs, "48 8B B9 ? ? ? ? 89 DA")
+        table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E")
+        table.insert(sigs, "48 8B BF ? ? ? ? 74") -- might be too short
+        table.insert(sigs, "48 8B 80 ? ? ? ? 40 38 B8 ? ? ? ? 0F 85")
+        table.insert(sigs, "48 8B B0 ? ? ? ? 48 39 BE")
+        table.insert(sigs, "48 8B 80 ? ? ? ? 80 B8 ? ? ? ? ? 0F 85 ? ? ? ? 48 8B 03")
+        table.insert(sigs, "48 8B 89 ? ? ? ? E9 ? ? ? ? 0F 1F 80 ? ? ? ? 81 FA")
+        table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E ? ? ? ? 48 85 C9 74")
+        table.insert(sigs, "48 8B 88 ? ? ? ? E8 ? ? ? ? 84 C0 0F 85 ? ? ? ? 48 8B 03")
+        table.insert(sigs, "48 8B B0 ? ? ? ? 48 8B 8E ? ? ? ? 48 85 C9 0F 84")
+        table.insert(sigs, "48 8B 8? ? ? ? ? E8 ? ? ? ? 48 8B 5C 24 ? 48 83 C4 ? 5F C3 90")
+        table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F E9 ? ? ? ? 0F 1F 80")
+        table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F E9 ? ? ? ? 0F 1F 44 00 ? 48 8B 05")
+        table.insert(sigs, "48 8B 8B ? ? ? ? 45 31 C0 48 89 F2 48 89 B3")
+        table.insert(sigs, "48 8B 8B ? ? ? ? 45 31 C0 4C 89 E2 4C 89 A3")
+        table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 41 5C 41 5D 41 5E")
+
+        table.insert(sigs, "48 3B 90 ? ? ? ? 0F 84 ? ? ? ? 48 8B 83")
+        table.insert(sigs, "48 39 82 ? ? ? ? 74 ? 48 8B 83")
+        table.insert(sigs, "48 39 86 ? ? ? ? 74 ? C7 44 24")
+        table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 66 2E 0F 1F 84 00")
+        table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
+        for i, sig in ipairs(sigs) do
+          if setVPRVA(sig) then
+            sendDebugMessage('setSTtoVPoffset: hit at: ' .. tostring(i) .. "\t" .. sig .. "\t value: " .. numtohexstr(getAddress('oSTtoVP')))
+            return true
+          end
+        end
+        return false
       end
 
       --- returns a valid Viewport pointer
       --- @return number
       function getViewport()
-
-          local viewport = readPointer("ptVP")
-          if isNullOrNil(viewport) then
-              print("Viewport pointer is invalid; something's wrong");
-              error('viewport pointer is invalid, couldn\'t read')
-          end
-          return viewport
+        local viewport = readPointer("ptVP")
+        if isNullOrNil(viewport) then
+          print("Viewport pointer is invalid; something's wrong");
+          error('viewport pointer is invalid, couldn\'t read')
+        end
+        return viewport
       end
 
       --- returns a childrenArrayPtr and its size
       ---@return number
       function getVPChildren()
-          local viewport = getViewport()
+        local viewport = getViewport()
 
-          debugStepIn()
+        debugStepIn()
 
-          local childrenPtr = readPointer(viewport + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
-          if isNullOrNil(childrenPtr) then
-              sendDebugMessageAndStepOut('getVPChildren: failed to get VP children')
-              return;
-          end
+        local childrenPtr = readPointer(viewport + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
+        if isNullOrNil(childrenPtr) then
+          sendDebugMessageAndStepOut('getVPChildren: failed to get VP children')
+          return;
+        end
 
-          local childrenSize;
-          if GDDEFS.MAJOR_VER == 4 then
-              childrenSize = readInteger(viewport + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-          elseif GDDEFS.MAJOR_VER > 4 then
-              childrenSize = readInteger(childrenPtr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
-          else
-              childrenSize = readInteger(childrenPtr - GDDEFS.CHILDREN_SIZE)
-          end
+        local childrenSize;
+        if GDDEFS.MAJOR_VER == 4 then
+          childrenSize = readInteger(viewport + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
+        elseif GDDEFS.MAJOR_VER > 4 then
+          childrenSize = readInteger(childrenPtr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
+        else
+          childrenSize = readInteger(childrenPtr - GDDEFS.CHILDREN_SIZE)
+        end
 
-          if isNullOrNil(childrenSize) then
-              sendDebugMessageAndStepOut('getVPChildren: ChildSize is invalid')
-              return;
-          end
+        if isNullOrNil(childrenSize) then
+          sendDebugMessageAndStepOut('getVPChildren: ChildSize is invalid')
+          return;
+        end
 
-          debugStepOut();
-          return childrenPtr, childrenSize
+        debugStepOut();
+        return childrenPtr, childrenSize
       end
 
-        -- TODO: split to specific engine internals
+      -- TODO: split to specific engine internals
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// VISITORS
 
       local NodeVisitor = {}
 
-      function NodeVisitor.recurseDictionary(dictPtr)
+        function NodeVisitor.recurseDictionary(dictPtr)
           iterateDictionaryForNodes(dictPtr)
-      end
+        end
 
-      function NodeVisitor.recurseArray(arrPtr)
+        function NodeVisitor.recurseArray(arrPtr)
           iterateArrayForNodes(arrPtr)
-      end
+        end
 
-      function NodeVisitor.visitObject(objPtr)
+        function NodeVisitor.visitObject(objPtr)
           local realPtr, bShifted = checkForVT(objPtr)
           local nodePtr = readPointer(realPtr)
           if checkForGDScript(nodePtr) then
-              iterateMNode(nodePtr)
+            iterateMNode(nodePtr)
           end
-      end
+        end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// EMITTERS
         -- leaves just add entries
@@ -2210,730 +2211,716 @@
         ---------------------------------------------------------------------------------
         GDEmitters.StructEmitter = {}
 
-        local function rootOffset(entry, emitter)
+          local function rootOffset(entry, emitter)
             if emitter == GDEmitters.StructEmitter then
-                return entry.offsetToValue
+              return entry.offsetToValue
             end
             return 0x0
-        end
+          end
 
-        local function fieldOffset(entry, emitter, rel)
+          local function fieldOffset(entry, emitter, rel)
             if emitter == GDEmitters.StructEmitter then
-                return entry.offsetToValue + rel
+              return entry.offsetToValue + rel
             end
             return rel
-        end
+          end
 
-        function GDEmitters.StructEmitter.leaf(contextTable, parent, label, offset, ceType)
+          function GDEmitters.StructEmitter.leaf(contextTable, parent, label, offset, ceType)
             return addStructureElem(parent, label, offset, ceType)
-        end
+          end
 
-        function GDEmitters.StructEmitter.layout(contextTable, parent, label, color, offset, ceType)
+          function GDEmitters.StructEmitter.layout(contextTable, parent, label, color, offset, ceType)
             return addLayoutStructElem(parent, label, color, offset, ceType)
-        end
+          end
 
-        function GDEmitters.StructEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
+          function GDEmitters.StructEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
             local elem = addStructureElem(parent, label, offset, ceType)
             elem.ChildStruct = createStructure(childStructName)
             return elem
-        end
+          end
 
-        function GDEmitters.StructEmitter.recurseDictionary(contextTable, parent, dictPtr)
+          function GDEmitters.StructEmitter.recurseDictionary(contextTable, parent, dictPtr)
             iterateDictionaryToStruct(dictPtr, parent)
-        end
+          end
 
-        function GDEmitters.StructEmitter.recurseArray(contextTable, parent, arrPtr)
+          function GDEmitters.StructEmitter.recurseArray(contextTable, parent, arrPtr)
             iterateArrayToStruct(arrPtr, parent)
-        end
+          end
 
-        function GDEmitters.StructEmitter.recurseNode(contextTable, parent, nodePtr)
+          function GDEmitters.StructEmitter.recurseNode(contextTable, parent, nodePtr)
             -- DISABLED
-        end
+          end
 
-        function GDEmitters.StructEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
+          function GDEmitters.StructEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
             iteratePackedArrayToStruct(arrayAddr, typeName, parent)
-        end
+          end
 
         ---------------------------------------------------------------------------------
 
         GDEmitters.AddrEmitter = {}
 
-        local function makeAddr(base, offset)
+          local function makeAddr(base, offset)
             return (base or 0) + (offset or 0)
-        end
+          end
 
-        function GDEmitters.AddrEmitter.leaf(contextTable, parent, label, offset, ceType)
+          function GDEmitters.AddrEmitter.leaf(contextTable, parent, label, offset, ceType)
             local created
             synchronize(function(label, addr, ceType, parent)
-                created = addMemRecTo(label, addr, ceType, parent)
+              created = addMemRecTo(label, addr, ceType, parent)
             end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent)
             return created
-        end
+          end
 
-        function GDEmitters.AddrEmitter.layout(contextTable, parent, label, color, offset, ceType)
+          function GDEmitters.AddrEmitter.layout(contextTable, parent, label, color, offset, ceType)
             local created
             synchronize(function(label, addr, ceType, parent)
-                created = addMemRecTo(label, addr, ceType, parent)
+              created = addMemRecTo(label, addr, ceType, parent)
             end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent)
             return created
-        end
+          end
 
-        function GDEmitters.AddrEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
+          function GDEmitters.AddrEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
             local created
             synchronize(function(label, addr, ceType, parent)
-                created = addMemRecTo(label, addr, ceType, parent)
-                created.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+              created = addMemRecTo(label, addr, ceType, parent)
+              created.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
             end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent)
             return created
-        end
+          end
 
-        function GDEmitters.AddrEmitter.recurseDictionary(contextTable, parent, dictPtr)
+          function GDEmitters.AddrEmitter.recurseDictionary(contextTable, parent, dictPtr)
             iterateDictionaryToAddr(dictPtr, parent)
-        end
+          end
 
-        function GDEmitters.AddrEmitter.recurseArray(contextTable, parent, arrPtr)
+          function GDEmitters.AddrEmitter.recurseArray(contextTable, parent, arrPtr)
             iterateArrayToAddr(arrPtr, parent)
-        end
+          end
 
-        function GDEmitters.AddrEmitter.recurseNode(contextTable, parent, nodePtr)
+          function GDEmitters.AddrEmitter.recurseNode(contextTable, parent, nodePtr)
             iterateMNodeToAddr(nodePtr, parent)
-        end
+          end
 
-        function GDEmitters.AddrEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
+          function GDEmitters.AddrEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
             iteratePackedArrayToAddr(arrayAddr, typeName, parent)
-        end
+          end
 
         ---------------------------------------------------------------------------------
 
         local function emitStringNameStruct(parent, label, offset, stringFieldLabel, bUniShift)
-            local outer = addStructureElem(parent, label, offset, vtPointer)
-            outer.ChildStruct = createStructure("StringName")
+          local outer = addStructureElem(parent, label, offset, vtPointer)
+          outer.ChildStruct = createStructure("StringName")
 
-            local innerOffset = bUniShift and GDDEFS.STRING or (GDDEFS.STRING - GDDEFS.PTRSIZE)
-            local inner = addStructureElem(outer, label, innerOffset, vtPointer)
-            inner.ChildStruct = createStructure("stringy")
-            local stringElem = addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0,
-                bUniShift and vtUnicodeString or vtString)
+          local innerOffset = bUniShift and GDDEFS.STRING or (GDDEFS.STRING - GDDEFS.PTRSIZE)
+          local inner = addStructureElem(outer, label, innerOffset, vtPointer)
+          inner.ChildStruct = createStructure("stringy")
+          local stringElem = addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0,
+            bUniShift and vtUnicodeString or vtString)
 
-            if not bUniShift then
-                stringElem.Bytesize = 100
-            end
+          if not bUniShift then
+            stringElem.Bytesize = 100
+          end
 
-            return outer, inner, stringElem
+          return outer, inner, stringElem
         end
 
         local function emitFunctionCodeStruct(funcParent, funcName)
-            return addStructureElem(funcParent, 'Code: ' .. funcName, GDDEFS.FUNC_CODE, vtPointer)
+          return addStructureElem(funcParent, 'Code: ' .. funcName, GDDEFS.FUNC_CODE, vtPointer)
         end
 
         local function emitFunctionConstantsStruct(funcParent, funcName, funcValueAddr)
-
-            local constantsElem = createChildStructElem(funcParent, "Constants: " .. funcName, GDDEFS.FUNC_CONST, vtPointer,
-                "GDFConst")
-            local funcConstAddr = readPointer(funcValueAddr + GDDEFS.FUNC_CONST)
-            iterateFuncConstantsToStruct(funcConstAddr, constantsElem)
-            return constantsElem
+          local constantsElem = createChildStructElem(funcParent, "Constants: " .. funcName, GDDEFS.FUNC_CONST, vtPointer, "GDFConst")
+          local funcConstAddr = readPointer(funcValueAddr + GDDEFS.FUNC_CONST)
+          iterateFuncConstantsToStruct(funcConstAddr, constantsElem)
+          return constantsElem
         end
 
         local function emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
-
-            local globalsElem = createChildStructElem(funcParent, "Globals: " .. funcName, GDDEFS.FUNC_GLOBNAMEPTR,
-                vtPointer, "GDFGlobals")
-            local funcGlobalAddr = readPointer(funcValueAddr + GDDEFS.FUNC_GLOBNAMEPTR)
-            iterateFuncGlobalsToStruct(funcGlobalAddr, globalsElem)
-            return globalsElem
+          local globalsElem = createChildStructElem(funcParent, "Globals: " .. funcName, GDDEFS.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals")
+          local funcGlobalAddr = readPointer(funcValueAddr + GDDEFS.FUNC_GLOBNAMEPTR)
+          iterateFuncGlobalsToStruct(funcGlobalAddr, globalsElem)
+          return globalsElem
         end
 
         local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
-            local funcRoot
-            if not bDisasmFunc then
-                funcRoot = createChildStructElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer,
-                    "GDFunction")
-                local funcValueAddr = readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
-                emitFunctionCodeStruct(funcRoot, funcName)
-                emitFunctionConstantsStruct(funcRoot, funcName, funcValueAddr)
-                emitFunctionGlobalsStruct(funcRoot, funcName, funcValueAddr)
-            else
-                funcRoot = addStructureElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer)
-            end
+          local funcRoot
+          if not bDisasmFunc then
+            funcRoot = createChildStructElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer, "GDFunction")
+            local funcValueAddr = readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
+            emitFunctionCodeStruct(funcRoot, funcName)
+            emitFunctionConstantsStruct(funcRoot, funcName, funcValueAddr)
+            emitFunctionGlobalsStruct(funcRoot, funcName, funcValueAddr)
+          else
+            funcRoot = addStructureElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer)
+          end
 
-            return funcRoot
+          return funcRoot
         end
 
         local function advanceFunctionMapElement(mapElement)
-            if GDDEFS.MAJOR_VER == 4 then
-                return readPointer(mapElement)
-            end
-            return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
+          if GDDEFS.MAJOR_VER == 4 then
+            return readPointer(mapElement)
+          end
+          return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
         end
 
         local function createNextFunctionContainer(currentContainer, index)
-            if GDDEFS.MAJOR_VER == 4 then
-                local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
-                nextElem.ChildStruct = createStructure("FuncNext")
-                return nextElem
-            end
-
-            local nextElem = addStructureElem(currentContainer, "Next", GDDEFS.MAP_NEXTELEM, vtPointer)
-            nextElem.ChildStruct = createStructure('FuncNext')
+          if GDDEFS.MAJOR_VER == 4 then
+            local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
+            nextElem.ChildStruct = createStructure("FuncNext")
             return nextElem
+          end
+
+          local nextElem = addStructureElem(currentContainer, "Next", GDDEFS.MAP_NEXTELEM, vtPointer)
+          nextElem.ChildStruct = createStructure('FuncNext')
+          return nextElem
         end
 
         ---------------------------------------------------------------------------------
 
         GDEmitters.PackedStructEmitter = {}
 
-        function GDEmitters.PackedStructEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
             local stringPtrElement = addStructureElem(parent, ('strElem[%d]'):format(elemIndex), offsetToValue, vtPointer)
             stringPtrElement.ChildStruct = createStructure('StringItem')
             addStructureElem(stringPtrElement, 'String', 0x0, vtUnicodeString)
-        end
+          end
 
-        function GDEmitters.PackedStructEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement,
-            ceType)
+          function GDEmitters.PackedStructEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType)
             addStructureElem(parent, prefixStr .. elemIndex .. ']', offsetToValue, ceType)
-        end
+          end
 
-        function GDEmitters.PackedStructEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
-        end
+          end
 
-        function GDEmitters.PackedStructEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: z', offsetToValue + 0x8, vtSingle)
-        end
+          end
 
-        function GDEmitters.PackedStructEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: R', offsetToValue, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: G', offsetToValue + 0x4, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: B', offsetToValue + 0x8, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: A', offsetToValue + 0xC, vtSingle)
-        end
+          end
 
         GDEmitters.PackedAddrEmitter = {}
 
-        function GDEmitters.PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
             synchronize(function(elemIndex, arrElement, parent)
-                addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent)
+              addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent)
             end, elemIndex, arrElement, parent)
-        end
+          end
 
-        function GDEmitters.PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement,
-            ceType)
+          function GDEmitters.PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType)
             synchronize(function(prefixStr, elemIndex, arrElement, ceType, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent)
             end, prefixStr, elemIndex, arrElement, ceType, parent)
-        end
+          end
 
-        function GDEmitters.PackedAddrEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedAddrEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
             synchronize(function(prefixStr, elemIndex, arrElement, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
             end, prefixStr, elemIndex, arrElement, parent)
-        end
+          end
 
-        function GDEmitters.PackedAddrEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedAddrEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
             synchronize(function(prefixStr, elemIndex, arrElement, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: z', arrElement + 0x8, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: z', arrElement + 0x8, vtSingle, parent)
             end, prefixStr, elemIndex, arrElement, parent)
-        end
+          end
 
-        function GDEmitters.PackedAddrEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedAddrEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
             synchronize(function(prefixStr, elemIndex, arrElement, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: B', arrElement + 0x8, vtSingle, parent)
-                addMemRecTo(prefixStr .. elemIndex .. ']: A', arrElement + 0xC, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: B', arrElement + 0x8, vtSingle, parent)
+              addMemRecTo(prefixStr .. elemIndex .. ']: A', arrElement + 0xC, vtSingle, parent)
             end, prefixStr, elemIndex, arrElement, parent)
-        end
+          end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS / SHARED HELPERS
 
       -- TODO: make magic dereferences more obvious
 
       local function getNextMapElement(mapElement)
-          if GDDEFS.MAJOR_VER == 4 then
-              return readPointer(mapElement)
-          else
-              return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
-          end
+        if GDDEFS.MAJOR_VER == 4 then
+          return readPointer(mapElement)
+        else
+          return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
+        end
       end
 
       local function getDictElemPairNext(mapElement)
-          if GDDEFS.MAJOR_VER == 4 then
-              return readPointer(mapElement)
-          else
-              return readPointer(mapElement + GDDEFS.DICTELEM_PAIR_NEXT)
-          end
+        if GDDEFS.MAJOR_VER == 4 then
+          return readPointer(mapElement)
+        else
+          return readPointer(mapElement + GDDEFS.DICTELEM_PAIR_NEXT)
+        end
       end
 
       local function getDictionarySizeFromVariantPtr(variantPtr)
-          -- if GDDEFS.MAJOR_VER == 4 then
-          --     return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
-          -- else
-          --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
-          -- end
-          return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
+        -- if GDDEFS.MAJOR_VER == 4 then
+        --     return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
+        -- else
+        --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
+        -- end
+        return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
       end
 
       local function isArrayEmptyFromVariantPtr(variantPtr)
-          return readPointer(readPointer(variantPtr) + GDDEFS.ARRAY_TOVECTOR) == 0
+        return readPointer(readPointer(variantPtr) + GDDEFS.ARRAY_TOVECTOR) == 0
       end
 
       local function resolveScriptVariantType(mapElement, runtimeVariantType)
 
-          -- debugStepIn()
+        -- debugStepIn()
 
-          if GDDEFS.MAJOR_VER < 4 then
-              -- debugStepOut()
-              return runtimeVariantType
-          end
+        if GDDEFS.MAJOR_VER < 4 then
+          -- debugStepOut()
+          return runtimeVariantType
+        end
 
-          local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
+        local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
 
-          -- 4.2.2 may differ TODO: make it version dependent
-          if scriptType > GDDEFS.MAXTYPE then
-              scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8)
-          end
+        -- 4.2.2 may differ TODO: make it version dependent
+        if scriptType > GDDEFS.MAXTYPE then
+          scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8)
+        end
 
-          if scriptType == runtimeVariantType then
-              -- debugStepOut()
-              return scriptType
-          elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDDEFS.MAXTYPE) then
-              -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback1, cached type is used') -- if the source is incorrect
-              return scriptType
-          else
-              -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback2, cached type is used') -- let's have cached if everything is wrong
-              return runtimeVariantType
-          end
+        if scriptType == runtimeVariantType then
+          -- debugStepOut()
+          return scriptType
+        elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDDEFS.MAXTYPE) then
+          -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback1, cached type is used') -- if the source is incorrect
+          return scriptType
+        else
+          -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback2, cached type is used') -- let's have cached if everything is wrong
+          return runtimeVariantType
+        end
       end
 
       local function getVariantNameFromMapElement(mapElement)
-          if GDDEFS.MAJOR_VER == 4 then
-              return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
-          else
-              return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
-          end
+        if GDDEFS.MAJOR_VER == 4 then
+          return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
+        else
+          return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
+        end
       end
 
       local function prepareObjectParent(entry, emitter, parent, contextTable)
-          debugStepIn()
+        debugStepIn()
 
-          local shifted
-          local ptr = entry.variantPtr
-          local offset = rootOffset(entry, emitter)
-          local currentParent = parent
-          local currentContext = contextTable
+        local shifted
+        local ptr = entry.variantPtr
+        local offset = rootOffset(entry, emitter)
+        local currentParent = parent
+        local currentContext = contextTable
 
-          ptr, shifted = checkForVT(ptr)
+        ptr, shifted = checkForVT(ptr)
 
-          if shifted then
-              offset = offset - GDDEFS.PTRSIZE
-              currentContext = {
-                  nodeAddr = contextTable.nodeAddr,
-                  nodeName = contextTable.nodeName,
-                  baseAddress = ptr
-              }
-              currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer,
-                  "Wrapper")
-              offset = 0x0
-          end
+        if shifted then
+          offset = offset - GDDEFS.PTRSIZE
+          currentContext =
+          {
+            nodeAddr = contextTable.nodeAddr,
+            nodeName = contextTable.nodeName,
+            baseAddress = ptr
+          }
+          currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer, "Wrapper")
+          offset = 0x0
+        end
 
-          sendDebugMessageAndStepOut("prepareObjectParent: " .. numtohexstr(ptr) .. " Object: " .. entry.name)
-          return currentParent, ptr, offset, currentContext
+        sendDebugMessageAndStepOut("prepareObjectParent: " .. numtohexstr(ptr) .. " Object: " .. entry.name)
+        return currentParent, ptr, offset, currentContext
       end
 
       local function getFunctionMapName(mapElement)
-          if isNullOrNil(mapElement) then
-              return nil
-          end
+        if isNullOrNil(mapElement) then
+          return nil
+        end
 
-          if GDDEFS.MAJOR_VER == 4 then
-              return getGDFunctionName(mapElement)
-          end
-          return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
+        if GDDEFS.MAJOR_VER == 4 then
+          return getGDFunctionName(mapElement)
+        end
+        return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
       end
 
       local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
-          if isNullOrNil(mapHead) then
-              return nil
+        if isNullOrNil(mapHead) then
+            return nil
+        end
+
+        local mapElement = mapHead
+
+        repeat
+          local currentName = getNameFn(mapElement)
+          if currentName == targetName then
+            return getResultCallback(mapElement)
           end
 
-          local mapElement = mapHead
+          mapElement = goAdvanceCallback(mapElement)
+        until (mapElement == 0)
 
-          repeat
-              local currentName = getNameFn(mapElement)
-              if currentName == targetName then
-                  return getResultCallback(mapElement)
-              end
-
-              mapElement = goAdvanceCallback(mapElement)
-          until (mapElement == 0)
-
-          return nil
+        return nil
       end
 
       local function getConstMapLookupResult(mapElement)
-          if GDDEFS.MAJOR_VER == 4 then
-              local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-              local offsetToValue = getVariantValueOffset(constType)
-              return getAddress(mapElement + GDDEFS.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
-          else
-              local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-              return getAddress(mapElement + GDDEFS.CONSTELEM_VALVAL), getCETypeFromGD(constType)
-          end
+        if GDDEFS.MAJOR_VER == 4 then
+          local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+          local offsetToValue = getVariantValueOffset(constType)
+          return getAddress(mapElement + GDDEFS.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
+        else
+          local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+          return getAddress(mapElement + GDDEFS.CONSTELEM_VALVAL), getCETypeFromGD(constType)
+        end
       end
 
       local function getFunctionMapLookupResult(mapElement)
-          return readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
+        return readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
       end
 
       local function createNextConstContainer(currentContainer, index)
-          if GDDEFS.MAJOR_VER == 4 then
-              local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
-              nextElem.ChildStruct = createStructure('ConstNext')
-              return nextElem
-          end
-
-          local nextElem = addStructureElem(currentContainer, 'Next', GDDEFS.MAP_NEXTELEM, vtPointer)
+        if GDDEFS.MAJOR_VER == 4 then
+          local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
           nextElem.ChildStruct = createStructure('ConstNext')
           return nextElem
+        end
+
+        local nextElem = addStructureElem(currentContainer, 'Next', GDDEFS.MAP_NEXTELEM, vtPointer)
+        nextElem.ChildStruct = createStructure('ConstNext')
+        return nextElem
       end
 
       local function formatArrayEntry(entry)
-          local cloned = {}
-          for k, v in pairs(entry) do
-              cloned[k] = v
-          end
-          cloned.name = "array[" .. tostring(entry.index) .. "]"
-          return cloned
+        local cloned = {}
+        for k, v in pairs(entry) do
+            cloned[k] = v
+        end
+        cloned.name = "array[" .. tostring(entry.index) .. "]"
+        return cloned
       end
 
       local function getArrayVectorInfo(arrayAddr)
-          debugStepIn()
+        debugStepIn()
 
-          if isInvalidPointer(arrayAddr) then
-              sendDebugMessageAndStepOut('getArrayVectorInfo: arrayAddr invalid')
-              return nil
-          end
+        if isInvalidPointer(arrayAddr) then
+          sendDebugMessageAndStepOut('getArrayVectorInfo: arrayAddr invalid')
+          return nil
+        end
 
-          local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
-          if isNullOrNil(arrVectorAddr) then
-              sendDebugMessageAndStepOut('getArrayVectorInfo: arrVectorAddr uninitialized')
-              return nil
-          end
+        local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
+        if isNullOrNil(arrVectorAddr) then
+          sendDebugMessageAndStepOut('getArrayVectorInfo: arrVectorAddr uninitialized')
+          return nil
+        end
 
-          local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
-          if isNullOrNil(arrVectorSize) then
-              sendDebugMessageAndStepOut('getArrayVectorInfo: vector size is invalid')
-              return nil
-          end
+        local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
+        if isNullOrNil(arrVectorSize) then
+          sendDebugMessageAndStepOut('getArrayVectorInfo: vector size is invalid')
+          return nil
+        end
 
-          local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
-          if not ok then
-              debugStepOut()
-              return nil
-          end
+        local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
+        if not ok then
           debugStepOut()
-          return arrVectorAddr, arrVectorSize, variantArrSize
+          return nil
+        end
+        debugStepOut()
+        return arrVectorAddr, arrVectorSize, variantArrSize
       end
 
       local function formatDictionaryEntry(entry)
-          local cloned = {}
-          for k, v in pairs(entry) do
-              cloned[k] = v
-          end
-          cloned.name = "[ " .. tostring(entry.name) .. " ]"
-          return cloned
+        local cloned = {}
+        for k, v in pairs(entry) do
+          cloned[k] = v
+        end
+        cloned.name = "[ " .. tostring(entry.name) .. " ]"
+        return cloned
       end
 
       local function decodeDictionaryKeyName(mapElement)
-          local keyType, keyValueAddr
+        local keyType, keyValueAddr
 
-          if GDDEFS.MAJOR_VER == 3 then
-              local keyPtr = readPointer(mapElement) -- key is a ptr
-              keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEYTYPE)
-              keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEYVAL)
-          else
-              keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEYTYPE) -- those can be a key , NodePath, Callable, StringName, etc
-              keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEYVAL)
-          end
+        if GDDEFS.MAJOR_VER == 3 then
+          local keyPtr = readPointer(mapElement) -- key is a ptr
+          keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEYTYPE)
+          keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEYVAL)
+        else
+          keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEYTYPE) -- those can be a key , NodePath, Callable, StringName, etc
+          keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEYVAL)
+        end
 
-          local keyTypeName = getGDTypeName(keyType)
-          local keyName = "UNKNOWN"
+        local keyTypeName = getGDTypeName(keyType)
+        local keyName = "UNKNOWN"
 
-          if keyTypeName == 'STRING' then
-              -- immediate String
-              keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
-          elseif keyTypeName == 'STRING_NAME' then
-              keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
-          elseif keyTypeName == 'FLOAT' then
-              keyName = tostring(readDouble(keyValueAddr) or "_couldnt_read") -- in godot 3.x real is 4 byte float or not?
-          elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' then
-              keyName = tostring(readPointer(keyValueAddr) or "_couldnt_read")
-          elseif keyTypeName == 'INT' then
-              keyName = tostring(readInteger(keyValueAddr, true) or "_couldnt_read")
-          else -- bool | might need separate for Vector2, Vector3, Color, etc
-              keyName = tostring(readInteger(keyValueAddr) or "_couldnt_read")
-          end
+        if keyTypeName == 'STRING' then
+          -- immediate String
+          keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
+        elseif keyTypeName == 'STRING_NAME' then
+          keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
+        elseif keyTypeName == 'FLOAT' then
+          keyName = tostring(readDouble(keyValueAddr) or "_couldnt_read") -- in godot 3.x real is 4 byte float or not?
+        elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' then
+          keyName = tostring(readPointer(keyValueAddr) or "_couldnt_read")
+        elseif keyTypeName == 'INT' then
+          keyName = tostring(readInteger(keyValueAddr, true) or "_couldnt_read")
+        else -- bool | might need separate for Vector2, Vector3, Color, etc
+          keyName = tostring(readInteger(keyValueAddr) or "_couldnt_read")
+        end
 
-          return keyType, keyValueAddr, keyName
+        return keyType, keyValueAddr, keyName
       end
 
       local function getDictionaryInfo(dictAddr)
-          debugStepIn()
+        debugStepIn()
 
-          if isInvalidPointer(dictAddr) then
-              sendDebugMessageAndStepOut('getDictionaryInfo: dictAddr isnt pointer')
-              return nil
+        if isInvalidPointer(dictAddr) then
+          sendDebugMessageAndStepOut('getDictionaryInfo: dictAddr isnt pointer')
+          return nil
+        end
+
+        local dictRoot = dictAddr
+        if GDDEFS.MAJOR_VER == 3 then
+          dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
+          if isNullOrNil(dictRoot) then
+            sendDebugMessageAndStepOut('getDictionaryInfo: dictRoot isnt valid')
+            return nil
           end
+        end
 
-          local dictRoot = dictAddr
-          if GDDEFS.MAJOR_VER == 3 then
-              dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
-              if isNullOrNil(dictRoot) then
-                  sendDebugMessageAndStepOut('getDictionaryInfo: dictRoot isnt valid')
-                  return nil
-              end
-          end
+        -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
+        local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
+        if isNullOrNil(dictSize) then
+          sendDebugMessageAndStepOut('getDictionaryInfo: dictSize isnt valid')
+          return nil
+        end
 
-          -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
-          local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
-          if isNullOrNil(dictSize) then
-              sendDebugMessageAndStepOut('getDictionaryInfo: dictSize isnt valid')
-              return nil
-          end
+        local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
+        if isNullOrNil(dictHead) then
+          sendDebugMessageAndStepOut('getDictionaryInfo: dictHead isnt valid')
+          return nil
+        end
 
-          local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
-          if isNullOrNil(dictHead) then
-              sendDebugMessageAndStepOut('getDictionaryInfo: dictHead isnt valid')
-              return nil
-          end
+        local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
 
-          local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
-
-          debugStepOut()
-          return dictRoot, dictSize, dictHead, dictTail
+        debugStepOut()
+        return dictRoot, dictSize, dictHead, dictTail
       end
 
       local function createNextDictContainer(currentContainer, index)
-          if GDDEFS.MAJOR_VER == 4 then
-              return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
-          end
+        if GDDEFS.MAJOR_VER == 4 then
+          return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
+        end
 
-          return createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+        return createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
       end
 
       local function getPackedArrayInfo(packedArrayAddr)
-          debugStepIn()
+        debugStepIn()
 
-          if isInvalidPointer(packedArrayAddr) then
-              sendDebugMessageAndStepOut('getPackedArrayInfo: packedArrayAddr isnt pointer')
-              return nil
-          end
+        if isInvalidPointer(packedArrayAddr) then
+          sendDebugMessageAndStepOut('getPackedArrayInfo: packedArrayAddr isnt pointer')
+          return nil
+        end
 
-          local packedDataArrAddr = readPointer(packedArrayAddr + GDDEFS.P_ARRAY_TOARR)
-          if isNullOrNil(packedDataArrAddr) then
-              sendDebugMessageAndStepOut('getPackedArrayInfo: packedDataArrAddr isnt pointer')
-              return nil
-          end
+        local packedDataArrAddr = readPointer(packedArrayAddr + GDDEFS.P_ARRAY_TOARR)
+        if isNullOrNil(packedDataArrAddr) then
+          sendDebugMessageAndStepOut('getPackedArrayInfo: packedDataArrAddr isnt pointer')
+          return nil
+        end
 
-          local packedVectorSize
-          if GDDEFS.MAJOR_VER == 4 then
-              packedVectorSize = readInteger(packedDataArrAddr - GDDEFS.SIZE_VECTOR)
-              if isNullOrNil(packedVectorSize) or packedVectorSize > 150 then
-                  packedVectorSize = 150
-              end
-          else
-              packedVectorSize = 150 -- no size to rely :(
+        local packedVectorSize
+        if GDDEFS.MAJOR_VER == 4 then
+          packedVectorSize = readInteger(packedDataArrAddr - GDDEFS.SIZE_VECTOR)
+          if isNullOrNil(packedVectorSize) or packedVectorSize > 150 then
+            packedVectorSize = 150
           end
-          if isNullOrNil(packedVectorSize) then
-              sendDebugMessageAndStepOut('getPackedArrayInfo: packedVectorSize isnt valid')
-              return nil
-          end
+        else
+          packedVectorSize = 150 -- no size to rely :(
+        end
+        if isNullOrNil(packedVectorSize) then
+          sendDebugMessageAndStepOut('getPackedArrayInfo: packedVectorSize isnt valid')
+          return nil
+        end
 
-          debugStepOut()
-          return packedDataArrAddr, packedVectorSize
+        debugStepOut()
+        return packedDataArrAddr, packedVectorSize
       end
 
       local function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter)
 
-          debugStepIn()
-          sendDebugMessageAndStepOut("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
-          local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
-          handler(packedDataArrAddr, packedVectorSize, parent, emitter)
+        debugStepIn()
+        sendDebugMessageAndStepOut("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
+        local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
+        handler(packedDataArrAddr, packedVectorSize, parent, emitter)
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
 
       local function readNodeVariantEntry(mapElement, variantVector, variantSize, bNeedStructOffset)
-          -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
-          local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
-          local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize,
-              bNeedStructOffset);
+        -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
+        local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
+        local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize, bNeedStructOffset);
 
-          local name = getVariantNameFromMapElement(mapElement);
-          local finalType = resolveScriptVariantType(mapElement, runtimeType);
+        local name = getVariantNameFromMapElement(mapElement);
+        local finalType = resolveScriptVariantType(mapElement, runtimeType);
 
-          local entry = {
-              index = variantIndex,
-              name = name or "UNKNOWN",
-              runtimeType = runtimeType,
-              typeId = finalType,
-              typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
-              variantPtr = variantPtr,
-              offsetToValue = offsetToValue or 0,
-              ceType = getCETypeFromGD(finalType)
-          }
+        local entry =
+        {
+          index = variantIndex,
+          name = name or "UNKNOWN",
+          runtimeType = runtimeType,
+          typeId = finalType,
+          typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
+          variantPtr = variantPtr,
+          offsetToValue = offsetToValue or 0,
+          ceType = getCETypeFromGD(finalType)
+        }
 
-          debugStepIn()
-          sendDebugMessageAndStepOut("readNodeVariantEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index ..
-                                        " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) ..
-                                        "\t Offset: " .. numtohexstr(entry.offsetToValue))
+        debugStepIn()
+        sendDebugMessageAndStepOut("readNodeVariantEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
-          return entry
+        return entry
       end
 
       local function readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
-          local variantPtr, runtimeType, offsetToValue = getVariantByIndex(funcConstantVect, variantIndex, variantSize,
-              true)
+        local variantPtr, runtimeType, offsetToValue = getVariantByIndex(funcConstantVect, variantIndex, variantSize, true)
 
-          local finalType = runtimeType
-          local typeName = getGDTypeName(finalType) or "UNKNOWNTYPE"
+        local finalType = runtimeType
+        local typeName = getGDTypeName(finalType) or "UNKNOWNTYPE"
 
-          local entry = {
-              index = variantIndex,
-              name = "Const[" .. tostring(variantIndex) .. "]",
-              runtimeType = runtimeType,
-              typeId = finalType,
-              typeName = typeName,
-              variantPtr = variantPtr,
-              offsetToValue = offsetToValue,
-              ceType = getCETypeFromGD(finalType)
-          }
+        local entry =
+        {
+          index = variantIndex,
+          name = "Const[" .. tostring(variantIndex) .. "]",
+          runtimeType = runtimeType,
+          typeId = finalType,
+          typeName = typeName,
+          variantPtr = variantPtr,
+          offsetToValue = offsetToValue,
+          ceType = getCETypeFromGD(finalType)
+        }
 
-          debugStepIn()
-          sendDebugMessageAndStepOut("readFunctionConstantEntry: name:\t" .. entry.name .. "\tIndex: " .. entry.index ..
-                                        "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) ..
-                                        "\t Offset: " .. numtohexstr(entry.offsetToValue))
+        debugStepIn()
+        sendDebugMessageAndStepOut("readFunctionConstantEntry: name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
-          return entry
+        return entry
       end
 
       local function readNodeConstEntry(mapElement)
-          local constName = getNodeConstName(mapElement)
-          local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-          local offsetToValue = GDDEFS.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
-          local constPtr = getAddress(mapElement + offsetToValue)
+        local constName = getNodeConstName(mapElement)
+        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+        local offsetToValue = GDDEFS.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
+        local constPtr = getAddress(mapElement + offsetToValue)
 
-          local entry = {
-              index = 0,
-              name = constName or "UNKNOWN_CONST",
-              runtimeType = constType,
-              typeId = constType,
-              typeName = getGDTypeName(constType) or "UNKNOWNTYPE",
-              variantPtr = constPtr,
-              offsetToValue = offsetToValue,
-              ceType = getCETypeFromGD(constType)
-          }
+        local entry =
+        {
+          index = 0,
+          name = constName or "UNKNOWN_CONST",
+          runtimeType = constType,
+          typeId = constType,
+          typeName = getGDTypeName(constType) or "UNKNOWNTYPE",
+          variantPtr = constPtr,
+          offsetToValue = offsetToValue,
+          ceType = getCETypeFromGD(constType)
+        }
 
-          debugStepIn()
-          sendDebugMessageAndStepOut("readNodeConstEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index ..
-                                        "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) ..
-                                        "\t Offset: " .. numtohexstr(entry.offsetToValue))
+        debugStepIn()
+        sendDebugMessageAndStepOut("readNodeConstEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
-          return entry
+        return entry
       end
 
       -- for node search
       local function readVectorVariantEntry(variantVector, variantIndex, variantSize)
-          local variantPtr, variantType = getVariantByIndex(variantVector, variantIndex, variantSize)
+        local variantPtr, variantType = getVariantByIndex(variantVector, variantIndex, variantSize)
 
-          return {
-              index = variantIndex,
-              typeId = variantType,
-              typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
-              variantPtr = variantPtr
-          }
+        return
+        {
+          index = variantIndex,
+          typeId = variantType,
+          typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
+          variantPtr = variantPtr
+        }
       end
 
       -- for node search
       local function readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
-          local variantPtr, variantType = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize)
+        local variantPtr, variantType = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize)
 
-          return {
-              index = varIndex,
-              typeId = variantType,
-              typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
-              variantPtr = variantPtr
-          }
+        return
+        {
+          index = varIndex,
+          typeId = variantType,
+          typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
+          variantPtr = variantPtr
+        }
       end
 
       local function readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
-          local variantPtr, runtimeType, offsetToValue = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize,
-              bNeedStructOffset)
+        local variantPtr, runtimeType, offsetToValue = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
 
-          local entry = {
-              index = varIndex,
-              name = "array[" .. tostring(varIndex) .. "]",
-              runtimeType = runtimeType,
-              typeId = runtimeType,
-              typeName = getGDTypeName(runtimeType) or "UNKNOWNTYPE",
-              variantPtr = variantPtr,
-              offsetToValue = offsetToValue,
-              ceType = getCETypeFromGD(runtimeType)
-          }
+        local entry =
+        {
+          index = varIndex,
+          name = "array[" .. tostring(varIndex) .. "]",
+          runtimeType = runtimeType,
+          typeId = runtimeType,
+          typeName = getGDTypeName(runtimeType) or "UNKNOWNTYPE",
+          variantPtr = variantPtr,
+          offsetToValue = offsetToValue,
+          ceType = getCETypeFromGD(runtimeType)
+        }
 
-          debugStepIn()
-          sendDebugMessageAndStepOut("readArrayContainerEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index ..
-                                        "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) ..
-                                        "\t Offset: " .. numtohexstr(entry.offsetToValue))
+        debugStepIn()
+        sendDebugMessageAndStepOut("readArrayContainerEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
-          return entry
-
+        return entry
       end
 
       local function readDictionaryContainerEntry(mapElement)
 
-          local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
-          local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
-          local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
-          local valueValuePtr = getAddress(mapElement + offsetToValue)
+        local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
+        local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
+        local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+        local valueValuePtr = getAddress(mapElement + offsetToValue)
 
-          local entry = {
-              index = 0,
-              name = keyName or ("key@" .. numtohexstr(mapElement)),
-              runtimeType = valueType,
-              typeId = valueType,
-              typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
-              variantPtr = valueValuePtr,
-              offsetToValue = offsetToValue,
-              ceType = getCETypeFromGD(valueType),
-              keyType = keyType,
-              keyValueAddr = keyValueAddr
-          }
+        local entry =
+        {
+          index = 0,
+          name = keyName or ("key@" .. numtohexstr(mapElement)),
+          runtimeType = valueType,
+          typeId = valueType,
+          typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
+          variantPtr = valueValuePtr,
+          offsetToValue = offsetToValue,
+          ceType = getCETypeFromGD(valueType),
+          keyType = keyType,
+          keyValueAddr = keyValueAddr
+        }
 
-          debugStepIn()
-          sendDebugMessageAndStepOut(
-              "readDictionaryContainerEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " ..
-                  entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " ..
-                  numtohexstr(entry.offsetToValue))
+        debugStepIn()
+        sendDebugMessageAndStepOut( "readDictionaryContainerEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
-          return entry
+        return entry
       end
 
       -- for node search
       local function readDictionaryValueEntry(mapElement)
           local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
           local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
-          return {
-              typeId = valueType,
-              typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
-              variantPtr = getAddress(mapElement + offsetToValue)
+          return
+          {
+            typeId = valueType,
+            typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
+            variantPtr = getAddress(mapElement + offsetToValue)
           }
       end
 
@@ -2943,110 +2930,96 @@
       GDHandlers.VariantHandlers = {}
 
         GDHandlers.VariantHandlers.DICTIONARY = function(entry, emitter, parent, contextTable)
-            sendDebugMessage("DICTIONARY case for name: " .. entry.name .. " address: " .. numtohexstr(entry.variantPtr) ..
-                                " offset: " .. numtohexstr(entry.offsetToValue))
-            local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+          sendDebugMessage("DICTIONARY case for name: " .. entry.name .. " address: " .. numtohexstr(entry.variantPtr) .. " offset: " .. numtohexstr(entry.offsetToValue))
+          local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
 
-            if isNullOrNil(dictSize) then
-                emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType)
-                return;
-            end
+          if isNullOrNil(dictSize) then
+            emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType)
+            return;
+          end
 
-            local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, rootOffset(entry, emitter),
-                entry.ceType, "Dict")
-            emitter.recurseDictionary(contextTable, child, readPointer(entry.variantPtr)) -- we pass the actual base addr
-
+          local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, rootOffset(entry, emitter), entry.ceType, "Dict")
+          emitter.recurseDictionary(contextTable, child, readPointer(entry.variantPtr)) -- we pass the actual base addr
         end
 
         GDHandlers.VariantHandlers.ARRAY = function(entry, emitter, parent, contextTable)
-            sendDebugMessage("ARRAY case for name: " .. entry.name)
-            if isArrayEmptyFromVariantPtr(entry.variantPtr) then
-                emitter.leaf(contextTable, parent, "array (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType);
-                return;
-            end
+          sendDebugMessage("ARRAY case for name: " .. entry.name)
+          if isArrayEmptyFromVariantPtr(entry.variantPtr) then
+            emitter.leaf(contextTable, parent, "array (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType);
+            return;
+          end
 
-            local child = emitter.branch(contextTable, parent, "array: " .. entry.name, rootOffset(entry, emitter),
-                entry.ceType, "Array");
-            emitter.recurseArray(contextTable, child, readPointer(entry.variantPtr))
+          local child = emitter.branch(contextTable, parent, "array: " .. entry.name, rootOffset(entry, emitter), entry.ceType, "Array");
+          emitter.recurseArray(contextTable, child, readPointer(entry.variantPtr))
         end
 
         GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
-            local objectParent, realPtr, realOffset, objectContext =
-                prepareObjectParent(entry, emitter, parent, contextTable);
-            local objectTypeName = getObjectName(readPointer(realPtr))
-            objectTypeName = '<' .. objectTypeName .. '>'
+          local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable);
+          local objectTypeName = getObjectName(readPointer(realPtr))
+          objectTypeName = '<' .. objectTypeName .. '>'
 
-            sendDebugMessage("OBJECT case: name: " .. entry.name .. " type: " .. objectTypeName .. " addr: " ..
-                                numtohexstr(realPtr))
+          sendDebugMessage("OBJECT case: name: " .. entry.name .. " type: " .. objectTypeName .. " addr: " .. numtohexstr(realPtr))
 
-            if checkForGDScript(readPointer(realPtr)) then
-                if emitter == GDEmitters.StructEmitter then
-                    local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: " .. entry.name, realOffset,
-                        vtPointer);
-                    nodeChild.BackgroundColor = 0x6C3157
-                else
-                    local nodeChild = emitter.branch(objectContext, objectParent, "mNode: " .. entry.name, realOffset,
-                        vtPointer, "Node");
-                    nodeChild.BackgroundColor = 0x6C3157
-
-                    if emitter.recurseNode then -- TODO: redundant?
-                        emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) --
-                    end
-                end
-
+          if checkForGDScript(readPointer(realPtr)) then
+            if emitter == GDEmitters.StructEmitter then
+              local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: " .. entry.name, realOffset, vtPointer);
+              nodeChild.BackgroundColor = 0x6C3157
             else
-                emitter.leaf(objectContext, objectParent, objectTypeName .. " obj: " .. entry.name, realOffset, vtPointer);
+              local nodeChild = emitter.branch(objectContext, objectParent, "mNode: " .. entry.name, realOffset, vtPointer, "Node");
+              nodeChild.BackgroundColor = 0x6C3157
+
+              if emitter.recurseNode then -- TODO: redundant?
+                emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) --
+              end
             end
+
+          else
+            emitter.leaf(objectContext, objectParent, objectTypeName .. " obj: " .. entry.name, realOffset, vtPointer);
+          end
         end
 
         GDHandlers.VariantHandlers.STRING = function(entry, emitter, parent, contextTable)
-            if emitter == GDEmitters.StructEmitter then
-                local outer = emitter.branch(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter),
-                    vtPointer, "String")
-                local inner = emitter.branch(contextTable, outer, "StringData: " .. entry.name, 0x0, vtUnicodeString,
-                    "stringy")
-                -- emitter.leaf( contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString )
-            else
-                emitter.leaf(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtString)
-            end
+          if emitter == GDEmitters.StructEmitter then
+            local outer = emitter.branch(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtPointer, "String")
+            local inner = emitter.branch(contextTable, outer, "StringData: " .. entry.name, 0x0, vtUnicodeString, "stringy")
+          else
+            emitter.leaf(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtString)
+          end
         end
 
         GDHandlers.VariantHandlers.STRING_NAME = function(entry, emitter, parent, contextTable)
-            if emitter == GDEmitters.StructEmitter then
-                local outer = emitter.branch(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter),
-                    vtPointer, "StringName")
-                local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDDEFS.STRING, vtPointer,
-                    "stringy")
-                emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString)
-            else
-                local stringNameAddr = readPointer(entry.variantPtr)
-                if isNullOrNil(stringNameAddr) then
-                    emitter.leaf(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer)
-                    return
-                end
-
-                local stringContext = {
-                    nodeAddr = contextTable.nodeAddr,
-                    nodeName = contextTable.nodeName,
-                    baseAddress = stringNameAddr + GDDEFS.STRING
-                }
-                emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
+          if emitter == GDEmitters.StructEmitter then
+            local outer = emitter.branch(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
+            local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDDEFS.STRING, vtPointer, "stringy")
+            emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString)
+          else
+            local stringNameAddr = readPointer(entry.variantPtr)
+            if isNullOrNil(stringNameAddr) then
+              emitter.leaf(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer)
+              return
             end
+
+            local stringContext =
+            {
+              nodeAddr = contextTable.nodeAddr,
+              nodeName = contextTable.nodeName,
+              baseAddress = stringNameAddr + GDDEFS.STRING
+            }
+            emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
+          end
 
         end
 
         GDHandlers.VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
-            sendDebugMessage("handlePackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
-            local arrayAddr = readPointer(entry.variantPtr)
+          sendDebugMessage("handlePackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
+          local arrayAddr = readPointer(entry.variantPtr)
 
-            if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
-                emitter.leaf(contextTable, parent, entry.typeName .. ' (empty): ' .. entry.name, rootOffset(entry, emitter),
-                    entry.ceType)
-            else
-                local child = emitter.branch(contextTable, parent, entry.typeName .. ' ' .. entry.name,
-                    rootOffset(entry, emitter), entry.ceType, "P_Array")
-                emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
-            end
+          if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
+            emitter.leaf(contextTable, parent, entry.typeName .. ' (empty): ' .. entry.name, rootOffset(entry, emitter), entry.ceType)
+          else
+            local child = emitter.branch(contextTable, parent, entry.typeName .. ' ' .. entry.name, rootOffset(entry, emitter), entry.ceType, "P_Array")
+            emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
+          end
         end
 
         GDHandlers.VariantHandlers.PACKED_BYTE_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
@@ -3060,178 +3033,177 @@
         GDHandlers.VariantHandlers.PACKED_VECTOR4_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
 
         GDHandlers.VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
-            local typeName = "Color: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
+          local typeName = "Color: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
-            local typeName = "Vec2: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+          local typeName = "Vec2: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
-            local typeName = "vec2I: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+          local typeName = "vec2I: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
         end
 
         GDHandlers.VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
-            local typeName = "Rect2: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtSingle)
+          local typeName = "Rect2: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
-            local typeName = "Rect2I: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtDword)
+          local typeName = "Rect2I: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtDword)
         end
 
         GDHandlers.VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
-            local typeName = "Vec3: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+          local typeName = "Vec3: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
-            local typeName = "Vec3I: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
+          local typeName = "Vec3I: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
         end
 
         GDHandlers.VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
-            local typeName = "Vec4: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtSingle)
+          local typeName = "Vec4: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
-            local typeName = "Vec4I: "
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
-            emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtDword)
+          local typeName = "Vec4I: "
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
+          emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtDword)
         end
 
         GDHandlers.VariantHandlers.DEFAULT = function(entry, emitter, parent, contextTable)
-            emitter.leaf(contextTable, parent, "var: " .. entry.name .. " (" .. entry.typeName .. ")",
-                rootOffset(entry, emitter), entry.ceType)
+          emitter.leaf(contextTable, parent, "var: " .. entry.name .. " (" .. entry.typeName .. ")", rootOffset(entry, emitter), entry.ceType)
         end
 
       GDHandlers.NodeDiscoveryHandlers = {}
 
         GDHandlers.NodeDiscoveryHandlers.DICTIONARY = function(entry, visitor)
-            local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
-            if isNotNullOrNil(dictSize) then
-                visitor.recurseDictionary(readPointer(entry.variantPtr))
-            end
+          local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+          if isNotNullOrNil(dictSize) then
+            visitor.recurseDictionary(readPointer(entry.variantPtr))
+          end
         end
 
         GDHandlers.NodeDiscoveryHandlers.ARRAY = function(entry, visitor)
-            if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
-                visitor.recurseArray(readPointer(entry.variantPtr))
-            end
+          if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
+            visitor.recurseArray(readPointer(entry.variantPtr))
+          end
         end
 
         GDHandlers.NodeDiscoveryHandlers.OBJECT = function(entry, visitor)
-            visitor.visitObject(entry.variantPtr)
+          visitor.visitObject(entry.variantPtr)
         end
 
       GDHandlers.PackedArrayHandlers = {}
 
         GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
 
-                if readPointer(arrElement) ~= 0 then
-                    emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
-                end
+            if readPointer(arrElement) ~= 0 then
+              emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
             end
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_INT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * 0x4
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * 0x4
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_FLOAT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * 0x4
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * 0x4
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_BYTE_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * 0x1
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * 0x1
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_VECTOR2_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * 0x8
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * 0x8
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_VECTOR3_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * 0xC
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * 0xC
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_COLOR_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * 0x10
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * 0x10
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement)
+          end
         end
 
         GDHandlers.PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter)
-            for elemIndex = 0, packedVectorSize - 1 do
-                local offsetToValue = elemIndex * GDDEFS.PTRSIZE
-                local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-                emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer)
-            end
+          for elemIndex = 0, packedVectorSize - 1 do
+            local offsetToValue = elemIndex * GDDEFS.PTRSIZE
+            local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer)
+          end
         end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
@@ -3239,135 +3211,134 @@
       --- returns a code with a ScriptInstance initialized
       ---@param nodeName string
       function getNodeWithGDScriptInstance(nodeName) -- TODO: should query node children
-          assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-          debugStepIn()
+        assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
+        debugStepIn()
 
-          local childrenPtr, childrenSize = getVPChildren()
-          if isNullOrNil(childrenPtr) then
-              debugStepOut()
-              return nil
-          end
-
-          for i = 0, (childrenSize - 1) do
-
-              local nodeAddr = readPointer(childrenPtr + i * GDDEFS.PTRSIZE)
-              if isNullOrNil(nodeAddr) then
-                  sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: nodeAddr invalid')
-                  return nil
-              end
-
-              local nodeNameStr = getNodeName(nodeAddr)
-              local gdScriptInsance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-              if isNullOrNil(gdScriptInsance) then
-                  sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: ScriptInstance is 0/nil')
-                  return nil
-              end
-
-              if nodeNameStr == nodeName then
-                  debugStepOut()
-                  return nodeAddr
-              end
-          end
+        local childrenPtr, childrenSize = getVPChildren()
+        if isNullOrNil(childrenPtr) then
           debugStepOut()
           return nil
+        end
+
+        for i = 0, (childrenSize - 1) do
+
+          local nodeAddr = readPointer(childrenPtr + i * GDDEFS.PTRSIZE)
+          if isNullOrNil(nodeAddr) then
+            sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: nodeAddr invalid')
+            return nil
+          end
+
+          local nodeNameStr = getNodeName(nodeAddr)
+          local gdScriptInsance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+          if isNullOrNil(gdScriptInsance) then
+            sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: ScriptInstance is 0/nil')
+            return nil
+          end
+
+          if nodeNameStr == nodeName then
+            debugStepOut()
+            return nodeAddr
+          end
+        end
+        debugStepOut()
+        return nil
       end
 
       --- gets a Node's GDScriptInstance addr
       ---@param nodeAddr number
       function getNodeGDScriptInstance(nodeAddr)
-          debugStepIn()
-          if isNullOrNil(nodeAddr) then
-              sendDebugMessageAndStepOut('getNodeGDScriptInstance: nodeAddr invalid')
-              return nil
-          end
+        debugStepIn()
+        if isNullOrNil(nodeAddr) then
+          sendDebugMessageAndStepOut('getNodeGDScriptInstance: nodeAddr invalid')
+          return nil
+        end
 
-          local gdScriptInsance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(gdScriptInsance) then
-              sendDebugMessageAndStepOut('getNodeGDScriptInstance: ScriptInstance is 0/nil')
-              return nil
-          end
-          return gdScriptInsance
+        local gdScriptInsance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(gdScriptInsance) then
+          sendDebugMessageAndStepOut('getNodeGDScriptInstance: ScriptInstance is 0/nil')
+          return nil
+        end
+        return gdScriptInsance
       end
 
       --- get a Node name by addr
       ---@param nodeAddr number
       function getNodeName(nodeAddr)
-          assert(type(nodeAddr) == 'number', "getNodeName: Node Addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', "getNodeName: Node Addr has to be a number, instead got: " .. type(nodeAddr))
 
-          debugStepIn()
+        debugStepIn()
 
-          local nodeNamePtr = readPointer(nodeAddr + GDDEFS.OBJ_STRING_NAME)
-          if isNullOrNil(nodeNamePtr) or isInvalidPointer(nodeNamePtr) then
-              sendDebugMessageAndStepOut('getNodeName: nodeName invalid or not a pointer (?)')
-              return 'N??'
-          end
+        local nodeNamePtr = readPointer(nodeAddr + GDDEFS.OBJ_STRING_NAME)
+        if isNullOrNil(nodeNamePtr) or isInvalidPointer(nodeNamePtr) then
+          sendDebugMessageAndStepOut('getNodeName: nodeName invalid or not a pointer (?)')
+          return 'N??'
+        end
 
-          debugStepOut()
-          return getStringNameStr(nodeNamePtr)
+        debugStepOut()
+        return getStringNameStr(nodeNamePtr)
       end
 
       function getNodeNameFromGDScript(nodeAddr)
-          assert(type(nodeAddr) == 'number',
-              "getNodeNameFromGDScript: Node Addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', "getNodeNameFromGDScript: Node Addr has to be a number, instead got: " .. type(nodeAddr))
 
-          debugStepIn()
+        debugStepIn()
 
-          local GDScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(GDScriptInstanceAddr) then
-              sendDebugMessageAndStepOut('getNodeNameFromGDScript: ScriptInstance is 0/nil')
-              return 'N??'
-          end
-          local GDScriptAddr = readPointer(GDScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
-          if isNullOrNil(GDScriptAddr) then
-              sendDebugMessageAndStepOut(' getNodeNameFromGDScript: GDScript is 0/nil')
-              return 'N??'
-          end
-          local GDScriptNameAddr = readPointer(GDScriptAddr + GDDEFS.GDSCRIPTNAME)
+        local GDScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(GDScriptInstanceAddr) then
+          sendDebugMessageAndStepOut('getNodeNameFromGDScript: ScriptInstance is 0/nil')
+          return 'N??'
+        end
+        local GDScriptAddr = readPointer(GDScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
+        if isNullOrNil(GDScriptAddr) then
+          sendDebugMessageAndStepOut(' getNodeNameFromGDScript: GDScript is 0/nil')
+          return 'N??'
+        end
+        local GDScriptNameAddr = readPointer(GDScriptAddr + GDDEFS.GDSCRIPTNAME)
 
-          if isNullOrNil(GDScriptNameAddr) then
-              sendDebugMessageAndStepOut('getNodeNameFromGDScript: nodeName invalid or not a pointer (?)')
-              return 'N??'
-          end
+        if isNullOrNil(GDScriptNameAddr) then
+          sendDebugMessageAndStepOut('getNodeNameFromGDScript: nodeName invalid or not a pointer (?)')
+          return 'N??'
+        end
 
-          -- immediate String
-          local GDScriptName = readUTFString(GDScriptNameAddr)
-          if GDScriptName == nil or GDScriptName == '' then
-              sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
-              return 'N??'
-          end
+        -- immediate String
+        local GDScriptName = readUTFString(GDScriptNameAddr)
+        if GDScriptName == nil or GDScriptName == '' then
+          sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+          return 'N??'
+        end
 
-          GDScriptName = string.match(GDScriptName, "([^/]+)%.gd$")
-          if GDScriptName == nil then
-              sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
-              return 'N??'
-          end
+        GDScriptName = string.match(GDScriptName, "([^/]+)%.gd$")
+        if GDScriptName == nil then
+          sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+          return 'N??'
+        end
 
-          debugStepOut()
+        debugStepOut()
 
-          return GDScriptName
+        return GDScriptName
       end
 
       --- Used to validate an object as a Node with GDScript, returns true if valid
       ---@param nodeAddr number
       ---@return boolean @ if GD/CSScript attached
-      ---@return number @ script type enum -- TODO: implement script type enum
+      ---@return number @ script type enum
       function checkForGDScript(nodeAddr)
 
         -- debugStepIn()
 
-        if isNullOrNil(nodeAddr) or isMMVTable( readPointer(nodeAddr) ) then
+        if isNullOrNil(nodeAddr) or not isMMVTable( readPointer(nodeAddr) ) then
           -- sendDebugMessageAndStepOut('checkForGDScript: nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
           return false
         end
 
         local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-        if isNullOrNil(scriptInstance) or isMMVTable( readPointer(scriptInstance) ) then
+        if isNullOrNil(scriptInstance) or not isMMVTable( readPointer(scriptInstance) ) then
           -- sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
           return false
         end
 
         local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-        if isNullOrNil(gdscript) or isMMVTable( readPointer(gdscript) ) then
+        if isNullOrNil(gdscript) or not isMMVTable( readPointer(gdscript) ) then
           -- sendDebugMessageAndStepOut('checkForGDScript: GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
           return false
         end
@@ -3380,14 +3351,48 @@
         local gdScriptName = readUTFString(gdScriptName)
 
         if (gdScriptName):sub(1,4) == 'res:' then
-          if      (gdScriptName):sub(-3) == '.gd' then  return true
-          elseif  (gdScriptName):sub(-3) == '.cs' then  return false -- skip until implemented
-          else                                          return false
-          end
+          return true
         else
           return false
         end
 
+      end
+
+      function checkScriptType(nodeAddr)
+        if GDDEFS.MONO == false then return 0 end;
+            -- debugStepIn()
+            -- if isNullOrNil(nodeAddr) or isMMVTable( readPointer(nodeAddr) ) then
+            --   -- sendDebugMessageAndStepOut('checkScriptType: nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
+            --   return 0
+            -- end
+
+        local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+            -- if isNullOrNil(scriptInstance) or isMMVTable( readPointer(scriptInstance) ) then
+            --   -- sendDebugMessageAndStepOut('checkScriptType: ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+            --   return 0
+            -- end
+
+        local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
+            -- if isNullOrNil(gdscript) or isMMVTable( readPointer(gdscript) ) then
+            --   -- sendDebugMessageAndStepOut('checkScriptType: GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+            --   return 0
+            -- end
+        
+        local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
+        if isNullOrNil(gdScriptName) then
+          -- sendDebugMessageAndStepOut('checkScriptType: gdScriptName invalid')
+          return 0
+        end
+        local gdScriptName = readUTFString(gdScriptName)
+
+        if  (gdScriptName):sub(1,4) == 'res:' then
+          if      (gdScriptName):sub(-3) == '.gd' then  return GDDEFS.SCRIPT_TYPES["GD"]
+          elseif  (gdScriptName):sub(-3) == '.cs' then  return GDDEFS.SCRIPT_TYPES["CS"]
+          else                                          return 0
+          end
+        else
+          return 0
+        end
       end
 
       function checkIfGDObjectWithChildren(objAddr)
@@ -3433,158 +3438,166 @@
       ---@param nodeAddr number
       function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress)
 
-          if not isPointerNotNull(readPointer(baseAddress + GDDEFS.CHILDREN)) then
-              -- check if the children array points to something
-              return;
-          end
-          local childrenAddr = readPointer(baseAddress + GDDEFS.CHILDREN)
+        if not isPointerNotNull(readPointer(baseAddress + GDDEFS.CHILDREN)) then
+          -- check if the children array points to something
+          return;
+        end
+        local childrenAddr = readPointer(baseAddress + GDDEFS.CHILDREN)
 
-          local childrenSize;
-          if GDDEFS.MAJOR_VER == 4 then
-              childrenSize = readInteger(baseAddress + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-          elseif GDDEFS.MAJOR_VER > 4 then
-              childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
+        local childrenSize;
+        if GDDEFS.MAJOR_VER == 4 then
+          childrenSize = readInteger(baseAddress + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
+        elseif GDDEFS.MAJOR_VER > 4 then
+          childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
+        else
+          childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
+        end
+        if isNullOrNil(childrenSize) then
+          return;
+        end
+
+        for i = 0, (childrenSize - 1) do
+          local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
+          local nodeName = getNodeName(nodeAddr)
+          if nodeName == nil or nodeName == 'N??' then
+            nodeName = getNodeNameFromGDScript(nodeAddr)
+          end
+          local objectTypeName = getObjectName(nodeAddr)
+          objectTypeName = '<' .. objectTypeName .. '>'
+
+          -- sendDebugMessage("Checking GDScript for "..nodeName)
+
+          if checkForGDScript(nodeAddr) then
+            addLayoutStructElem(childrenArrStructElem, objectTypeName .. ' cNode: ' .. nodeName, 0x6C3157, (i * GDDEFS.PTRSIZE), vtPointer)
           else
-              childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
+            addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE), vtPointer)
           end
-          if isNullOrNil(childrenSize) then
-              return;
-          end
+        end
 
-          for i = 0, (childrenSize - 1) do
-              local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-              local nodeName = getNodeName(nodeAddr)
-              if nodeName == nil or nodeName == 'N??' then
-                  nodeName = getNodeNameFromGDScript(nodeAddr)
-              end
-              local objectTypeName = getObjectName(nodeAddr)
-              objectTypeName = '<' .. objectTypeName .. '>'
-
-              -- sendDebugMessage("Checking GDScript for "..nodeName)
-
-              if checkForGDScript(nodeAddr) then
-                  addLayoutStructElem(childrenArrStructElem, objectTypeName .. ' cNode: ' .. nodeName, 0x6C3157,
-                      (i * GDDEFS.PTRSIZE), vtPointer)
-              else
-                  addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE),
-                      vtPointer)
-              end
-          end
-
-          return
+        return
       end
 
       --- go over child nodes in the main nodes
       ---@param nodeAddr number
       ---@param parent userdata
       function iterateMNodeToAddr(nodeAddr, parent)
-          assert(type(nodeAddr) == 'number',
-              "iterateMNodeToAddr: node addr has to be a number, instead got: " .. type(nodeAddr))
-          assert(type(parent) == "userdata", "iterateMNodeToAddr: parent has to exist")
+        assert(type(nodeAddr) == 'number', "iterateMNodeToAddr: node addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(parent) == "userdata", "iterateMNodeToAddr: parent has to exist")
 
-          debugStepIn()
+        debugStepIn()
 
-          local nodeName = getNodeName(nodeAddr)
-          sendDebugMessage(' iterateMNodeToAddr: MemberNode: ' .. tostring(nodeName))
+        local nodeName = getNodeName(nodeAddr)
+        sendDebugMessage(' iterateMNodeToAddr: MemberNode: ' .. tostring(nodeName))
 
-          for i, storedNode in ipairs(dumpedNodes) do -- check if a node was already dumped
-              if storedNode == nodeAddr then
-                  sendDebugMessageAndStepOut('iterateMNodeToAddr: NODE ' .. tostring(nodeName) .. ' ALREADY DUMPED')
+        for i, storedNode in ipairs(dumpedNodes) do -- check if a node was already dumped
+          if storedNode == nodeAddr then
+            sendDebugMessageAndStepOut('iterateMNodeToAddr: NODE ' .. tostring(nodeName) .. ' ALREADY DUMPED')
 
-                  synchronize(function(parent)
-                      parent.setDescription(parent.Description .. ' /D/') -- let's note what nodes are copies
-                      parent.Options = '[moHideChildren]'
-                  end, parent)
+            synchronize(function(parent)
+              parent.setDescription(parent.Description .. ' /D/') -- let's note what nodes are copies
+              parent.Options = '[moHideChildren]'
+            end, parent)
 
-                  return
-              end
+            return
           end
-          table.insert(dumpedNodes, nodeAddr)
+        end
+        table.insert(dumpedNodes, nodeAddr)
 
-          synchronize(function(nodeName, parent)
-              parent.setDescription(parent.Description .. ' : ' .. tostring(nodeName)) -- append node name
-          end, nodeName, parent)
+        synchronize(function(nodeName, parent)
+          parent.setDescription(parent.Description .. ' : ' .. tostring(nodeName)) -- append node name
+        end, nodeName, parent)
 
-          sendDebugMessage('iterateMNodeToAddr: STEP: Constants for: ' .. tostring(nodeName))
+        sendDebugMessage('iterateMNodeToAddr: STEP: Constants for: ' .. tostring(nodeName))
 
-          if GDDEFS.CONST_MAP ~= 0 then
-              local newConstRec = synchronize(function(parent)
-                  local addrList = getAddressList()
-                  local newConstRec = addrList.createMemoryRecord()
-                  newConstRec.setDescription("Consts:")
-                  newConstRec.setAddress(0xBABE)
-                  newConstRec.setType(vtPointer)
-                  newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                  newConstRec.DontSave = true
-                  newConstRec.appendToEntry(parent)
-                  return newConstRec
-              end, parent)
+        if GDDEFS.CONST_MAP ~= 0 then
+          local newConstRec = synchronize(function(parent)
+            local addrList = getAddressList()
+            local newConstRec = addrList.createMemoryRecord()
+            newConstRec.setDescription("Consts:")
+            newConstRec.setAddress(0xBABE)
+            newConstRec.setType(vtPointer)
+            newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+            newConstRec.DontSave = true
+            newConstRec.appendToEntry(parent)
+            return newConstRec
+          end, parent)
 
-              iterateNodeConstToAddr(nodeAddr, newConstRec)
-          end
+          iterateNodeConstToAddr(nodeAddr, newConstRec)
+        end
 
-          sendDebugMessage('iterateMNodeToAddr: STEP: VARIANTS for: ' .. tostring(nodeName))
-          iterateVecVarToAddr(nodeAddr, parent)
+        sendDebugMessage('iterateMNodeToAddr: STEP: VARIANTS for: ' .. tostring(nodeName))
+        iterateVecVarToAddr(nodeAddr, parent)
 
-          debugStepOut()
-          return
+        debugStepOut()
+        return
       end
 
       --- builds the structure layout for a Node when guessed
       ---@param nodeAddr number
       ---@param scriptInstStructElement userdata
       function iterateNodeToStruct(nodeAddr, scriptInstStructElement)
-          debugStepIn()
+        debugStepIn()
 
-          local nodeName = getNodeName(nodeAddr) or 'NIL';
+        local nodeName = getNodeName(nodeAddr) or 'NIL';
 
-          sendDebugMessage('iterateNodeToStruct: Node: ' .. tostring(nodeName))
+        sendDebugMessage('iterateNodeToStruct: Node: ' .. tostring(nodeName))
 
-          for i, storedNode in ipairs(dumpedDissectorNodes) do -- check if a node was already dumped
-              if storedNode == nodeAddr then
-                  sendDebugMessageAndStepOut('iterateNodeToStruct: NODE ' .. tostring(nodeName) .. ' ALREADY DUMPED')
-                  parent.Name = parent.Name .. ' /D/'
-                  return
-              end
+        -- for i, storedNode in ipairs(dumpedDissectorNodes) do -- we don't go recursively
+        --   if storedNode == nodeAddr then
+        --     sendDebugMessageAndStepOut('iterateNodeToStruct: NODE ' .. tostring(nodeName) .. ' ALREADY DUMPED')
+        --     parent.Name = parent.Name .. ' /D/'
+        --     return
+        --   end
+        -- end
+        -- table.insert(dumpedDissectorNodes, nodeAddr)
+
+        local varVectorStructElem, scriptStructElem, constMapStructElem, functMapStructElem
+        local gdScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE) or 0x0
+        local gdScriptAddr = readPointer(gdScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
+        local varVectorAddr = readPointer(gdScriptInstanceAddr + GDDEFS.VAR_VECTOR)
+        local constMapAddr = readPointer(gdScriptAddr + GDDEFS.CONST_MAP)
+        local funcMapAddr = readPointer(gdScriptAddr + GDDEFS.FUNC_MAP)
+
+        scriptStructElem = addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer)
+
+        -- we check if consts, funcs, veriants exist
+        if isNotNullOrNil( varVectorAddr ) and isValidPointer( varVectorAddr ) then
+          varVectorStructElem = addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer)
+          sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: ' .. tostring(nodeName))
+          varVectorStructElem.ChildStruct = createStructure('Vars')
+          iterateVecVarToStruct(nodeAddr, varVectorStructElem)
+        else
+          sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS skipped: nothing to process: ' .. tostring(nodeName))
+        end
+
+        if isNotNullOrNil(GDDEFS.CONST_MAP) and isNotNullOrNil( constMapAddr ) and isValidPointer( constMapAddr ) then
+          constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
+          sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: ' .. tostring(nodeName))
+          constMapStructElem.ChildStruct = createStructure('Consts')
+          iterateNodeConstToStruct(nodeAddr, constMapStructElem)
+        else
+          sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS skipped: nothing to process: ' .. tostring(nodeName))
+        end
+
+        if isNotNullOrNil(GDDEFS.FUNC_MAP) and isNotNullOrNil( funcMapAddr ) and isValidPointer( funcMapAddr ) then
+          functMapStructElem = addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer)
+          sendDebugMessage('iterateNodeToStruct: STEP: Functions for: ' .. tostring(nodeName))
+          functMapStructElem.ChildStruct = createStructure('Funcs')
+          iterateNodeFuncMapToStruct(nodeAddr, functMapStructElem)
+        else
+          sendDebugMessage('iterateNodeToStruct: STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
+        end
+
+        if GDDEFS.MONO then -- TODO: temp
+          if checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
+            sendDebugMessage("iterateNodeToStruct: Node " .. nodeName .. " has csharp script type")
+            local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", 0x20, vtPointer, "CLRPtr")  -- TODO: magic constant
+            addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
           end
-          table.insert(dumpedDissectorNodes, nodeAddr)
+        end
 
-          local varVectorStructElem, scriptStructElem, constMapStructElem, functMapStructElem
-          local gdScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE) or 0x0
-          local gdScriptAddr = readPointer(gdScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
-
-          scriptStructElem = addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer)
-
-          -- we check if consts, funcs, veriants exist
-          if isNotNullOrNil(readPointer(gdScriptInstanceAddr + GDDEFS.VAR_VECTOR)) then
-              varVectorStructElem = addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer)
-              sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: ' .. tostring(nodeName))
-              varVectorStructElem.ChildStruct = createStructure('Vars')
-              iterateVecVarToStruct(nodeAddr, varVectorStructElem)
-          else
-              sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS skipped: nothing to process: ' .. tostring(nodeName))
-          end
-
-          if isNotNullOrNil(GDDEFS.CONST_MAP) and isNotNullOrNil(readPointer(gdScriptAddr + GDDEFS.CONST_MAP)) then
-              constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
-              sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: ' .. tostring(nodeName))
-              constMapStructElem.ChildStruct = createStructure('Consts')
-              iterateNodeConstToStruct(nodeAddr, constMapStructElem)
-          else
-              sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS skipped: nothing to process: ' .. tostring(nodeName))
-          end
-
-          if isNotNullOrNil(GDDEFS.FUNC_MAP) and isNotNullOrNil(readPointer(gdScriptAddr + GDDEFS.FUNC_MAP)) then
-              functMapStructElem = addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer)
-              sendDebugMessage('iterateNodeToStruct: STEP: Functions for: ' .. tostring(nodeName))
-              functMapStructElem.ChildStruct = createStructure('Funcs')
-              iterateNodeFuncMapToStruct(nodeAddr, functMapStructElem)
-          else
-              sendDebugMessage('iterateNodeToStruct: STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
-          end
-
-          debugStepOut()
-          return
+        debugStepOut()
+        return
       end
 
       --- go over child nodes in the main nodes
@@ -3679,49 +3692,48 @@
       --- gets a Node by name
       ---@param nodeName string
       function getNode(nodeName)
-          assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-          if not (gdOffsetsDefined) then
-              print('define the offsets first, silly')
-              return
-          end
-
-          local childrenPtr, childrenSize = getVPChildren()
-          if isNullOrNil(childrenPtr) then
-              return
-          end
-
-          for i = 0, (childrenSize - 1) do
-
-              local nodeAddr = readPointer(childrenPtr + i * GDDEFS.PTRSIZE)
-              if isNullOrNil(nodeAddr) then
-                  -- sendDebugMessage('getNode: nodeAddr invalid' )
-                  return
-              end
-
-              local nodeNameStr = getNodeName(nodeAddr)
-              if nodeNameStr == nodeName then
-                  return nodeAddr
-              end
-          end
+        assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
           return
+        end
+
+        local childrenPtr, childrenSize = getVPChildren()
+        if isNullOrNil(childrenPtr) then
+          return
+        end
+
+        for i = 0, (childrenSize - 1) do
+
+          local nodeAddr = readPointer(childrenPtr + i * GDDEFS.PTRSIZE)
+          if isNullOrNil(nodeAddr) then
+            -- sendDebugMessage('getNode: nodeAddr invalid' )
+            return
+          end
+
+          local nodeNameStr = getNodeName(nodeAddr)
+          if nodeNameStr == nodeName then
+            return nodeAddr
+          end
+        end
+        return
       end
 
       --- returns a const ptr and its type
       ---@param nodeName string
       ---@param constName string
       function getNodeConstPtr(nodeName, constName)
-          assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
-          assert(type(constName) == 'string', "Constant name has to be a string, instead got: " .. type(constName))
+        assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
+        assert(type(constName) == 'string', "Constant name has to be a string, instead got: " .. type(constName))
 
-          local nodePtr = getNodeWithGDScriptInstance(nodeName)
-          if isNullOrNil(nodePtr) then
-              -- sendDebugMessage("getNodeConstPtr: Node + GDSI: "..tostring(nodeName).." wasn't found")
-              return
-          end
+        local nodePtr = getNodeWithGDScriptInstance(nodeName)
+        if isNullOrNil(nodePtr) then
+          -- sendDebugMessage("getNodeConstPtr: Node + GDSI: "..tostring(nodeName).." wasn't found")
+          return
+        end
 
-          local mapHead = getNodeConstantMap(nodePtr)
-          return findMapEntryByName(mapHead, constName, getNodeConstName, getConstMapLookupResult, getNextMapElement)
-
+        local mapHead = getNodeConstantMap(nodePtr)
+        return findMapEntryByName(mapHead, constName, getNodeConstName, getConstMapLookupResult, getNextMapElement)
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Func
@@ -8212,50 +8224,53 @@
       ---@param emitter table
       ---@param options table
       function iterateVectorVariants(nodeAddr, parent, emitter, options)
-          assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr));
+        assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr));
 
-          debugStepIn()
+        debugStepIn()
 
-          local nodeName = getNodeName(nodeAddr) or "UnknownNode";
+        local nodeName = getNodeName(nodeAddr) or "UnknownNode";
 
-          options = options or {}
+        options = options or {}
 
-          if options.requireGDScript and not checkForGDScript(nodeAddr) then
-              sendDebugMessageAndStepOut(" iterateVectorVariants: Node has NO GDScript: " .. nodeName)
-              -- synchronize(function(parent) parent.Destroy() end, parent ) -- TODO: compare the emitter?
-              return;
-          end
+        if options.requireGDScript and not checkForGDScript(nodeAddr) then
+          
+          sendDebugMessageAndStepOut(" iterateVectorVariants: Node has NO GDScript: " .. nodeName)
+          -- synchronize(function(parent) parent.Destroy() end, parent ) -- TODO: compare the emitter?
+          return;
+        end
+        if GDDEFS.MONO and (checkScriptType(nodeAddr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
 
-          local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
-          if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-              sendDebugMessageAndStepOut('iterateVectorVariants (hash)Map empty?: ' .. nodeName)
-              return;
-          end
+        local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
+        if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+          sendDebugMessageAndStepOut('iterateVectorVariants (hash)Map empty?: ' .. nodeName)
+          return;
+        end
 
-          local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-          local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
-          if not ok then
-              sendDebugMessageAndStepOut("iterateVectorVariants: Variant resize strangely failed")
-              return;
-          end
+        local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
+        local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+        if not ok then
+          sendDebugMessageAndStepOut("iterateVectorVariants: Variant resize strangely failed")
+          return;
+        end
 
-          local mapElement = headElement
+        local mapElement = headElement
 
-          repeat
-              local entry = readNodeVariantEntry(mapElement, variantVector, variantSize, options.bNeedStructOffset)
-              local contextTable = {
-                  nodeAddr = nodeAddr,
-                  nodeName = nodeName,
-                  baseAddress = entry.variantPtr
-              }
-              local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT;
-              handler(entry, emitter, parent, contextTable);
+        repeat
+          local entry = readNodeVariantEntry(mapElement, variantVector, variantSize, options.bNeedStructOffset)
+          local contextTable =
+          {
+            nodeAddr = nodeAddr,
+            nodeName = nodeName,
+            baseAddress = entry.variantPtr
+          }
+          local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT;
+          handler(entry, emitter, parent, contextTable);
 
-              mapElement = getNextMapElement(mapElement)
-          until (mapElement == 0)
+          mapElement = getNextMapElement(mapElement)
+        until (mapElement == 0)
 
-          debugStepOut()
-          return
+        debugStepOut()
+        return
       end
 
       --- nodeAddr and owner to append to
@@ -8273,9 +8288,10 @@
       ---@param nodeAddr number
       ---@param varStructElement userdata
       function iterateVecVarToStruct(nodeAddr, varStructElement)
-          local options = {
-              bNeedStructOffset = true,
-              requireGDScript = false
+          local options =
+          {
+            bNeedStructOffset = true,
+            requireGDScript = false
           }
           iterateVectorVariants(nodeAddr, varStructElement, GDEmitters.StructEmitter, options)
       end
@@ -8350,15 +8366,14 @@
 
           local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
           if isNullOrNil(scriptInstanceAddr) then
-              sendDebugMessageAndStepOut('getNodeVariantMap: scriptInstance is absent for ' ..
-                                            string.format(' %x', nodeAddr));
-              return;
+            sendDebugMessageAndStepOut('getNodeVariantMap: scriptInstance is absent for ' .. string.format(' %x', nodeAddr));
+            return;
           end
 
           local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
           if isNullOrNil(gdScriptAddr) then
-              sendDebugMessageAndStepOut('getNodeVariantMap: GDScript is absent for ' .. string.format(' %x', nodeAddr));
-              return;
+            sendDebugMessageAndStepOut('getNodeVariantMap: GDScript is absent for ' .. string.format(' %x', nodeAddr));
+            return;
           end
 
           local mainElement = readPointer(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP) -- head / root
@@ -8366,15 +8381,15 @@
           local mapSize = readInteger(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.MAP_SIZE)
 
           if isNullOrNil(mainElement) or isNullOrNil(endElement) or isNullOrNil(mapSize) then
-              sendDebugMessage('getNodeVariantMap: Variant: (hash)map is not found')
-              return;
+            sendDebugMessage('getNodeVariantMap: Variant: (hash)map is not found')
+            return;
           end
 
           debugStepOut()
           if GDDEFS.MAJOR_VER == 4 then
-              return mainElement, endElement, mapSize
+            return mainElement, endElement, mapSize
           else
-              return getLeftmostMapElem(mainElement, endElement, mapSize)
+            return getLeftmostMapElem(mainElement, endElement, mapSize)
           end
       end
 
@@ -8602,13 +8617,12 @@
       --- returns an adjusted offset to a variant value
       ---@param gdType number
       function getVariantValueOffset(gdType)
-          assert(type(gdType) == "number",
-              'getVariantValueOffset: Type from enum should be a number, instead got: ' .. type(gdType))
-          if (getGDTypeName(gdType) == 'OBJECT') then
-              return 0x10
-          end -- objects have 0x10 offset for value
-          -- not sure about the rest
-          return 0x8 -- the rest have this offset
+        assert(type(gdType) == "number", 'getVariantValueOffset: Type from enum should be a number, instead got: ' .. type(gdType))
+        if (getGDTypeName(gdType) == 'OBJECT') then
+          return 0x10
+        end -- objects have 0x10 offset for value
+        -- not sure about the rest
+        return 0x8 -- the rest have this offset
       end
 
       --- takes a godot type. Returns CEType
@@ -9295,100 +9309,97 @@
               MEMREC = 0
             }
           end
-
         end
         return nodeDict
       end
 
       --- returns a node table
       function getMainNodeTable()
-          local childrenAddr, childrenSize = getVPChildren()
-          if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('getMainNodeDict: VP Children not valid') end
+        local childrenAddr, childrenSize = getVPChildren()
+        if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('getMainNodeDict: VP Children not valid') end
 
-          local nodeTable = {}
+        local nodeTable = {}
 
-          for i = 0, (childrenSize - 1) do
-
-              local nodeAddr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
-              if isNullOrNil(nodeAddr) then
-                  error('getMainNodeDict: NO MAIN NODES')
-              end
-
-              local nodeNameStr = getNodeName(nodeAddr)
-              nodeNameStr = tostring(nodeNameStr)
-              registerSymbol(nodeNameStr, nodeAddr, true) -- let's have them registered when we do structs
-              table.insert(nodeTable, nodeAddr)
+        for i = 0, (childrenSize - 1) do
+          local nodeAddr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
+          if isNullOrNil(nodeAddr) then
+            error('getMainNodeDict: NO MAIN NODES')
           end
-          return nodeTable
+
+          local nodeNameStr = getNodeName(nodeAddr)
+          nodeNameStr = tostring(nodeNameStr)
+          registerSymbol(nodeNameStr, nodeAddr, true) -- let's have them registered when we do structs
+          table.insert(nodeTable, nodeAddr)
+        end
+        return nodeTable
       end
 
       --- gets a dumped Node by name
       ---@param nodeName string
       function getDumpedNode(nodeName)
-          assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-          if not (gdOffsetsDefined) then
-              print('define the offsets first, silly')
-              return
-          end
-
-          if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
-              -- sendDebugMessage('getDumpedNode: dumped nodes table is nil, dump the game first')
-              return;
-          end
-          for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-              local nodeNameStr = getNodeName(nodeAddr)
-              if nodeNameStr == nodeName then
-                  return nodeAddr
-              end
-          end
+        assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
           return
+        end
+
+        if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
+          -- sendDebugMessage('getDumpedNode: dumped nodes table is nil, dump the game first')
+          return;
+        end
+        for _, nodeAddr in ipairs(dumpedMonitorNodes) do
+          local nodeNameStr = getNodeName(nodeAddr)
+          if nodeNameStr == nodeName then
+            return nodeAddr
+          end
+        end
+        return
       end
 
       --- prints all gathered nodeNames
       function printDumpedNodes()
-          if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
-              -- sendDebugMessage('printDumpedNodes: dumped nodes table is nil, dump the game first')
-              return;
-          end
-          if not (gdOffsetsDefined) then
-              print('define the offsets first, silly')
-              return
-          end
+        if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
+          -- sendDebugMessage('printDumpedNodes: dumped nodes table is nil, dump the game first')
+          return;
+        end
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
+          return
+        end
 
-          for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-              local nodeNameStr = getNodeName(nodeAddr)
-              printf(">Node name: %s \t Node addr: %x", tostring(nodeNameStr), tonumber(nodeAddr))
-          end
+        for _, nodeAddr in ipairs(dumpedMonitorNodes) do
+          local nodeNameStr = getNodeName(nodeAddr)
+          printf(">Node name: %s \t Node addr: %x", tostring(nodeNameStr), tonumber(nodeAddr))
+        end
       end
 
       function nodeMonitorThread(thr)
-          thr.Name = "GDMonitorThread"
-          while (bMonitorNodes) do
-              local mainNodeDict = getMainNodeDict()
-              dumpedMonitorNodes = {};
-              for key, value in ipairs(mainNodeDict) do
-
-                  table.insert(dumpedMonitorNodes, value.PTR)
-                  iterateVecVarForNodes(value.PTR)
-              end
-              sleep(3000)
+        thr.Name = "GDMonitorThread"
+        while (bMonitorNodes) do
+          local mainNodeDict = getMainNodeDict()
+          dumpedMonitorNodes = {};
+          for key, value in ipairs(mainNodeDict) do
+            table.insert(dumpedMonitorNodes, value.PTR)
+            iterateVecVarForNodes(value.PTR)
           end
-          thr.terminate()
+          sleep(3000)
+        end
+        thr.terminate()
       end
 
       -- switches node monitoring (in a thread)
       function nodeMonitor()
-          if not (gdOffsetsDefined) then
-              print('define the offsets first, silly')
-              return
-          end
-          
-          if true then print('disabled so far') return end
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
+          return
+        end
+        
+        if true then print('disabled so far') return end
 
-          bMonitorNodes = not bMonitorNodes
-          if bMonitorNodes then
-              createThread(nodeMonitorThread)
-          end
+        bMonitorNodes = not bMonitorNodes
+        if bMonitorNodes then
+          createThread(nodeMonitorThread)
+        end
       end
 
       --- dump for a specific node and append to the parent
@@ -9396,124 +9407,123 @@
       ---@param nodeAddr number
       ---@param bDoConstants number
       function DumpNodeToAddr(parentMemrec, nodeAddr, bDoConstants)
-          assert(type(parentMemrec) == "userdata",
-              'Parent address has to be userdata, instead got: ' .. type(parentMemrec))
-          assert(type(nodeAddr) == "number", 'Node address has to be a number, instead got: ' .. type(nodeAddr))
-          if not (gdOffsetsDefined) then
-              print('define the offsets first, silly')
-              return
+        assert(type(parentMemrec) == "userdata", 'Parent address has to be userdata, instead got: ' .. type(parentMemrec))
+        assert(type(nodeAddr) == "number", 'Node address has to be a number, instead got: ' .. type(nodeAddr))
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
+          return
+        end
+
+        debugPrefix = 1; -- reset debug prefix, don't use that while running Node threads
+        dumpedNodes = {}; -- let's start from scratch for single node dumps | there might be race conditions, not a big issue for most cases
+        table.insert(dumpedNodes, nodeAddr)
+
+        local nodeNameStr = getNodeName(nodeAddr)
+        if not checkForGDScript(nodeAddr) then
+          -- sendDebugMessage('DumpNodeToAddr: node '..nodeNameStr..' doesnt have GDScript/Inst')
+          return
+        end
+        -- sendDebugMessage('DumpNodeToAddr: node '..tostring(nodeNameStr)..'addr: '..numtohexstr(nodeAddr) )
+
+        synchronize(function(parentMemrec)
+          if parentMemrec.Count ~= 0 then -- let's clear all children
+            while parentMemrec.Child[0] ~= nil do
+              parentMemrec.Child[0].Destroy()
+            end
           end
+        end, parentMemrec)
 
-          debugPrefix = 1; -- reset debug prefix, don't use that while running Node threads
-          dumpedNodes = {}; -- let's start from scratch for single node dumps | there might be race conditions, not a big issue for most cases
-          table.insert(dumpedNodes, nodeAddr)
+        if bDoConstants and (GDDEFS.CONST_MAP ~= 0) then
+          -- sendDebugMessage('DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) )
 
-          local nodeNameStr = getNodeName(nodeAddr)
-          if not checkForGDScript(nodeAddr) then
-              -- sendDebugMessage('DumpNodeToAddr: node '..nodeNameStr..' doesnt have GDScript/Inst')
-              return
-          end
-          -- sendDebugMessage('DumpNodeToAddr: node '..tostring(nodeNameStr)..'addr: '..numtohexstr(nodeAddr) )
-
-          synchronize(function(parentMemrec)
-              if parentMemrec.Count ~= 0 then -- let's clear all children
-                  while parentMemrec.Child[0] ~= nil do
-                      parentMemrec.Child[0].Destroy()
-                  end
-              end
+          local newConstRec = synchronize(function(parentMemrec)
+            local newConstRec = getAddressList().createMemoryRecord()
+            newConstRec.setDescription("Consts:")
+            newConstRec.setAddress(0xBABE)
+            newConstRec.setType(vtPointer)
+            newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+            newConstRec.DontSave = true
+            newConstRec.appendToEntry(parentMemrec)
+            return newConstRec
           end, parentMemrec)
 
-          if bDoConstants and (GDDEFS.CONST_MAP ~= 0) then
-              -- sendDebugMessage('DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) )
+          iterateNodeConstToAddr(nodeAddr, newConstRec)
 
-              local newConstRec = synchronize(function(parentMemrec)
-                  local newConstRec = getAddressList().createMemoryRecord()
-                  newConstRec.setDescription("Consts:")
-                  newConstRec.setAddress(0xBABE)
-                  newConstRec.setType(vtPointer)
-                  newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                  newConstRec.DontSave = true
-                  newConstRec.appendToEntry(parentMemrec)
-                  return newConstRec
-              end, parentMemrec)
-
-              iterateNodeConstToAddr(nodeAddr, newConstRec)
-
-          end
-          -- sendDebugMessage('DumpNodeToAddr: variants for node: '..tostring(nodeNameStr) )
-          iterateVecVarToAddr(nodeAddr, parentMemrec)
-          debugPrefix = 1; -- reset debug prefix
+        end
+        -- sendDebugMessage('DumpNodeToAddr: variants for node: '..tostring(nodeNameStr) )
+        iterateVecVarToAddr(nodeAddr, parentMemrec)
+        debugPrefix = 1; -- reset debug prefix
       end
 
       --- dumps all the active objects to the Address List
       function DumpAllNodesToAddr(thr)
-          if not (gdOffsetsDefined) then
-              print('define the offsets first, silly')
-              return
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
+          return
+        end
+
+        print('MAIN: DUMP PROCESS STARTED')
+        debugPrefix = 1; -- reset debug prefix
+        dumpedNodes = {}; -- mutually linked nodes may end up in endless recursion + we use it for API | an obvious race condition if a user calls that on different nodes at the same time, don't care much
+        local parentRec
+
+        parentRec = synchronize(function()
+          local addrList = getAddressList()
+          local mainAddr = addrList.getMemoryRecordByDescription("DUMPED:")
+          if mainAddr then
+              mainAddr.Destroy()
           end
 
-          print('MAIN: DUMP PROCESS STARTED')
-          debugPrefix = 1; -- reset debug prefix
-          dumpedNodes = {}; -- mutually linked nodes may end up in endless recursion + we use it for API | an obvious race condition if a user calls that on different nodes at the same time, don't care much
-          local parentRec
+          local parentRec = addrList.createMemoryRecord()
+          parentRec.setDescription("DUMPED:")
+          parentRec.setAddress(0xBABE)
+          parentRec.setType(vtPointer)
+          parentRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+          parentRec.DontSave = true
+          return parentRec
+        end)
 
-          parentRec = synchronize(function()
-              local addrList = getAddressList()
-              local mainAddr = addrList.getMemoryRecordByDescription("DUMPED:")
-              if mainAddr then
-                  mainAddr.Destroy()
-              end
+        local mainNodeDict = getMainNodeDict()
 
-              local parentRec = addrList.createMemoryRecord()
-              parentRec.setDescription("DUMPED:")
-              parentRec.setAddress(0xBABE)
-              parentRec.setType(vtPointer)
-              parentRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-              parentRec.DontSave = true
-              return parentRec
-          end)
+        for key, value in ipairs(mainNodeDict) do
 
-          local mainNodeDict = getMainNodeDict()
+          value.MEMREC = synchronize(function(value, key, parentRec)
+            local newNodeMemRec = addMemRecTo(key, value.PTR, getCETypeFromGD(value.TYPE), parentRec)
+            newNodeMemRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+            return newNodeMemRec
+          end, value, key, parentRec)
 
-          for key, value in ipairs(mainNodeDict) do
+          table.insert(dumpedNodes, value.PTR)
+          sendDebugMessage('MAIN: loop. STEP: Constants for: ' .. key)
 
-              value.MEMREC = synchronize(function(value, key, parentRec)
-                  local newNodeMemRec = addMemRecTo(key, value.PTR, getCETypeFromGD(value.TYPE), parentRec)
-                  newNodeMemRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                  return newNodeMemRec
-              end, value, key, parentRec)
+          if GDDEFS.CONST_MAP ~= 0 then
+            local newConstRec = synchronize(function(value)
+              local newConstRec = getAddressList().createMemoryRecord()
+              newConstRec.setDescription("Consts:")
+              newConstRec.setAddress(0xBABE)
+              newConstRec.setType(vtPointer)
+              newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
+              newConstRec.DontSave = true
+              newConstRec.appendToEntry(value.MEMREC)
+              return newConstRec
+            end, value)
 
-              table.insert(dumpedNodes, value.PTR)
-              sendDebugMessage('MAIN: loop. STEP: Constants for: ' .. key)
-
-              if GDDEFS.CONST_MAP ~= 0 then
-                  local newConstRec = synchronize(function(value)
-                      local newConstRec = getAddressList().createMemoryRecord()
-                      newConstRec.setDescription("Consts:")
-                      newConstRec.setAddress(0xBABE)
-                      newConstRec.setType(vtPointer)
-                      newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-                      newConstRec.DontSave = true
-                      newConstRec.appendToEntry(value.MEMREC)
-                      return newConstRec
-                  end, value)
-
-                  iterateNodeConstToAddr(value.PTR, newConstRec)
-              end
-
-              sendDebugMessage('MAIN: loop. STEP: VARIANTS for: ' .. key)
-              iterateVecVarToAddr(value.PTR, value.MEMREC)
+            iterateNodeConstToAddr(value.PTR, newConstRec)
           end
 
-          debugPrefix = 1;
-          print('MAIN: DUMP PROCESS FINISHED')
+          sendDebugMessage('MAIN: loop. STEP: VARIANTS for: ' .. key)
+          iterateVecVarToAddr(value.PTR, value.MEMREC)
+        end
+
+        debugPrefix = 1;
+        print('MAIN: DUMP PROCESS FINISHED')
 
       end
 
-      if not (targetIsGodot) then --[[print('target is not godot')--]]
-          return;
-      end
-      defineGDOffsets(config)
+    if not (targetIsGodot) then --[[print('target is not godot')--]]
+      return;
+    end
+    defineGDOffsets(config)
   end
 
   godotRegisterPreinit()
