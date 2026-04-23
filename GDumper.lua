@@ -197,9 +197,7 @@
     function defineGDVersion()
       local godotVersionString = getGodotVersionString()
 
-      if isNullOrNil(GDDEFS) then
-        GDDEFS = {}
-      end
+      if isNullOrNil(GDDEFS) then GDDEFS = {} end
 
       GDDEFS.FULL_GDVERSION_STRING = godotVersionString
       local major, minor, patch, tag = (godotVersionString):match("v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)")
@@ -1067,33 +1065,19 @@
       if VTAddr == 0 or VTAddr == nil then
         return false
       end
-
-      -- TODO: calculate the bounds once and store
-
-      -- the vtables are stored in some readonly data section, text included too
-      local moduleStart = getAddress(process) or 0
-      local moduleEnd;
-      local moduleSize = getModuleSize(process)
-
-      -- for cases when getAddress fails
-      if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
-        moduleStart = enumModules()[1].Address
-        moduleEnd = moduleStart + enumModules()[1].Size
-      else
-        moduleEnd = moduleStart + moduleSize
+      if isNullOrNil(GDDEFS.MAIN_MODULE_INFO) then
+        GDDEFS.MAIN_MODULE_INFO = getMainModuleInfo()
+        GDDEFS.TEXT_SECTIONINFO = getSectionBounds(".text")
+        if GDDEFS.TEXT_SECTIONINFO == nil then return false end
       end
 
-      if moduleStart < VTAddr and VTAddr < moduleEnd then
+      if GDDEFS.MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS.MAIN_MODULE_INFO.moduleEnd then
         -- iterate a few pointers and confirm if they are executable
         local ptrsize = targetIs64Bit() and 0x8 or 0x4
-        local sectionInfo = getSectionBounds(".text")
-        if sectionInfo == nil then
-          return false
-        end
 
         for i = 0, 5 do -- 5 pointers
           local pmethod = readPointer(VTAddr + ptrsize * i)
-          if not isInsideSectionRange(pmethod, sectionInfo) then
+          if not isInsideSectionRange(pmethod, GDDEFS.TEXT_SECTIONINFO) then
             return false
           end
         end
@@ -1401,7 +1385,7 @@
       elseif bDisasmFunc and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
         disassembleGDFunctionCodeToStruct(baseaddr, struct)
 
-      elseif checkIfGDObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
+      elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
         local childrenStructElem = struct.addElement()
         childrenStructElem.Name = 'Children'
         childrenStructElem.BackgroundColor = 0xFF0080
@@ -1677,6 +1661,29 @@
       rootNode.getItem().Text = "NodeChild"
     end
 
+  -- ///---///--///---///--///---/// MISC UTILS
+    function getMainModuleInfo()
+      -- the vtables are stored in some readonly data section, text included too
+      local moduleStart = getAddress(process) or 0
+      local moduleEnd;
+      local moduleSize = getModuleSize(process)
+
+      -- for cases when getAddress fails
+      if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
+        moduleStart = enumModules()[1].Address
+        moduleEnd = moduleStart + enumModules()[1].Size
+      else
+        moduleEnd = moduleStart + moduleSize
+      end
+
+      return
+      {
+        moduleStart = moduleStart,
+        moduleEnd = moduleEnd,
+        moduleSize = moduleSize
+      }
+    end
+
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
 
   function initDumper(config)
@@ -1949,17 +1956,16 @@
 
       --- inits the GDDEFS object
       function initGDDefs()
-        if GDDEFS == nil then
-          GDDEFS = {}
-          GDDEFS.SCRIPT_TYPES =
-            {
-              ["UNDEFINED"] = 0,
-              ["GD"] = 1,
-              ["CS"] = 2
-            }
+        GDDEFS = {} -- for now let it be reinitialized here
 
-          GDDEFS.STRING = 0x10
-        end
+        GDDEFS.SCRIPT_TYPES =
+          {
+            ["UNDEFINED"] = 0,
+            ["GD"] = 1,
+            ["CS"] = 2
+          }
+
+        GDDEFS.STRING = 0x10
         
         dumpedMonitorNodes = {};
         debugPrefix = 1;
@@ -2162,7 +2168,7 @@
         end
 
         function NodeVisitor.visitObject(objPtr)
-          local realPtr, bShifted = checkForVT(objPtr)
+          local realPtr, bShifted = checkObjectOffset(objPtr)
           local nodePtr = readPointer(realPtr)
           if checkForGDScript(nodePtr) then
             iterateMNode(nodePtr)
@@ -2490,7 +2496,7 @@
         local currentParent = parent
         local currentContext = contextTable
 
-        ptr, shifted = checkForVT(ptr)
+        ptr, shifted = checkObjectOffset(ptr)
 
         if shifted then
           offset = offset - GDDEFS.PTRSIZE
@@ -3362,7 +3368,7 @@
         end
       end
 
-      function checkIfGDObjectWithChildren(objAddr)
+      function checkIfObjectWithChildren(objAddr)
         
         -- if object itself is valid & has a vtable
         if isNullOrNil(objAddr) or not isMMVTable( readPointer(objAddr) ) then return false end
@@ -3403,15 +3409,15 @@
       --- builds a structure layout for a node's children array
       ---@param childrenArrStruct userdata
       ---@param nodeAddr number
-      function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress)
+      function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress) -- TODO: repurpose for visitor & emitters
 
-        if not isPointerNotNull(readPointer(baseAddress + GDDEFS.CHILDREN)) then
+        if not isPointerNotNull(readPointer(baseAddress + GDDEFS.CHILDREN)) then -- TODO: can be delegated to parent check
           -- check if the children array points to something
           return;
         end
         local childrenAddr = readPointer(baseAddress + GDDEFS.CHILDREN)
 
-        local childrenSize;
+        local childrenSize; -- TODO: replace with a function
         if GDDEFS.MAJOR_VER == 4 then
           childrenSize = readInteger(baseAddress + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
         elseif GDDEFS.MAJOR_VER > 4 then
@@ -3626,29 +3632,29 @@
       ---@param objectPtr number -- a ptr to an object or nullptr
       ---@return number -- returns a more valid pointer to an object
       ---@return boolean -- true if the returned pointer was shifted back to get a valid ptr
-      function checkForVT(objectPtr) -- TODO: rename for consistency
+      function checkObjectOffset(objectPtr)
         local objectAddr = readPointer(objectPtr) -- it's either an obj ptr or zero
         local vtable = readPointer(objectAddr)
         if not isMMVTable(vtable) then -- check for vtable
           -- debugStepIn()
 
-          -- sendDebugMessage('checkForVT: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
+          -- sendDebugMessage('checkObjectOffset: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
           local adjustedObjectPtr = objectPtr - GDDEFS.PTRSIZE; -- shift back to get a ptr
           local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
           objectAddr = readPointer(wrapperAddr)
 
           if isNullOrNil(wrapperAddr) or isInvalidPointer(wrapperAddr) then -- check the wrapper
-            -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not an obj  ptr, leave it be')
+            -- sendDebugMessageAndStepOut('checkObjectOffset: OBJ addr still not an obj  ptr, leave it be')
             return objectPtr, false; -- revert the value, whatever
           end
 
           local vtable = readPointer(objectAddr)
           if isMMVTable(vtable) then -- check for vtable to be safe
-            -- sendDebugMessageAndStepOut('checkForVT: shifted OBJ addr is a ptr, returning it')
+            -- sendDebugMessageAndStepOut('checkObjectOffset: shifted OBJ addr is a ptr, returning it')
             return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
 
           else
-            -- sendDebugMessageAndStepOut('checkForVT: OBJ addr still not a ptr, leave it be')
+            -- sendDebugMessageAndStepOut('checkObjectOffset: OBJ addr still not a ptr, leave it be')
             return objectPtr, false; -- revert the value, whatever
           end
         else -- vtable valid
@@ -7864,18 +7870,13 @@
       function iterateVecVarForNodes(nodeAddr)
         assert(type(nodeAddr) == 'number', "iterateVecVarForNodes: Node addr has to be a number, instead got: " .. type(nodeAddr))
 
-        if not checkForGDScript(nodeAddr) then
-          return;
-        end
+        if not checkForGDScript(nodeAddr) then return; end
+
         local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-        if isNullOrNil(vectorSize) then
-          return;
-        end
+        if isNullOrNil(vectorSize) then return; end
 
         local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
-        if not ok then
-          return;
-        end
+        if not ok then return; end
 
         local visitor = NodeVisitor
 
@@ -8628,6 +8629,9 @@
           for key, value in ipairs(mainNodeDict) do
             table.insert(dumpedMonitorNodes, value.PTR)
             iterateVecVarForNodes(value.PTR)
+            if checkIfObjectWithChildren(value.PTR) then
+              -- iterate node children
+            end
           end
           sleep(3000)
         end
