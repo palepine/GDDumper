@@ -1454,208 +1454,204 @@
 
     --- creates a menu button in the main menu
     function buildGDGUI()
-        if GDGUIInit then
-            return
-        end
-        GDGUIInit = true
+      if GDGUIInit then
+        return
+      end
+      GDGUIInit = true
 
-        -- creates and adds button to parent with callback on click
-        local function addCustomMenuButtonTo(ownerParent, captionName, customCallback)
-            local newMenuItem = createMenuItem(ownerParent)
-            newMenuItem.Caption = captionName
-            ownerParent.add(newMenuItem)
-            newMenuItem.OnClick = customCallback
-            return newMenuItem
-        end
+      -- creates and adds button to parent with callback on click
+      local function addCustomMenuButtonTo(ownerParent, captionName, customCallback)
+        local newMenuItem = createMenuItem(ownerParent)
+        newMenuItem.Caption = captionName
+        ownerParent.add(newMenuItem)
+        newMenuItem.OnClick = customCallback
+        return newMenuItem
+      end
 
-        local menuItemCaption = 'GDDumper'
-        local mainMenu = getMainForm().Menu
-        local gdMenuItem = nil
+      local menuItemCaption = 'GDDumper'
+      local mainMenu = getMainForm().Menu
+      local gdMenuItem = nil
 
-        for i = 0, mainMenu.Items.Count - 1 do
-            if mainMenu.Items.Item[i].Caption == menuItemCaption then
-                gdMenuItem = mainMenu.Items.Item[i]
-                break
-            end
+      for i = 0, mainMenu.Items.Count - 1 do
+        if mainMenu.Items.Item[i].Caption == menuItemCaption then
+          gdMenuItem = mainMenu.Items.Item[i]
+          break
         end
+      end
 
-        if not gdMenuItem then
-            gdMenuItem = createMenuItem(mainMenu)
-            gdMenuItem.Caption = menuItemCaption
-            mainMenu.Items.add(gdMenuItem)
-            addCustomMenuButtonTo(gdMenuItem, 'VP Struct', createVPStructForm)
-            addCustomMenuButtonTo(gdMenuItem, 'GD Dissector', GDDissectorSwitch)
-            addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
-            addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
-            addCustomMenuButtonTo(gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch)
-            addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
-            addCustomMenuButtonTo(gdMenuItem, 'GD StuctName Lookup', GDStructNameLookupSwitch)
-            -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
-            local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', appendDumperScript)
-            -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
-            addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
-            addCustomMenuButtonTo(gdMenuItem, 'Print config', printGDConfig)
-            -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
-        end
+      if not gdMenuItem then
+        gdMenuItem = createMenuItem(mainMenu)
+        gdMenuItem.Caption = menuItemCaption
+        mainMenu.Items.add(gdMenuItem)
+        addCustomMenuButtonTo(gdMenuItem, 'VP Struct', createVPStructForm)
+        addCustomMenuButtonTo(gdMenuItem, 'GD Dissector', GDDissectorSwitch)
+        addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
+        addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
+        addCustomMenuButtonTo(gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch)
+        addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
+        addCustomMenuButtonTo(gdMenuItem, 'GD StuctName Lookup', GDStructNameLookupSwitch)
+        -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
+        local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', appendDumperScript)
+        -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
+        addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
+        addCustomMenuButtonTo(gdMenuItem, 'Print config', printGDConfig)
+        -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
+      end
     end
 
     --- toggling dissector override
     function GDDissectorSwitch(sender)
-        -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
-        sender.Checked = not sender.Checked
-        if sender.Checked then
-            enableGDDissect()
-        else
-            disableGDDissect()
-        end
+      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+      sender.Checked = not sender.Checked
+      if sender.Checked then
+        enableGDDissect()
+      else
+        disableGDDissect()
+      end
     end
 
     function GDStructNameLookupSwitch(sender)
-        if not (gdOffsetsDefined) then
-            print('define the offsets first, silly')
-            return
-        end
-        sender.Checked = not sender.Checked
-        if sender.Checked then
-            enableGDStructNameLookup()
-        else
-            disableGDStructNameLookup()
-        end
+      if not (gdOffsetsDefined) then
+        print('define the offsets first, silly')
+        return
+      end
+      sender.Checked = not sender.Checked
+      if sender.Checked then
+        enableGDStructNameLookup()
+      else
+        disableGDStructNameLookup()
+      end
     end
 
     function GDAddressLookupSwitch(sender)
-        if not (gdOffsetsDefined) then
-            print('define the offsets first, silly')
-            return
-        end
-        sender.Checked = not sender.Checked
-        if sender.Checked then
-            enableGDAddressLookup()
-        else
-            disableGDAddressLookup()
-        end
+      if not (gdOffsetsDefined) then
+        print('define the offsets first, silly')
+        return
+      end
+      sender.Checked = not sender.Checked
+      if sender.Checked then
+        enableGDAddressLookup()
+      else
+        disableGDAddressLookup()
+      end
     end
 
     function GDDebugSwitch(sender)
-        sender.Checked = not sender.Checked
-        if sender.Checked then
-            bGDDebug = true
-        else
-            bGDDebug = false
-        end
+      sender.Checked = not sender.Checked
+      if sender.Checked then
+        bGDDebug = true
+      else
+        bGDDebug = false
+      end
     end
 
     function GDDisasmFuncSwitch(sender)
-        sender.Checked = not sender.Checked
-        if sender.Checked then
-            bDisasmFunc = true
-        else
-            bDisasmFunc = false
-        end
+      sender.Checked = not sender.Checked
+      if sender.Checked then
+        bDisasmFunc = true
+      else
+        bDisasmFunc = false
+      end
     end
 
     function GDStoredOffsetsSwitch(sender)
-        sender.Checked = not sender.Checked
-        if sender.Checked then
-            bHardOffsets = true
-        else
-            bHardOffsets = false
-        end
+      sender.Checked = not sender.Checked
+      if sender.Checked then
+        bHardOffsets = true
+      else
+        bHardOffsets = false
+      end
     end
 
     function addGDMemrecToTable(sender)
-        local addrList = getAddressList()
-        local mainMemrec = addrList.createMemoryRecord()
-        mainMemrec.Description = "Dumper"
-        mainMemrec.Type = vtAutoAssembler
-        mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        mainMemrec.Script =
-            "{$lua}\nif syntaxcheck then return end\n{$asm}\n[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- IMPORTANT: if you define all, you can 'Use stored offsets' to try to relieve yourself from defining the OFFSETS\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver\nGDDebugVer =                nil, -- if it's template_debug ver\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nnodeMonitor()\n{$asm}"
+      local addrList = getAddressList()
+      local mainMemrec = addrList.createMemoryRecord()
+      mainMemrec.Description = "Dumper"
+      mainMemrec.Type = vtAutoAssembler
+      mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+      mainMemrec.Script = "{$lua}\nif syntaxcheck then return end\n{$asm}\n[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- IMPORTANT: if you define all, you can 'Use stored offsets' to try to relieve yourself from defining the OFFSETS\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver\nGDDebugVer =                nil, -- if it's template_debug ver\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nnodeMonitor()\n{$asm}"
 
-        local dumpMemrec = addrList.createMemoryRecord()
-        dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
-        dumpMemrec.Type = vtAutoAssembler
-        dumpMemrec.Async = true
-        dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        dumpMemrec.Script =
-            '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
-        dumpMemrec.appendToEntry(mainMemrec)
+      local dumpMemrec = addrList.createMemoryRecord()
+      dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
+      dumpMemrec.Type = vtAutoAssembler
+      dumpMemrec.Async = true
+      dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+      dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
+      dumpMemrec.appendToEntry(mainMemrec)
 
-        local dumpMemrec = addrList.createMemoryRecord()
-        dumpMemrec.Description = 'Dump All Nodes (main)'
-        dumpMemrec.Type = vtAutoAssembler
-        dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        dumpMemrec.Async = true
-        dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpAllNodesToAddr()\n[DISABLE]'
-        dumpMemrec.appendToEntry(mainMemrec)
+      local dumpMemrec = addrList.createMemoryRecord()
+      dumpMemrec.Description = 'Dump All Nodes (main)'
+      dumpMemrec.Type = vtAutoAssembler
+      dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+      dumpMemrec.Async = true
+      dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpAllNodesToAddr()\n[DISABLE]'
+      dumpMemrec.appendToEntry(mainMemrec)
 
-        local supportPalique = addrList.createMemoryRecord()
-        supportPalique.Description = 'Support the development & author'
-        supportPalique.Type = vtAutoAssembler
-        supportPalique.Color = 0x8F379F
-        supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
+      local supportPalique = addrList.createMemoryRecord()
+      supportPalique.Description = 'Support the development & author'
+      supportPalique.Type = vtAutoAssembler
+      supportPalique.Color = 0x8F379F
+      supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
     end
 
     -- attaches the script to the table
     function appendDumperScript(sender)
-        local cedir = getCheatEngineDir()
-        local scriptPath = cedir .. [[autorun\GDumper.lua]]
-        createTableFile("GDumper", scriptPath)
-        sender.Enabled = false
+      local cedir = getCheatEngineDir()
+      local scriptPath = cedir .. [[autorun\GDumper.lua]]
+      createTableFile("GDumper", scriptPath)
+      sender.Enabled = false
     end
 
     -- load from attached script
     function loadDumperScript(sender)
-        local tableFile = findTableFile("GDumper")
-        if tableFile == nil then
-            return
+      local tableFile = findTableFile("GDumper")
+      if tableFile == nil then
+        return
+      end
+      local fileStream = tableFile.getData()
+      local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
+      if scriptString ~= nil then
+        local doScript = loadstring(scriptString)
+        if type(doScript) == 'function' then
+          doScript()
+          sender.Checked = true
         end
-        local fileStream = tableFile.getData()
-        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
-        if scriptString ~= nil then
-            local doScript = loadstring(scriptString)
-            if type(doScript) == 'function' then
-                doScript()
-                sender.Checked = true
-            end
-
-        end
+      end
     end
 
     function loadDumperScriptFromFile(sender)
-        local cedir = getCheatEngineDir()
-        local scriptPath = cedir .. [[autorun\GDumper.lua]]
-        local scriptFile, err = io.open(scriptPath, "r")
-        if not scriptFile then
-            error("Could not open file: " .. scriptPath .. "\n" .. tostring(err))
+      local cedir = getCheatEngineDir()
+      local scriptPath = cedir .. [[autorun\GDumper.lua]]
+      local scriptFile, err = io.open(scriptPath, "r")
+      if not scriptFile then
+        error("Could not open file: " .. scriptPath .. "\n" .. tostring(err))
+      end
+      local scriptCode = scriptFile:read("*a")
+      scriptFile:close()
+      if scriptCode and scriptCode ~= "" then
+        local doScript, loadErr = loadstring(scriptCode)
+        if not doScript then
+          error("Compile error in " .. scriptPath .. ":\n" .. tostring(loadErr))
         end
-        local scriptCode = scriptFile:read("*a")
-        scriptFile:close()
-        if scriptCode and scriptCode ~= "" then
-            local doScript, loadErr = loadstring(scriptCode)
-            if not doScript then
-                error("Compile error in " .. scriptPath .. ":\n" .. tostring(loadErr))
-            end
-            local ok, runErr = pcall(doScript)
-            if not ok then
-                error("Runtime error in " .. scriptPath .. ":\n" .. tostring(runErr))
-            end
-        else
-            error("File is empty: " .. scriptPath)
+        local ok, runErr = pcall(doScript)
+        if not ok then
+          error("Runtime error in " .. scriptPath .. ":\n" .. tostring(runErr))
         end
+      else
+        error("File is empty: " .. scriptPath)
+      end
     end
 
     function loadGDDumperForm()
-        local gdform = createFormFromFile(getCheatEngineDir()..[[autorun\gdform\GDForm.FRM]])
-        gdform.setDoNotSaveInTable(true)
-        -- TODO: setup
-        local gdtreeview = gdform.ComponentByName["treeviewNodes"]
+      local gdform = createFormFromFile(getCheatEngineDir()..[[autorun\gdform\GDForm.FRM]])
+      gdform.setDoNotSaveInTable(true)
+      -- TODO: setup
+      local gdtreeview = gdform.ComponentByName["treeviewNodes"]
 
-        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNode
-        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNodes
-        local rootNode = gdtreeview.getItems().add("root")
-        rootNode.getItem().Text = "NodeChild"
-
+      -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNode
+      -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNodes
+      local rootNode = gdtreeview.getItems().add("root")
+      rootNode.getItem().Text = "NodeChild"
     end
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
