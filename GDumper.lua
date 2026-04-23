@@ -2410,7 +2410,7 @@
 
       -- TODO: make magic dereferences more obvious
 
-      local function getNodeChildrenInfo(nodeAddr)
+      function getNodeChildrenInfo(nodeAddr)
 
         local childrenAddr = readPointer(nodeAddr + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
         if isNullOrNil(childrenAddr) then
@@ -2472,7 +2472,6 @@
 
         local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
 
-        -- 4.2.2 may differ TODO: make it version dependent
         if scriptType > GDDEFS.MAXTYPE then
           scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8)
         end
@@ -3540,7 +3539,7 @@
         if GDDEFS.MONO then -- TODO: temp
           if checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
             sendDebugMessage("iterateNodeToStruct: Node " .. nodeName .. " has csharp script type")
-            local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")  -- TODO: magic constant
+            local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
             addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
           end
         end
@@ -3843,7 +3842,7 @@
           local label = "GlobName[" .. variantIndex .. "] stringName"
           local stringFieldLabel = "GlobName[" .. variantIndex .. "] string"
           local stringNamePtr = readPointer(funcGlobalVect + entryOffset)
-          local bUniShift = false -- TODO: with version checking that should not be an issue
+          local bUniShift = false
 
           if isPointerNotNull(stringNamePtr) then
             bUniShift = isPointerNotNull(stringNamePtr + GDDEFS.STRING)
@@ -5102,7 +5101,6 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
                 operand1 = operand1 .. '.'
 
-                -- TODO: there's value before argc and after (latter references call index from globalnames)
                 local operandArg = '';
 
                 for i = 0, argc - 1 do
@@ -6605,9 +6603,9 @@
             GDF.Decoders.BytecodeV1 =
               {
                 name = "BytecodeV1",
-                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
+                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum) -- TODO: version specific overriding
                   -- for other versions redefine the handler on the fly
-                  -- for example, in 4.0 GDF.OP.OPCODE_OPERATOR takes more operands than future versions TODO
+                  -- for example, in 4.0 GDF.OP.OPCODE_OPERATOR takes more operands than future versions
                   return profile.OPHandlerDefFromOPEnum[opcodeEnum]
                 end
               }
@@ -7165,8 +7163,7 @@
 
         debugStepIn()
 
-        -- TODO: resolve that with a a helper
-        local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
+        local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE) -- TODO: resolve that with a a helper
         funcStruct.Name = 'ScriptFunc'
         local codeStructElement = funcStruct.addElement()
         codeStructElement.Name = 'FuncCode'
@@ -7432,7 +7429,7 @@
         end
         debugStepOut()
 
-        if GDDEFS.MAJOR_VER == 4 then -- TODO: the function can be segmented
+        if GDDEFS.MAJOR_VER == 4 then
           return mainElement, lastElement, mapSize, constStructElement
         else
           if constStructElement then
@@ -8029,7 +8026,7 @@
         end
 
         if GDDEFS.MAJOR_VER == 4 then
-          if (vectorSize == 1) and (readInteger(vectorPtr) == 27) then -- TODO: replace with TYPE_MAX
+          if (vectorSize == 1) and (getGDTypeName( readInteger(vectorPtr) ) == "DICTIONARY") then -- TODO: BRITTLE, investigate how consistent dictionaries do that
             -- sendDebugMessageAndStepOut(" 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
             return 0x30, true;
           elseif (vectorSize == 1) then
@@ -8129,186 +8126,206 @@
       function getCETypeFromGD(gdType)
         assert(type(gdType) == "number", 'getCETypeFromGD Type from enum should be a number, instead got: ' .. type(gdType))
 
-        if GDDEFS.MAJOR_VER == 4 then -- TODO make it patchable
-          if (gdType == 2) then return vtDword end
-          if (gdType == 1) then return vtByte end
-          if (gdType == 3) then return vtDouble end
-          if (gdType == 4) then return vtString end -- not sure though, need to test that, GD string is 4byte per char
-          if (gdType == 27) then return vtPointer end
-          if (gdType == 28) then return vtPointer end
-          if (gdType == 21) then return vtPointer end
-          if (gdType == 24) then return vtPointer end -- object
-          if (gdType == 0) then return vtPointer end
+        if isNullOrNil(GDDEFS.VARIANT_TYPES) then
+          if GDDEFS.MAJOR_VER == 4 then
+            GDDEFS.VARIANT_TYPES =
+              {
+                [0] = vtPointer,
+                [1] = vtByte,
+                [2] = vtDword,
+                [3] = vtDouble,
+                [4] = vtString,
+                [5] = vtSingle,
+                [6] = vtSingle,
+                [7] = vtSingle,
+                [8] = vtSingle,
+                [9] = vtSingle,
+                [10] = vtSingle,
+                [11] = vtSingle,
+                [12] = vtPointer,
+                [13] = vtPointer,
+                [14] = vtPointer,
+                [15] = vtPointer,
+                [16] = vtPointer,
+                [17] = vtPointer,
+                [18] = vtPointer,
+                [19] = vtPointer,
+                [20] = vtPointer,
+                [21] = vtPointer,
+                [22] = vtPointer,
+                [23] = vtPointer,
+                [24] = vtPointer, -- object
+                [25] = vtPointer,
+                [26] = vtPointer,
+                [27] = vtPointer,
+                [28] = vtPointer,
+                [29] = vtPointer,
+                [30] = vtPointer,
+                [31] = vtPointer,
+                [32] = vtPointer,
+                [33] = vtPointer,
+                [34] = vtPointer,
+                [35] = vtPointer,
+                [36] = vtPointer,
+                [37] = vtPointer,
+                [38] = vtPointer,
+                [39] = vtPointer
+              }
+          elseif GDDEFS.MAJOR_VER == 3 then
+            GDDEFS.VARIANT_TYPES =
+              {
+                [0] = vtPointer,
+                [1] = vtByte,
+                [2] = vtDword,
+                [3] = vtDouble,
+                [4] = vtString,
+                [5] = vtSingle,
+                [6] = vtSingle,
+                [7] = vtSingle,
+                [8] = vtSingle,
+                [9] = vtPointer,
+                [10] = vtPointer,
+                [11] = vtPointer,
+                [12] = vtPointer,
+                [13] = vtPointer,
+                [14] = vtDword,
+                [15] = vtPointer,
+                [16] = vtPointer,
+                [17] = vtPointer, -- object
+                [18] = vtPointer,
+                [19] = vtPointer,
+                [20] = vtPointer,
+                [21] = vtPointer,
+                [22] = vtPointer,
+                [23] = vtPointer,
+                [24] = vtPointer,
+                [25] = vtPointer,
+                [26] = vtPointer,
+                [27] = vtPointer
+              }
 
-          if (gdType == 5) then return vtSingle end -- vector is 2 floats (x,y)
-          if (gdType == 6) then return vtSingle end
-          if (gdType == 7) then return vtSingle end
-          if (gdType == 8) then return vtSingle end
-          if (gdType == 9) then return vtSingle end
-          if (gdType == 10) then return vtSingle end
-          if (gdType == 11) then return vtSingle end
-          if (gdType == 12) then return vtPointer end
-          if (gdType == 13) then return vtPointer end
-          if (gdType == 14) then return vtPointer end
-          if (gdType == 15) then return vtPointer end
-          if (gdType == 16) then return vtPointer end
-          if (gdType == 17) then return vtPointer end
-          if (gdType == 18) then return vtPointer end
-          if (gdType == 19) then return vtPointer end
-          if (gdType == 20) then return vtSingle end
-          if (gdType == 22) then return vtPointer end
-          if (gdType == 23) then return vtPointer end
-          if (gdType == 25) then return vtPointer end
-          if (gdType == 26) then return vtPointer end
-          if (gdType == 29) then return vtPointer end
-          if (gdType == 30) then return vtPointer end
-          if (gdType == 31) then return vtPointer end
-          if (gdType == 32) then return vtPointer end
-          if (gdType == 33) then return vtPointer end
-          if (gdType == 34) then return vtPointer end
-          if (gdType == 35) then return vtPointer end
-          if (gdType == 36) then return vtPointer end
-          if (gdType == 37) then return vtPointer end
-          if (gdType == 38) then return vtPointer end
-          if (gdType == 39) then return vtDword end
-          return vtPointer -- whatever
+            else
+              error("unexpected version")
+              --[[
+                  vtByte=0
+                  vtWord=1
+                  vtDword=2
+                  vtQword=3
+                  vtSingle=4
+                  vtDouble=5
+                  vtString=6
+                  vtUnicodeString=7 --Only used by autoguess
+                  vtByteArray=8
+                  vtBinary=9
+                  vtAutoAssembler=11
+                  vtPointer=12 --Only used by autoguess and structures
+                  vtCustom=13
+                  vtGrouped=14
+                ]]
+
+            end
+        end
+
+        if GDDEFS.MAXTYPE >= gdType then
+          return GDDEFS.VARIANT_TYPES[gdType]
         else
-          if (gdType == 2) then return vtDword end
-          if (gdType == 1) then return vtByte end
-          if (gdType == 3) then return vtDouble end
-          if (gdType == 18) then return vtPointer end
-          if (gdType == 19) then return vtPointer end
-          if (gdType == 17) then return vtPointer end -- object
-          if (gdType == 4) then return vtString end -- not sure though, need to test that, GD string is 4byte per char
-          if (gdType == 0) then return vtPointer end
-
-          if (gdType == 5) then return vtSingle end -- vector is 2 floats (x,y)
-          if (gdType == 6) then return vtSingle end
-          if (gdType == 7) then return vtSingle end
-          if (gdType == 8) then return vtSingle end
-          if (gdType == 9) then return vtCustom end
-          if (gdType == 10) then return vtCustom end
-          if (gdType == 11) then return vtCustom end
-          if (gdType == 12) then return vtCustom end
-          if (gdType == 13) then return vtCustom end
-          if (gdType == 14) then return vtDword end
-          if (gdType == 15) then return vtUnicodeString end
-          if (gdType == 16) then return vtPointer end
-          if (gdType == 20) then return vtPointer end
-          if (gdType == 21) then return vtPointer end
-          if (gdType == 22) then return vtPointer end
-          if (gdType == 23) then return vtPointer end
-          if (gdType == 24) then return vtPointer end
-          if (gdType == 25) then return vtPointer end
-          if (gdType == 26) then return vtPointer end
-          if (gdType == 27) then return vtPointer end
           return vtPointer -- whatever
         end
-        --[[
-            vtByte=0
-            vtWord=1
-            vtDword=2
-            vtQword=3
-            vtSingle=4
-            vtDouble=5
-            vtString=6
-            vtUnicodeString=7 --Only used by autoguess
-            vtByteArray=8
-            vtBinary=9
-            vtAutoAssembler=11
-            vtPointer=12 --Only used by autoguess and structures
-            vtCustom=13
-            vtGrouped=14
-          ]]
-        return
       end
 
       --- takes in a godot type, returns a godot type name
       ---@param typeInt number
       function getGDTypeName(typeInt)
-        if type(typeInt) ~= "number" then
-          -- sendDebugMessage("getGDTypeName: input not a number, instead: "..tostring(typeInt))
-          return false;
+        if type(typeInt) ~= "number" then --[[sendDebugMessage("getGDTypeName: input not a number, instead: "..tostring(typeInt))]] return false; end
+
+        if isNullOrNil(GDDEFS.VARIANT_TYPE_NAMES) then
+          if GDDEFS.MAJOR_VER == 4 then
+            GDDEFS.VARIANT_TYPE_NAMES =
+              { -- TODO: patches
+                [0] = "NIL",
+                [1] = "BOOL",
+                [2] = "INT",
+                [3] = "FLOAT",
+                [4] = "STRING",
+                [5] = "VECTOR2",
+                [6] = "VECTOR2I",  -- (x,y): int
+                [7] = "RECT2", -- (vector2,vector2)
+                [8] = "RECT2I", -- (vector2i,vector2i)
+                [9] = "VECTOR3", -- (x,y,z)
+                [10] = "VECTOR3I", -- (x,y,z): int
+                [11] = "TRANSFORM2D", 
+                [12] = "VECTOR4",  -- (x,y,z,w)
+                [13] = "VECTOR4I", -- (x,y,z,w): int
+                [14] = "PLANE",
+                [15] = "QUATERNION",
+                [16] = "AABB",
+                [17] = "BASIS",
+                [18] = "TRANSFORM3D", -- basis: 3x3 matix, origin: vector3
+                [19] = "PROJECTION",
+                [20] = "COLOR",  -- color is 4 floats (r,g,b,a)
+                [21] = "STRING_NAME",
+                [22] = "NODE_PATH",
+                [23] = "RID",
+                [24] = "OBJECT",
+                [25] = "CALLABLE",
+                [26] = "SIGNAL",
+                [27] = "DICTIONARY",
+                [28] = "ARRAY",
+                [29] = "PACKED_BYTE_ARRAY",
+                [30] = "PACKED_INT32_ARRAY",
+                [31] = "PACKED_INT64_ARRAY",
+                [32] = "PACKED_FLOAT32_ARRAY",
+                [33] = "PACKED_FLOAT64_ARRAY",
+                [34] = "PACKED_STRING_ARRAY",
+                [35] = "PACKED_VECTOR2_ARRAY",
+                [36] = "PACKED_VECTOR3_ARRAY",
+                [37] = "PACKED_COLOR_ARRAY",
+                [38] = "PACKED_VECTOR4_ARRAY",
+                [39] = "VARIANT_MAX"
+              }
+          elseif GDDEFS.MAJOR_VER == 3 then
+            GDDEFS.VARIANT_TYPE_NAMES =
+              {
+                [0] = "NIL",
+                [1] = "BOOL",
+                [2] = "INT",
+                [3] = "FLOAT",
+                [4] = "STRING",
+                [5] = "VECTOR2",
+                [6] = "RECT2",
+                [7] = "VECTOR3",
+                [8] = "TRANSFORM2D",
+                [9] = "PLANE",
+                [10] = "QUATERNION",
+                [11] = "AABB", 
+                [12] = "BASIS",
+                [13] = "TRANSFORM3D",
+                [14] = "COLOR",
+                [15] = "NODE_PATH",
+                [16] = "RID",
+                [17] = "OBJECT",
+                [18] = "DICTIONARY",
+                [19] = "ARRAY",
+                [20] = "PACKED_BYTE_ARRAY",
+                [21] = "PACKED_INT64_ARRAY",
+                [22] = "PACKED_FLOAT32_ARRAY",
+                [23] = "PACKED_STRING_ARRAY",
+                [24] = "PACKED_VECTOR2_ARRAY",
+                [25] = "PACKED_VECTOR3_ARRAY",
+                [26] = "PACKED_COLOR_ARRAY",
+                [27] = "VARIANT_MAX",
+              }
+
+            else
+              error("unexpected version")
+            end
         end
 
-        if GDDEFS.MAJOR_VER == 4 then
-          if (typeInt == 2) then return "INT" end -- these go first
-          if (typeInt == 1) then return "BOOL" end
-          if (typeInt == 3) then return "FLOAT" end
-          if (typeInt == 4) then return "STRING" end
-          if (typeInt == 27) then return "DICTIONARY" end
-          if (typeInt == 28) then return "ARRAY" end
-          if (typeInt == 24) then return "OBJECT" end
-          if (typeInt == 21) then return "STRING_NAME" end
-          if (typeInt == 0) then return "NIL" end
-
-          if (typeInt == 5) then return "VECTOR2" end -- (x,y)
-          if (typeInt == 6) then return "VECTOR2I" end -- (x,y): int
-          if (typeInt == 7) then return "RECT2" end -- (vector2,vector2)
-          if (typeInt == 8) then return "RECT2I" end -- (vector2i,vector2i)
-          if (typeInt == 9) then return "VECTOR3" end -- (x,y,z)
-          if (typeInt == 10) then return "VECTOR3I" end -- (x,y,z): int
-          if (typeInt == 11) then return "TRANSFORM2D" end
-          if (typeInt == 12) then return "VECTOR4" end -- (x,y,z,w)
-          if (typeInt == 13) then return "VECTOR4I" end -- (x,y,z,w): int
-          if (typeInt == 14) then return "PLANE" end
-          if (typeInt == 15) then return "QUATERNION" end
-          if (typeInt == 16) then return "AABB" end
-          if (typeInt == 17) then return "BASIS" end
-          if (typeInt == 18) then return "TRANSFORM3D" end -- basis: 3x3 matix, origin: vector3
-          if (typeInt == 19) then return "PROJECTION" end
-          if (typeInt == 20) then return "COLOR" end -- color is 4 floats (r,g,b,a)
-          if (typeInt == 22) then return "NODE_PATH" end
-          if (typeInt == 23) then return "RID" end
-          if (typeInt == 25) then return "CALLABLE" end
-          if (typeInt == 26) then return "SIGNAL" end
-          if (typeInt == 29) then return "PACKED_BYTE_ARRAY" end
-          if (typeInt == 30) then return "PACKED_INT32_ARRAY" end
-          if (typeInt == 31) then return "PACKED_INT64_ARRAY" end
-          if (typeInt == 32) then return "PACKED_FLOAT32_ARRAY" end
-          if (typeInt == 33) then return "PACKED_FLOAT64_ARRAY" end
-          if (typeInt == 34) then return "PACKED_STRING_ARRAY" end
-          if (typeInt == 35) then return "PACKED_VECTOR2_ARRAY" end
-          if (typeInt == 36) then return "PACKED_VECTOR3_ARRAY" end
-          if (typeInt == 37) then return "PACKED_COLOR_ARRAY" end
-          if (typeInt == 38) then return "PACKED_VECTOR4_ARRAY" end
-          if (typeInt == 39) then return "VARIANT_MAX" end
-          return "BEYOND_VARIANT_MAX"
-        else -- 3.x
-          if (typeInt == 2) then return "INT" end -- these go first
-          if (typeInt == 1) then return "BOOL" end
-          if (typeInt == 3) then return "FLOAT" end
-          if (typeInt == 18) then return "DICTIONARY" end
-          if (typeInt == 19) then return "ARRAY" end
-          if (typeInt == 17) then return "OBJECT" end
-          if (typeInt == 4) then return "STRING" end
-          if (typeInt == 0) then return "NIL" end
-
-          if (typeInt == 5) then return "VECTOR2" end
-          if (typeInt == 6) then return "RECT2" end
-          if (typeInt == 7) then return "VECTOR3" end
-          if (typeInt == 8) then return "TRANSFORM2D" end
-          if (typeInt == 9) then return "PLANE" end
-          if (typeInt == 10) then return "QUATERNION" end
-          if (typeInt == 11) then return "AABB" end
-          if (typeInt == 12) then return "BASIS" end
-          if (typeInt == 13) then return "TRANSFORM3D" end
-          if (typeInt == 14) then return "COLOR" end
-          if (typeInt == 15) then return "NODE_PATH" end
-          if (typeInt == 16) then return "RID" end
-          if (typeInt == 20) then return "PACKED_BYTE_ARRAY" end
-          if (typeInt == 21) then return "PACKED_INT64_ARRAY" end
-          if (typeInt == 22) then return "PACKED_FLOAT32_ARRAY" end
-          if (typeInt == 23) then return "PACKED_STRING_ARRAY" end
-          if (typeInt == 24) then return "PACKED_VECTOR2_ARRAY" end
-          if (typeInt == 25) then return "PACKED_VECTOR3_ARRAY" end
-          if (typeInt == 26) then return "PACKED_COLOR_ARRAY" end
-          if (typeInt == 27) then return "VARIANT_MAX" end
-          return "BEYOND_VARIANT_MAX"
+        if GDDEFS.MAXTYPE >= typeInt then
+          return GDDEFS.VARIANT_TYPE_NAMES[typeInt]
+        else
+          return "BEYOND_VARIANT_MAX" -- whatever
         end
-
-        return false; -- nil
-
       end
 
       --- I'm gonna add a 4byte string type
