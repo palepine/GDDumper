@@ -1370,7 +1370,7 @@
         scriptInstStructElem.Offset = GDDEFS.GDSCRIPTINSTANCE
         scriptInstStructElem.VarType = vtPointer
 
-        if isPointerNotNull(baseaddr + GDDEFS.CHILDREN) then
+        if checkIfObjectWithChildren(baseaddr) then
           local childrenStructElem = struct.addElement()
           childrenStructElem.Name = 'Children'
           childrenStructElem.BackgroundColor = 0xFF0080
@@ -2129,20 +2129,7 @@
 
         debugStepIn()
 
-        local childrenPtr = readPointer(viewport + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
-        if isNullOrNil(childrenPtr) then
-          sendDebugMessageAndStepOut('getVPChildren: failed to get VP children')
-          return;
-        end
-
-        local childrenSize;
-        if GDDEFS.MAJOR_VER == 4 then
-          childrenSize = readInteger(viewport + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-        elseif GDDEFS.MAJOR_VER > 4 then
-          childrenSize = readInteger(childrenPtr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
-        else
-          childrenSize = readInteger(childrenPtr - GDDEFS.CHILDREN_SIZE)
-        end
+        local childrenAddr, childrenSize = getNodeChildrenInfo(viewport)
 
         if isNullOrNil(childrenSize) then
           sendDebugMessageAndStepOut('getVPChildren: ChildSize is invalid')
@@ -2150,7 +2137,7 @@
         end
 
         debugStepOut();
-        return childrenPtr, childrenSize
+        return childrenAddr, childrenSize
       end
 
       -- TODO: split to specific engine internals
@@ -2172,6 +2159,7 @@
           local nodePtr = readPointer(realPtr)
           if checkForGDScript(nodePtr) then
             iterateMNode(nodePtr)
+          elseif true then
           end
         end
 
@@ -2421,6 +2409,28 @@
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS / SHARED HELPERS
 
       -- TODO: make magic dereferences more obvious
+
+      local function getNodeChildrenInfo(nodeAddr)
+
+        local childrenAddr = readPointer(nodeAddr + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
+        if isNullOrNil(childrenAddr) then
+          sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
+          return nil, nil;
+        end
+
+        local childrenSize;
+        if GDDEFS.MAJOR_VER == 4 then
+          if GDDEFS.MINOR_VER > 2 then
+            childrenSize = readInteger(nodeAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
+          else
+            childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
+          end
+        else
+          childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
+        end
+
+        return childrenAddr, childrenSize
+      end
 
       local function getNextMapElement(mapElement)
         if GDDEFS.MAJOR_VER == 4 then
@@ -3374,19 +3384,7 @@
         if isNullOrNil(objAddr) or not isMMVTable( readPointer(objAddr) ) then return false end
 
         -- check children & if it's a valid pointer
-        local objectChildren = readPointer(objAddr + GDDEFS.CHILDREN)
-        if isNullOrNil(objectChildren) or isInvalidPointer(objectChildren) then return false end
-
-        local childrenSize;
-        if GDDEFS.MAJOR_VER == 4 then
-          childrenSize = readInteger(objAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-
-        -- elseif GDDEFS.MAJOR_VER > 4 then -- TODO: versions before ~4.2 have size inside the array 4 bytes behind
-        --     childrenSize = readInteger( objectChildren - GDDEFS.CHILDREN_SIZE )
-
-        else
-          childrenSize = readInteger(objectChildren - GDDEFS.CHILDREN_SIZE)
-        end
+        local objectChildren, childrenSize = getNodeChildrenInfo(objAddr)
 
         -- if no children, we don't need it
         if isNullOrNil(childrenSize) then return false end
@@ -3395,39 +3393,17 @@
         local childAddr = readPointer(objectChildren)
         if isNullOrNil(childAddr) or not isMMVTable( readPointer(childAddr) ) then return false end
 
-        --[[
-        local objectStrNamePtr = readPointer(objAddr + GDDEFS.OBJ_STRING_NAME)
-        if isNullOrNil(objectStrNamePtr) then return false end
-
-        local objName = getStringNameStr(objectStrNamePtr)
-        if isNullOrNil(objName) or objName == "??" then return false end
-        ]]
-
         return true
       end
 
       --- builds a structure layout for a node's children array
       ---@param childrenArrStruct userdata
       ---@param nodeAddr number
-      function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress) -- TODO: repurpose for visitor & emitters
+      function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress) -- TODO: repurpose for visitor & emitters?
 
-        if not isPointerNotNull(readPointer(baseAddress + GDDEFS.CHILDREN)) then -- TODO: can be delegated to parent check
-          -- check if the children array points to something
-          return;
-        end
-        local childrenAddr = readPointer(baseAddress + GDDEFS.CHILDREN)
+        local childrenAddr, childrenSize = getNodeChildrenInfo(baseAddress)
 
-        local childrenSize; -- TODO: replace with a function
-        if GDDEFS.MAJOR_VER == 4 then
-          childrenSize = readInteger(baseAddress + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-        elseif GDDEFS.MAJOR_VER > 4 then
-          childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
-        else
-          childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
-        end
-        if isNullOrNil(childrenSize) then
-          return;
-        end
+        if isNullOrNil(childrenSize) then return; end
 
         for i = 0, (childrenSize - 1) do
           local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
