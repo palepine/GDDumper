@@ -3689,4068 +3689,3717 @@
       --- returns a lua string for function name
       ---@param mapElement number
       function getGDFunctionName(mapElement)
-          debugStepIn()
+        debugStepIn()
 
-          local mapElementValue = readPointer(mapElement + GDDEFS.PTRSIZE * 2) -- it's after next and prev
-          if isNullOrNil(mapElementValue) then
-              sendDebugMessageAndStepOut('getGDFunctionName: (hash)mapElementKey invalid');
-              return 'F??'
-          end
+        local mapElementValue = readPointer(mapElement + GDDEFS.PTRSIZE * 2) -- it's after next and prev
+        if isNullOrNil(mapElementValue) then
+          sendDebugMessageAndStepOut('getGDFunctionName: (hash)mapElementKey invalid');
+          return 'F??'
+        end
 
-          debugStepOut()
-          return getStringNameStr(mapElementValue)
+        debugStepOut()
+        return getStringNameStr(mapElementValue)
       end
 
       --- returns a head element, tail element and (hash)Map size
       ---@param nodeAddr number
       function getNodeFuncMap(nodeAddr, funcStructElement)
-          assert(type(nodeAddr) == 'number', "getNodeFuncMap: NodePtr should be a number, instead got: " .. type(nodeAddr))
-          debugStepIn()
+        assert(type(nodeAddr) == 'number', "getNodeFuncMap: NodePtr should be a number, instead got: " .. type(nodeAddr))
+        debugStepIn()
 
-          local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(scriptInstanceAddr) then
-              sendDebugMessageAndStepOut('getNodeFuncMap: scriptInstance is invalid')
-              return
-          end
+        local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(scriptInstanceAddr) then
+          sendDebugMessageAndStepOut('getNodeFuncMap: scriptInstance is invalid')
+          return
+        end
 
-          local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
-          if isNullOrNil(gdScriptAddr) then
-              sendDebugMessageAndStepOut(' getNodeFuncMap: GDScript is invalid');
-              return;
-          end
+        local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
+        if isNullOrNil(gdScriptAddr) then
+          sendDebugMessageAndStepOut(' getNodeFuncMap: GDScript is invalid');
+          return;
+        end
 
-          local mainElement = readPointer(gdScriptAddr + GDDEFS.FUNC_MAP) -- head or root depending on the version
-          local lastElement = readPointer(gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.PTRSIZE) -- tail or end
-          local mapSize = readInteger(gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.MAP_SIZE) -- hashmap or map
-          if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
-              sendDebugMessageAndStepOut('getNodeFuncMap: Const: (hash)map is not found')
-              return; -- return to skip if the const map is absent
-          end
-          debugStepOut()
+        local mainElement = readPointer(gdScriptAddr + GDDEFS.FUNC_MAP) -- head or root depending on the version
+        local lastElement = readPointer(gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.PTRSIZE) -- tail or end
+        local mapSize = readInteger(gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.MAP_SIZE) -- hashmap or map
+        if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
+          sendDebugMessageAndStepOut('getNodeFuncMap: Const: (hash)map is not found')
+          return; -- return to skip if the const map is absent
+        end
+        debugStepOut()
 
-          if GDDEFS.MAJOR_VER == 4 then
-              return mainElement, lastElement, mapSize, funcStructElement
-          else
-              if funcStructElement then
-                  funcStructElement.ChildStruct = createStructure('ConstMapRes')
-              end
-              return getLeftmostMapElem(mainElement, lastElement, mapSize, funcStructElement)
+        if GDDEFS.MAJOR_VER == 4 then
+          return mainElement, lastElement, mapSize, funcStructElement
+        else
+          if funcStructElement then
+            funcStructElement.ChildStruct = createStructure('ConstMapRes')
           end
+          return getLeftmostMapElem(mainElement, lastElement, mapSize, funcStructElement)
+        end
       end
 
       --- gets a functionPtr by nodename (root children) and funcname
       ---@param nodeName string
       ---@param funcName string
       function getGDFunctionPtr(nodeName, funcName)
-          assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
-          local nodePtr = getNodeWithGDScriptInstance(nodeName)
-          if isNullOrNil(nodePtr) then
-              sendDebugMessage("getGDFunctionPtr: Node: " .. tostring(nodeName) .. " wasn't found");
-              return;
-          end
-          local mapHead = getNodeFuncMap(nodePtr)
-          return findMapEntryByName(mapHead, funcName, getFunctionMapName, getFunctionMapLookupResult,
-              advanceFunctionMapElement)
+        assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
+        local nodePtr = getNodeWithGDScriptInstance(nodeName)
+        if isNullOrNil(nodePtr) then
+          sendDebugMessage("getGDFunctionPtr: Node: " .. tostring(nodeName) .. " wasn't found");
+          return;
+        end
+        local mapHead = getNodeFuncMap(nodePtr)
+        return findMapEntryByName(mapHead, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement)
       end
 
       --- iterates a function map and adds it to a struct
       ---@param nodeAddr number
       ---@param funcStructElement userdata
       function iterateNodeFuncMapToStruct(nodeAddr, funcStructElement)
-          assert(type(nodeAddr) == 'number',
-              'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeAddr))
 
-          debugStepIn()
-          local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeAddr, funcStructElement)
-          if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-              sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: ' .. " Address " ..
-                                              numtohexstr(nodeAddr))
-              return;
+        debugStepIn()
+        local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeAddr, funcStructElement)
+        if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+          sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: ' .. " Address " .. numtohexstr(nodeAddr))
+          return;
+        end
+        local mapElement = headElement
+        local index = 0;
+
+        repeat
+          -- sendDebugMessage('iterateNodeFuncMapToStruct: Looping '.." mapElemAddr: "..numtohexstr(mapElement))
+
+          local funcName = getFunctionMapName(mapElement) or "UNKNOWN" -- the layout is similar to constant map's
+
+          emitFunctionStructEntry(currentContainer, mapElement, funcName)
+
+          index = index + 1
+          mapElement = advanceFunctionMapElement(mapElement)
+          if mapElement ~= 0 then
+            currentContainer = createNextFunctionContainer(currentContainer, index)
           end
-          local mapElement = headElement
-          local index = 0;
+        until (mapElement == 0)
 
-          repeat
-              -- sendDebugMessage('iterateNodeFuncMapToStruct: Looping '.." mapElemAddr: "..numtohexstr(mapElement))
-
-              local funcName = getFunctionMapName(mapElement) or "UNKNOWN" -- the layout is similar to constant map's
-
-              emitFunctionStructEntry(currentContainer, mapElement, funcName)
-
-              index = index + 1
-              mapElement = advanceFunctionMapElement(mapElement)
-              if mapElement ~= 0 then
-                  currentContainer = createNextFunctionContainer(currentContainer, index)
-              end
-          until (mapElement == 0)
-
-          debugStepOut()
-          return
+        debugStepOut()
+        return
       end
 
       function iterateFuncConstantsToStruct(funcConstantVect, funcConstantStructElem)
-          debugStepIn()
+        debugStepIn()
 
-          if isNullOrNil(funcConstantVect) then
-              sendDebugMessageAndStepOut('iterateFuncConstantsToStruct func vector invalid')
-              return
-          end
+        if isNullOrNil(funcConstantVect) then
+          sendDebugMessageAndStepOut('iterateFuncConstantsToStruct func vector invalid')
+          return
+        end
 
-          local vectorSize = readInteger(funcConstantVect - GDDEFS.SIZE_VECTOR)
-          if isNullOrNil(vectorSize) then
-              sendDebugMessageAndStepOut('iterateFuncConstantsToStruct vector size invalid')
-              return;
-          end
-
-          local variantSize, ok = redefineVariantSizeByVector(funcConstantVect, vectorSize)
-
-          if not ok then
-              sendDebugMessageAndStepOut("iterateFuncConstantsToStruct: Variant resize failed")
-              return
-          end
-          local emitter = GDEmitters.StructEmitter
-
-          for variantIndex = 0, (vectorSize - 1) do
-              local entry = readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
-              local contextTable = {
-                  nodeAddr = 0,
-                  nodeName = "FunctionConst",
-                  baseAddress = entry.variantPtr
-              }
-              local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
-              handler(entry, emitter, funcConstantStructElem, contextTable)
-          end
-
-          debugStepOut()
+        local vectorSize = readInteger(funcConstantVect - GDDEFS.SIZE_VECTOR)
+        if isNullOrNil(vectorSize) then
+          sendDebugMessageAndStepOut('iterateFuncConstantsToStruct vector size invalid')
           return;
+        end
+
+        local variantSize, ok = redefineVariantSizeByVector(funcConstantVect, vectorSize)
+
+        if not ok then
+          sendDebugMessageAndStepOut("iterateFuncConstantsToStruct: Variant resize failed")
+          return
+        end
+        local emitter = GDEmitters.StructEmitter
+
+        for variantIndex = 0, (vectorSize - 1) do
+          local entry = readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
+          local contextTable =
+          {
+            nodeAddr = 0,
+            nodeName = "FunctionConst",
+            baseAddress = entry.variantPtr
+          }
+          local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
+          handler(entry, emitter, funcConstantStructElem, contextTable)
+        end
+
+        debugStepOut()
+        return;
       end
 
       function iterateFuncGlobalsToStruct(funcGlobalVect, funcGlobalNameStructElem)
-          debugStepIn()
+        debugStepIn()
 
-          if isNullOrNil(funcGlobalVect) then
-              sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct funcGlobalVect invalid')
-              return;
-          end
-
-          local vectorSize = readInteger(funcGlobalVect - GDDEFS.SIZE_VECTOR)
-          if isNullOrNil(vectorSize) then
-              sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct vector size invalid')
-              return;
-          end
-
-          for variantIndex = 0, (vectorSize - 1) do
-              local entryOffset = variantIndex * GDDEFS.PTRSIZE
-              local label = "GlobName[" .. variantIndex .. "] stringName"
-              local stringFieldLabel = "GlobName[" .. variantIndex .. "] string"
-              local stringNamePtr = readPointer(funcGlobalVect + entryOffset)
-              local bUniShift = false -- TODO: with version checking that should not be an issue
-
-              if isPointerNotNull(stringNamePtr) then
-                  bUniShift = isPointerNotNull(stringNamePtr + GDDEFS.STRING)
-              end
-
-              -- sendDebugMessage('iterateFuncGlobalsToStruct: Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
-
-              emitStringNameStruct(funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, bUniShift)
-          end
-
-          debugStepOut()
+        if isNullOrNil(funcGlobalVect) then
+          sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct funcGlobalVect invalid')
           return;
+        end
+
+        local vectorSize = readInteger(funcGlobalVect - GDDEFS.SIZE_VECTOR)
+        if isNullOrNil(vectorSize) then
+          sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct vector size invalid')
+          return;
+        end
+
+        for variantIndex = 0, (vectorSize - 1) do
+          local entryOffset = variantIndex * GDDEFS.PTRSIZE
+          local label = "GlobName[" .. variantIndex .. "] stringName"
+          local stringFieldLabel = "GlobName[" .. variantIndex .. "] string"
+          local stringNamePtr = readPointer(funcGlobalVect + entryOffset)
+          local bUniShift = false -- TODO: with version checking that should not be an issue
+
+          if isPointerNotNull(stringNamePtr) then
+            bUniShift = isPointerNotNull(stringNamePtr + GDDEFS.STRING)
+          end
+
+          -- sendDebugMessage('iterateFuncGlobalsToStruct: Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
+
+          emitStringNameStruct(funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, bUniShift)
+        end
+
+        debugStepOut()
+        return;
       end
 
       function defineGDFunctionEnums()
-          GDF = {}
+        GDF = {}
 
-          local function buildReverseTable(tab)
-              local reversedTable = {}
-              for i, v in ipairs(tab) do
-                  reversedTable[v] = i - 1
-              end
-              return reversedTable
+        local function buildReverseTable(tab)
+          local reversedTable = {}
+          for i, v in ipairs(tab) do
+            reversedTable[v] = i - 1
           end
+          return reversedTable
+        end
 
-          local function cloneArray(tabl)
-              local result = {}
-              for i, val in ipairs(tabl) do
-                  result[i] = val
-              end
-              return result
+        local function cloneArray(tabl)
+          local result = {}
+          for i, val in ipairs(tabl) do
+            result[i] = val
           end
+          return result
+        end
 
-          local function insertValueBefore(list, anchor, valueToInsert)
-              for i, val in ipairs(list) do
-                  if val == anchor then
-                      table.insert(list, i, valueToInsert)
-                      return
-                  end
-              end
-              error("insertValueBefore: anchor not found: " .. tostring(anchor))
+        local function insertValueBefore(list, anchor, valueToInsert)
+          for i, val in ipairs(list) do
+            if val == anchor then
+              table.insert(list, i, valueToInsert)
+              return
+            end
           end
+          error("insertValueBefore: anchor not found: " .. tostring(anchor))
+        end
 
-          local function insertValueAfter(list, anchor, valueToInsert)
-              for i, val in ipairs(list) do
-                  if val == anchor then
-                      table.insert(list, i + 1, valueToInsert)
-                      return
-                  end
-              end
-              error("insertValueAfter: anchor not found: " .. tostring(anchor))
+        local function insertValueAfter(list, anchor, valueToInsert)
+          for i, val in ipairs(list) do
+            if val == anchor then
+              table.insert(list, i + 1, valueToInsert)
+              return
+            end
           end
+          error("insertValueAfter: anchor not found: " .. tostring(anchor))
+        end
 
-          local function removeValue(list, valueToRemove)
-              for i, v in ipairs(list) do
-                  if v == valueToRemove then
-                      table.remove(list, i)
-                      return
-                  end
-              end
-              error("removeValue: value not found: " .. tostring(valueToRemove))
+        local function removeValue(list, valueToRemove)
+          for i, v in ipairs(list) do
+            if v == valueToRemove then
+              table.remove(list, i)
+              return
+            end
           end
-
-          local function applyPatchOnList(list, patch)
-              if patch.kind == "insertValueBefore" then
-                  insertValueBefore(list, patch.anchor, patch.value)
-              elseif patch.kind == "insertValueAfter" then
-                  insertValueAfter(list, patch.anchor, patch.value)
-              elseif patch.kind == "removeValue" then
-                  removeValue(list, patch.value)
-              else
-                  error("Unknown patch kind: " .. tostring(patch.kind))
-              end
-          end
-
-          local function prepareProfileSpec(version, bVisited)
-              local spec = GDF.ProfileSpecs[version]
-              if not spec then
-                  error("Unknown version: " .. tostring(version))
-              end
-
-              bVisited = bVisited or {}
-              if bVisited[version] then
-                  error("Circular profile inheritance for version: " .. tostring(version))
-              end
-              bVisited[version] = true
-
-              local resolvedProfileSpec = {
-                  version = version,
-                  decoderName = spec.decoderName,
-                  orderedOpcodes = nil
-              }
-
-              if spec.base then
-                  local parent = prepareProfileSpec(spec.base, bVisited)
-                  resolvedProfileSpec.orderedOpcodes = cloneArray(parent.orderedOpcodes)
-
-                  if spec.patches then
-                      for _, patch in ipairs(spec.patches) do
-                          applyPatchOnList(resolvedProfileSpec.orderedOpcodes, patch)
-                      end
-                  end
-              else
-                  resolvedProfileSpec.orderedOpcodes = cloneArray(spec.orderedOpcodes or {})
-              end
-
-              return resolvedProfileSpec
-          end
-
-          local function createProfileFromVersion(version)
-              local resolvedProfileSpec = prepareProfileSpec(version)
-              local decoder = GDF.Decoders[resolvedProfileSpec.decoderName]
-
-              if not decoder then
-                  error("Unknown decoder: " .. tostring(resolvedProfileSpec.decoderName))
-              end
-
-              local profile = {
-                  version = version,
-                  decoder = decoder,
-                  orderedOpcodes = cloneArray(resolvedProfileSpec.orderedOpcodes),
-                  OPHandlerDefFromOPEnum = {},
-                  OPEnumFromInternalOPID = {},
-                  opNameFromOPEnum = {}
-              }
-
-              for i, internalOpcodeID in ipairs(profile.orderedOpcodes) do
-                  local opcodeEnum = i - 1
-                  local disasmHandlerDef = GDF.DisasmHandlers[internalOpcodeID]
-
-                  if not disasmHandlerDef then
-                      error("Missing DisasmHandlers entry for internalOpcodeID: " .. tostring(internalOpcodeID))
-                  end
-
-                  profile.OPHandlerDefFromOPEnum[opcodeEnum] = disasmHandlerDef
-                  profile.OPEnumFromInternalOPID[internalOpcodeID] = opcodeEnum
-                  profile.opNameFromOPEnum[opcodeEnum] = disasmHandlerDef.name
-              end
-
-              return profile
-          end
-
-          function GDF.createDisassemblerFromVersion(version)
-              local profile = GDF.CompiledProfiles[version]
-              if not profile then
-                  error("Unsupported version: " .. tostring(version))
-              end
-
-              local newDisassembler = {}
-              newDisassembler.version = version
-              newDisassembler.profile = profile
-
-              function newDisassembler:getOPNameFromOPEnum(opcodeEnum)
-                  local handlerDef = self.profile.OPHandlerDefFromOPEnum[opcodeEnum]
-                  return handlerDef and handlerDef.name or nil
-              end
-
-              function newDisassembler:getOPEnumFromInternalOPID(internalOpcodeID)
-                  return self.profile.OPEnumFromInternalOPID[internalOpcodeID]
-              end
-
-              function newDisassembler:disassembleBytecode(codeInts, codeStructElement, instrPointer)
-                  local disasmContext = {
-                      opcodeName = '',
-                      codeStructElement = codeStructElement,
-                      instrPointer = 1,
-                      codeInts = codeInts,
-                      opcodeEnumRaw = nil,
-                      profile = self.profile
-                  }
-
-                  while disasmContext.instrPointer <= #disasmContext.codeInts do
-
-                      disasmContext.opcodeEnumRaw = disasmContext.codeInts[disasmContext.instrPointer]
-                      if disasmContext.opcodeEnumRaw == nil then
-                          break
-                      end
-
-                      local opcodeHandlerDef = self.profile.decoder.resolveOPHandlerDefFromProfile(self.profile,
-                          disasmContext.opcodeEnumRaw)
-                      if not opcodeHandlerDef then
-                          sendDebugMessage('disassembleBytecode: handler not retrieved opcode: ' ..
-                                              (disasmContext.opcodeEnumRaw or -1) ..
-                                              (" | hex: %x"):format(disasmContext.opcodeEnumRaw or -1))
-                      end
-                      sendDebugMessage(("DB:\topcode: %-4d\thex: %-4x\tname: %s"):format(
-                          (disasmContext.opcodeEnumRaw or -1), (disasmContext.opcodeEnumRaw or -1),
-                          (opcodeHandlerDef.name or "??")))
-                      disasmContext.opcodeName = opcodeHandlerDef.name
-                      local nextInstrPointer = opcodeHandlerDef.handler(disasmContext)
-                      if nextInstrPointer == nil then
-                          error(
-                              "Opcode handler returned nil for opcode: " .. disasmContext.opcodeName .. " at InstrPtr " ..
-                                  disasmContext.instrPointer)
-                      end
-                      disasmContext.instrPointer = nextInstrPointer
-                  end
-
-                  return
-              end
-
-              return newDisassembler
-          end
-
-          if GDDEFS.MAJOR_VER == 4 then
-
-              GDF.OP = {
-                  OPCODE_OPERATOR = "OPCODE_OPERATOR",
-                  OPCODE_OPERATOR_VALIDATED = "OPCODE_OPERATOR_VALIDATED",
-                  OPCODE_TYPE_TEST_BUILTIN = "OPCODE_TYPE_TEST_BUILTIN",
-                  OPCODE_TYPE_TEST_ARRAY = "OPCODE_TYPE_TEST_ARRAY",
-                  OPCODE_TYPE_TEST_DICTIONARY = "OPCODE_TYPE_TEST_DICTIONARY",
-                  OPCODE_TYPE_TEST_NATIVE = "OPCODE_TYPE_TEST_NATIVE",
-                  OPCODE_TYPE_TEST_SCRIPT = "OPCODE_TYPE_TEST_SCRIPT",
-                  OPCODE_SET_KEYED = "OPCODE_SET_KEYED",
-                  OPCODE_SET_KEYED_VALIDATED = "OPCODE_SET_KEYED_VALIDATED",
-                  OPCODE_SET_INDEXED_VALIDATED = "OPCODE_SET_INDEXED_VALIDATED",
-                  OPCODE_GET_KEYED = "OPCODE_GET_KEYED",
-                  OPCODE_GET_KEYED_VALIDATED = "OPCODE_GET_KEYED_VALIDATED",
-                  OPCODE_GET_INDEXED_VALIDATED = "OPCODE_GET_INDEXED_VALIDATED",
-                  OPCODE_SET_NAMED = "OPCODE_SET_NAMED",
-                  OPCODE_SET_NAMED_VALIDATED = "OPCODE_SET_NAMED_VALIDATED",
-                  OPCODE_GET_NAMED = "OPCODE_GET_NAMED",
-                  OPCODE_GET_NAMED_VALIDATED = "OPCODE_GET_NAMED_VALIDATED",
-                  OPCODE_SET_MEMBER = "OPCODE_SET_MEMBER",
-                  OPCODE_GET_MEMBER = "OPCODE_GET_MEMBER",
-                  OPCODE_SET_STATIC_VARIABLE = "OPCODE_SET_STATIC_VARIABLE",
-                  OPCODE_GET_STATIC_VARIABLE = "OPCODE_GET_STATIC_VARIABLE",
-                  OPCODE_ASSIGN = "OPCODE_ASSIGN",
-                  OPCODE_ASSIGN_NULL = "OPCODE_ASSIGN_NULL",
-                  OPCODE_ASSIGN_TRUE = "OPCODE_ASSIGN_TRUE",
-                  OPCODE_ASSIGN_FALSE = "OPCODE_ASSIGN_FALSE",
-                  OPCODE_ASSIGN_TYPED_BUILTIN = "OPCODE_ASSIGN_TYPED_BUILTIN",
-                  OPCODE_ASSIGN_TYPED_ARRAY = "OPCODE_ASSIGN_TYPED_ARRAY",
-                  OPCODE_ASSIGN_TYPED_DICTIONARY = "OPCODE_ASSIGN_TYPED_DICTIONARY",
-                  OPCODE_ASSIGN_TYPED_NATIVE = "OPCODE_ASSIGN_TYPED_NATIVE",
-                  OPCODE_ASSIGN_TYPED_SCRIPT = "OPCODE_ASSIGN_TYPED_SCRIPT",
-                  OPCODE_CAST_TO_BUILTIN = "OPCODE_CAST_TO_BUILTIN",
-                  OPCODE_CAST_TO_NATIVE = "OPCODE_CAST_TO_NATIVE",
-                  OPCODE_CAST_TO_SCRIPT = "OPCODE_CAST_TO_SCRIPT",
-                  OPCODE_CONSTRUCT = "OPCODE_CONSTRUCT",
-                  OPCODE_CONSTRUCT_VALIDATED = "OPCODE_CONSTRUCT_VALIDATED",
-                  OPCODE_CONSTRUCT_ARRAY = "OPCODE_CONSTRUCT_ARRAY",
-                  OPCODE_CONSTRUCT_TYPED_ARRAY = "OPCODE_CONSTRUCT_TYPED_ARRAY",
-                  OPCODE_CONSTRUCT_DICTIONARY = "OPCODE_CONSTRUCT_DICTIONARY",
-                  OPCODE_CONSTRUCT_TYPED_DICTIONARY = "OPCODE_CONSTRUCT_TYPED_DICTIONARY",
-                  OPCODE_CALL = "OPCODE_CALL",
-                  OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN",
-                  OPCODE_CALL_ASYNC = "OPCODE_CALL_ASYNC",
-                  OPCODE_CALL_UTILITY = "OPCODE_CALL_UTILITY",
-                  OPCODE_CALL_UTILITY_VALIDATED = "OPCODE_CALL_UTILITY_VALIDATED",
-                  OPCODE_CALL_GDSCRIPT_UTILITY = "OPCODE_CALL_GDSCRIPT_UTILITY",
-                  OPCODE_CALL_BUILTIN_TYPE_VALIDATED = "OPCODE_CALL_BUILTIN_TYPE_VALIDATED",
-                  OPCODE_CALL_SELF_BASE = "OPCODE_CALL_SELF_BASE",
-                  OPCODE_CALL_METHOD_BIND = "OPCODE_CALL_METHOD_BIND",
-                  OPCODE_CALL_METHOD_BIND_RET = "OPCODE_CALL_METHOD_BIND_RET",
-                  OPCODE_CALL_BUILTIN_STATIC = "OPCODE_CALL_BUILTIN_STATIC",
-                  OPCODE_CALL_NATIVE_STATIC = "OPCODE_CALL_NATIVE_STATIC",
-                  OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN",
-                  OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN",
-                  OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN = "OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN",
-                  OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN = "OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN",
-                  OPCODE_AWAIT = "OPCODE_AWAIT",
-                  OPCODE_AWAIT_RESUME = "OPCODE_AWAIT_RESUME",
-                  OPCODE_CREATE_LAMBDA = "OPCODE_CREATE_LAMBDA",
-                  OPCODE_CREATE_SELF_LAMBDA = "OPCODE_CREATE_SELF_LAMBDA",
-                  OPCODE_JUMP = "OPCODE_JUMP",
-                  OPCODE_JUMP_IF = "OPCODE_JUMP_IF",
-                  OPCODE_JUMP_IF_NOT = "OPCODE_JUMP_IF_NOT",
-                  OPCODE_JUMP_TO_DEF_ARGUMENT = "OPCODE_JUMP_TO_DEF_ARGUMENT",
-                  OPCODE_JUMP_IF_SHARED = "OPCODE_JUMP_IF_SHARED",
-                  OPCODE_RETURN = "OPCODE_RETURN",
-                  OPCODE_RETURN_TYPED_BUILTIN = "OPCODE_RETURN_TYPED_BUILTIN",
-                  OPCODE_RETURN_TYPED_ARRAY = "OPCODE_RETURN_TYPED_ARRAY",
-                  OPCODE_RETURN_TYPED_DICTIONARY = "OPCODE_RETURN_TYPED_DICTIONARY",
-                  OPCODE_RETURN_TYPED_NATIVE = "OPCODE_RETURN_TYPED_NATIVE",
-                  OPCODE_RETURN_TYPED_SCRIPT = "OPCODE_RETURN_TYPED_SCRIPT",
-                  OPCODE_ITERATE_BEGIN = "OPCODE_ITERATE_BEGIN",
-                  OPCODE_ITERATE_BEGIN_INT = "OPCODE_ITERATE_BEGIN_INT",
-                  OPCODE_ITERATE_BEGIN_FLOAT = "OPCODE_ITERATE_BEGIN_FLOAT",
-                  OPCODE_ITERATE_BEGIN_VECTOR2 = "OPCODE_ITERATE_BEGIN_VECTOR2",
-                  OPCODE_ITERATE_BEGIN_VECTOR2I = "OPCODE_ITERATE_BEGIN_VECTOR2I",
-                  OPCODE_ITERATE_BEGIN_VECTOR3 = "OPCODE_ITERATE_BEGIN_VECTOR3",
-                  OPCODE_ITERATE_BEGIN_VECTOR3I = "OPCODE_ITERATE_BEGIN_VECTOR3I",
-                  OPCODE_ITERATE_BEGIN_STRING = "OPCODE_ITERATE_BEGIN_STRING",
-                  OPCODE_ITERATE_BEGIN_DICTIONARY = "OPCODE_ITERATE_BEGIN_DICTIONARY",
-                  OPCODE_ITERATE_BEGIN_ARRAY = "OPCODE_ITERATE_BEGIN_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY",
-                  OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY",
-                  OPCODE_ITERATE_BEGIN_OBJECT = "OPCODE_ITERATE_BEGIN_OBJECT",
-                  OPCODE_ITERATE_BEGIN_RANGE = "OPCODE_ITERATE_BEGIN_RANGE",
-                  OPCODE_ITERATE = "OPCODE_ITERATE",
-                  OPCODE_ITERATE_INT = "OPCODE_ITERATE_INT",
-                  OPCODE_ITERATE_FLOAT = "OPCODE_ITERATE_FLOAT",
-                  OPCODE_ITERATE_VECTOR2 = "OPCODE_ITERATE_VECTOR2",
-                  OPCODE_ITERATE_VECTOR2I = "OPCODE_ITERATE_VECTOR2I",
-                  OPCODE_ITERATE_VECTOR3 = "OPCODE_ITERATE_VECTOR3",
-                  OPCODE_ITERATE_VECTOR3I = "OPCODE_ITERATE_VECTOR3I",
-                  OPCODE_ITERATE_STRING = "OPCODE_ITERATE_STRING",
-                  OPCODE_ITERATE_DICTIONARY = "OPCODE_ITERATE_DICTIONARY",
-                  OPCODE_ITERATE_ARRAY = "OPCODE_ITERATE_ARRAY",
-                  OPCODE_ITERATE_PACKED_BYTE_ARRAY = "OPCODE_ITERATE_PACKED_BYTE_ARRAY",
-                  OPCODE_ITERATE_PACKED_INT32_ARRAY = "OPCODE_ITERATE_PACKED_INT32_ARRAY",
-                  OPCODE_ITERATE_PACKED_INT64_ARRAY = "OPCODE_ITERATE_PACKED_INT64_ARRAY",
-                  OPCODE_ITERATE_PACKED_FLOAT32_ARRAY = "OPCODE_ITERATE_PACKED_FLOAT32_ARRAY",
-                  OPCODE_ITERATE_PACKED_FLOAT64_ARRAY = "OPCODE_ITERATE_PACKED_FLOAT64_ARRAY",
-                  OPCODE_ITERATE_PACKED_STRING_ARRAY = "OPCODE_ITERATE_PACKED_STRING_ARRAY",
-                  OPCODE_ITERATE_PACKED_VECTOR2_ARRAY = "OPCODE_ITERATE_PACKED_VECTOR2_ARRAY",
-                  OPCODE_ITERATE_PACKED_VECTOR3_ARRAY = "OPCODE_ITERATE_PACKED_VECTOR3_ARRAY",
-                  OPCODE_ITERATE_PACKED_COLOR_ARRAY = "OPCODE_ITERATE_PACKED_COLOR_ARRAY",
-                  OPCODE_ITERATE_PACKED_VECTOR4_ARRAY = "OPCODE_ITERATE_PACKED_VECTOR4_ARRAY",
-                  OPCODE_ITERATE_OBJECT = "OPCODE_ITERATE_OBJECT",
-                  OPCODE_ITERATE_RANGE = "OPCODE_ITERATE_RANGE",
-                  OPCODE_STORE_GLOBAL = "OPCODE_STORE_GLOBAL",
-                  OPCODE_STORE_NAMED_GLOBAL = "OPCODE_STORE_NAMED_GLOBAL",
-                  OPCODE_TYPE_ADJUST_BOOL = "OPCODE_TYPE_ADJUST_BOOL",
-                  OPCODE_TYPE_ADJUST_INT = "OPCODE_TYPE_ADJUST_INT",
-                  OPCODE_TYPE_ADJUST_FLOAT = "OPCODE_TYPE_ADJUST_FLOAT",
-                  OPCODE_TYPE_ADJUST_STRING = "OPCODE_TYPE_ADJUST_STRING",
-                  OPCODE_TYPE_ADJUST_VECTOR2 = "OPCODE_TYPE_ADJUST_VECTOR2",
-                  OPCODE_TYPE_ADJUST_VECTOR2I = "OPCODE_TYPE_ADJUST_VECTOR2I",
-                  OPCODE_TYPE_ADJUST_RECT2 = "OPCODE_TYPE_ADJUST_RECT2",
-                  OPCODE_TYPE_ADJUST_RECT2I = "OPCODE_TYPE_ADJUST_RECT2I",
-                  OPCODE_TYPE_ADJUST_VECTOR3 = "OPCODE_TYPE_ADJUST_VECTOR3",
-                  OPCODE_TYPE_ADJUST_VECTOR3I = "OPCODE_TYPE_ADJUST_VECTOR3I",
-                  OPCODE_TYPE_ADJUST_TRANSFORM2D = "OPCODE_TYPE_ADJUST_TRANSFORM2D",
-                  OPCODE_TYPE_ADJUST_VECTOR4 = "OPCODE_TYPE_ADJUST_VECTOR4",
-                  OPCODE_TYPE_ADJUST_VECTOR4I = "OPCODE_TYPE_ADJUST_VECTOR4I",
-                  OPCODE_TYPE_ADJUST_PLANE = "OPCODE_TYPE_ADJUST_PLANE",
-                  OPCODE_TYPE_ADJUST_QUATERNION = "OPCODE_TYPE_ADJUST_QUATERNION",
-                  OPCODE_TYPE_ADJUST_AABB = "OPCODE_TYPE_ADJUST_AABB",
-                  OPCODE_TYPE_ADJUST_BASIS = "OPCODE_TYPE_ADJUST_BASIS",
-                  OPCODE_TYPE_ADJUST_TRANSFORM3D = "OPCODE_TYPE_ADJUST_TRANSFORM3D",
-                  OPCODE_TYPE_ADJUST_PROJECTION = "OPCODE_TYPE_ADJUST_PROJECTION",
-                  OPCODE_TYPE_ADJUST_COLOR = "OPCODE_TYPE_ADJUST_COLOR",
-                  OPCODE_TYPE_ADJUST_STRING_NAME = "OPCODE_TYPE_ADJUST_STRING_NAME",
-                  OPCODE_TYPE_ADJUST_NODE_PATH = "OPCODE_TYPE_ADJUST_NODE_PATH",
-                  OPCODE_TYPE_ADJUST_RID = "OPCODE_TYPE_ADJUST_RID",
-                  OPCODE_TYPE_ADJUST_OBJECT = "OPCODE_TYPE_ADJUST_OBJECT",
-                  OPCODE_TYPE_ADJUST_CALLABLE = "OPCODE_TYPE_ADJUST_CALLABLE",
-                  OPCODE_TYPE_ADJUST_SIGNAL = "OPCODE_TYPE_ADJUST_SIGNAL",
-                  OPCODE_TYPE_ADJUST_DICTIONARY = "OPCODE_TYPE_ADJUST_DICTIONARY",
-                  OPCODE_TYPE_ADJUST_ARRAY = "OPCODE_TYPE_ADJUST_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY",
-                  OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY",
-                  OPCODE_ASSERT = "OPCODE_ASSERT",
-                  OPCODE_BREAKPOINT = "OPCODE_BREAKPOINT",
-                  OPCODE_LINE = "OPCODE_LINE",
-                  OPCODE_END = "OPCODE_END",
-
-                  OPCODE_CALL_PTRCALL_NO_RETURN = "OPCODE_CALL_PTRCALL_NO_RETURN",
-                  OPCODE_CALL_PTRCALL_BOOL = "OPCODE_CALL_PTRCALL_BOOL",
-                  OPCODE_CALL_PTRCALL_INT = "OPCODE_CALL_PTRCALL_INT",
-                  OPCODE_CALL_PTRCALL_FLOAT = "OPCODE_CALL_PTRCALL_FLOAT",
-                  OPCODE_CALL_PTRCALL_STRING = "OPCODE_CALL_PTRCALL_STRING",
-                  OPCODE_CALL_PTRCALL_VECTOR2 = "OPCODE_CALL_PTRCALL_VECTOR2",
-                  OPCODE_CALL_PTRCALL_VECTOR2I = "OPCODE_CALL_PTRCALL_VECTOR2I",
-                  OPCODE_CALL_PTRCALL_RECT2 = "OPCODE_CALL_PTRCALL_RECT2",
-                  OPCODE_CALL_PTRCALL_RECT2I = "OPCODE_CALL_PTRCALL_RECT2I",
-                  OPCODE_CALL_PTRCALL_VECTOR3 = "OPCODE_CALL_PTRCALL_VECTOR3",
-                  OPCODE_CALL_PTRCALL_VECTOR3I = "OPCODE_CALL_PTRCALL_VECTOR3I",
-                  OPCODE_CALL_PTRCALL_TRANSFORM2D = "OPCODE_CALL_PTRCALL_TRANSFORM2D",
-                  OPCODE_CALL_PTRCALL_VECTOR4 = "OPCODE_CALL_PTRCALL_VECTOR4",
-                  OPCODE_CALL_PTRCALL_VECTOR4I = "OPCODE_CALL_PTRCALL_VECTOR4I",
-                  OPCODE_CALL_PTRCALL_PLANE = "OPCODE_CALL_PTRCALL_PLANE",
-                  OPCODE_CALL_PTRCALL_QUATERNION = "OPCODE_CALL_PTRCALL_QUATERNION",
-                  OPCODE_CALL_PTRCALL_AABB = "OPCODE_CALL_PTRCALL_AABB",
-                  OPCODE_CALL_PTRCALL_BASIS = "OPCODE_CALL_PTRCALL_BASIS",
-                  OPCODE_CALL_PTRCALL_TRANSFORM3D = "OPCODE_CALL_PTRCALL_TRANSFORM3D",
-                  OPCODE_CALL_PTRCALL_PROJECTION = "OPCODE_CALL_PTRCALL_PROJECTION",
-                  OPCODE_CALL_PTRCALL_COLOR = "OPCODE_CALL_PTRCALL_COLOR",
-                  OPCODE_CALL_PTRCALL_STRING_NAME = "OPCODE_CALL_PTRCALL_STRING_NAME",
-                  OPCODE_CALL_PTRCALL_NODE_PATH = "OPCODE_CALL_PTRCALL_NODE_PATH",
-                  OPCODE_CALL_PTRCALL_RID = "OPCODE_CALL_PTRCALL_RID",
-                  OPCODE_CALL_PTRCALL_OBJECT = "OPCODE_CALL_PTRCALL_OBJECT",
-                  OPCODE_CALL_PTRCALL_CALLABLE = "OPCODE_CALL_PTRCALL_CALLABLE",
-                  OPCODE_CALL_PTRCALL_SIGNAL = "OPCODE_CALL_PTRCALL_SIGNAL",
-                  OPCODE_CALL_PTRCALL_DICTIONARY = "OPCODE_CALL_PTRCALL_DICTIONARY",
-                  OPCODE_CALL_PTRCALL_ARRAY = "OPCODE_CALL_PTRCALL_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY",
-                  OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY"
-
-              }
-              GDF.DisasmHandlers = {}
-              -- https://github.com/godotengine/godot/blob/master/modules/gdscript/gdscript_disassembler.cpp
-
-              GDF.DisasmHandlers[GDF.OP.OPCODE_OPERATOR] = {
-                  name = "OPCODE_OPERATOR",
-                  handler = function(contextTable)
-                      local _pointer_size = GDDEFS.PTRSIZE / 0x4
-
-                      local operation = contextTable.codeInts[contextTable.instrPointer + 4] -- operator is 4*0x4 after
-                      addStructureElem(contextTable.codeStructElement, 'Operator: ',
-                          (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
-
-                      local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR'
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' ..
-                                                      operationName .. ' ' .. operand2
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 7 + _pointer_size -- incr += 5; in 4.0
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_OPERATOR_VALIDATED] = {
-                  name = "OPCODE_OPERATOR_VALIDATED",
-                  handler = function(contextTable)
-
-                      local operation = contextTable.codeInts[contextTable.instrPointer + 4] -- operator is 4*0x4 after
-                      addStructureElem(contextTable.codeStructElement, 'Operator: ',
-                          (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
-
-                      local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR' -- TODO not sure, is that the same thing: operator_names[_code_ptr[ip + 4]];
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' ..
-                                                      operationName .. ' ' .. operand2
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_BUILTIN] = {
-                  name = "OPCODE_TYPE_TEST_BUILTIN",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 4
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_ARRAY] = {
-                  name = "OPCODE_TYPE_TEST_ARRAY",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      -- TODO create function constants lookup for disassembling
-                      local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 4])
-                      -- Ref<Script> script_type = get_constant(_code_ptr[ip + 3] & ADDR_MASK);
-                      -- Variant::Type builtin_type = (Variant::Type)_code_ptr[ip + 4];
-                      -- StringName native_type = get_global_name(_code_ptr[ip + 5]);
-
-                      -- if (script_type.is_valid() && script_type->is_valid()) {
-                      --     text += "script(";
-                      --     text += GDScript::debug_get_script_name(script_type);
-                      --     text += ")";
-                      -- } else if (native_type != StringName()) {
-                      --     text += native_type;
-                      -- } else {
-                      --     text += Variant::get_type_name(builtin_type);
-                      -- }
-                      addStructureElem(contextTable.codeStructElement, 'script_type',
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, 'native_type',
-                          (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 ..
-                                                      ' is Dictionary[' .. operand3 .. ']'
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 6
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_DICTIONARY] = {
-                  name = "OPCODE_TYPE_TEST_DICTIONARY",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      local operand5 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 5])
-                      local operand7 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 7])
-                      -- Ref<Script> key_script_type = get_constant(_code_ptr[ip + 3] & ADDR_MASK);
-                      -- Variant::Type key_builtin_type = (Variant::Type)_code_ptr[ip + 5];
-                      -- StringName key_native_type = get_global_name(_code_ptr[ip + 6]);
-
-                      -- if (key_script_type.is_valid() && key_script_type->is_valid()) {
-                      --                 text += "script(";
-                      --                 text += GDScript::debug_get_script_name(key_script_type);
-                      --                 text += ")";
-                      -- } else if (key_native_type != StringName()) {
-                      --                 text += key_native_type;
-                      -- } else {
-                      --                 text += Variant::get_type_name(key_builtin_type);
-                      -- }
-
-                      -- Ref<Script> value_script_type = get_constant(_code_ptr[ip + 4] & ADDR_MASK);
-                      -- Variant::Type value_builtin_type = (Variant::Type)_code_ptr[ip + 7];
-                      -- StringName value_native_type = get_global_name(_code_ptr[ip + 8]);
-
-                      -- if (value_script_type.is_valid() && value_script_type->is_valid()) {
-                      --     text += "script(";
-                      --     text += GDScript::debug_get_script_name(value_script_type);
-                      --     text += ")";
-                      -- } else if (value_native_type != StringName()) {
-                      --     text += value_native_type;
-                      -- } else {
-                      --     text += Variant::get_type_name(value_builtin_type);
-                      -- }
-
-                      addStructureElem(contextTable.codeStructElement, 'key_script_type',
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, operand5,
-                          (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, 'value_script_type',
-                          (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, operand7,
-                          (contextTable.instrPointer - 1 + 7) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, 'value_native_type',
-                          (contextTable.instrPointer - 1 + 8) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 ..
-                                                      ' is Dictionary[' .. operand5 .. ']' .. ', ' .. operand7 .. ']'
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 9
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_NATIVE] = {
-                  name = "OPCODE_TYPE_TEST_NATIVE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      local operand3 = 'get_global_name(' .. (contextTable.codeInts[contextTable.instrPointer + 3]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 4
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_SCRIPT] = {
-                  name = "OPCODE_TYPE_TEST_SCRIPT",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_SET_KEYED] = {
-                  name = "OPCODE_SET_KEYED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' ..
-                                                      operand3
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_SET_KEYED_VALIDATED] = {
-                  name = "OPCODE_SET_KEYED_VALIDATED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' ..
-                                                      operand3
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_SET_INDEXED_VALIDATED] = {
-                  name = "OPCODE_SET_INDEXED_VALIDATED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' ..
-                                                      operand3
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_GET_KEYED] = {
-                  name = "OPCODE_GET_KEYED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' ..
-                                                      operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_GET_KEYED_VALIDATED] = {
-                  name = "OPCODE_GET_KEYED_VALIDATED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' ..
-                                                      operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_GET_INDEXED_VALIDATED] = {
-                  name = "OPCODE_GET_INDEXED_VALIDATED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' ..
-                                                      operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_SET_NAMED] = {
-                  name = "OPCODE_SET_NAMED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 3] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand1 .. '["' .. operand3 .. '"] = ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_SET_NAMED_VALIDATED] = {
-                  name = "OPCODE_SET_NAMED_VALIDATED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = 'setter_names[' .. (contextTable.codeInts[contextTable.instrPointer + 3]) .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand1 .. '["' .. operand3 .. '"] = ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_GET_NAMED] = {
-                  name = "OPCODE_GET_NAMED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 3] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' ..
-                                                      operand3 .. '"]'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_GET_NAMED_VALIDATED] = {
-                  name = "OPCODE_GET_NAMED_VALIDATED",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = 'getter_names[operand3]' -- TODO
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' ..
-                                                      operand3 .. '"]'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_SET_MEMBER] = {
-                  name = "OPCODE_SET_MEMBER",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. '["' .. operand2 .. '"] = ' .. operand1
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_GET_MEMBER] = {
-                  name = "OPCODE_GET_MEMBER",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ["' .. operand2 .. '"]'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_SET_STATIC_VARIABLE] = {
-                  name = "OPCODE_SET_STATIC_VARIABLE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = 'gdscript' -- TODO
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = 'debug_get_static_var_by_index(operand3)'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' script(scriptname)[' .. operand3 .. '] = ' ..
-                                                      operand1
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_GET_STATIC_VARIABLE] = {
-                  name = "OPCODE_GET_STATIC_VARIABLE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = 'gdscript' -- TODO
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = 'debug_get_static_var_by_index(operand3)'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = script(scriptname)[' ..
-                                                      operand3 .. ']'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN] = {
-                  name = "OPCODE_ASSIGN",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_NULL] = {
-                  name = "OPCODE_ASSIGN_NULL",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = NULL'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TRUE] = {
-                  name = "OPCODE_ASSIGN_TRUE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = TRUE'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_FALSE] = {
-                  name = "OPCODE_ASSIGN_FALSE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = FALSE'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_BUILTIN] = {
-                  name = "OPCODE_ASSIGN_TYPED_BUILTIN",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' (' .. operand3 .. ') ' .. operand1 .. ' = ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY] = {
-                  name = "OPCODE_ASSIGN_TYPED_ARRAY",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 6
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_DICTIONARY] = {
-                  name = "OPCODE_ASSIGN_TYPED_DICTIONARY",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 9
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_NATIVE] = {
-                  name = "OPCODE_ASSIGN_TYPED_NATIVE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ')' .. operand1 .. ' = ' ..
-                                                      operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_SCRIPT] = {
-                  name = "OPCODE_ASSIGN_TYPED_SCRIPT",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = 'debug_get_script_name(get_constant(operand3))' -- TODO
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' (' .. operand3 .. ') ' .. operand1 .. ' = ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CAST_TO_BUILTIN] = {
-                  name = "OPCODE_CAST_TO_BUILTIN",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand1_n = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 1])
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand1_n
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CAST_TO_NATIVE] = {
-                  name = "OPCODE_CAST_TO_NATIVE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand3
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CAST_TO_SCRIPT] = {
-                  name = "OPCODE_CAST_TO_SCRIPT",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand3
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT] = {
-                  name = "OPCODE_CONSTRUCT",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      local typeName =
-                          getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 3 + instr_var_args])
-                      addStructureElem(contextTable.codeStructElement, typeName,
-                          (contextTable.instrPointer - 1 + 3 + instr_var_args) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement,
-                              'arg: ' .. formatDisassembledAddress(contextTable.codeInts[i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '(' ..
-                                                      operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3 + instr_var_args
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_VALIDATED] = {
-                  name = "OPCODE_CONSTRUCT_VALIDATED",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-                      local operand3 = 'constructors_names[' ..
-                                          (contextTable.codeInts[contextTable.instrPointer + 3 + argc]) .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' ..
-                                                      operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3 + instr_var_args
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_ARRAY] = {
-                  name = "OPCODE_CONSTRUCT_ARRAY",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. '[' .. operandArg .. ']'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3 + instr_var_args
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_TYPED_ARRAY] = {
-                  name = "OPCODE_CONSTRUCT_TYPED_ARRAY",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand2 = 'get_constant(' ..
-                                          (contextTable.codeInts[contextTable.instrPointer + argc + 2] &
-                                              GDF.EADDRESS["ADDR_MASK"]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + argc + 2) * 0x4, vtDword)
-                      local operand4 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc + 4])
-                      addStructureElem(contextTable.codeStructElement, operand4,
-                          (contextTable.instrPointer - 1 + argc + 4) * 0x4, vtDword)
-                      local operand5 =
-                          'get_global_name(' .. (contextTable.codeInts[contextTable.instrPointer + argc + 5]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand5,
-                          (contextTable.instrPointer - 1 + argc + 5) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' (' .. operand4 .. ') ' .. operand1 .. ' = ' .. '[' .. operandArg ..
-                              ']'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 6 + instr_var_args
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_DICTIONARY] = {
-                  name = "OPCODE_CONSTRUCT_DICTIONARY",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand3 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc * 2])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 1 + argc * 2) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0])
-                          addStructureElem(contextTable.codeStructElement, 'argK: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0]),
-                              (contextTable.instrPointer - 1 + 1 + i * 2 + 0) * 0x4, vtDword)
-                          operandArg = operandArg .. ': ' ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1])
-                          addStructureElem(contextTable.codeStructElement, 'argV: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1]),
-                              (contextTable.instrPointer - 1 + 1 + i * 2 + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = {' .. operandArg .. '}'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3 + argc * 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_TYPED_DICTIONARY] = {
-                  name = "OPCODE_CONSTRUCT_TYPED_DICTIONARY",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand2_2 = 'get_constant(' ..
-                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 2] &
-                                                  GDF.EADDRESS["ADDR_MASK"]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand2_2,
-                          (contextTable.instrPointer - 1 + argc * 2 + 2) * 0x4, vtDword)
-                      local operand2_5 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc * 2 + 5])
-                      addStructureElem(contextTable.codeStructElement, operand2_5,
-                          (contextTable.instrPointer - 1 + argc * 2 + 5) * 0x4, vtDword)
-                      local operand2_6 = 'get_global_name(' ..
-                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 6]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand2_6,
-                          (contextTable.instrPointer - 1 + argc * 2 + 6) * 0x4, vtDword)
-
-                      local operand2_3 = 'get_constant(' ..
-                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 3] &
-                                                  GDF.EADDRESS["ADDR_MASK"]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand2_3,
-                          (contextTable.instrPointer - 1 + argc * 2 + 3) * 0x4, vtDword)
-                      local operand2_7 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc * 2 + 7])
-                      addStructureElem(contextTable.codeStructElement, operand2_7,
-                          (contextTable.instrPointer - 1 + argc * 2 + 7) * 0x4, vtDword)
-                      local operand2_8 = 'get_global_name(' ..
-                                              (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 8]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand2_8,
-                          (contextTable.instrPointer - 1 + argc * 2 + 8) * 0x4, vtDword)
-
-                      local operand2 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc * 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 1 + argc * 2) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0])
-                          addStructureElem(contextTable.codeStructElement, 'argK: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0]),
-                              (contextTable.instrPointer - 1 + 1 + i * 2 + 0) * 0x4, vtDword)
-                          operandArg = operandArg .. ': ' ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1])
-                          addStructureElem(contextTable.codeStructElement, 'argV: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1]),
-                              (contextTable.instrPointer - 1 + 1 + i * 2 + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2_5 .. ', ' .. operand2_7 ..
-                                                      ') ' .. operand2 .. ' = {' .. operandArg .. '}'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 9 + argc * 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL] = {
-                  name = "OPCODE_CALL",
-                  handler = function(contextTable)
-                      local ret = contextTable.codeInts[contextTable.instrPointer] ==
-                                      GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_RETURN)
-                      local async = contextTable.codeInts[contextTable.instrPointer] ==
-                                          GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_ASYNC)
-
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      local operand2 = '';
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      if (ret or async) then
-                          operand2 =
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + argc + 2])
-                          addStructureElem(contextTable.codeStructElement, operand2,
-                              (contextTable.instrPointer - 1 + argc + 2) * 0x4, vtDword)
-                          operand2 = operand2 .. ' = '
-                      end
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      operand1 = operand1 .. '.'
-
-                      -- TODO: there's value before argc and after (latter references call index from globalnames)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 = 'Globals[' ..
-                                          (contextTable.codeInts[contextTable.instrPointer + instr_var_args + 2]) .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + instr_var_args + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. operand3 .. ']' .. '(' .. operandArg ..
-                              ')' -- original representation 'GlobalNames[FuncCode['..(contextTable.instrPointer-1 + instr_var_args+2)..']]'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_RETURN] = {
-                  name = "OPCODE_CALL_RETURN",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_ASYNC] = {
-                  name = "OPCODE_CALL_ASYNC",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_UTILITY] = {
-                  name = "OPCODE_CALL_UTILITY",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand2 =
-                          'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. '(' ..
-                                                      operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_UTILITY_VALIDATED] = {
-                  name = "OPCODE_CALL_UTILITY_VALIDATED",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 =
-                          'utilities_names[' .. contextTable.codeInts[contextTable.instrPointer + 3 + argc] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' ..
-                                                      operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_GDSCRIPT_UTILITY] = {
-                  name = "OPCODE_CALL_GDSCRIPT_UTILITY",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 = 'gds_utilities_names[' ..
-                                          contextTable.codeInts[contextTable.instrPointer + 3 + argc] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' ..
-                                                      operandArg .. ')'
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_BUILTIN_TYPE_VALIDATED] = {
-                  name = "OPCODE_CALL_BUILTIN_TYPE_VALIDATED",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 2 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand4 = 'builtin_methods_names[' ..
-                                          (contextTable.codeInts[contextTable.instrPointer + 4 + argc]) .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand4,
-                          (contextTable.instrPointer - 1 + 4 + argc) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' ..
-                                                      operand4 .. '(' .. operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_SELF_BASE] = {
-                  name = "OPCODE_CALL_SELF_BASE",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 2 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 =
-                          'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand3 .. '(' ..
-                                                      operandArg .. ')'
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND] = {
-                  name = "OPCODE_CALL_METHOD_BIND",
-                  handler = function(contextTable)
-                      local ret = contextTable.codeInts[contextTable.instrPointer] ==
-                                      GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_METHOD_BIND_RET)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local operand2 = '';
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      if (ret) then
-                          operand2 =
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + argc + 2])
-                          addStructureElem(contextTable.codeStructElement, operand2,
-                              (contextTable.instrPointer - 1 + argc + 2) * 0x4, vtDword)
-                          operand2 = operand2 .. ' = '
-                      end
-
-                      local operand3 = '_methods_ptr[' ..
-                                          contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      operand1 = operand1 .. '.'
-                      operand1 = operand1 .. operand3 .. '->get_name()' -- TODO
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. '(' ..
-                                                      operandArg .. ')' -- TODO retrieve the funciton name
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND_RET] = {
-                  name = "OPCODE_CALL_METHOD_BIND_RET",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_BUILTIN_STATIC] = {
-                  name = "OPCODE_CALL_BUILTIN_STATIC",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local typeName =
-                          getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args])
-                      addStructureElem(contextTable.codeStructElement, 'typeName:',
-                          (contextTable.instrPointer - 1 + 3 + instr_var_args) * 0x4, vtDword)
-
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand2 =
-                          'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '.' ..
-                                                      operand2 .. '.operator String()' .. '(' .. operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_NATIVE_STATIC] = {
-                  name = "OPCODE_CALL_NATIVE_STATIC",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' ..
-                                                      'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
-                                                      operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN] = {
-                  name = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' ..
-                                                      'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
-                                                      operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN] = {
-                  name = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' ..
-                                                      'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' ..
-                                                      operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN] = {
-                  name = "OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand2 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 2 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 = '_methods_ptr[' ..
-                                          contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' ..
-                                                      operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN] = {
-                  name = "OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 = '_methods_ptr[' ..
-                                          contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 ..
-                                                      '->get_name()' .. '(' .. operandArg .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_AWAIT] = {
-                  name = "OPCODE_AWAIT",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_AWAIT_RESUME] = {
-                  name = "OPCODE_AWAIT_RESUME",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_AWAIT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CREATE_LAMBDA] = {
-                  name = "OPCODE_CREATE_LAMBDA",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      local operand2 = '_lambdas_ptr['
-                      (contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args]) ']'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-                      local captures_count = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + captures_count])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + captures_count) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, captures_count - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'captures_count: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' ..
-                                                      operand2 .. '->name.operator String()' .. ' function, captures (' ..
-                                                      operandArg .. ')'
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + captures_count
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CREATE_SELF_LAMBDA] = {
-                  name = "OPCODE_CREATE_SELF_LAMBDA",
-                  handler = function(contextTable)
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local operand2 = '_lambdas_ptr[' ..
-                                          (contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args]) .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-                      local captures_count = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + captures_count])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + captures_count) * 0x4, vtDword)
-
-                      local operandArg = '';
-
-                      for i = 0, captures_count - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'captures_count: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' ..
-                                                      operand2 .. '->name.operator String()' .. ' function, captures (' ..
-                                                      operandArg .. ')'
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 4 + captures_count
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP] = {
-                  name = "OPCODE_JUMP",
-                  handler = function(contextTable)
-                      local operand1 = numtohexstr(contextTable.codeInts[contextTable.instrPointer + 1] * 0x4) -- where to jump in hex representation, 4byte step
-                      local elem = addStructureElem(contextTable.codeStructElement, "JUMP to " .. operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      elem.DisplayMethod = 'dtHexadecimal'
-                      elem.ShowAsHex = true
-                      contextTable.opcodeName = contextTable.opcodeName .. ' -> ' .. operand1
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF] = {
-                  name = "OPCODE_JUMP_IF",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      local operand2 = numtohexstr(contextTable.codeInts[contextTable.instrPointer + 2] * 0x4) -- where to jump
-                      local elem = addStructureElem(contextTable.codeStructElement, "JUMP to " .. operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      elem.DisplayMethod = 'dtHexadecimal'
-                      elem.ShowAsHex = true
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' -> ' .. operand2
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF_NOT] = {
-                  name = "OPCODE_JUMP_IF_NOT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_TO_DEF_ARGUMENT] = {
-                  name = "OPCODE_JUMP_TO_DEF_ARGUMENT",
-                  handler = function(contextTable)
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 1
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF_SHARED] = {
-                  name = "OPCODE_JUMP_IF_SHARED",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN] = {
-                  name = "OPCODE_RETURN",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_BUILTIN] = {
-                  name = "OPCODE_RETURN_TYPED_BUILTIN",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2 .. ')' .. ' ' .. operand1
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_ARRAY] = {
-                  name = "OPCODE_RETURN_TYPED_ARRAY",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_DICTIONARY] = {
-                  name = "OPCODE_RETURN_TYPED_DICTIONARY",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 8
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_NATIVE] = {
-                  name = "OPCODE_RETURN_TYPED_NATIVE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2 .. ') ' .. operand1
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_SCRIPT] = {
-                  name = "OPCODE_RETURN_TYPED_SCRIPT",
-                  handler = function(contextTable)
-
-                      local operand2 = 'get_constant(' ..
-                                          (contextTable.codeInts[contextTable.instrPointer + 2] &
-                                              GDF.EADDRESS["ADDR_MASK"]) .. ')'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' (' .. 'GDScript::debug_get_script_name(' ..
-                                                      operand2 .. ')' .. ') ' .. operand1
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN] = {
-                  name = "OPCODE_ITERATE_BEGIN",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4,
-                          vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' for-init ' .. operand3 .. ' in ' .. operand2 .. ' counter ' ..
-                              operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT] = {
-                  name = "OPCODE_ITERATE_BEGIN_INT",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4,
-                          vtDword)
-
-                      local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_BEGIN_', '')
-                      contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' ..
-                                                      operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' ..
-                                                      tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_FLOAT] = {
-                  name = "OPCODE_ITERATE_BEGIN_FLOAT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2] = {
-                  name = "OPCODE_ITERATE_BEGIN_VECTOR2",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2I] = {
-                  name = "OPCODE_ITERATE_BEGIN_VECTOR2I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3] = {
-                  name = "OPCODE_ITERATE_BEGIN_VECTOR3",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3I] = {
-                  name = "OPCODE_ITERATE_BEGIN_VECTOR3I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_STRING] = {
-                  name = "OPCODE_ITERATE_BEGIN_STRING",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_DICTIONARY] = {
-                  name = "OPCODE_ITERATE_BEGIN_DICTIONARY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY] = {
-                  name = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT] = {
-                  name = "OPCODE_ITERATE_BEGIN_OBJECT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_RANGE] = {
-                  name = "OPCODE_ITERATE_BEGIN_RANGE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      local operand4 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addStructureElem(contextTable.codeStructElement, operand4,
-                          (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
-
-                      local operand5 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 5])
-                      addStructureElem(contextTable.codeStructElement, operand5,
-                          (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
-
-                      addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4,
-                          vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' for-init ' .. operand5 .. ' in range from ' .. operand2 .. ' to ' ..
-                              operand3 .. ' step ' .. operand4 .. ' counter ' .. operand1 .. ' end ' ..
-                              tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 7
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE] = {
-                  name = "OPCODE_ITERATE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4,
-                          vtDword)
-
-                      contextTable.opcodeName =
-                          contextTable.opcodeName .. ' for-loop ' .. operand2 .. ' in ' .. operand2 .. ' counter ' ..
-                              operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT] = {
-                  name = "OPCODE_ITERATE_INT",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-                      addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4,
-                          vtDword)
-
-                      local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_', '')
-                      contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' ..
-                                                      operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' ..
-                                                      tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_FLOAT] = {
-                  name = "OPCODE_ITERATE_FLOAT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR2] = {
-                  name = "OPCODE_ITERATE_VECTOR2",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR2I] = {
-                  name = "OPCODE_ITERATE_VECTOR2I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR3] = {
-                  name = "OPCODE_ITERATE_VECTOR3",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR3I] = {
-                  name = "OPCODE_ITERATE_VECTOR3I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_STRING] = {
-                  name = "OPCODE_ITERATE_STRING",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_DICTIONARY] = {
-                  name = "OPCODE_ITERATE_DICTIONARY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_ARRAY] = {
-                  name = "OPCODE_ITERATE_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_BYTE_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_BYTE_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_INT32_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_INT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_INT64_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_INT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_FLOAT32_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_FLOAT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_FLOAT64_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_FLOAT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_STRING_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_STRING_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_VECTOR2_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_VECTOR2_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_VECTOR3_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_VECTOR3_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_COLOR_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_VECTOR4_ARRAY] = {
-                  name = "OPCODE_ITERATE_PACKED_VECTOR4_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_OBJECT] = {
-                  name = "OPCODE_ITERATE_OBJECT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_RANGE] = {
-                  name = "OPCODE_ITERATE_RANGE",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
-
-                      local operand4 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addStructureElem(contextTable.codeStructElement, operand4,
-                          (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
-
-                      addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4,
-                          vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' for-loop ' .. operand4 .. ' in range to ' ..
-                                                      operand2 .. ' step ' .. operand3 .. ' counter ' .. operand1 .. ' end ' ..
-                                                      tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 6
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_STORE_GLOBAL] = {
-                  name = "OPCODE_STORE_GLOBAL",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      local operand2 = (contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_STORE_NAMED_GLOBAL] = {
-                  name = "OPCODE_STORE_NAMED_GLOBAL",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2] .. ']'
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL] = {
-                  name = "OPCODE_TYPE_ADJUST_BOOL",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
-                      contextTable.opcodeName = contextTable.opcodeName .. ' (' .. opcodeType .. ') ' .. operand1
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_INT] = {
-                  name = "OPCODE_TYPE_ADJUST_INT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_FLOAT] = {
-                  name = "OPCODE_TYPE_ADJUST_FLOAT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_STRING] = {
-                  name = "OPCODE_TYPE_ADJUST_STRING",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2] = {
-                  name = "OPCODE_TYPE_ADJUST_VECTOR2",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2I] = {
-                  name = "OPCODE_TYPE_ADJUST_VECTOR2I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_RECT2] = {
-                  name = "OPCODE_TYPE_ADJUST_RECT2",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_RECT2I] = {
-                  name = "OPCODE_TYPE_ADJUST_RECT2I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3] = {
-                  name = "OPCODE_TYPE_ADJUST_VECTOR3",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3I] = {
-                  name = "OPCODE_TYPE_ADJUST_VECTOR3I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM2D] = {
-                  name = "OPCODE_TYPE_ADJUST_TRANSFORM2D",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4] = {
-                  name = "OPCODE_TYPE_ADJUST_VECTOR4",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4I] = {
-                  name = "OPCODE_TYPE_ADJUST_VECTOR4I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PLANE] = {
-                  name = "OPCODE_TYPE_ADJUST_PLANE",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_QUATERNION] = {
-                  name = "OPCODE_TYPE_ADJUST_QUATERNION",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_AABB] = {
-                  name = "OPCODE_TYPE_ADJUST_AABB",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BASIS] = {
-                  name = "OPCODE_TYPE_ADJUST_BASIS",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM3D] = {
-                  name = "OPCODE_TYPE_ADJUST_TRANSFORM3D",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PROJECTION] = {
-                  name = "OPCODE_TYPE_ADJUST_PROJECTION",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_COLOR] = {
-                  name = "OPCODE_TYPE_ADJUST_COLOR",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_STRING_NAME] = {
-                  name = "OPCODE_TYPE_ADJUST_STRING_NAME",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_NODE_PATH] = {
-                  name = "OPCODE_TYPE_ADJUST_NODE_PATH",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_RID] = {
-                  name = "OPCODE_TYPE_ADJUST_RID",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_OBJECT] = {
-                  name = "OPCODE_TYPE_ADJUST_OBJECT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_CALLABLE] = {
-                  name = "OPCODE_TYPE_ADJUST_CALLABLE",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_SIGNAL] = {
-                  name = "OPCODE_TYPE_ADJUST_SIGNAL",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_DICTIONARY] = {
-                  name = "OPCODE_TYPE_ADJUST_DICTIONARY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY] = {
-                  name = "OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_ASSERT] = {
-                  name = "OPCODE_ASSERT",
-                  handler = function(contextTable)
-                      local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand1 .. ', ' .. operand2 .. ')'
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 3
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_BREAKPOINT] = {
-                  name = "OPCODE_BREAKPOINT",
-                  handler = function(contextTable)
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 1
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_LINE] = {
-                  name = "OPCODE_LINE",
-                  handler = function(contextTable)
-                      local line = contextTable.codeInts[contextTable.instrPointer + 1] - 1
-                      if line > 0 --[[and line < p_code_lines.size()]] then
-                          contextTable.opcodeName = contextTable.opcodeName .. ' ' .. tostring(line + 1) .. ': '
-                      else
-                          contextTable.opcodeName = ''
-                      end
-                      addStructureElem(contextTable.codeStructElement, 'line: ',
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 2
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_END] = {
-                  name = "OPCODE_END",
-                  handler = function(contextTable)
-                      addLayoutStructElem(contextTable.codeStructElement, '>>>END.', 0x808040,
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      return contextTable.instrPointer + 1
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN] = {
-                  name = "OPCODE_CALL_PTRCALL_NO_RETURN",
-                  handler = function(contextTable)
-
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      operand1 = operand1 .. '.'
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 = '_methods_ptr[' ..
-                                          contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. operand3 .. '->getname()' ..
-                                                      '(' .. operandArg .. ')' -- TODO: retrieve the funciton name
-
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL] = {
-                  name = "OPCODE_CALL_PTRCALL_BOOL",
-                  handler = function(contextTable)
-
-                      contextTable.instrPointer = contextTable.instrPointer + 1
-                      local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
-                      addStructureElem(contextTable.codeStructElement, 'instr_var_args:',
-                          (contextTable.instrPointer - 1) * 0x4, vtDword)
-
-                      local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
-                      addStructureElem(contextTable.codeStructElement, 'argc:',
-                          (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
-
-                      local operand2 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 2 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand2,
-                          (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-
-                      local operand1 = formatDisassembledAddress(
-                          contextTable.codeInts[contextTable.instrPointer + 1 + argc])
-                      addStructureElem(contextTable.codeStructElement, operand1,
-                          (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
-                      operand1 = operand1 .. '.'
-
-                      local operandArg = '';
-
-                      for i = 0, argc - 1 do
-                          if i > 0 then
-                              operandArg = operandArg .. ', '
-                          end
-                          operandArg = operandArg ..
-                                          formatDisassembledAddress(
-                                  contextTable.codeInts[contextTable.instrPointer + i + 1])
-                          addStructureElem(contextTable.codeStructElement, 'arg: ' ..
-                              formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),
-                              (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
-                      end
-
-                      local operand3 = '_methods_ptr[' ..
-                                          contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
-                      addStructureElem(contextTable.codeStructElement, operand3,
-                          (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
-
-                      local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
-                      contextTable.opcodeName = contextTable.opcodeName .. '(return ' .. opcodeType .. ') ' .. operand2 ..
-                                                      ' = ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg ..
-                                                      ')'
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040,
-                          (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
-
-                      return contextTable.instrPointer + 5 + argc
-                  end
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_INT] = {
-                  name = "OPCODE_CALL_PTRCALL_INT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_FLOAT] = {
-                  name = "OPCODE_CALL_PTRCALL_FLOAT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_STRING] = {
-                  name = "OPCODE_CALL_PTRCALL_STRING",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2] = {
-                  name = "OPCODE_CALL_PTRCALL_VECTOR2",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I] = {
-                  name = "OPCODE_CALL_PTRCALL_VECTOR2I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_RECT2] = {
-                  name = "OPCODE_CALL_PTRCALL_RECT2",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_RECT2I] = {
-                  name = "OPCODE_CALL_PTRCALL_RECT2I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3] = {
-                  name = "OPCODE_CALL_PTRCALL_VECTOR3",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I] = {
-                  name = "OPCODE_CALL_PTRCALL_VECTOR3I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D] = {
-                  name = "OPCODE_CALL_PTRCALL_TRANSFORM2D",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4] = {
-                  name = "OPCODE_CALL_PTRCALL_VECTOR4",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I] = {
-                  name = "OPCODE_CALL_PTRCALL_VECTOR4I",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PLANE] = {
-                  name = "OPCODE_CALL_PTRCALL_PLANE",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION] = {
-                  name = "OPCODE_CALL_PTRCALL_QUATERNION",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_AABB] = {
-                  name = "OPCODE_CALL_PTRCALL_AABB",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BASIS] = {
-                  name = "OPCODE_CALL_PTRCALL_BASIS",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D] = {
-                  name = "OPCODE_CALL_PTRCALL_TRANSFORM3D",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION] = {
-                  name = "OPCODE_CALL_PTRCALL_PROJECTION",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_COLOR] = {
-                  name = "OPCODE_CALL_PTRCALL_COLOR",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME] = {
-                  name = "OPCODE_CALL_PTRCALL_STRING_NAME",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH] = {
-                  name = "OPCODE_CALL_PTRCALL_NODE_PATH",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_RID] = {
-                  name = "OPCODE_CALL_PTRCALL_RID",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_OBJECT] = {
-                  name = "OPCODE_CALL_PTRCALL_OBJECT",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE] = {
-                  name = "OPCODE_CALL_PTRCALL_CALLABLE",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL] = {
-                  name = "OPCODE_CALL_PTRCALL_SIGNAL",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY] = {
-                  name = "OPCODE_CALL_PTRCALL_DICTIONARY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-              GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY] = {
-                  name = "OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY",
-                  handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
-              }
-
-              GDF.Decoders = {}
-
-              GDF.Decoders.BytecodeV0 = {
-                  name = "BytecodeV0",
-                  resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
-                      return profile.OPHandlerDefFromOPEnum[opcodeEnum]
-                  end
-              }
-              GDF.Decoders.BytecodeV1 = {
-                  name = "BytecodeV1",
-                  resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
-                      -- for other versions redefine the handler on the fly
-                      -- for example, in 4.0 GDF.OP.OPCODE_OPERATOR takes more operands than future versions TODO
-                      return profile.OPHandlerDefFromOPEnum[opcodeEnum]
-                  end
-              }
-
-              GDF.ProfileSpecs = {
-                  ["4.0"] = {
-                      decoderName = "BytecodeV0",
-                      orderedOpcodes = {GDF.OP.OPCODE_OPERATOR, GDF.OP.OPCODE_OPERATOR_VALIDATED,
-                                          GDF.OP.OPCODE_TYPE_TEST_BUILTIN, GDF.OP.OPCODE_TYPE_TEST_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_TEST_NATIVE, GDF.OP.OPCODE_TYPE_TEST_SCRIPT,
-                                          GDF.OP.OPCODE_SET_KEYED, GDF.OP.OPCODE_SET_KEYED_VALIDATED,
-                                          GDF.OP.OPCODE_SET_INDEXED_VALIDATED, GDF.OP.OPCODE_GET_KEYED,
-                                          GDF.OP.OPCODE_GET_KEYED_VALIDATED, GDF.OP.OPCODE_GET_INDEXED_VALIDATED,
-                                          GDF.OP.OPCODE_SET_NAMED, GDF.OP.OPCODE_SET_NAMED_VALIDATED,
-                                          GDF.OP.OPCODE_GET_NAMED, GDF.OP.OPCODE_GET_NAMED_VALIDATED,
-                                          GDF.OP.OPCODE_SET_MEMBER, GDF.OP.OPCODE_GET_MEMBER, GDF.OP.OPCODE_ASSIGN,
-                                          GDF.OP.OPCODE_ASSIGN_TRUE, GDF.OP.OPCODE_ASSIGN_FALSE,
-                                          GDF.OP.OPCODE_ASSIGN_TYPED_BUILTIN, GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY,
-                                          GDF.OP.OPCODE_ASSIGN_TYPED_NATIVE, GDF.OP.OPCODE_ASSIGN_TYPED_SCRIPT,
-                                          GDF.OP.OPCODE_CAST_TO_BUILTIN, GDF.OP.OPCODE_CAST_TO_NATIVE,
-                                          GDF.OP.OPCODE_CAST_TO_SCRIPT, GDF.OP.OPCODE_CONSTRUCT,
-                                          GDF.OP.OPCODE_CONSTRUCT_VALIDATED, GDF.OP.OPCODE_CONSTRUCT_ARRAY,
-                                          GDF.OP.OPCODE_CONSTRUCT_TYPED_ARRAY, GDF.OP.OPCODE_CONSTRUCT_DICTIONARY,
-                                          GDF.OP.OPCODE_CALL, GDF.OP.OPCODE_CALL_RETURN, GDF.OP.OPCODE_CALL_ASYNC,
-                                          GDF.OP.OPCODE_CALL_UTILITY, GDF.OP.OPCODE_CALL_UTILITY_VALIDATED,
-                                          GDF.OP.OPCODE_CALL_GDSCRIPT_UTILITY, GDF.OP.OPCODE_CALL_BUILTIN_TYPE_VALIDATED,
-                                          GDF.OP.OPCODE_CALL_SELF_BASE, GDF.OP.OPCODE_CALL_METHOD_BIND,
-                                          GDF.OP.OPCODE_CALL_METHOD_BIND_RET, GDF.OP.OPCODE_CALL_BUILTIN_STATIC,
-                                          GDF.OP.OPCODE_CALL_NATIVE_STATIC, GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_BOOL, GDF.OP.OPCODE_CALL_PTRCALL_INT,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_FLOAT, GDF.OP.OPCODE_CALL_PTRCALL_STRING,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_RECT2, GDF.OP.OPCODE_CALL_PTRCALL_RECT2I,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D, GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I, GDF.OP.OPCODE_CALL_PTRCALL_PLANE,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION, GDF.OP.OPCODE_CALL_PTRCALL_AABB,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_BASIS, GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION, GDF.OP.OPCODE_CALL_PTRCALL_COLOR,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME, GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_RID, GDF.OP.OPCODE_CALL_PTRCALL_OBJECT,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE, GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY, GDF.OP.OPCODE_CALL_PTRCALL_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY,
-                                          GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_AWAIT,
-                                          GDF.OP.OPCODE_AWAIT_RESUME, GDF.OP.OPCODE_CREATE_LAMBDA,
-                                          GDF.OP.OPCODE_CREATE_SELF_LAMBDA, GDF.OP.OPCODE_JUMP, GDF.OP.OPCODE_JUMP_IF,
-                                          GDF.OP.OPCODE_JUMP_IF_NOT, GDF.OP.OPCODE_JUMP_TO_DEF_ARGUMENT,
-                                          GDF.OP.OPCODE_JUMP_IF_SHARED, GDF.OP.OPCODE_RETURN,
-                                          GDF.OP.OPCODE_RETURN_TYPED_BUILTIN, GDF.OP.OPCODE_RETURN_TYPED_ARRAY,
-                                          GDF.OP.OPCODE_RETURN_TYPED_NATIVE, GDF.OP.OPCODE_RETURN_TYPED_SCRIPT,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN, GDF.OP.OPCODE_ITERATE_BEGIN_INT,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_FLOAT, GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2I, GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3I, GDF.OP.OPCODE_ITERATE_BEGIN_STRING,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_DICTIONARY, GDF.OP.OPCODE_ITERATE_BEGIN_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT, GDF.OP.OPCODE_ITERATE,
-                                          GDF.OP.OPCODE_ITERATE_INT, GDF.OP.OPCODE_ITERATE_FLOAT,
-                                          GDF.OP.OPCODE_ITERATE_VECTOR2, GDF.OP.OPCODE_ITERATE_VECTOR2I,
-                                          GDF.OP.OPCODE_ITERATE_VECTOR3, GDF.OP.OPCODE_ITERATE_VECTOR3I,
-                                          GDF.OP.OPCODE_ITERATE_STRING, GDF.OP.OPCODE_ITERATE_DICTIONARY,
-                                          GDF.OP.OPCODE_ITERATE_ARRAY, GDF.OP.OPCODE_ITERATE_PACKED_BYTE_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_INT32_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_INT64_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_FLOAT32_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_FLOAT64_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_STRING_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_VECTOR2_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_VECTOR3_ARRAY,
-                                          GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_ITERATE_OBJECT,
-                                          GDF.OP.OPCODE_STORE_GLOBAL, GDF.OP.OPCODE_STORE_NAMED_GLOBAL,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_BOOL, GDF.OP.OPCODE_TYPE_ADJUST_INT,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_FLOAT, GDF.OP.OPCODE_TYPE_ADJUST_STRING,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2I,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_RECT2, GDF.OP.OPCODE_TYPE_ADJUST_RECT2I,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3I,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM2D, GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4I, GDF.OP.OPCODE_TYPE_ADJUST_PLANE,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_QUATERNION, GDF.OP.OPCODE_TYPE_ADJUST_AABB,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_BASIS, GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM3D,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PROJECTION, GDF.OP.OPCODE_TYPE_ADJUST_COLOR,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_STRING_NAME, GDF.OP.OPCODE_TYPE_ADJUST_NODE_PATH,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_RID, GDF.OP.OPCODE_TYPE_ADJUST_OBJECT,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_CALLABLE, GDF.OP.OPCODE_TYPE_ADJUST_SIGNAL,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_DICTIONARY, GDF.OP.OPCODE_TYPE_ADJUST_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY,
-                                          GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY, GDF.OP.OPCODE_ASSERT,
-                                          GDF.OP.OPCODE_BREAKPOINT, GDF.OP.OPCODE_LINE, GDF.OP.OPCODE_END}
-                  },
-
-                  ["4.1"] = {
-                      base = "4.0",
-                      decoderName = "BytecodeV0",
-                      patches = {{
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_GET_MEMBER,
-                          value = GDF.OP.OPCODE_SET_STATIC_VARIABLE
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_SET_STATIC_VARIABLE,
-                          value = GDF.OP.OPCODE_GET_STATIC_VARIABLE
-                      }}
-                  },
-
-                  ["4.2"] = {
-                      base = "4.1",
-                      decoderName = "BytecodeV0",
-                      patches = {{
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_CALL_NATIVE_STATIC,
-                          value = GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN,
-                          value = GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_BOOL
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_INT
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_FLOAT
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_STRING
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_RECT2
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_RECT2I
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PLANE
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_AABB
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_BASIS
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_COLOR
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_RID
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_OBJECT
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY
-                      }, {
-                          kind = "removeValue",
-                          value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY
-                      }}
-                  },
-
-                  ["4.3"] = {
-                      base = "4.2",
-                      decoderName = "BytecodeV0",
-                      patches = {{
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_ASSIGN,
-                          value = GDF.OP.OPCODE_ASSIGN_NULL
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_CALL_NATIVE_STATIC,
-                          value = GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN,
-                          value = GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY,
-                          value = GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY,
-                          value = GDF.OP.OPCODE_ITERATE_PACKED_VECTOR4_ARRAY
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY,
-                          value = GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY
-                      }}
-                  },
-
-                  ["4.4"] = {
-                      base = "4.3",
-                      decoderName = "BytecodeV0",
-                      patches = {{
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_TYPE_TEST_ARRAY,
-                          value = GDF.OP.OPCODE_TYPE_TEST_DICTIONARY
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY,
-                          value = GDF.OP.OPCODE_ASSIGN_TYPED_DICTIONARY
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_CONSTRUCT_DICTIONARY,
-                          value = GDF.OP.OPCODE_CONSTRUCT_TYPED_DICTIONARY
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_RETURN_TYPED_ARRAY,
-                          value = GDF.OP.OPCODE_RETURN_TYPED_DICTIONARY
-                      }}
-                  },
-
-                  ["4.5"] = {
-                      base = "4.4",
-                      decoderName = "BytecodeV0",
-                      patches = {{
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT,
-                          value = GDF.OP.OPCODE_ITERATE_BEGIN_RANGE
-                      }, {
-                          kind = "insertValueAfter",
-                          anchor = GDF.OP.OPCODE_ITERATE_OBJECT,
-                          value = GDF.OP.OPCODE_ITERATE_RANGE
-                      }}
-                  },
-
-                  ["4.6"] = {
-                      base = "4.5",
-                      decoderName = "BytecodeV0",
-                      patches = {}
-                  }
-              }
-              GDF.CompiledProfiles = {}
-              GDF.EADDRESS = {
-                  ['ADDR_BITS'] = 24,
-                  ['ADDR_MASK'] = ((1 << 24) - 1), -- ((1 << ADDR_BITS) - 1)
-                  ['ADDR_TYPE_MASK'] = ~((1 << 24) - 1),
-                  ['ADDR_TYPE_STACK'] = 0,
-                  ['ADDR_TYPE_CONSTANT'] = 1,
-                  ['ADDR_TYPE_MEMBER'] = 2,
-                  ['ADDR_TYPE_MAX'] = 3
-              }
-              GDF.EFIXEDADDRESSES = {
-                  ['ADDR_STACK_SELF'] = 0,
-                  ['ADDR_STACK_CLASS'] = 1,
-                  ['ADDR_STACK_NIL'] = 2,
-                  ['FIXED_ADDRESSES_MAX'] = 3,
-                  ['ADDR_SELF'] = 0 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS'],
-                  ['ADDR_CLASS'] = 1 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS'],
-                  ['ADDR_NIL'] = 2 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS']
-              }
-              GDF.OPERATOR_NAME = { -- comparison
-              "OP_EQUAL", "OP_NOT_EQUAL", "OP_LESS", "OP_LESS_EQUAL", "OP_GREATER", "OP_GREATER_EQUAL", -- mathematic
-              "OP_ADD", "OP_SUBTRACT", "OP_MULTIPLY", "OP_DIVIDE", "OP_NEGATE", "OP_POSITIVE", "OP_MODULE", "OP_POWER",
-              -- bitwise
-              "OP_SHIFT_LEFT", "OP_SHIFT_RIGHT", "OP_BIT_AND", "OP_BIT_OR", "OP_BIT_XOR", "OP_BIT_NEGATE", -- logic
-              "OP_AND", "OP_OR", "OP_XOR", "OP_NOT", -- containment
-              "OP_IN", "OP_MAX" -- 25
-              }
-
-              for version, _ in pairs(GDF.ProfileSpecs) do
-                  GDF.CompiledProfiles[version] = createProfileFromVersion(version)
-              end
-
-              if GDDEFS.VERSION_STRING then
-                  GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion(GDDEFS.VERSION_STRING)
-              end
-
+          error("removeValue: value not found: " .. tostring(valueToRemove))
+        end
+
+        local function applyPatchOnList(list, patch)
+          if patch.kind == "insertValueBefore" then
+            insertValueBefore(list, patch.anchor, patch.value)
+          elseif patch.kind == "insertValueAfter" then
+            insertValueAfter(list, patch.anchor, patch.value)
+          elseif patch.kind == "removeValue" then
+            removeValue(list, patch.value)
           else
-              -- TODO for 3.x
+            error("Unknown patch kind: " .. tostring(patch.kind))
           end
+        end
+
+        local function prepareProfileSpec(version, bVisited)
+          local spec = GDF.ProfileSpecs[version]
+          if not spec then
+            error("Unknown version: " .. tostring(version))
+          end
+
+          bVisited = bVisited or {}
+          if bVisited[version] then
+            error("Circular profile inheritance for version: " .. tostring(version))
+          end
+          bVisited[version] = true
+
+          local resolvedProfileSpec =
+          {
+            version = version,
+            decoderName = spec.decoderName,
+            orderedOpcodes = nil
+          }
+
+          if spec.base then
+            local parent = prepareProfileSpec(spec.base, bVisited)
+            resolvedProfileSpec.orderedOpcodes = cloneArray(parent.orderedOpcodes)
+
+            if spec.patches then
+              for _, patch in ipairs(spec.patches) do
+                applyPatchOnList(resolvedProfileSpec.orderedOpcodes, patch)
+              end
+            end
+          else
+            resolvedProfileSpec.orderedOpcodes = cloneArray(spec.orderedOpcodes or {})
+          end
+
+          return resolvedProfileSpec
+        end
+
+        local function createProfileFromVersion(version)
+          local resolvedProfileSpec = prepareProfileSpec(version)
+          local decoder = GDF.Decoders[resolvedProfileSpec.decoderName]
+
+          if not decoder then
+            error("Unknown decoder: " .. tostring(resolvedProfileSpec.decoderName))
+          end
+
+          local profile =
+          {
+            version = version,
+            decoder = decoder,
+            orderedOpcodes = cloneArray(resolvedProfileSpec.orderedOpcodes),
+            OPHandlerDefFromOPEnum = {},
+            OPEnumFromInternalOPID = {},
+            opNameFromOPEnum = {}
+          }
+
+          for i, internalOpcodeID in ipairs(profile.orderedOpcodes) do
+            local opcodeEnum = i - 1
+            local disasmHandlerDef = GDF.DisasmHandlers[internalOpcodeID]
+
+            if not disasmHandlerDef then
+              error("Missing DisasmHandlers entry for internalOpcodeID: " .. tostring(internalOpcodeID))
+            end
+
+            profile.OPHandlerDefFromOPEnum[opcodeEnum] = disasmHandlerDef
+            profile.OPEnumFromInternalOPID[internalOpcodeID] = opcodeEnum
+            profile.opNameFromOPEnum[opcodeEnum] = disasmHandlerDef.name
+          end
+
+          return profile
+        end
+
+        function GDF.createDisassemblerFromVersion(version)
+          local profile = GDF.CompiledProfiles[version]
+          if not profile then
+            error("Unsupported version: " .. tostring(version))
+          end
+
+          local newDisassembler = {}
+          newDisassembler.version = version
+          newDisassembler.profile = profile
+
+          function newDisassembler:getOPNameFromOPEnum(opcodeEnum)
+            local handlerDef = self.profile.OPHandlerDefFromOPEnum[opcodeEnum]
+            return handlerDef and handlerDef.name or nil
+          end
+
+          function newDisassembler:getOPEnumFromInternalOPID(internalOpcodeID)
+            return self.profile.OPEnumFromInternalOPID[internalOpcodeID]
+          end
+
+          function newDisassembler:disassembleBytecode(codeInts, codeStructElement, instrPointer)
+            local disasmContext =
+            {
+              opcodeName = '',
+              codeStructElement = codeStructElement,
+              instrPointer = 1,
+              codeInts = codeInts,
+              opcodeEnumRaw = nil,
+              profile = self.profile
+            }
+
+            while disasmContext.instrPointer <= #disasmContext.codeInts do
+
+              disasmContext.opcodeEnumRaw = disasmContext.codeInts[disasmContext.instrPointer]
+              if disasmContext.opcodeEnumRaw == nil then
+                break
+              end
+
+              local opcodeHandlerDef = self.profile.decoder.resolveOPHandlerDefFromProfile(self.profile, disasmContext.opcodeEnumRaw)
+                if not opcodeHandlerDef then
+                  sendDebugMessage('disassembleBytecode: handler not retrieved opcode: ' .. (disasmContext.opcodeEnumRaw or -1) .. (" | hex: %x"):format(disasmContext.opcodeEnumRaw or -1))
+                end
+                sendDebugMessage(("DB:\topcode: %-4d\thex: %-4x\tname: %s"):format( (disasmContext.opcodeEnumRaw or -1), (disasmContext.opcodeEnumRaw or -1), (opcodeHandlerDef.name or "??")))
+                disasmContext.opcodeName = opcodeHandlerDef.name
+                local nextInstrPointer = opcodeHandlerDef.handler(disasmContext)
+                if nextInstrPointer == nil then
+                  error( "Opcode handler returned nil for opcode: " .. disasmContext.opcodeName .. " at InstrPtr " .. disasmContext.instrPointer)
+                end
+                disasmContext.instrPointer = nextInstrPointer
+            end
+
+            return
+          end
+
+          return newDisassembler
+        end
+
+        if GDDEFS.MAJOR_VER == 4 then
+          GDF.OP =
+            {
+              OPCODE_OPERATOR = "OPCODE_OPERATOR",
+              OPCODE_OPERATOR_VALIDATED = "OPCODE_OPERATOR_VALIDATED",
+              OPCODE_TYPE_TEST_BUILTIN = "OPCODE_TYPE_TEST_BUILTIN",
+              OPCODE_TYPE_TEST_ARRAY = "OPCODE_TYPE_TEST_ARRAY",
+              OPCODE_TYPE_TEST_DICTIONARY = "OPCODE_TYPE_TEST_DICTIONARY",
+              OPCODE_TYPE_TEST_NATIVE = "OPCODE_TYPE_TEST_NATIVE",
+              OPCODE_TYPE_TEST_SCRIPT = "OPCODE_TYPE_TEST_SCRIPT",
+              OPCODE_SET_KEYED = "OPCODE_SET_KEYED",
+              OPCODE_SET_KEYED_VALIDATED = "OPCODE_SET_KEYED_VALIDATED",
+              OPCODE_SET_INDEXED_VALIDATED = "OPCODE_SET_INDEXED_VALIDATED",
+              OPCODE_GET_KEYED = "OPCODE_GET_KEYED",
+              OPCODE_GET_KEYED_VALIDATED = "OPCODE_GET_KEYED_VALIDATED",
+              OPCODE_GET_INDEXED_VALIDATED = "OPCODE_GET_INDEXED_VALIDATED",
+              OPCODE_SET_NAMED = "OPCODE_SET_NAMED",
+              OPCODE_SET_NAMED_VALIDATED = "OPCODE_SET_NAMED_VALIDATED",
+              OPCODE_GET_NAMED = "OPCODE_GET_NAMED",
+              OPCODE_GET_NAMED_VALIDATED = "OPCODE_GET_NAMED_VALIDATED",
+              OPCODE_SET_MEMBER = "OPCODE_SET_MEMBER",
+              OPCODE_GET_MEMBER = "OPCODE_GET_MEMBER",
+              OPCODE_SET_STATIC_VARIABLE = "OPCODE_SET_STATIC_VARIABLE",
+              OPCODE_GET_STATIC_VARIABLE = "OPCODE_GET_STATIC_VARIABLE",
+              OPCODE_ASSIGN = "OPCODE_ASSIGN",
+              OPCODE_ASSIGN_NULL = "OPCODE_ASSIGN_NULL",
+              OPCODE_ASSIGN_TRUE = "OPCODE_ASSIGN_TRUE",
+              OPCODE_ASSIGN_FALSE = "OPCODE_ASSIGN_FALSE",
+              OPCODE_ASSIGN_TYPED_BUILTIN = "OPCODE_ASSIGN_TYPED_BUILTIN",
+              OPCODE_ASSIGN_TYPED_ARRAY = "OPCODE_ASSIGN_TYPED_ARRAY",
+              OPCODE_ASSIGN_TYPED_DICTIONARY = "OPCODE_ASSIGN_TYPED_DICTIONARY",
+              OPCODE_ASSIGN_TYPED_NATIVE = "OPCODE_ASSIGN_TYPED_NATIVE",
+              OPCODE_ASSIGN_TYPED_SCRIPT = "OPCODE_ASSIGN_TYPED_SCRIPT",
+              OPCODE_CAST_TO_BUILTIN = "OPCODE_CAST_TO_BUILTIN",
+              OPCODE_CAST_TO_NATIVE = "OPCODE_CAST_TO_NATIVE",
+              OPCODE_CAST_TO_SCRIPT = "OPCODE_CAST_TO_SCRIPT",
+              OPCODE_CONSTRUCT = "OPCODE_CONSTRUCT",
+              OPCODE_CONSTRUCT_VALIDATED = "OPCODE_CONSTRUCT_VALIDATED",
+              OPCODE_CONSTRUCT_ARRAY = "OPCODE_CONSTRUCT_ARRAY",
+              OPCODE_CONSTRUCT_TYPED_ARRAY = "OPCODE_CONSTRUCT_TYPED_ARRAY",
+              OPCODE_CONSTRUCT_DICTIONARY = "OPCODE_CONSTRUCT_DICTIONARY",
+              OPCODE_CONSTRUCT_TYPED_DICTIONARY = "OPCODE_CONSTRUCT_TYPED_DICTIONARY",
+              OPCODE_CALL = "OPCODE_CALL",
+              OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN",
+              OPCODE_CALL_ASYNC = "OPCODE_CALL_ASYNC",
+              OPCODE_CALL_UTILITY = "OPCODE_CALL_UTILITY",
+              OPCODE_CALL_UTILITY_VALIDATED = "OPCODE_CALL_UTILITY_VALIDATED",
+              OPCODE_CALL_GDSCRIPT_UTILITY = "OPCODE_CALL_GDSCRIPT_UTILITY",
+              OPCODE_CALL_BUILTIN_TYPE_VALIDATED = "OPCODE_CALL_BUILTIN_TYPE_VALIDATED",
+              OPCODE_CALL_SELF_BASE = "OPCODE_CALL_SELF_BASE",
+              OPCODE_CALL_METHOD_BIND = "OPCODE_CALL_METHOD_BIND",
+              OPCODE_CALL_METHOD_BIND_RET = "OPCODE_CALL_METHOD_BIND_RET",
+              OPCODE_CALL_BUILTIN_STATIC = "OPCODE_CALL_BUILTIN_STATIC",
+              OPCODE_CALL_NATIVE_STATIC = "OPCODE_CALL_NATIVE_STATIC",
+              OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN",
+              OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN",
+              OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN = "OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN",
+              OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN = "OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN",
+              OPCODE_AWAIT = "OPCODE_AWAIT",
+              OPCODE_AWAIT_RESUME = "OPCODE_AWAIT_RESUME",
+              OPCODE_CREATE_LAMBDA = "OPCODE_CREATE_LAMBDA",
+              OPCODE_CREATE_SELF_LAMBDA = "OPCODE_CREATE_SELF_LAMBDA",
+              OPCODE_JUMP = "OPCODE_JUMP",
+              OPCODE_JUMP_IF = "OPCODE_JUMP_IF",
+              OPCODE_JUMP_IF_NOT = "OPCODE_JUMP_IF_NOT",
+              OPCODE_JUMP_TO_DEF_ARGUMENT = "OPCODE_JUMP_TO_DEF_ARGUMENT",
+              OPCODE_JUMP_IF_SHARED = "OPCODE_JUMP_IF_SHARED",
+              OPCODE_RETURN = "OPCODE_RETURN",
+              OPCODE_RETURN_TYPED_BUILTIN = "OPCODE_RETURN_TYPED_BUILTIN",
+              OPCODE_RETURN_TYPED_ARRAY = "OPCODE_RETURN_TYPED_ARRAY",
+              OPCODE_RETURN_TYPED_DICTIONARY = "OPCODE_RETURN_TYPED_DICTIONARY",
+              OPCODE_RETURN_TYPED_NATIVE = "OPCODE_RETURN_TYPED_NATIVE",
+              OPCODE_RETURN_TYPED_SCRIPT = "OPCODE_RETURN_TYPED_SCRIPT",
+              OPCODE_ITERATE_BEGIN = "OPCODE_ITERATE_BEGIN",
+              OPCODE_ITERATE_BEGIN_INT = "OPCODE_ITERATE_BEGIN_INT",
+              OPCODE_ITERATE_BEGIN_FLOAT = "OPCODE_ITERATE_BEGIN_FLOAT",
+              OPCODE_ITERATE_BEGIN_VECTOR2 = "OPCODE_ITERATE_BEGIN_VECTOR2",
+              OPCODE_ITERATE_BEGIN_VECTOR2I = "OPCODE_ITERATE_BEGIN_VECTOR2I",
+              OPCODE_ITERATE_BEGIN_VECTOR3 = "OPCODE_ITERATE_BEGIN_VECTOR3",
+              OPCODE_ITERATE_BEGIN_VECTOR3I = "OPCODE_ITERATE_BEGIN_VECTOR3I",
+              OPCODE_ITERATE_BEGIN_STRING = "OPCODE_ITERATE_BEGIN_STRING",
+              OPCODE_ITERATE_BEGIN_DICTIONARY = "OPCODE_ITERATE_BEGIN_DICTIONARY",
+              OPCODE_ITERATE_BEGIN_ARRAY = "OPCODE_ITERATE_BEGIN_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY",
+              OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY",
+              OPCODE_ITERATE_BEGIN_OBJECT = "OPCODE_ITERATE_BEGIN_OBJECT",
+              OPCODE_ITERATE_BEGIN_RANGE = "OPCODE_ITERATE_BEGIN_RANGE",
+              OPCODE_ITERATE = "OPCODE_ITERATE",
+              OPCODE_ITERATE_INT = "OPCODE_ITERATE_INT",
+              OPCODE_ITERATE_FLOAT = "OPCODE_ITERATE_FLOAT",
+              OPCODE_ITERATE_VECTOR2 = "OPCODE_ITERATE_VECTOR2",
+              OPCODE_ITERATE_VECTOR2I = "OPCODE_ITERATE_VECTOR2I",
+              OPCODE_ITERATE_VECTOR3 = "OPCODE_ITERATE_VECTOR3",
+              OPCODE_ITERATE_VECTOR3I = "OPCODE_ITERATE_VECTOR3I",
+              OPCODE_ITERATE_STRING = "OPCODE_ITERATE_STRING",
+              OPCODE_ITERATE_DICTIONARY = "OPCODE_ITERATE_DICTIONARY",
+              OPCODE_ITERATE_ARRAY = "OPCODE_ITERATE_ARRAY",
+              OPCODE_ITERATE_PACKED_BYTE_ARRAY = "OPCODE_ITERATE_PACKED_BYTE_ARRAY",
+              OPCODE_ITERATE_PACKED_INT32_ARRAY = "OPCODE_ITERATE_PACKED_INT32_ARRAY",
+              OPCODE_ITERATE_PACKED_INT64_ARRAY = "OPCODE_ITERATE_PACKED_INT64_ARRAY",
+              OPCODE_ITERATE_PACKED_FLOAT32_ARRAY = "OPCODE_ITERATE_PACKED_FLOAT32_ARRAY",
+              OPCODE_ITERATE_PACKED_FLOAT64_ARRAY = "OPCODE_ITERATE_PACKED_FLOAT64_ARRAY",
+              OPCODE_ITERATE_PACKED_STRING_ARRAY = "OPCODE_ITERATE_PACKED_STRING_ARRAY",
+              OPCODE_ITERATE_PACKED_VECTOR2_ARRAY = "OPCODE_ITERATE_PACKED_VECTOR2_ARRAY",
+              OPCODE_ITERATE_PACKED_VECTOR3_ARRAY = "OPCODE_ITERATE_PACKED_VECTOR3_ARRAY",
+              OPCODE_ITERATE_PACKED_COLOR_ARRAY = "OPCODE_ITERATE_PACKED_COLOR_ARRAY",
+              OPCODE_ITERATE_PACKED_VECTOR4_ARRAY = "OPCODE_ITERATE_PACKED_VECTOR4_ARRAY",
+              OPCODE_ITERATE_OBJECT = "OPCODE_ITERATE_OBJECT",
+              OPCODE_ITERATE_RANGE = "OPCODE_ITERATE_RANGE",
+              OPCODE_STORE_GLOBAL = "OPCODE_STORE_GLOBAL",
+              OPCODE_STORE_NAMED_GLOBAL = "OPCODE_STORE_NAMED_GLOBAL",
+              OPCODE_TYPE_ADJUST_BOOL = "OPCODE_TYPE_ADJUST_BOOL",
+              OPCODE_TYPE_ADJUST_INT = "OPCODE_TYPE_ADJUST_INT",
+              OPCODE_TYPE_ADJUST_FLOAT = "OPCODE_TYPE_ADJUST_FLOAT",
+              OPCODE_TYPE_ADJUST_STRING = "OPCODE_TYPE_ADJUST_STRING",
+              OPCODE_TYPE_ADJUST_VECTOR2 = "OPCODE_TYPE_ADJUST_VECTOR2",
+              OPCODE_TYPE_ADJUST_VECTOR2I = "OPCODE_TYPE_ADJUST_VECTOR2I",
+              OPCODE_TYPE_ADJUST_RECT2 = "OPCODE_TYPE_ADJUST_RECT2",
+              OPCODE_TYPE_ADJUST_RECT2I = "OPCODE_TYPE_ADJUST_RECT2I",
+              OPCODE_TYPE_ADJUST_VECTOR3 = "OPCODE_TYPE_ADJUST_VECTOR3",
+              OPCODE_TYPE_ADJUST_VECTOR3I = "OPCODE_TYPE_ADJUST_VECTOR3I",
+              OPCODE_TYPE_ADJUST_TRANSFORM2D = "OPCODE_TYPE_ADJUST_TRANSFORM2D",
+              OPCODE_TYPE_ADJUST_VECTOR4 = "OPCODE_TYPE_ADJUST_VECTOR4",
+              OPCODE_TYPE_ADJUST_VECTOR4I = "OPCODE_TYPE_ADJUST_VECTOR4I",
+              OPCODE_TYPE_ADJUST_PLANE = "OPCODE_TYPE_ADJUST_PLANE",
+              OPCODE_TYPE_ADJUST_QUATERNION = "OPCODE_TYPE_ADJUST_QUATERNION",
+              OPCODE_TYPE_ADJUST_AABB = "OPCODE_TYPE_ADJUST_AABB",
+              OPCODE_TYPE_ADJUST_BASIS = "OPCODE_TYPE_ADJUST_BASIS",
+              OPCODE_TYPE_ADJUST_TRANSFORM3D = "OPCODE_TYPE_ADJUST_TRANSFORM3D",
+              OPCODE_TYPE_ADJUST_PROJECTION = "OPCODE_TYPE_ADJUST_PROJECTION",
+              OPCODE_TYPE_ADJUST_COLOR = "OPCODE_TYPE_ADJUST_COLOR",
+              OPCODE_TYPE_ADJUST_STRING_NAME = "OPCODE_TYPE_ADJUST_STRING_NAME",
+              OPCODE_TYPE_ADJUST_NODE_PATH = "OPCODE_TYPE_ADJUST_NODE_PATH",
+              OPCODE_TYPE_ADJUST_RID = "OPCODE_TYPE_ADJUST_RID",
+              OPCODE_TYPE_ADJUST_OBJECT = "OPCODE_TYPE_ADJUST_OBJECT",
+              OPCODE_TYPE_ADJUST_CALLABLE = "OPCODE_TYPE_ADJUST_CALLABLE",
+              OPCODE_TYPE_ADJUST_SIGNAL = "OPCODE_TYPE_ADJUST_SIGNAL",
+              OPCODE_TYPE_ADJUST_DICTIONARY = "OPCODE_TYPE_ADJUST_DICTIONARY",
+              OPCODE_TYPE_ADJUST_ARRAY = "OPCODE_TYPE_ADJUST_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY",
+              OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY = "OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY",
+              OPCODE_ASSERT = "OPCODE_ASSERT",
+              OPCODE_BREAKPOINT = "OPCODE_BREAKPOINT",
+              OPCODE_LINE = "OPCODE_LINE",
+              OPCODE_END = "OPCODE_END",
+
+              OPCODE_CALL_PTRCALL_NO_RETURN = "OPCODE_CALL_PTRCALL_NO_RETURN",
+              OPCODE_CALL_PTRCALL_BOOL = "OPCODE_CALL_PTRCALL_BOOL",
+              OPCODE_CALL_PTRCALL_INT = "OPCODE_CALL_PTRCALL_INT",
+              OPCODE_CALL_PTRCALL_FLOAT = "OPCODE_CALL_PTRCALL_FLOAT",
+              OPCODE_CALL_PTRCALL_STRING = "OPCODE_CALL_PTRCALL_STRING",
+              OPCODE_CALL_PTRCALL_VECTOR2 = "OPCODE_CALL_PTRCALL_VECTOR2",
+              OPCODE_CALL_PTRCALL_VECTOR2I = "OPCODE_CALL_PTRCALL_VECTOR2I",
+              OPCODE_CALL_PTRCALL_RECT2 = "OPCODE_CALL_PTRCALL_RECT2",
+              OPCODE_CALL_PTRCALL_RECT2I = "OPCODE_CALL_PTRCALL_RECT2I",
+              OPCODE_CALL_PTRCALL_VECTOR3 = "OPCODE_CALL_PTRCALL_VECTOR3",
+              OPCODE_CALL_PTRCALL_VECTOR3I = "OPCODE_CALL_PTRCALL_VECTOR3I",
+              OPCODE_CALL_PTRCALL_TRANSFORM2D = "OPCODE_CALL_PTRCALL_TRANSFORM2D",
+              OPCODE_CALL_PTRCALL_VECTOR4 = "OPCODE_CALL_PTRCALL_VECTOR4",
+              OPCODE_CALL_PTRCALL_VECTOR4I = "OPCODE_CALL_PTRCALL_VECTOR4I",
+              OPCODE_CALL_PTRCALL_PLANE = "OPCODE_CALL_PTRCALL_PLANE",
+              OPCODE_CALL_PTRCALL_QUATERNION = "OPCODE_CALL_PTRCALL_QUATERNION",
+              OPCODE_CALL_PTRCALL_AABB = "OPCODE_CALL_PTRCALL_AABB",
+              OPCODE_CALL_PTRCALL_BASIS = "OPCODE_CALL_PTRCALL_BASIS",
+              OPCODE_CALL_PTRCALL_TRANSFORM3D = "OPCODE_CALL_PTRCALL_TRANSFORM3D",
+              OPCODE_CALL_PTRCALL_PROJECTION = "OPCODE_CALL_PTRCALL_PROJECTION",
+              OPCODE_CALL_PTRCALL_COLOR = "OPCODE_CALL_PTRCALL_COLOR",
+              OPCODE_CALL_PTRCALL_STRING_NAME = "OPCODE_CALL_PTRCALL_STRING_NAME",
+              OPCODE_CALL_PTRCALL_NODE_PATH = "OPCODE_CALL_PTRCALL_NODE_PATH",
+              OPCODE_CALL_PTRCALL_RID = "OPCODE_CALL_PTRCALL_RID",
+              OPCODE_CALL_PTRCALL_OBJECT = "OPCODE_CALL_PTRCALL_OBJECT",
+              OPCODE_CALL_PTRCALL_CALLABLE = "OPCODE_CALL_PTRCALL_CALLABLE",
+              OPCODE_CALL_PTRCALL_SIGNAL = "OPCODE_CALL_PTRCALL_SIGNAL",
+              OPCODE_CALL_PTRCALL_DICTIONARY = "OPCODE_CALL_PTRCALL_DICTIONARY",
+              OPCODE_CALL_PTRCALL_ARRAY = "OPCODE_CALL_PTRCALL_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY",
+              OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY = "OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY"
+            }
+          GDF.DisasmHandlers = {}
+          -- https://github.com/godotengine/godot/blob/master/modules/gdscript/gdscript_disassembler.cpp
+
+          GDF.DisasmHandlers[GDF.OP.OPCODE_OPERATOR] =
+            {
+              name = "OPCODE_OPERATOR",
+              handler = function(contextTable)
+                local _pointer_size = GDDEFS.PTRSIZE / 0x4
+
+                local operation = contextTable.codeInts[contextTable.instrPointer + 4] -- operator is 4*0x4 after
+                addStructureElem(contextTable.codeStructElement, 'Operator: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR'
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 7 + _pointer_size -- incr += 5; in 4.0
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_OPERATOR_VALIDATED] =
+            {
+              name = "OPCODE_OPERATOR_VALIDATED",
+              handler = function(contextTable)
+
+                local operation = contextTable.codeInts[contextTable.instrPointer + 4] -- operator is 4*0x4 after
+                addStructureElem(contextTable.codeStructElement, 'Operator: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR' -- TODO not sure, is that the same thing: operator_names[_code_ptr[ip + 4]];
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_BUILTIN] =
+            {
+              name = "OPCODE_TYPE_TEST_BUILTIN",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_ARRAY] =
+            {
+              name = "OPCODE_TYPE_TEST_ARRAY",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                -- TODO create function constants lookup for disassembling
+                local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 4])
+                -- Ref<Script> script_type = get_constant(_code_ptr[ip + 3] & ADDR_MASK);
+                -- Variant::Type builtin_type = (Variant::Type)_code_ptr[ip + 4];
+                -- StringName native_type = get_global_name(_code_ptr[ip + 5]);
+
+                -- if (script_type.is_valid() && script_type->is_valid()) {
+                --     text += "script(";
+                --     text += GDScript::debug_get_script_name(script_type);
+                --     text += ")";
+                -- } else if (native_type != StringName()) {
+                --     text += native_type;
+                -- } else {
+                --     text += Variant::get_type_name(builtin_type);
+                -- }
+                addStructureElem(contextTable.codeStructElement, 'script_type', (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, 'native_type', (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is Dictionary[' .. operand3 .. ']'
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 6
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_DICTIONARY] =
+            {
+              name = "OPCODE_TYPE_TEST_DICTIONARY",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                local operand5 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 5])
+                local operand7 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 7])
+                -- Ref<Script> key_script_type = get_constant(_code_ptr[ip + 3] & ADDR_MASK);
+                -- Variant::Type key_builtin_type = (Variant::Type)_code_ptr[ip + 5];
+                -- StringName key_native_type = get_global_name(_code_ptr[ip + 6]);
+
+                -- if (key_script_type.is_valid() && key_script_type->is_valid()) {
+                --                 text += "script(";
+                --                 text += GDScript::debug_get_script_name(key_script_type);
+                --                 text += ")";
+                -- } else if (key_native_type != StringName()) {
+                --                 text += key_native_type;
+                -- } else {
+                --                 text += Variant::get_type_name(key_builtin_type);
+                -- }
+
+                -- Ref<Script> value_script_type = get_constant(_code_ptr[ip + 4] & ADDR_MASK);
+                -- Variant::Type value_builtin_type = (Variant::Type)_code_ptr[ip + 7];
+                -- StringName value_native_type = get_global_name(_code_ptr[ip + 8]);
+
+                -- if (value_script_type.is_valid() && value_script_type->is_valid()) {
+                --     text += "script(";
+                --     text += GDScript::debug_get_script_name(value_script_type);
+                --     text += ")";
+                -- } else if (value_native_type != StringName()) {
+                --     text += value_native_type;
+                -- } else {
+                --     text += Variant::get_type_name(value_builtin_type);
+                -- }
+
+                addStructureElem(contextTable.codeStructElement, 'key_script_type', (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, operand5, (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, 'value_script_type', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, operand7, (contextTable.instrPointer - 1 + 7) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, 'value_native_type', (contextTable.instrPointer - 1 + 8) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is Dictionary[' .. operand5 .. ']' .. ', ' .. operand7 .. ']'
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 9
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_NATIVE] =
+            {
+              name = "OPCODE_TYPE_TEST_NATIVE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                local operand3 = 'get_global_name(' .. (contextTable.codeInts[contextTable.instrPointer + 3]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_TEST_SCRIPT] =
+            {
+              name = "OPCODE_TYPE_TEST_SCRIPT",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 4
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_SET_KEYED] = 
+            {
+              name = "OPCODE_SET_KEYED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' .. operand3
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_SET_KEYED_VALIDATED] = 
+            {
+              name = "OPCODE_SET_KEYED_VALIDATED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' .. operand3
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_SET_INDEXED_VALIDATED] = 
+            {
+              name = "OPCODE_SET_INDEXED_VALIDATED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' .. operand3
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_GET_KEYED] = 
+            {
+              name = "OPCODE_GET_KEYED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_GET_KEYED_VALIDATED] = 
+            {
+              name = "OPCODE_GET_KEYED_VALIDATED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_GET_INDEXED_VALIDATED] = 
+            {
+              name = "OPCODE_GET_INDEXED_VALIDATED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_SET_NAMED] = 
+            {
+              name = "OPCODE_SET_NAMED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 3] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName =
+                    contextTable.opcodeName .. ' ' .. operand1 .. '["' .. operand3 .. '"] = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_SET_NAMED_VALIDATED] = 
+            {
+              name = "OPCODE_SET_NAMED_VALIDATED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = 'setter_names[' .. (contextTable.codeInts[contextTable.instrPointer + 3]) .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName =
+                    contextTable.opcodeName .. ' ' .. operand1 .. '["' .. operand3 .. '"] = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_GET_NAMED] = 
+            {
+              name = "OPCODE_GET_NAMED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 3] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' .. operand3 .. '"]'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_GET_NAMED_VALIDATED] = 
+            {
+              name = "OPCODE_GET_NAMED_VALIDATED",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = 'getter_names[operand3]' -- TODO
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' .. operand3 .. '"]'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_SET_MEMBER] = 
+            {
+              name = "OPCODE_SET_MEMBER",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. '["' .. operand2 .. '"] = ' .. operand1
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_GET_MEMBER] = 
+            {
+              name = "OPCODE_GET_MEMBER",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ["' .. operand2 .. '"]'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_SET_STATIC_VARIABLE] = 
+            {
+              name = "OPCODE_SET_STATIC_VARIABLE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = 'gdscript' -- TODO
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = 'debug_get_static_var_by_index(operand3)'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' script(scriptname)[' .. operand3 .. '] = ' .. operand1
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_GET_STATIC_VARIABLE] = 
+            {
+              name = "OPCODE_GET_STATIC_VARIABLE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = 'gdscript' -- TODO
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = 'debug_get_static_var_by_index(operand3)'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = script(scriptname)[' .. operand3 .. ']'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN] = 
+            {
+              name = "OPCODE_ASSIGN",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_NULL] = 
+            {
+              name = "OPCODE_ASSIGN_NULL",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = NULL'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TRUE] = 
+            {
+              name = "OPCODE_ASSIGN_TRUE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = TRUE'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_FALSE] = 
+            {
+              name = "OPCODE_ASSIGN_FALSE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = FALSE'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_BUILTIN] = 
+            {
+              name = "OPCODE_ASSIGN_TYPED_BUILTIN",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ') ' .. operand1 .. ' = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY] = 
+            {
+              name = "OPCODE_ASSIGN_TYPED_ARRAY",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 6
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_DICTIONARY] = 
+            {
+              name = "OPCODE_ASSIGN_TYPED_DICTIONARY",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 9
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_NATIVE] = 
+            {
+              name = "OPCODE_ASSIGN_TYPED_NATIVE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ')' .. operand1 .. ' = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSIGN_TYPED_SCRIPT] = 
+            {
+              name = "OPCODE_ASSIGN_TYPED_SCRIPT",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = 'debug_get_script_name(get_constant(operand3))' -- TODO
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ') ' .. operand1 .. ' = ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CAST_TO_BUILTIN] = 
+            {
+              name = "OPCODE_CAST_TO_BUILTIN",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand1_n = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 1])
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand1_n
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CAST_TO_NATIVE] = 
+            {
+              name = "OPCODE_CAST_TO_NATIVE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand3
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CAST_TO_SCRIPT] = 
+            {
+              name = "OPCODE_CAST_TO_SCRIPT",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand3
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT] = 
+            {
+              name = "OPCODE_CONSTRUCT",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                local typeName = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 3 + instr_var_args])
+                addStructureElem(contextTable.codeStructElement, typeName, (contextTable.instrPointer - 1 + 3 + instr_var_args) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3 + instr_var_args
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_VALIDATED] = 
+            {
+              name = "OPCODE_CONSTRUCT_VALIDATED",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+                local operand3 = 'constructors_names[' .. (contextTable.codeInts[contextTable.instrPointer + 3 + argc]) .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1] )
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3 + instr_var_args
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_ARRAY] = 
+            {
+              name = "OPCODE_CONSTRUCT_ARRAY",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. '[' .. operandArg .. ']'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3 + instr_var_args
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_TYPED_ARRAY] = 
+            {
+              name = "OPCODE_CONSTRUCT_TYPED_ARRAY",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand2 = 'get_constant(' .. (contextTable.codeInts[contextTable.instrPointer + argc + 2] & GDF.EADDRESS["ADDR_MASK"]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + argc + 2) * 0x4, vtDword)
+                local operand4 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc + 4])
+                addStructureElem(contextTable.codeStructElement, operand4, (contextTable.instrPointer - 1 + argc + 4) * 0x4, vtDword)
+                local operand5 = 'get_global_name(' .. (contextTable.codeInts[contextTable.instrPointer + argc + 5]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand5, (contextTable.instrPointer - 1 + argc + 5) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand4 .. ') ' .. operand1 .. ' = ' .. '[' .. operandArg .. ']'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 6 + instr_var_args
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_DICTIONARY] = 
+            {
+              name = "OPCODE_CONSTRUCT_DICTIONARY",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand3 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc * 2])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 1 + argc * 2) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0])
+                  addStructureElem(contextTable.codeStructElement, 'argK: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0]), (contextTable.instrPointer - 1 + 1 + i * 2 + 0) * 0x4, vtDword)
+                  operandArg = operandArg .. ': ' .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1])
+                  addStructureElem(contextTable.codeStructElement, 'argV: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1]), (contextTable.instrPointer - 1 + 1 + i * 2 + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' =  {' .. operandArg .. '  }'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3 + argc * 2
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_TYPED_DICTIONARY] = 
+            {
+              name = "OPCODE_CONSTRUCT_TYPED_DICTIONARY",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand2_2 = 'get_constant(' .. (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 2] & GDF.EADDRESS["ADDR_MASK"]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand2_2, (contextTable.instrPointer - 1 + argc * 2 + 2) * 0x4, vtDword)
+                local operand2_5 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc * 2 + 5])
+                addStructureElem(contextTable.codeStructElement, operand2_5, (contextTable.instrPointer - 1 + argc * 2 + 5) * 0x4, vtDword)
+                local operand2_6 = 'get_global_name(' .. (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 6]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand2_6, (contextTable.instrPointer - 1 + argc * 2 + 6) * 0x4, vtDword)
+
+                local operand2_3 = 'get_constant(' .. (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 3] & GDF.EADDRESS["ADDR_MASK"]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand2_3, (contextTable.instrPointer - 1 + argc * 2 + 3) * 0x4, vtDword)
+                local operand2_7 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + argc * 2 + 7])
+                addStructureElem(contextTable.codeStructElement, operand2_7, (contextTable.instrPointer - 1 + argc * 2 + 7) * 0x4, vtDword)
+                local operand2_8 = 'get_global_name(' .. (contextTable.codeInts[contextTable.instrPointer + argc * 2 + 8]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand2_8, (contextTable.instrPointer - 1 + argc * 2 + 8) * 0x4, vtDword)
+
+                local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc * 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 1 + argc * 2) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                    operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0])
+                    addStructureElem(contextTable.codeStructElement, 'argK: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 0]), (contextTable.instrPointer - 1 + 1 + i * 2 + 0) * 0x4, vtDword)
+                    operandArg = operandArg .. ': ' .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1])
+                    addStructureElem(contextTable.codeStructElement, 'argV: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1 + i * 2 + 1]), (contextTable.instrPointer - 1 + 1 + i * 2 + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2_5 .. ', ' .. operand2_7 .. ') ' .. operand2 .. ' =  {' .. operandArg .. '  }'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 9 + argc * 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL] = 
+            {
+              name = "OPCODE_CALL",
+              handler = function(contextTable)
+                local ret = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_RETURN)
+                local async = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_ASYNC)
+
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                local operand2 = '';
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                if (ret or async) then
+                  operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + argc + 2])
+                  addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + argc + 2) * 0x4, vtDword)
+                  operand2 = operand2 .. ' = '
+                end
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                operand1 = operand1 .. '.'
+
+                -- TODO: there's value before argc and after (latter references call index from globalnames)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = 'Globals[' .. (contextTable.codeInts[contextTable.instrPointer + instr_var_args + 2]) .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + instr_var_args + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. operand3 .. ']' .. '(' .. operandArg .. ')' -- original representation 'GlobalNames[FuncCode['..(contextTable.instrPointer-1 + instr_var_args+2)..']]'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_RETURN] = 
+            {
+              name = "OPCODE_CALL_RETURN",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_ASYNC] = 
+            {
+              name = "OPCODE_CALL_ASYNC",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_UTILITY] = 
+            {
+              name = "OPCODE_CALL_UTILITY",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + argc
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_UTILITY_VALIDATED] = 
+            {
+              name = "OPCODE_CALL_UTILITY_VALIDATED",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = 'utilities_names[' .. contextTable.codeInts[contextTable.instrPointer + 3 + argc] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_GDSCRIPT_UTILITY] = 
+            {
+              name = "OPCODE_CALL_GDSCRIPT_UTILITY",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = 'gds_utilities_names[' .. contextTable.codeInts[contextTable.instrPointer + 3 + argc] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_BUILTIN_TYPE_VALIDATED] = 
+            {
+              name = "OPCODE_CALL_BUILTIN_TYPE_VALIDATED",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2 + argc])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand4 = 'builtin_methods_names[' .. (contextTable.codeInts[contextTable.instrPointer + 4 + argc]) .. ']'
+                addStructureElem(contextTable.codeStructElement, operand4, (contextTable.instrPointer - 1 + 4 + argc) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand4 .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_SELF_BASE] = 
+            {
+              name = "OPCODE_CALL_SELF_BASE",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2 + argc])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND] = 
+            {
+              name = "OPCODE_CALL_METHOD_BIND",
+              handler = function(contextTable)
+                local ret = contextTable.codeInts[contextTable.instrPointer] == GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_CALL_METHOD_BIND_RET)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local operand2 = '';
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                if (ret) then
+                  operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + argc + 2])
+                  addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + argc + 2) * 0x4, vtDword)
+                  operand2 = operand2 .. ' = '
+                end
+
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                operand1 = operand1 .. '.'
+                operand1 = operand1 .. operand3 .. '->get_name()' -- TODO
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),     (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. '(' .. operandArg .. ')' -- TODO retrieve the funciton name
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND_RET] = 
+            {
+              name = "OPCODE_CALL_METHOD_BIND_RET",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_BUILTIN_STATIC] = 
+            {
+              name = "OPCODE_CALL_BUILTIN_STATIC",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local typeName = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args])
+                addStructureElem(contextTable.codeStructElement, 'typeName:', (contextTable.instrPointer - 1 + 3 + instr_var_args) * 0x4, vtDword)
+
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '.' .. operand2 .. '.operator String()' .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_NATIVE_STATIC] = 
+            {
+              name = "OPCODE_CALL_NATIVE_STATIC",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN] = 
+            {
+              name = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + argc
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN] = 
+            {
+              name = "OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN] = 
+            {
+              name = "OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2 + argc])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN] = 
+            {
+              name = "OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_AWAIT] = 
+            {
+              name = "OPCODE_AWAIT",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_AWAIT_RESUME] = 
+            {
+              name = "OPCODE_AWAIT_RESUME",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_AWAIT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CREATE_LAMBDA] = 
+            {
+              name = "OPCODE_CREATE_LAMBDA",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                local operand2 = '_lambdas_ptr[' .. (contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args]) .. ']'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+                local captures_count = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + captures_count])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + captures_count) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, captures_count - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'captures_count: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' .. operand2 .. '->name.operator String()' .. ' function, captures (' .. operandArg .. ')'
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + captures_count
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CREATE_SELF_LAMBDA] = 
+            {
+              name = "OPCODE_CREATE_SELF_LAMBDA",
+              handler = function(contextTable)
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local operand2 = '_lambdas_ptr[' .. (contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args]) .. ']'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+                local captures_count = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + captures_count])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + captures_count) * 0x4, vtDword)
+
+                local operandArg = '';
+
+                for i = 0, captures_count - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'captures_count: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),     (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' .. operand2 .. '->name.operator String()' .. ' function, captures (' .. operandArg .. ')'
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 4 + captures_count
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP] = 
+            {
+              name = "OPCODE_JUMP",
+              handler = function(contextTable)
+                local operand1 = numtohexstr(contextTable.codeInts[contextTable.instrPointer + 1] * 0x4) -- where to jump in hex representation, 4byte step
+                local elem = addStructureElem(contextTable.codeStructElement, "JUMP to " .. operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                elem.DisplayMethod = 'dtHexadecimal'
+                elem.ShowAsHex = true
+                contextTable.opcodeName = contextTable.opcodeName .. ' -> ' .. operand1
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF] = 
+            {
+              name = "OPCODE_JUMP_IF",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                local operand2 = numtohexstr(contextTable.codeInts[contextTable.instrPointer + 2] * 0x4) -- where to jump
+                local elem = addStructureElem(contextTable.codeStructElement, "JUMP to " .. operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                elem.DisplayMethod = 'dtHexadecimal'
+                elem.ShowAsHex = true
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' -> ' .. operand2
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF_NOT] = 
+            {
+              name = "OPCODE_JUMP_IF_NOT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_TO_DEF_ARGUMENT] = 
+            {
+              name = "OPCODE_JUMP_TO_DEF_ARGUMENT",
+              handler = function(contextTable)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 1
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF_SHARED] = 
+            {
+              name = "OPCODE_JUMP_IF_SHARED",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_JUMP_IF].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN] = 
+            {
+              name = "OPCODE_RETURN",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_BUILTIN] = 
+            {
+              name = "OPCODE_RETURN_TYPED_BUILTIN",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2 .. ')' .. ' ' .. operand1
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_ARRAY] = 
+            {
+              name = "OPCODE_RETURN_TYPED_ARRAY",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_DICTIONARY] = 
+            {
+              name = "OPCODE_RETURN_TYPED_DICTIONARY",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 8
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_NATIVE] = 
+            {
+              name = "OPCODE_RETURN_TYPED_NATIVE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2 .. ') ' .. operand1
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_RETURN_TYPED_SCRIPT] = 
+            {
+              name = "OPCODE_RETURN_TYPED_SCRIPT",
+              handler = function(contextTable)
+                local operand2 = 'get_constant(' .. (contextTable.codeInts[contextTable.instrPointer + 2] & GDF.EADDRESS["ADDR_MASK"]) .. ')'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. 'GDScript::debug_get_script_name(' .. operand2 .. ')' .. ') ' .. operand1
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' for-init ' .. operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_INT",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_BEGIN_', '')
+                contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' .. operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_FLOAT] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_FLOAT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_VECTOR2",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2I] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_VECTOR2I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_VECTOR3",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3I] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_VECTOR3I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_STRING] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_STRING",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_DICTIONARY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_DICTIONARY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT] = 
+            {
+              name = "OPCODE_ITERATE_BEGIN_OBJECT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_BEGIN_RANGE] =
+            {
+              name = "OPCODE_ITERATE_BEGIN_RANGE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                local operand4 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 4])
+                addStructureElem(contextTable.codeStructElement, operand4, (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                local operand5 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 5])
+                addStructureElem(contextTable.codeStructElement, operand5, (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
+
+                addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' for-init ' .. operand5 .. ' in range from ' .. operand2 .. ' to ' .. operand3 .. ' step ' .. operand4 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 7
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE] =
+            {
+              name = "OPCODE_ITERATE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' for-loop ' .. operand2 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT] =
+            {
+              name = "OPCODE_ITERATE_INT",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_', '')
+                contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' .. operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_FLOAT] = 
+            {
+              name = "OPCODE_ITERATE_FLOAT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR2] = 
+            {
+              name = "OPCODE_ITERATE_VECTOR2",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR2I] = 
+            {
+              name = "OPCODE_ITERATE_VECTOR2I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR3] = 
+            {
+              name = "OPCODE_ITERATE_VECTOR3",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_VECTOR3I] = 
+            {
+              name = "OPCODE_ITERATE_VECTOR3I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_STRING] = 
+            {
+              name = "OPCODE_ITERATE_STRING",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_DICTIONARY] = 
+            {
+              name = "OPCODE_ITERATE_DICTIONARY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_BYTE_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_BYTE_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_INT32_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_INT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_INT64_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_INT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_FLOAT32_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_FLOAT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_FLOAT64_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_FLOAT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_STRING_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_STRING_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_VECTOR2_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_VECTOR2_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_VECTOR3_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_VECTOR3_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_COLOR_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_PACKED_VECTOR4_ARRAY] = 
+            {
+              name = "OPCODE_ITERATE_PACKED_VECTOR4_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_OBJECT] = 
+            {
+              name = "OPCODE_ITERATE_OBJECT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_INT].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ITERATE_RANGE] =
+            {
+              name = "OPCODE_ITERATE_RANGE",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+
+                local operand4 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 4])
+                addStructureElem(contextTable.codeStructElement, operand4, (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' for-loop ' .. operand4 .. ' in range to ' .. operand2 .. ' step ' .. operand3 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 6
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_STORE_GLOBAL] =
+            {
+              name = "OPCODE_STORE_GLOBAL",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                local operand2 = (contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 3
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_STORE_NAMED_GLOBAL] =
+            {
+              name = "OPCODE_STORE_NAMED_GLOBAL",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2] .. ']'
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL] =
+            {
+              name = "OPCODE_TYPE_ADJUST_BOOL",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. opcodeType .. ') ' .. operand1
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 2
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_INT] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_INT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_FLOAT] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_FLOAT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_STRING] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_STRING",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_VECTOR2",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2I] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_VECTOR2I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_RECT2] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_RECT2",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_RECT2I] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_RECT2I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_VECTOR3",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3I] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_VECTOR3I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM2D] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_TRANSFORM2D",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_VECTOR4",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4I] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_VECTOR4I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PLANE] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PLANE",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_QUATERNION] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_QUATERNION",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_AABB] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_AABB",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BASIS] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_BASIS",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM3D] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_TRANSFORM3D",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PROJECTION] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PROJECTION",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_COLOR] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_COLOR",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_STRING_NAME] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_STRING_NAME",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_NODE_PATH] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_NODE_PATH",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_RID] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_RID",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_OBJECT] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_OBJECT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_CALLABLE] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_CALLABLE",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_SIGNAL] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_SIGNAL",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_DICTIONARY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_DICTIONARY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY] = 
+            {
+              name = "OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_TYPE_ADJUST_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_ASSERT] =
+            {
+              name = "OPCODE_ASSERT",
+              handler = function(contextTable)
+                local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand1 .. ', ' .. operand2 .. ')'
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 3
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_BREAKPOINT] =
+            {
+              name = "OPCODE_BREAKPOINT",
+              handler = function(contextTable)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 1
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_LINE] =
+            {
+              name = "OPCODE_LINE",
+              handler = function(contextTable)
+                local line = contextTable.codeInts[contextTable.instrPointer + 1] - 1
+                if line > 0 --[[and line < p_code_lines.size()]] then
+                  contextTable.opcodeName = contextTable.opcodeName .. ' ' .. tostring(line + 1) .. ': '
+                else
+                  contextTable.opcodeName = ''
+                end
+                addStructureElem(contextTable.codeStructElement, 'line: ', (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 2
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_END] =
+            {
+              name = "OPCODE_END",
+              handler = function(contextTable)
+                addLayoutStructElem(contextTable.codeStructElement, '>>>END.', 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                return contextTable.instrPointer + 1
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN] =
+            {
+              name = "OPCODE_CALL_PTRCALL_NO_RETURN",
+              handler = function(contextTable)
+
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                operand1 = operand1 .. '.'
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg .. ')' -- TODO: retrieve the funciton name
+
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL] =
+            {
+              name = "OPCODE_CALL_PTRCALL_BOOL",
+              handler = function(contextTable)
+
+                contextTable.instrPointer = contextTable.instrPointer + 1
+                local instr_var_args = contextTable.codeInts[contextTable.instrPointer]
+                addStructureElem(contextTable.codeStructElement, 'instr_var_args:', (contextTable.instrPointer - 1) * 0x4, vtDword)
+
+                local argc = contextTable.codeInts[contextTable.instrPointer + 1 + instr_var_args]
+                addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1 + instr_var_args) * 0x4, vtDword)
+
+                local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2 + argc])
+                addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+
+                local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
+                addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
+                operand1 = operand1 .. '.'
+
+                local operandArg = '';
+
+                for i = 0, argc - 1 do
+                  if i > 0 then
+                    operandArg = operandArg .. ', '
+                  end
+                  operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + i + 1])
+                  addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
+                end
+
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
+
+                local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
+                contextTable.opcodeName = contextTable.opcodeName .. '(return ' .. opcodeType .. ') ' .. operand2 .. ' = ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg .. ')'
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+
+                return contextTable.instrPointer + 5 + argc
+              end
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_INT] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_INT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_FLOAT] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_FLOAT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_STRING] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_STRING",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_VECTOR2",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_VECTOR2I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_RECT2] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_RECT2",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_RECT2I] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_RECT2I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_VECTOR3",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_VECTOR3I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_TRANSFORM2D",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_VECTOR4",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_VECTOR4I",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PLANE] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PLANE",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_QUATERNION",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_AABB] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_AABB",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BASIS] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_BASIS",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_TRANSFORM3D",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PROJECTION",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_COLOR] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_COLOR",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_STRING_NAME",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_NODE_PATH",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_RID] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_RID",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_OBJECT] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_OBJECT",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_CALLABLE",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_SIGNAL",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_DICTIONARY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+          GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY] = 
+            {
+              name = "OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY",
+              handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_PTRCALL_BOOL].handler
+            }
+
+          GDF.Decoders = {}
+
+            GDF.Decoders.BytecodeV0 =
+              {
+                name = "BytecodeV0",
+                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
+                  return profile.OPHandlerDefFromOPEnum[opcodeEnum]
+                end
+              }
+            GDF.Decoders.BytecodeV1 =
+              {
+                name = "BytecodeV1",
+                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
+                  -- for other versions redefine the handler on the fly
+                  -- for example, in 4.0 GDF.OP.OPCODE_OPERATOR takes more operands than future versions TODO
+                  return profile.OPHandlerDefFromOPEnum[opcodeEnum]
+                end
+              }
+
+            GDF.ProfileSpecs =
+              {
+                ["4.0"] =
+                  {
+                    decoderName = "BytecodeV0",
+                    orderedOpcodes =
+                    {
+                      GDF.OP.OPCODE_OPERATOR,
+                      GDF.OP.OPCODE_OPERATOR_VALIDATED,
+                      GDF.OP.OPCODE_TYPE_TEST_BUILTIN,
+                      GDF.OP.OPCODE_TYPE_TEST_ARRAY,
+                      GDF.OP.OPCODE_TYPE_TEST_NATIVE,
+                      GDF.OP.OPCODE_TYPE_TEST_SCRIPT,
+                      GDF.OP.OPCODE_SET_KEYED,
+                      GDF.OP.OPCODE_SET_KEYED_VALIDATED,
+                      GDF.OP.OPCODE_SET_INDEXED_VALIDATED,
+                      GDF.OP.OPCODE_GET_KEYED,
+                      GDF.OP.OPCODE_GET_KEYED_VALIDATED,
+                      GDF.OP.OPCODE_GET_INDEXED_VALIDATED,
+                      GDF.OP.OPCODE_SET_NAMED,
+                      GDF.OP.OPCODE_SET_NAMED_VALIDATED,
+                      GDF.OP.OPCODE_GET_NAMED,
+                      GDF.OP.OPCODE_GET_NAMED_VALIDATED,
+                      GDF.OP.OPCODE_SET_MEMBER,
+                      GDF.OP.OPCODE_GET_MEMBER,
+                      GDF.OP.OPCODE_ASSIGN,
+                      GDF.OP.OPCODE_ASSIGN_TRUE,
+                      GDF.OP.OPCODE_ASSIGN_FALSE,
+                      GDF.OP.OPCODE_ASSIGN_TYPED_BUILTIN,
+                      GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY,
+                      GDF.OP.OPCODE_ASSIGN_TYPED_NATIVE,
+                      GDF.OP.OPCODE_ASSIGN_TYPED_SCRIPT,
+                      GDF.OP.OPCODE_CAST_TO_BUILTIN,
+                      GDF.OP.OPCODE_CAST_TO_NATIVE,
+                      GDF.OP.OPCODE_CAST_TO_SCRIPT,
+                      GDF.OP.OPCODE_CONSTRUCT,
+                      GDF.OP.OPCODE_CONSTRUCT_VALIDATED,
+                      GDF.OP.OPCODE_CONSTRUCT_ARRAY,
+                      GDF.OP.OPCODE_CONSTRUCT_TYPED_ARRAY,
+                      GDF.OP.OPCODE_CONSTRUCT_DICTIONARY,
+                      GDF.OP.OPCODE_CALL,
+                      GDF.OP.OPCODE_CALL_RETURN,
+                      GDF.OP.OPCODE_CALL_ASYNC,
+                      GDF.OP.OPCODE_CALL_UTILITY,
+                      GDF.OP.OPCODE_CALL_UTILITY_VALIDATED,
+                      GDF.OP.OPCODE_CALL_GDSCRIPT_UTILITY,
+                      GDF.OP.OPCODE_CALL_BUILTIN_TYPE_VALIDATED,
+                      GDF.OP.OPCODE_CALL_SELF_BASE,
+                      GDF.OP.OPCODE_CALL_METHOD_BIND,
+                      GDF.OP.OPCODE_CALL_METHOD_BIND_RET,
+                      GDF.OP.OPCODE_CALL_BUILTIN_STATIC,
+                      GDF.OP.OPCODE_CALL_NATIVE_STATIC,
+                      GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN,
+                      GDF.OP.OPCODE_CALL_PTRCALL_BOOL,
+                      GDF.OP.OPCODE_CALL_PTRCALL_INT,
+                      GDF.OP.OPCODE_CALL_PTRCALL_FLOAT,
+                      GDF.OP.OPCODE_CALL_PTRCALL_STRING,
+                      GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2,
+                      GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I,
+                      GDF.OP.OPCODE_CALL_PTRCALL_RECT2,
+                      GDF.OP.OPCODE_CALL_PTRCALL_RECT2I,
+                      GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3,
+                      GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I,
+                      GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D,
+                      GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4,
+                      GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PLANE,
+                      GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION,
+                      GDF.OP.OPCODE_CALL_PTRCALL_AABB,
+                      GDF.OP.OPCODE_CALL_PTRCALL_BASIS,
+                      GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION,
+                      GDF.OP.OPCODE_CALL_PTRCALL_COLOR,
+                      GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME,
+                      GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH,
+                      GDF.OP.OPCODE_CALL_PTRCALL_RID,
+                      GDF.OP.OPCODE_CALL_PTRCALL_OBJECT,
+                      GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE,
+                      GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL,
+                      GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY,
+                      GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY,
+                      GDF.OP.OPCODE_AWAIT,
+                      GDF.OP.OPCODE_AWAIT_RESUME,
+                      GDF.OP.OPCODE_CREATE_LAMBDA,
+                      GDF.OP.OPCODE_CREATE_SELF_LAMBDA,
+                      GDF.OP.OPCODE_JUMP,
+                      GDF.OP.OPCODE_JUMP_IF,
+                      GDF.OP.OPCODE_JUMP_IF_NOT,
+                      GDF.OP.OPCODE_JUMP_TO_DEF_ARGUMENT,
+                      GDF.OP.OPCODE_JUMP_IF_SHARED,
+                      GDF.OP.OPCODE_RETURN,
+                      GDF.OP.OPCODE_RETURN_TYPED_BUILTIN,
+                      GDF.OP.OPCODE_RETURN_TYPED_ARRAY,
+                      GDF.OP.OPCODE_RETURN_TYPED_NATIVE,
+                      GDF.OP.OPCODE_RETURN_TYPED_SCRIPT,
+                      GDF.OP.OPCODE_ITERATE_BEGIN,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_INT,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_FLOAT,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR2I,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_VECTOR3I,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_STRING,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_DICTIONARY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_BYTE_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT32_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_INT64_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT32_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_FLOAT64_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_STRING_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR2_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR3_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT,
+                      GDF.OP.OPCODE_ITERATE,
+                      GDF.OP.OPCODE_ITERATE_INT,
+                      GDF.OP.OPCODE_ITERATE_FLOAT,
+                      GDF.OP.OPCODE_ITERATE_VECTOR2,
+                      GDF.OP.OPCODE_ITERATE_VECTOR2I,
+                      GDF.OP.OPCODE_ITERATE_VECTOR3,
+                      GDF.OP.OPCODE_ITERATE_VECTOR3I,
+                      GDF.OP.OPCODE_ITERATE_STRING,
+                      GDF.OP.OPCODE_ITERATE_DICTIONARY,
+                      GDF.OP.OPCODE_ITERATE_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_BYTE_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_INT32_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_INT64_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_FLOAT32_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_FLOAT64_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_STRING_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_VECTOR2_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_VECTOR3_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY,
+                      GDF.OP.OPCODE_ITERATE_OBJECT,
+                      GDF.OP.OPCODE_STORE_GLOBAL,
+                      GDF.OP.OPCODE_STORE_NAMED_GLOBAL,
+                      GDF.OP.OPCODE_TYPE_ADJUST_BOOL,
+                      GDF.OP.OPCODE_TYPE_ADJUST_INT,
+                      GDF.OP.OPCODE_TYPE_ADJUST_FLOAT,
+                      GDF.OP.OPCODE_TYPE_ADJUST_STRING,
+                      GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2,
+                      GDF.OP.OPCODE_TYPE_ADJUST_VECTOR2I,
+                      GDF.OP.OPCODE_TYPE_ADJUST_RECT2,
+                      GDF.OP.OPCODE_TYPE_ADJUST_RECT2I,
+                      GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3,
+                      GDF.OP.OPCODE_TYPE_ADJUST_VECTOR3I,
+                      GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM2D,
+                      GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4,
+                      GDF.OP.OPCODE_TYPE_ADJUST_VECTOR4I,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PLANE,
+                      GDF.OP.OPCODE_TYPE_ADJUST_QUATERNION,
+                      GDF.OP.OPCODE_TYPE_ADJUST_AABB,
+                      GDF.OP.OPCODE_TYPE_ADJUST_BASIS,
+                      GDF.OP.OPCODE_TYPE_ADJUST_TRANSFORM3D,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PROJECTION,
+                      GDF.OP.OPCODE_TYPE_ADJUST_COLOR,
+                      GDF.OP.OPCODE_TYPE_ADJUST_STRING_NAME,
+                      GDF.OP.OPCODE_TYPE_ADJUST_NODE_PATH,
+                      GDF.OP.OPCODE_TYPE_ADJUST_RID,
+                      GDF.OP.OPCODE_TYPE_ADJUST_OBJECT,
+                      GDF.OP.OPCODE_TYPE_ADJUST_CALLABLE,
+                      GDF.OP.OPCODE_TYPE_ADJUST_SIGNAL,
+                      GDF.OP.OPCODE_TYPE_ADJUST_DICTIONARY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_BYTE_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT32_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_INT64_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT32_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_FLOAT64_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_STRING_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR2_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR3_ARRAY,
+                      GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY,
+                      GDF.OP.OPCODE_ASSERT,
+                      GDF.OP.OPCODE_BREAKPOINT,
+                      GDF.OP.OPCODE_LINE,
+                      GDF.OP.OPCODE_END
+                    }
+                  },
+
+                ["4.1"] =
+                  {
+                    base = "4.0",
+                    decoderName = "BytecodeV0",
+                    patches = 
+                    {
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_GET_MEMBER,
+                        value = GDF.OP.OPCODE_SET_STATIC_VARIABLE
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_SET_STATIC_VARIABLE,
+                        value = GDF.OP.OPCODE_GET_STATIC_VARIABLE
+                      }
+                    }
+                  },
+
+                ["4.2"] =
+                  {
+                    base = "4.1",
+                    decoderName = "BytecodeV0",
+                    patches =
+                    {
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_CALL_NATIVE_STATIC,
+                        value = GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN,
+                        value = GDF.OP.OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_NO_RETURN
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_BOOL
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_INT
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_FLOAT
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_STRING
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR2I
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_RECT2
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_RECT2I
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR3I
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM2D
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_VECTOR4I
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PLANE
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_QUATERNION
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_AABB
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_BASIS
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_TRANSFORM3D
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PROJECTION
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_COLOR
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_STRING_NAME
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_NODE_PATH
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_RID
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_OBJECT
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_CALLABLE
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_SIGNAL
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_DICTIONARY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_BYTE_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT32_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_INT64_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT32_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_FLOAT64_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_STRING_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR2_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_VECTOR3_ARRAY
+                      },
+                      {
+                        kind = "removeValue",
+                        value = GDF.OP.OPCODE_CALL_PTRCALL_PACKED_COLOR_ARRAY
+                    
+                      }
+                    }
+                  },
+
+                ["4.3"] =
+                  {
+                    base = "4.2",
+                    decoderName = "BytecodeV0",
+                    patches =
+                    {
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_ASSIGN,
+                        value = GDF.OP.OPCODE_ASSIGN_NULL
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_CALL_NATIVE_STATIC,
+                        value = GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN,
+                        value = GDF.OP.OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_COLOR_ARRAY,
+                        value = GDF.OP.OPCODE_ITERATE_BEGIN_PACKED_VECTOR4_ARRAY
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_ITERATE_PACKED_COLOR_ARRAY,
+                        value = GDF.OP.OPCODE_ITERATE_PACKED_VECTOR4_ARRAY
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_TYPE_ADJUST_PACKED_COLOR_ARRAY,
+                        value = GDF.OP.OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY
+                      }
+                    }
+                  },
+
+                ["4.4"] =
+                  {
+                    base = "4.3",
+                    decoderName = "BytecodeV0",
+                    patches =
+                    {
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_TYPE_TEST_ARRAY,
+                        value = GDF.OP.OPCODE_TYPE_TEST_DICTIONARY
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_ASSIGN_TYPED_ARRAY,
+                        value = GDF.OP.OPCODE_ASSIGN_TYPED_DICTIONARY
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_CONSTRUCT_DICTIONARY,
+                        value = GDF.OP.OPCODE_CONSTRUCT_TYPED_DICTIONARY
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_RETURN_TYPED_ARRAY,
+                        value = GDF.OP.OPCODE_RETURN_TYPED_DICTIONARY
+                      }
+                    }
+                  },
+
+                ["4.5"] =
+                  {
+                    base = "4.4",
+                    decoderName = "BytecodeV0",
+                    patches =
+                    {
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_ITERATE_BEGIN_OBJECT,
+                        value = GDF.OP.OPCODE_ITERATE_BEGIN_RANGE
+                      },
+                      {
+                        kind = "insertValueAfter",
+                        anchor = GDF.OP.OPCODE_ITERATE_OBJECT,
+                        value = GDF.OP.OPCODE_ITERATE_RANGE
+                      }
+                    }
+                  },
+
+                ["4.6"] =
+                  {
+                    base = "4.5",
+                    decoderName = "BytecodeV0",
+                    patches = {}
+                  }
+              }
+            GDF.CompiledProfiles = {}
+            GDF.EADDRESS =
+              {
+                ['ADDR_BITS'] = 24,
+                ['ADDR_MASK'] = ((1 << 24) - 1), -- ((1 << ADDR_BITS) - 1)
+                ['ADDR_TYPE_MASK'] = ~((1 << 24) - 1),
+                ['ADDR_TYPE_STACK'] = 0,
+                ['ADDR_TYPE_CONSTANT'] = 1,
+                ['ADDR_TYPE_MEMBER'] = 2,
+                ['ADDR_TYPE_MAX'] = 3
+              }
+            GDF.EFIXEDADDRESSES =
+              {
+                ['ADDR_STACK_SELF'] = 0,
+                ['ADDR_STACK_CLASS'] = 1,
+                ['ADDR_STACK_NIL'] = 2,
+                ['FIXED_ADDRESSES_MAX'] = 3,
+                ['ADDR_SELF'] = 0 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS'],
+                ['ADDR_CLASS'] = 1 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS'],
+                ['ADDR_NIL'] = 2 | GDF.EADDRESS['ADDR_TYPE_STACK'] << GDF.EADDRESS['ADDR_BITS']
+              }
+            GDF.OPERATOR_NAME =
+            {
+              -- comparison
+              "OP_EQUAL",
+              "OP_NOT_EQUAL",
+              "OP_LESS",
+              "OP_LESS_EQUAL",
+              "OP_GREATER",
+              "OP_GREATER_EQUAL",
+              -- mathematic
+              "OP_ADD",
+              "OP_SUBTRACT",
+              "OP_MULTIPLY",
+              "OP_DIVIDE",
+              "OP_NEGATE",
+              "OP_POSITIVE", 
+              "OP_MODULE",
+              "OP_POWER",
+              -- bitwise
+              "OP_SHIFT_LEFT",
+              "OP_SHIFT_RIGHT",
+              "OP_BIT_AND",
+              "OP_BIT_OR",
+              "OP_BIT_XOR",
+              "OP_BIT_NEGATE",
+              -- logic
+              "OP_AND",
+              "OP_OR",
+              "OP_XOR",
+              "OP_NOT",
+              -- containment
+              "OP_IN",
+              "OP_MAX" -- 25
+            }
+
+          for version, _ in pairs(GDF.ProfileSpecs) do
+            GDF.CompiledProfiles[version] = createProfileFromVersion(version)
+          end
+
+          if GDDEFS.VERSION_STRING then
+            GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion(GDDEFS.VERSION_STRING)
+          end
+
+        else
+          -- TODO for 3.x
+        end
       end
 
       function disassembleGDFunctionCodeToStruct(funcAddr, funcStruct)
-          assert((type(funcAddr) == 'number') and (funcAddr ~= 0),
-              'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: ' .. type(funcAddr))
+        assert((type(funcAddr) == 'number') and (funcAddr ~= 0), 'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: ' .. type(funcAddr))
 
-          if GDF == nil then
-              defineGDFunctionEnums()
+        if GDF == nil then
+          defineGDFunctionEnums()
+        end
+
+        debugStepIn()
+
+        -- TODO: resolve that with a a helper
+        local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
+        funcStruct.Name = 'ScriptFunc'
+        local codeStructElement = funcStruct.addElement()
+        codeStructElement.Name = 'FuncCode'
+        codeStructElement.Offset = GDDEFS.FUNC_CODE
+        codeStructElement.VarType = vtPointer
+        codeStructElement.ChildStruct = createStructure('FuncCode')
+
+        local funcConstantStructElem = funcStruct.addElement()
+        funcConstantStructElem.Name = 'Constants'
+        funcConstantStructElem.Offset = GDDEFS.FUNC_CONST
+        funcConstantStructElem.VarType = vtPointer
+        funcConstantStructElem.ChildStruct = createStructure('GDFConst')
+        local funcConstAddr = readPointer(funcAddr + GDDEFS.FUNC_CONST)
+        iterateFuncConstantsToStruct(funcConstAddr, funcConstantStructElem)
+
+        local funcGlobalNameStructElem = funcStruct.addElement()
+        funcGlobalNameStructElem.Name = 'Globals'
+        funcGlobalNameStructElem.Offset = GDDEFS.FUNC_GLOBNAMEPTR
+        funcGlobalNameStructElem.VarType = vtPointer
+        funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
+        local funcGlobalAddr = readPointer(funcAddr + GDDEFS.FUNC_GLOBNAMEPTR)
+        iterateFuncGlobalsToStruct(funcGlobalAddr, funcGlobalNameStructElem)
+
+        local codeInts = {}
+        local codeSize, currIndx, currOpcode = 0, 0, 0
+        while true do
+          codeSize = codeSize + 1
+          currOpcode = readInteger(codeAddr + currIndx * 0x4)
+          table.insert(codeInts, currOpcode)
+
+          if currOpcode == GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_END) then
+            break
           end
+          currIndx = currIndx + 1
+        end
+        sendDebugMessage('disassembleGDFunctionCode: codeSize: ' .. tostring(codeSize))
 
-          debugStepIn()
+        GDF.CurrentDisassembler:disassembleBytecode(codeInts, codeStructElement)
 
-          -- TODO: resolve that with a a helper
-          local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
-          funcStruct.Name = 'ScriptFunc'
-          local codeStructElement = funcStruct.addElement()
-          codeStructElement.Name = 'FuncCode'
-          codeStructElement.Offset = GDDEFS.FUNC_CODE
-          codeStructElement.VarType = vtPointer
-          codeStructElement.ChildStruct = createStructure('FuncCode')
-
-          local funcConstantStructElem = funcStruct.addElement()
-          funcConstantStructElem.Name = 'Constants'
-          funcConstantStructElem.Offset = GDDEFS.FUNC_CONST
-          funcConstantStructElem.VarType = vtPointer
-          funcConstantStructElem.ChildStruct = createStructure('GDFConst')
-          local funcConstAddr = readPointer(funcAddr + GDDEFS.FUNC_CONST)
-          iterateFuncConstantsToStruct(funcConstAddr, funcConstantStructElem)
-
-          local funcGlobalNameStructElem = funcStruct.addElement()
-          funcGlobalNameStructElem.Name = 'Globals'
-          funcGlobalNameStructElem.Offset = GDDEFS.FUNC_GLOBNAMEPTR
-          funcGlobalNameStructElem.VarType = vtPointer
-          funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
-          local funcGlobalAddr = readPointer(funcAddr + GDDEFS.FUNC_GLOBNAMEPTR)
-          iterateFuncGlobalsToStruct(funcGlobalAddr, funcGlobalNameStructElem)
-
-          local codeInts = {}
-          local codeSize, currIndx, currOpcode = 0, 0, 0
-          while true do
-              codeSize = codeSize + 1
-              currOpcode = readInteger(codeAddr + currIndx * 0x4)
-              table.insert(codeInts, currOpcode)
-
-              if currOpcode == GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_END) then
-                  break
-              end
-              currIndx = currIndx + 1
-          end
-          sendDebugMessage('disassembleGDFunctionCode: codeSize: ' .. tostring(codeSize))
-
-          GDF.CurrentDisassembler:disassembleBytecode(codeInts, codeStructElement)
-
-          debugStepOut()
-          return
+        debugStepOut()
+        return
       end
 
       function formatDisassembledAddress(addrInt)
-          local addrIndex = addrInt & (GDF.EADDRESS['ADDR_MASK']) -- lower 24 bits are indices
-          local addrType = (addrInt >> GDF.EADDRESS['ADDR_BITS']) -- the higher 8 would be types: shift to the beginning and mask
+        local addrIndex = addrInt & (GDF.EADDRESS['ADDR_MASK']) -- lower 24 bits are indices
+        local addrType = (addrInt >> GDF.EADDRESS['ADDR_BITS']) -- the higher 8 would be types: shift to the beginning and mask
 
-          if addrType == 0 and (addrIndex >= 0 and addrIndex <= 2) then
-              if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_SELF'] then
-                  return "stack(self)"
-              end
-              if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_CLASS'] then
-                  return "stack(class)"
-              end
-              if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_NIL'] then
-                  return "stack(nil)"
-              end
-              return 'stack[' .. tostring(addrIndex) .. ']'
-          end
+        if addrType == 0 and (addrIndex >= 0 and addrIndex <= 2) then
+          if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_SELF'] then   return "stack(self)" end
+          if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_CLASS'] then  return "stack(class)" end
+          if addrIndex == GDF.EFIXEDADDRESSES['ADDR_STACK_NIL'] then    return "stack(nil)" end
+                                                                        return 'stack[' .. tostring(addrIndex) .. ']'
+        end
 
-          if (addrType == GDF.EADDRESS['ADDR_TYPE_STACK']) then
-              return ("stack[%d]"):format(addrIndex)
-          elseif (addrType == GDF.EADDRESS['ADDR_TYPE_CONSTANT']) then
-              return ("Constants[%d]"):format(addrIndex)
-          elseif (addrType == GDF.EADDRESS['ADDR_TYPE_MEMBER']) then
-              return ("Variants[%d]"):format(addrIndex) -- for clarity ("member[%d]"):format(addrIndex)
-          else
-              return ("addr?(0x%08X)"):format(addrInt)
-          end
+        if (addrType == GDF.EADDRESS['ADDR_TYPE_STACK']) then         return ("stack[%d]"):format(addrIndex)
+        elseif (addrType == GDF.EADDRESS['ADDR_TYPE_CONSTANT']) then  return ("Constants[%d]"):format(addrIndex)
+        elseif (addrType == GDF.EADDRESS['ADDR_TYPE_MEMBER']) then    return ("Variants[%d]"):format(addrIndex) -- for clarity ("member[%d]"):format(addrIndex)
+        else                                                          return ("addr?(0x%08X)"):format(addrInt)
+        end
       end
 
       function checkIfGDFunction(funcAddr)
-          debugStepIn()
+        debugStepIn()
 
-          local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
-          local OPCODEMAX = 250
-          if GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1" then
-              funcResStringNameAddr = readPointer(funcAddr) -- StringName source at 0x0;
-              funcStringNameAddr = 0xDEADBEEF -- just a placeholder
-          else
-              funcStringNameAddr = readPointer(funcAddr) -- StringName funct name;
-              funcResStringNameAddr = readPointer(funcAddr + GDDEFS.PTRSIZE) -- StringName source;
+        local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
+        local OPCODEMAX = 250
+        if GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1" then
+          funcResStringNameAddr = readPointer(funcAddr) -- StringName source at 0x0;
+          funcStringNameAddr = 0xDEADBEEF -- just a placeholder
+        else
+          funcStringNameAddr = readPointer(funcAddr) -- StringName funct name;
+          funcResStringNameAddr = readPointer(funcAddr + GDDEFS.PTRSIZE) -- StringName source;
+        end
+
+        funcCodeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
+        firstOpcode = readInteger(funcCodeAddr) or 0
+
+        if isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcStringNameAddr) and (firstOpcode < OPCODEMAX) then
+
+          if not (getStringNameStr(funcResStringNameAddr)):match("res://") then
+            return false
           end
 
-          funcCodeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
-          firstOpcode = readInteger(funcCodeAddr) or 0
-
-          if isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcStringNameAddr) and (firstOpcode < OPCODEMAX) then
-
-              if not (getStringNameStr(funcResStringNameAddr)):match("res://") then
-                  return false
+          if GDDEFS.MAJOR_VER ~= 3 and GDDEFS.VERSION_STRING ~= "4.1" then
+            local funcStringAddr = readPointer(funcStringNameAddr + GDDEFS.STRING)
+            if isNullOrNil(funcStringAddr) then
+              funcStringAddr = readPointer(funcStringNameAddr + 0x8)
+              if isNullOrNil(funcStringAddr) then
+                return false
               end
-
-              if GDDEFS.MAJOR_VER ~= 3 and GDDEFS.VERSION_STRING ~= "4.1" then
-                  local funcStringAddr = readPointer(funcStringNameAddr + GDDEFS.STRING)
-                  if isNullOrNil(funcStringAddr) then
-                      funcStringAddr = readPointer(funcStringNameAddr + 0x8)
-                      if isNullOrNil(funcStringAddr) then
-                          return false
-                      end
-                  end
-              end
-
-              return true
+            end
           end
 
-          return false
+          return true
+        end
+
+        return false
       end
 
       function getGDVMCallPtr()
 
-          local function resolveVM_RELA(aobSignature, sigByteLength, offsetToNextIntr)
-              local function resolveAddress(instructionAddr, sigByteLength, offsetToNextIntr)
-                  local callInstr = instructionAddr + sigByteLength - 1
-                  local relativeAddr = readInteger(callInstr + 1)
-                  local nextAddr = getAddress(callInstr + offsetToNextIntr)
-                  local relativeAddr = readInteger(instructionAddr + sigByteLength)
-                  registerSymbol('GDFunctionCall', (nextAddr + relativeAddr), false)
-              end
-              local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
-              if addr == 0 or addr == nil then
-                  return false
-              end
-              resolveAddress(addr, sigByteLength, 5)
-              return true
+        local function resolveVM_RELA(aobSignature, sigByteLength, offsetToNextIntr)
+          local function resolveAddress(instructionAddr, sigByteLength, offsetToNextIntr)
+            local callInstr = instructionAddr + sigByteLength - 1
+            local relativeAddr = readInteger(callInstr + 1)
+            local nextAddr = getAddress(callInstr + offsetToNextIntr)
+            local relativeAddr = readInteger(instructionAddr + sigByteLength)
+            registerSymbol('GDFunctionCall', (nextAddr + relativeAddr), false)
           end
+          local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+          if addr == 0 or addr == nil then
+            return false
+          end
+          resolveAddress(addr, sigByteLength, 5)
+          return true
+        end
 
-          local function querySignatures()
-              local sigs = {}
-              table.insert(sigs, {
-                  isheavy = true,
-                  sig = "4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8",
-                  sigsize = 24
-              }) -- 4.6 ret 64<
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8",
-                  sigsize = 28
-              }) -- 4.6 ret 64>
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8",
-                  sigsize = 34
-              }) -- 4.5
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8",
-                  sigsize = 19
-              }) -- 4.4
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8",
-                  sigsize = 19
-              }) -- 4.3
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8",
-                  sigsize = 25
-              }) -- 4.3 ret 64<
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8",
-                  sigsize = 19
-              }) -- 4.4-4.3
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8",
-                  sigsize = 16
-              }) -- 4.2
-              table.insert(sigs, {
-                  isheavy = true,
-                  sig = "4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8",
-                  sigsize = 16
-              }) -- 4.2 Godot Engine v4.2.2.stable.official.15073afe3
+        local function querySignatures()
+            local sigs = {}
+            table.insert(sigs, { isheavy = true, sig = "4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize = 24 }) -- 4.6 ret 64<
+            table.insert(sigs, { isheavy = false, sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize = 28 }) -- 4.6 ret 64>
+            table.insert(sigs, { isheavy = false, sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 34 }) -- 4.5
+            table.insert(sigs, { isheavy = false, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
+            table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
+            table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 25 }) -- 4.3 ret 64<
+            table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4-4.3
+            table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize = 16 }) -- 4.2
+            table.insert(sigs, { isheavy = true, sig = "4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8", sigsize = 16 }) -- 4.2 Godot Engine v4.2.2.stable.official.15073afe3
 
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8",
-                  sigsize = 24
-              }) -- 4.1
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB",
-                  sigsize = 30
-              }) -- 4.1
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8",
-                  sigsize = 32
-              }) -- 3.6
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8",
-                  sigsize = 36
-              }) -- 3.5
-              table.insert(sigs, {
-                  isheavy = false,
-                  sig = "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8",
-                  sigsize = 23
-              }) -- 3.3 - 3.4 - 3.5
-              table.insert(sigs, {
-                  isheavy = true,
-                  sig = "4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8",
-                  sigsize = 17
-              }) -- 3.0 prefixed by 48 C7 44 24 30 ? 000000
+            table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize = 24 }) -- 4.1
+            table.insert(sigs, { isheavy = false, sig = "48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize = 30 }) -- 4.1
+            table.insert(sigs, { isheavy = false, sig = "48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize = 32 }) -- 3.6
+            table.insert(sigs, { isheavy = false, sig = "4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize = 36 }) -- 3.5
+            table.insert(sigs, { isheavy = false, sig = "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize = 23 }) -- 3.3 - 3.4 - 3.5
+            table.insert(sigs, { isheavy = true, sig = "4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8", sigsize = 17 }) -- 3.0 prefixed by 48 C7 44 24 30 ? 000000
 
-              for i, sign in ipairs(sigs) do
-                  if resolveVM_RELA(sign.sig, sign.sigsize) then
-                      sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: ' .. tostring(i) .. "\t" .. sign.sig)
-                      if sign.isheavy then
-                          GDDEFS.VM_CALL_HEAVY = true
-                      end
-                      return true
-                  end
+            for i, sign in ipairs(sigs) do
+              if resolveVM_RELA(sign.sig, sign.sigsize) then
+                sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: ' .. tostring(i) .. "\t" .. sign.sig)
+                if sign.isheavy then GDDEFS.VM_CALL_HEAVY = true end
+                return true
               end
-              return false
-          end
+            end
+            return false
+        end
 
-          local funcPrologueAddr = getAddress('GDFunctionCall') or nil
+        local funcPrologueAddr = getAddress('GDFunctionCall') or nil
 
-          if isNotNullOrNil(funcPrologueAddr) then
-              return funcPrologueAddr
-          elseif querySignatures() then
-              return getAddress('GDFunctionCall') or nil
-          end
-          -- if querySignatures() then
-          --     return getAddress('GDFunctionCall') or nil
-          -- end
+        if isNotNullOrNil(funcPrologueAddr) then
+          return funcPrologueAddr
+        elseif querySignatures() then
+          return getAddress('GDFunctionCall') or nil
+        end
+        -- if querySignatures() then
+        --   return getAddress('GDFunctionCall') or nil
+        -- end
 
-          return nil
-
+        return nil
       end
 
       function executeGDFunction(func_this, GDScriptInstanceAddr, argsetupCallback, argCount)
-          -- so far the calling conventions match seamlessly
+        -- so far the calling conventions match seamlessly
 
-          local dumSpace = getAddress("dummySpace")
-          if isNullOrNil(dumSpace) then
-              error("'stack' space isn't alloced")
-          end
+        local dumSpace = getAddress("dummySpace")
+        if isNullOrNil(dumSpace) then error("'stack' space isn't alloced") end
 
-          local vmCallAddr = getGDVMCallPtr()
-          if isNullOrNil(vmCallAddr) then
-              error("::call() isn't found")
-          end
+        local vmCallAddr = getGDVMCallPtr()
+        if isNullOrNil(vmCallAddr) then error("::call() isn't found") end
 
-          -- setting up space
-          if argsetupCallback and type(argsetupCallback) == "function" then
-              argsetupCallback()
-          else
-              writeQword(dumSpace + 0x100, dumSpace + 0x30) -- *p_args
-              writeQword(dumSpace + 0x108, dumSpace + 0x100) -- **p_args
-          end
+        -- setting up space
+        if argsetupCallback and type(argsetupCallback) == "function" then
+          argsetupCallback()
+        else
+          writeQword(dumSpace + 0x100, dumSpace + 0x30) -- *p_args
+          writeQword(dumSpace + 0x108, dumSpace + 0x100) -- **p_args
+        end
 
-          local stdcall = 0
-          local timeout = 0
-          local int_t = 0
-          local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3, _rax
-          if GDDEFS.VM_CALL_HEAVY then
+        local stdcall = 0
+        local timeout = 0
+        local int_t = 0
+        local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3, _rax
+        if GDDEFS.VM_CALL_HEAVY then
+          _rcx = { type = int_t, value = dumSpace + 0x80 } -- return buffer ptr
+          _rdx = { type = int_t, value = func_this }
 
-              _rcx = {
-                  type = int_t,
-                  value = dumSpace + 0x80
-              } -- return buffer ptr
-              _rdx = {
-                  type = int_t,
-                  value = func_this
-              }
+        else
+          _rcx = { type = int_t, value = func_this }
+          _rdx = { type = int_t, value = dumSpace + 0x80 } -- *someexcval
+        end
 
-          else
+        _r8 =   { type = int_t, value = GDScriptInstanceAddr } -- GDScriptInstance *p_instance
+        _r9 =   { type = int_t, value = dumSpace + 0x78 } -- const Variant **p_args
+        _st1 =  { type = int_t, value = argCount or 0x0 } -- int p_argcount
+        _st2 =  { type = int_t, value = dumSpace + 0x90 } -- Callable::CallError &r_err
+        _st3 =  { type = int_t, value = 0x0 } -- CallState *p_state
+        _rax =  { type = int_t, value = 0x0 } -- lastArgument
 
-              _rcx = {
-                  type = int_t,
-                  value = func_this
-              }
-              _rdx = {
-                  type = int_t,
-                  value = dumSpace + 0x80
-              } -- *someexcval
+        local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
 
-          end
+        if isNotNullOrNil(returned) then
+            writeQword(dumSpace + 0x0, returned)
+            return returned
+        else
+            return true, "noret"
+        end
 
-          _r8 = {
-              type = int_t,
-              value = GDScriptInstanceAddr
-          } -- GDScriptInstance *p_instance
-          _r9 = {
-              type = int_t,
-              value = dumSpace + 0x78
-          } -- const Variant **p_args
-          _st1 = {
-              type = int_t,
-              value = argCount or 0x0
-          } -- int p_argcount
-          _st2 = {
-              type = int_t,
-              value = dumSpace + 0x90
-          } -- Callable::CallError &r_err
-          _st3 = {
-              type = int_t,
-              value = 0x0
-          } -- CallState *p_state
-          _rax = {
-              type = int_t,
-              value = 0x0
-          } -- lastArgument
-          local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
+        --[[
+            Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state)
+            rcx  *this
+            rdx  value (on stack) passed to _get_default_variant_for_data_type()
+            r8   GDScriptInstance* p_instance
+            r9   Variant** p_args (on stack)
+            -- the rest are mov'd to stack after shallow space
+            [rsp+20] int32_t p_argcount
+            [rsp+28] Callable::CallError *r_err (on stack)
+            [rsp+30] CallState *p_state (on stack, usually nullptr)
 
-          if isNotNullOrNil(returned) then
-              writeQword(dumSpace + 0x0, returned)
-              return returned
-          else
-              return true, "noret"
-          end
+            in case the return-by-value doesnt fit __ 64bit< Variant __ , return buffer ptr goes to rcx, else shift accordingly
+            --https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#return-values
+            rcx - buffer ptr (Variant)
+            rdx this
+            r8 GDScriptInstance* p_instance
+            r9   Variant** p_args (on stack)
+            [rsp+20] int32_t p_argcount
+            [rsp+28] Callable::CallError *r_err (on stack)
+            [rsp+30] CallState *p_state (on stack, usually nullptr)
 
-          --[[
-                      Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state)
-                      rcx  *this
-                      rdx  value (on stack) passed to _get_default_variant_for_data_type()
-                      r8   GDScriptInstance* p_instance
-                      r9   Variant** p_args (on stack)
-                      -- the rest are mov'd to stack after shallow space
-                      [rsp+20] int32_t p_argcount
-                      [rsp+28] Callable::CallError *r_err (on stack)
-                      [rsp+30] CallState *p_state (on stack, usually nullptr)
-
-                      in case the return-by-value doesnt fit __ 64bit< Variant __ , return buffer ptr goes to rcx, else shift accordingly
-                      --https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#return-values
-                      rcx - buffer ptr (Variant)
-                      rdx this
-                      r8 GDScriptInstance* p_instance
-                      r9   Variant** p_args (on stack)
-                      [rsp+20] int32_t p_argcount
-                      [rsp+28] Callable::CallError *r_err (on stack)
-                      [rsp+30] CallState *p_state (on stack, usually nullptr)
-
-                      [ENABLE]
-                      alloc(dummySpace,$1000,$process)
-                      registersymbol(dummySpace)
-                      [DISABLE]
-                      dealloc(*)
-                      unregistersymbol(*)
-
-
-                  ]]
+            [ENABLE]
+            alloc(dummySpace,$1000,$process)
+            registersymbol(dummySpace)
+            [DISABLE]
+            dealloc(*)
+            unregistersymbol(*)
+          ]]
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
@@ -7758,102 +7407,100 @@
       --- returns a head element, tail element and (hash)Map size
       ---@param nodeAddr number
       function getNodeConstMap(nodeAddr, constStructElement)
-          assert(type(nodeAddr) == 'number',
-              "getNodeConstMap: NodePtr should be a number, instead got: " .. type(nodeAddr))
-          debugStepIn()
+        assert(type(nodeAddr) == 'number', "getNodeConstMap: NodePtr should be a number, instead got: " .. type(nodeAddr))
+        debugStepIn()
 
-          local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(scriptInstanceAddr) then
-              sendDebugMessageAndStepOut('getNodeConstMap: scriptInstance is invalid');
-              return;
-          end
+        local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(scriptInstanceAddr) then
+          sendDebugMessageAndStepOut('getNodeConstMap: scriptInstance is invalid');
+          return;
+        end
 
-          local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
-          if isNullOrNil(gdScriptAddr) then
-              sendDebugMessageAndStepOut('getNodeConstMap: GDScript is invalid')
-              return;
-          end
+        local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
+        if isNullOrNil(gdScriptAddr) then
+          sendDebugMessageAndStepOut('getNodeConstMap: GDScript is invalid')
+          return;
+        end
 
-          local mainElement = readPointer(gdScriptAddr + GDDEFS.CONST_MAP) -- head or root depending on the version
-          local lastElement = readPointer(gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.PTRSIZE) -- tail or end
-          local mapSize = readInteger(gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.MAP_SIZE) -- hashmap or map
-          if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
-              sendDebugMessageAndStepOut('getNodeConstMap: Const: (hash)map is not found')
-              return;
-          end
-          debugStepOut()
+        local mainElement = readPointer(gdScriptAddr + GDDEFS.CONST_MAP) -- head or root depending on the version
+        local lastElement = readPointer(gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.PTRSIZE) -- tail or end
+        local mapSize = readInteger(gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.MAP_SIZE) -- hashmap or map
+        if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
+          sendDebugMessageAndStepOut('getNodeConstMap: Const: (hash)map is not found')
+          return;
+        end
+        debugStepOut()
 
-          if GDDEFS.MAJOR_VER == 4 then -- TODO: the function can be segmented
-              return mainElement, lastElement, mapSize, constStructElement
-          else
-              if constStructElement then
-                  constStructElement.ChildStruct = createStructure('ConstMapRes')
-              end
-              return getLeftmostMapElem(mainElement, lastElement, mapSize, constStructElement)
+        if GDDEFS.MAJOR_VER == 4 then -- TODO: the function can be segmented
+          return mainElement, lastElement, mapSize, constStructElement
+        else
+          if constStructElement then
+            constStructElement.ChildStruct = createStructure('ConstMapRes')
           end
+          return getLeftmostMapElem(mainElement, lastElement, mapSize, constStructElement)
+        end
       end
 
       --- returns a lua string for const name
       ---@param mapElement number
       function getNodeConstName(mapElement)
-          debugStepIn()
+        debugStepIn()
 
-          local mapElementKey = readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL)
-          if isNullOrNil(mapElementKey) then
-              sendDebugMessageAndStepOut('getNodeConstName: (hash)mapElementKey invalid');
-              return 'C??'
-          end
+        local mapElementKey = readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL)
+        if isNullOrNil(mapElementKey) then
+          sendDebugMessageAndStepOut('getNodeConstName: (hash)mapElementKey invalid');
+          return 'C??'
+        end
 
-          debugStepOut()
-          return getStringNameStr(mapElementKey)
+        debugStepOut()
+        return getStringNameStr(mapElementKey)
       end
 
       -- iterates over const (hash)map of a node and creates addresses for it
       ---@param nodeAddr number
       ---@param parent userdata
       function iterateNodeConstToAddr(nodeAddr, parent)
-          assert(type(nodeAddr) == 'number',
-              "iterateNodeConstToAddr Node addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', "iterateNodeConstToAddr Node addr has to be a number, instead got: " .. type(nodeAddr))
 
-          debugStepIn()
+        debugStepIn()
 
-          local nodeName = getNodeName(nodeAddr) or "UnknownNode"
-          if not checkForGDScript(nodeAddr) then
-              sendDebugMessageAndStepOut("iterateNodeConstToAddr: Node " .. tostring(nodeName) .. " with NO GDScript")
-              synchronize(function(parent)
-                  parent.Destroy()
-              end, parent)
-              return;
-          end
+        local nodeName = getNodeName(nodeAddr) or "UnknownNode"
+        if not checkForGDScript(nodeAddr) then
+          sendDebugMessageAndStepOut("iterateNodeConstToAddr: Node " .. tostring(nodeName) .. " with NO GDScript")
+          synchronize(function(parent)
+            parent.Destroy()
+          end, parent)
+          return;
+        end
 
-          local headElement, tailElement, mapSize = getNodeConstMap(nodeAddr)
-          if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-              sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: ' .. 'Address: ' ..
-                                            numtohexstr(nodeAddr))
-              synchronize(function(parent)
-                  parent.Destroy()
-              end, parent)
-              return;
-          end
+        local headElement, tailElement, mapSize = getNodeConstMap(nodeAddr)
+        if isNullOrNil(headElement) or isNullOrNil(mapSize) then
+          sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeAddr))
+          synchronize(function(parent)
+            parent.Destroy()
+          end, parent)
+          return;
+        end
 
-          local emitter = GDEmitters.AddrEmitter
-          local mapElement = headElement
+        local emitter = GDEmitters.AddrEmitter
+        local mapElement = headElement
 
-          repeat
-              local entry = readNodeConstEntry(mapElement)
-              entry.name = "CONST: " .. entry.name
-              local contextTable = {
-                  nodeAddr = nodeAddr,
-                  nodeName = nodeName or "UnknownNode",
-                  baseAddress = entry.variantPtr
-              }
-              local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
-              handler(entry, emitter, parent, contextTable)
-              mapElement = getNextMapElement(mapElement)
+        repeat
+          local entry = readNodeConstEntry(mapElement)
+          entry.name = "CONST: " .. entry.name
+          local contextTable =
+          {
+            nodeAddr = nodeAddr,
+            nodeName = nodeName or "UnknownNode",
+            baseAddress = entry.variantPtr
+          }
+          local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
+          handler(entry, emitter, parent, contextTable)
+          mapElement = getNextMapElement(mapElement)
 
-          until (mapElement == 0)
-          debugStepOut()
-          return
+        until (mapElement == 0)
+        debugStepOut()
+        return
       end
 
       -- iterates over const (hash)map of a node and builds the structure for it
@@ -7905,53 +7552,46 @@
 
       local function iterateDictionary(dictHead, parent, emitter, options, contextSeed)
 
-          options = options or {}
-          local mapElement = dictHead
-          local currentContainer = parent
-          local index = 0
+        options = options or {}
+        local mapElement = dictHead
+        local currentContainer = parent
+        local index = 0
 
-          repeat
-              local entry = readDictionaryContainerEntry(mapElement)
-              local formatted = formatDictionaryEntry(entry)
-              local contextTable = {
-                  nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
-                  nodeName = contextSeed and contextSeed.nodeName or "Dictionary",
-                  baseAddress = entry.variantPtr
-              }
+        repeat
+            local entry = readDictionaryContainerEntry(mapElement)
+            local formatted = formatDictionaryEntry(entry)
+            local contextTable =
+            {
+              nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
+              nodeName = contextSeed and contextSeed.nodeName or "Dictionary",
+              baseAddress = entry.variantPtr
+            }
 
-              local handler = GDHandlers.VariantHandlers[formatted.typeName] or GDHandlers.VariantHandlers.DEFAULT
-              handler(formatted, emitter, currentContainer, contextTable)
+            local handler = GDHandlers.VariantHandlers[formatted.typeName] or GDHandlers.VariantHandlers.DEFAULT
+            handler(formatted, emitter, currentContainer, contextTable)
 
-              mapElement = getDictElemPairNext(mapElement)
-              index = index + 1
+            mapElement = getDictElemPairNext(mapElement)
+            index = index + 1
 
-              if isNotNullOrNil(mapElement) and options.nextContainerFactory then
-                  currentContainer = options.nextContainerFactory(currentContainer, index)
-              end
+            if isNotNullOrNil(mapElement) and options.nextContainerFactory then
+              currentContainer = options.nextContainerFactory(currentContainer, index)
+            end
 
-          until (mapElement == 0)
-          return
+        until (mapElement == 0)
+        return
       end
 
       --- iterates a dictionary and adds it to a class
       ---@param dictAddr number
       ---@param parent userdata
       function iterateDictionaryToAddr(dictAddr, parent)
-          assert(type(dictAddr) == 'number',
-              'iterateDictionaryToAddr: dictAddr has to be a number, instead got: ' .. type(dictAddr))
+        assert(type(dictAddr) == 'number', 'iterateDictionaryToAddr: dictAddr has to be a number, instead got: ' .. type(dictAddr))
 
-          local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
-          if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then
-              return
-          end
+        local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
+        if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then return end
 
-          iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, {
-              bNeedStructOffset = false
-          }, {
-              nodeAddr = 0,
-              nodeName = "Dictionary"
-          })
-          return
+        iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Dictionary" })
+        return
       end
 
       --- iterates a dictionary and adds it to a struct
@@ -7959,169 +7599,133 @@
       ---@param dictStructElement userdata
       function iterateDictionaryToStruct(dictAddr, dictStructElement)
 
-          local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
-          if isNullOrNil(dictRoot) then
-              return
-          end
-          local currentRoot = dictStructElement
+        local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
+        if isNullOrNil(dictRoot) then return
+        end
+        local currentRoot = dictStructElement
 
-          if GDDEFS.MAJOR_VER == 3 then
-              currentRoot = createChildStructElem(currentRoot, 'dictList', GDDEFS.DICT_LIST, vtPointer, 'dictList')
-          end
+        if GDDEFS.MAJOR_VER == 3 then
+          currentRoot = createChildStructElem(currentRoot, 'dictList', GDDEFS.DICT_LIST, vtPointer, 'dictList')
+        end
 
-          local headContainer = createChildStructElem(currentRoot, 'dictHead', GDDEFS.DICT_HEAD, vtPointer, 'dictHead')
+        local headContainer = createChildStructElem(currentRoot, 'dictHead', GDDEFS.DICT_HEAD, vtPointer, 'dictHead')
 
-          iterateDictionary(dictHead, headContainer, GDEmitters.StructEmitter, {
-              bNeedStructOffset = true,
-              nextContainerFactory = createNextDictContainer
-          }, {
-              nodeAddr = 0,
-              nodeName = "Dictionary"
-          })
-
-          return
+        iterateDictionary(dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer }, { nodeAddr = 0, nodeName = "Dictionary" })
+        return
       end
 
       --- iterates a dictionary for nodes
       ---@param dictAddr number
       function iterateDictionaryForNodes(dictAddr)
-          assert(type(dictAddr) == 'number',
-              'iterateDictionaryForNodes: dictAddr has to be a number, instead got: ' .. type(dictAddr))
-          if (not (dictAddr > 0)) then
-              return;
+        assert(type(dictAddr) == 'number', 'iterateDictionaryForNodes: dictAddr has to be a number, instead got: ' .. type(dictAddr))
+        if (not (dictAddr > 0)) then return; end
+
+        local dictRoot = dictAddr
+        if GDDEFS.MAJOR_VER == 3 then
+          dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST) -- for 3.x it's dictList actually
+        end
+
+        -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
+        local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
+
+        if isNullOrNil(dictSize) then
+          return;
+        end
+
+        local mapElement = readPointer(dictRoot + GDDEFS.DICT_HEAD)
+        if isNullOrNil(mapElement) then
+          return
+        end
+        local visitor = NodeVisitor
+
+        repeat
+          local entry = readDictionaryValueEntry(mapElement)
+          local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
+          if handler then
+            handler(entry, visitor)
           end
-
-          local dictRoot = dictAddr
-          if GDDEFS.MAJOR_VER == 3 then
-              dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST) -- for 3.x it's dictList actually
-          end
-
-          -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
-          local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
-
-          if isNullOrNil(dictSize) then
-              return;
-          end
-
-          local mapElement = readPointer(dictRoot + GDDEFS.DICT_HEAD)
-          if isNullOrNil(mapElement) then
-              return
-          end
-          local visitor = NodeVisitor
-
-          repeat
-              local entry = readDictionaryValueEntry(mapElement)
-              local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
-              if handler then
-                  handler(entry, visitor)
-              end
-              mapElement = getDictElemPairNext(mapElement)
-          until (mapElement == 0)
+          mapElement = getDictElemPairNext(mapElement)
+        until (mapElement == 0)
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Array
 
       local function iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, emitter, options, contextSeed)
-          assert(type(arrVectorAddr) == 'number',
-              "iterateArray: arrayAddr has to be a number, instead got: " .. type(arrVectorAddr))
+        assert(type(arrVectorAddr) == 'number', "iterateArray: arrayAddr has to be a number, instead got: " .. type(arrVectorAddr))
 
-          options = options or {}
-          for varIndex = 0, arrVectorSize - 1 do
-              local entry = readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, options.bNeedStructOffset)
-              if isNullOrNil(entry.variantPtr) then
-                  goto continue
-              end
-              local formatted = formatArrayEntry(entry)
-              local contextTable = {
-                  nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
-                  nodeName = contextSeed and contextSeed.nodeName or "Array",
-                  baseAddress = entry.variantPtr
-              }
-              local handler = GDHandlers.VariantHandlers[formatted.typeName] or GDHandlers.VariantHandlers.DEFAULT
-              handler(formatted, emitter, parent, contextTable)
-
-              ::continue::
+        options = options or {}
+        for varIndex = 0, arrVectorSize - 1 do
+          local entry = readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, options.bNeedStructOffset)
+          if isNullOrNil(entry.variantPtr) then
+            goto continue
           end
+          local formatted = formatArrayEntry(entry)
+          local contextTable =
+          {
+            nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
+            nodeName = contextSeed and contextSeed.nodeName or "Array",
+            baseAddress = entry.variantPtr
+          }
+          local handler = GDHandlers.VariantHandlers[formatted.typeName] or GDHandlers.VariantHandlers.DEFAULT
+          handler(formatted, emitter, parent, contextTable)
+
+          ::continue::
+        end
       end
 
       --- takes in an array address and address owner to append to
       ---@param arrayAddr number
       ---@param parent userdata
       function iterateArrayToAddr(arrayAddr, parent)
-          assert(type(arrayAddr) == 'number',
-              "Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
+        assert(type(arrayAddr) == 'number', "Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
-          local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
-          if isNullOrNil(arrVectorAddr) then
-              return;
-          end
+        local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
+        if isNullOrNil(arrVectorAddr) then return; end
 
-          iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, {
-              bNeedStructOffset = false
-          }, {
-              nodeAddr = 0,
-              nodeName = "Array"
-          })
-
-          return
+        iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array" })
+        return
       end
 
       --- takes in an array address and struct owner to append to
       ---@param arrayAddr number
       ---@param parent userdata
       function iterateArrayToStruct(arrayAddr, arrayStructElement)
-          assert(type(arrayAddr) == 'number', "iterateArrayToStruct: Array " .. tostring(arrayAddr) ..
-              " has to be a number, instead got: " .. type(arrayAddr))
+        assert(type(arrayAddr) == 'number', "iterateArrayToStruct: Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
-          local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
-          if isNullOrNil(arrVectorAddr) then
-              return;
-          end
+        local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
+        if isNullOrNil(arrVectorAddr) then return; end
 
-          arrayStructElement = addStructureElem(arrayStructElement, 'VectorArray', GDDEFS.ARRAY_TOVECTOR, vtPointer)
-          arrayStructElement.ChildStruct = createStructure('ArrayData')
-          iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, {
-              bNeedStructOffset = true
-          }, {
-              nodeAddr = 0,
-              nodeName = "Array"
-          })
-          return
+        arrayStructElement = addStructureElem(arrayStructElement, 'VectorArray', GDDEFS.ARRAY_TOVECTOR, vtPointer)
+        arrayStructElement.ChildStruct = createStructure('ArrayData')
+        iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array" })
+        return
       end
 
       --- iterates an array for nodes
       ---@param arrayAddr number
       function iterateArrayForNodes(arrayAddr)
-          assert(type(arrayAddr) == 'number', "iterateArrayForNodes: array " .. tostring(arrayAddr) ..
-              " has to be a number, instead got: " .. type(arrayAddr))
+        assert(type(arrayAddr) == 'number', "iterateArrayForNodes: array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
-          local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
-          if isNullOrNil(arrVectorAddr) then
-              return;
+        local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
+        if isNullOrNil(arrVectorAddr) then return; end
+        local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
+        if isNullOrNil(arrVectorSize) then return; end
+
+        local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
+        if not ok then return; end
+
+        local visitor = NodeVisitor
+
+        for varIndex = 0, arrVectorSize - 1 do
+          local entry = readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
+
+          if isNotNullOrNil(entry.variantPtr) then
+            local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
+            if handler then
+              handler(entry, visitor)
+            end
           end
-          local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
-          if isNullOrNil(arrVectorSize) then
-              return;
-          end
-
-          local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
-          if not ok then
-              return;
-          end
-
-          local visitor = NodeVisitor
-
-          for varIndex = 0, arrVectorSize - 1 do
-
-              local entry = readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
-
-              if isNotNullOrNil(entry.variantPtr) then
-                  local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
-                  if handler then
-                      handler(entry, visitor)
-                  end
-              end
-          end
+        end
       end
 
       --- iterates a packed array and adds it to a class
@@ -8129,17 +7733,14 @@
       ---@param packedTypeName string
       ---@param parent userdata
       function iteratePackedArrayToAddr(packedArrayAddr, packedTypeName, parent)
-          assert(type(packedArrayAddr) == 'number',
-              "Packed Array has to be a number, instead got: " .. type(packedArrayAddr))
-          assert(type(packedTypeName) == 'string', "TypeName has to be a string, instead got: " .. type(packedTypeName))
+        assert(type(packedArrayAddr) == 'number', "Packed Array has to be a number, instead got: " .. type(packedArrayAddr))
+        assert(type(packedTypeName) == 'string', "TypeName has to be a string, instead got: " .. type(packedTypeName))
 
-          local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
-          if isNullOrNil(packedDataArrAddr) then
-              return
-          end
+        local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
+        if isNullOrNil(packedDataArrAddr) then return end
 
-          iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, GDEmitters.PackedAddrEmitter)
-          return
+        iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, GDEmitters.PackedAddrEmitter)
+        return
       end
 
       --- iterates a packed array and adds it to a struct
@@ -8147,22 +7748,16 @@
       ---@param packedTypeName string
       ---@param pArrayStructElement userdata
       function iteratePackedArrayToStruct(packedArrayAddr, packedTypeName, pArrayStructElement)
-          assert(type(packedArrayAddr) == 'number', "Packed Array " .. tostring(packedArrayAddr) ..
-              " has to be a number, instead got: " .. type(packedArrayAddr))
-          assert(type(packedTypeName) == 'string',
-              "TypeName " .. tostring(packedTypeName) .. " has to be a string, instead got: " .. type(packedTypeName))
+        assert(type(packedArrayAddr) == 'number', "Packed Array " .. tostring(packedArrayAddr) .. " has to be a number, instead got: " .. type(packedArrayAddr))
+        assert(type(packedTypeName) == 'string', "TypeName " .. tostring(packedTypeName) .. " has to be a string, instead got: " .. type(packedTypeName))
 
-          local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
-          if isNullOrNil(packedDataArrAddr) then
-              return
-          end
-          pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDDEFS.P_ARRAY_TOARR, vtPointer)
-          pArrayStructElement.ChildStruct = createStructure('PArrayData')
+        local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
+        if isNullOrNil(packedDataArrAddr) then return end
+        pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDDEFS.P_ARRAY_TOARR, vtPointer)
+        pArrayStructElement.ChildStruct = createStructure('PArrayData')
 
-          iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement,
-              GDEmitters.PackedStructEmitter)
-
-          return
+        iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, GDEmitters.PackedStructEmitter)
+        return
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Variant
@@ -8225,7 +7820,8 @@
       ---@param nodeAddr number
       ---@param parent userdata
       function iterateVecVarToAddr(nodeAddr, parent)
-        local options = {
+        local options =
+        {
           bNeedStructOffset = false,
           requireGDScript = true
         };
@@ -8247,98 +7843,96 @@
       --- iterate nodes only and owner to append to
       ---@param nodeAddr number
       function iterateVecVarForNodes(nodeAddr)
-          assert(type(nodeAddr) == 'number', "iterateVecVarForNodes: Node addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', "iterateVecVarForNodes: Node addr has to be a number, instead got: " .. type(nodeAddr))
 
-          if not checkForGDScript(nodeAddr) then
-              return;
-          end
-          local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-          if isNullOrNil(vectorSize) then
-              return;
-          end
+        if not checkForGDScript(nodeAddr) then
+          return;
+        end
+        local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
+        if isNullOrNil(vectorSize) then
+          return;
+        end
 
-          local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
-          if not ok then
-              return;
-          end
+        local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+        if not ok then
+          return;
+        end
 
-          local visitor = NodeVisitor
+        local visitor = NodeVisitor
 
-          for variantIndex = 0, vectorSize - 1 do
-              local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize)
-              local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
-              if handler then
-                  handler(entry, visitor)
-              end
+        for variantIndex = 0, vectorSize - 1 do
+          local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize)
+          local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
+          if handler then
+            handler(entry, visitor)
           end
+        end
       end
 
       --- returns a vector pointer and its size via
       ---@param nodeAddr number
       function getNodeVariantVector(nodeAddr)
-          assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
-          debugStepIn()
+        debugStepIn()
 
-          local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(scriptInstance) then
-              sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for ' ..
-                                            string.format(' %x', nodeAddr))
-              return;
-          end
+        local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(scriptInstance) then
+          sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for ' .. string.format(' %x', nodeAddr))
+          return;
+        end
 
-          local vectorPtr = readPointer(scriptInstance + GDDEFS.VAR_VECTOR)
-          local vectorSize = readInteger(vectorPtr - GDDEFS.SIZE_VECTOR)
+        local vectorPtr = readPointer(scriptInstance + GDDEFS.VAR_VECTOR)
+        local vectorSize = readInteger(vectorPtr - GDDEFS.SIZE_VECTOR)
 
-          if isNullOrNil(vectorPtr) then
-              sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for ' .. string.format(' %x', nodeAddr))
-              return;
-          end
-          if isNullOrNil(vectorSize) then
-              sendDebugMessageAndStepOut('getNodeVariantVector: vector size is 0/nil, node ' ..
-                                            string.format(' %x', nodeAddr))
-              return;
-          end
+        if isNullOrNil(vectorPtr) then
+          sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for ' .. string.format(' %x', nodeAddr))
+          return;
+        end
+        if isNullOrNil(vectorSize) then
+          sendDebugMessageAndStepOut('getNodeVariantVector: vector size is 0/nil, node ' .. string.format(' %x', nodeAddr))
+          return;
+        end
 
-          debugStepOut()
+        debugStepOut()
 
-          return vectorPtr, vectorSize
+        return vectorPtr, vectorSize
       end
 
       --- returns a VariantData's (hash) map head, tail and size via a nodeAddr
       ---@param nodeAddr number
       function getNodeVariantMap(nodeAddr)
-          assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
-          debugStepIn()
+        debugStepIn()
 
-          local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-          if isNullOrNil(scriptInstanceAddr) then
-            sendDebugMessageAndStepOut('getNodeVariantMap: scriptInstance is absent for ' .. string.format(' %x', nodeAddr));
-            return;
-          end
+        local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        if isNullOrNil(scriptInstanceAddr) then
+          sendDebugMessageAndStepOut('getNodeVariantMap: scriptInstance is absent for ' .. string.format(' %x', nodeAddr));
+          return;
+        end
 
-          local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
-          if isNullOrNil(gdScriptAddr) then
-            sendDebugMessageAndStepOut('getNodeVariantMap: GDScript is absent for ' .. string.format(' %x', nodeAddr));
-            return;
-          end
+        local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
+        if isNullOrNil(gdScriptAddr) then
+          sendDebugMessageAndStepOut('getNodeVariantMap: GDScript is absent for ' .. string.format(' %x', nodeAddr));
+          return;
+        end
 
-          local mainElement = readPointer(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP) -- head / root
-          local endElement = readPointer(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.PTRSIZE) -- tail / end
-          local mapSize = readInteger(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.MAP_SIZE)
+        local mainElement = readPointer(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP) -- head / root
+        local endElement = readPointer(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.PTRSIZE) -- tail / end
+        local mapSize = readInteger(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.MAP_SIZE)
 
-          if isNullOrNil(mainElement) or isNullOrNil(endElement) or isNullOrNil(mapSize) then
-            sendDebugMessage('getNodeVariantMap: Variant: (hash)map is not found')
-            return;
-          end
+        if isNullOrNil(mainElement) or isNullOrNil(endElement) or isNullOrNil(mapSize) then
+          sendDebugMessage('getNodeVariantMap: Variant: (hash)map is not found')
+          return;
+        end
 
-          debugStepOut()
-          if GDDEFS.MAJOR_VER == 4 then
-            return mainElement, endElement, mapSize
-          else
-            return getLeftmostMapElem(mainElement, endElement, mapSize)
-          end
+        debugStepOut()
+        if GDDEFS.MAJOR_VER == 4 then
+          return mainElement, endElement, mapSize
+        else
+          return getLeftmostMapElem(mainElement, endElement, mapSize)
+        end
       end
 
       --- returns a pointer to the variant's value and its type for a sanity check
@@ -8347,35 +7941,32 @@
       ---@param varSize number
       ---@param bOffsetret boolean
       function getVariantByIndex(vectorAddr, index, varSize, bPushOffset)
-          assert(type(vectorAddr) == 'number',
-              ">>getVariantByIndex: vector addr should be a number, instead got: " .. type(vectorAddr))
-          assert((type(index) == 'number') and (index >= 0),
-              ">>getVariantByIndex: index should be a valid number, instead got: " .. type(nodePtr))
+        assert(type(vectorAddr) == 'number', ">>getVariantByIndex: vector addr should be a number, instead got: " .. type(vectorAddr))
+        assert((type(index) == 'number') and (index >= 0), ">>getVariantByIndex: index should be a valid number, instead got: " .. type(index))
 
-          debugStepIn()
+        debugStepIn()
 
-          if (index > (readInteger(vectorAddr - GDDEFS.SIZE_VECTOR) - 1)) then
-              sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: " .. tostring(index) ..
-                                  ' VecSize: ' .. tostring((readInteger(vectorAddr - GDDEFS.SIZE_VECTOR) - 1)))
-          end
+        if (index > (readInteger(vectorAddr - GDDEFS.SIZE_VECTOR) - 1)) then
+          sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring((readInteger(vectorAddr - GDDEFS.SIZE_VECTOR) - 1)))
+        end
 
-          local variantType = readInteger(vectorAddr + varSize * index)
-          local offsetToValue = getVariantValueOffset(variantType)
+        local variantType = readInteger(vectorAddr + varSize * index)
+        local offsetToValue = getVariantValueOffset(variantType)
 
-          local offset = varSize * index + offsetToValue
-          local variantAddr = getAddress(vectorAddr + offset)
+        local offset = varSize * index + offsetToValue
+        local variantAddr = getAddress(vectorAddr + offset)
 
-          if (variantType == nil) or (variantAddr == nil) then -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or
-              sendDebugMessage('getVariantByIndex: variant ptr or type invalid');
-              error('getVariantByIndex: variant ptr or type invalid')
-          end
+        if (variantType == nil) or (variantAddr == nil) then -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or
+          sendDebugMessage('getVariantByIndex: variant ptr or type invalid');
+          error('getVariantByIndex: variant ptr or type invalid')
+        end
 
-          debugStepOut()
-          if bPushOffset then
-              return variantAddr, variantType, offset
-          else
-              return variantAddr, variantType
-          end
+        debugStepOut()
+        if bPushOffset then
+          return variantAddr, variantType, offset
+        else
+          return variantAddr, variantType
+        end
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// (Hash)Map
@@ -8385,48 +7976,44 @@
       ---@param endElement number
       ---@param mapSize number
       function getLeftmostMapElem(rootElement, endElement, mapSize, struct)
-          debugStepIn()
+        debugStepIn()
 
-          local mapElement = readPointer(rootElement + GDDEFS.MAP_LELEM)
+        local mapElement = readPointer(rootElement + GDDEFS.MAP_LELEM)
+        if isNullOrNil(mapElement) then
+          sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
+          return 0, endElement, mapSize -- return 0 as a head element
+        end
+
+        local leftStructElem
+        if struct then
+          leftStructElem = addStructureElem(struct, 'rootElem', GDDEFS.MAP_LELEM, vtPointer)
+          leftStructElem.ChildStruct = createStructure('rootElem')
+        end
+
+        if (mapElement == endElement) then
+          debugStepOut();
+          return mapElement, endElement, mapSize -- not sure that's possible
+        else
+          while readPointer(mapElement + GDDEFS.MAP_LELEM) ~= endElement do
+            mapElement = readPointer(mapElement + GDDEFS.MAP_LELEM)
+            if struct then
+              leftStructElem = addStructureElem(leftStructElem, 'goLeft', GDDEFS.MAP_LELEM, vtPointer)
+              leftStructElem.ChildStruct = createStructure('goLeft')
+            end
+          end
+
           if isNullOrNil(mapElement) then
-              sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' ..
-                                            numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' ..
-                                            numtohexstr(mapSize));
-              return 0, endElement, mapSize -- return 0 as a head element
-          end
+            sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
+            return 0, endElement, mapSize
+          end -- return 0 as a head element
 
-          local leftStructElem
+          debugStepOut();
           if struct then
-              leftStructElem = addStructureElem(struct, 'rootElem', GDDEFS.MAP_LELEM, vtPointer)
-              leftStructElem.ChildStruct = createStructure('rootElem')
-          end
-
-          if (mapElement == endElement) then
-              debugStepOut();
-              return mapElement, endElement, mapSize -- not sure that's possible
+            return mapElement, endElement, mapSize, leftStructElem
           else
-              while readPointer(mapElement + GDDEFS.MAP_LELEM) ~= endElement do
-                  mapElement = readPointer(mapElement + GDDEFS.MAP_LELEM)
-                  if struct then
-                      leftStructElem = addStructureElem(leftStructElem, 'goLeft', GDDEFS.MAP_LELEM, vtPointer)
-                      leftStructElem.ChildStruct = createStructure('goLeft')
-                  end
-              end
-
-              if isNullOrNil(mapElement) then
-                  sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' ..
-                                                numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) ..
-                                                ' size ' .. numtohexstr(mapSize));
-                  return 0, endElement, mapSize
-              end -- return 0 as a head element
-
-              debugStepOut();
-              if struct then
-                  return mapElement, endElement, mapSize, leftStructElem
-              else
-                  return mapElement, endElement, mapSize
-              end
+            return mapElement, endElement, mapSize
           end
+        end
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Type & Size
@@ -8435,131 +8022,99 @@
       ---@param vectorPtr number
       ---@param vectorSize number
       function redefineVariantSizeByVector(vectorPtr, vectorSize)
-          assert((type(vectorPtr) == 'number'), "vectorPtr has to be a number, instead got: " .. type(vectorPtr))
-          assert((type(vectorSize) == 'number') and (vectorSize > 0),
-              "VectorSize is empty or not a number, type: " .. type(vectorSize))
+        assert((type(vectorPtr) == 'number'), "vectorPtr has to be a number, instead got: " .. type(vectorPtr))
+        assert((type(vectorSize) == 'number') and (vectorSize > 0), "VectorSize is empty or not a number, type: " .. type(vectorSize))
 
-          -- debugStepIn()
+        -- debugStepIn()
 
-          if isNullOrNil(vectorSize) then
-              -- sendDebugMessageAndStepOut('redefineVariantSizeByVector: Bad vector size for '..numtohexstr(vectorPtr));
-              return 0x18, true;
+        if isNullOrNil(vectorSize) then
+          -- sendDebugMessageAndStepOut('redefineVariantSizeByVector: Bad vector size for '..numtohexstr(vectorPtr));
+          return 0x18, true;
+        end
+
+        if GDDEFS.MAJOR_VER == 4 then
+          if (vectorSize == 1) and (readInteger(vectorPtr) == 27) then -- TODO: replace with TYPE_MAX
+            -- sendDebugMessageAndStepOut(" 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
+            return 0x30, true;
+          elseif (vectorSize == 1) then
+            -- sendDebugMessageAndStepOut("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
+            return 0x18, true;
           end
 
-          if GDDEFS.MAJOR_VER == 4 then
-
-              if (vectorSize == 1) and (readInteger(vectorPtr) == 27) then
-                  -- sendDebugMessageAndStepOut(" 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
-
-                  return 0x30, true;
-
-              elseif (vectorSize == 1) then
-                  -- sendDebugMessageAndStepOut("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
-
-                  return 0x18, true;
-
-              end
-
-              if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
-                  -- debugStepOut()
-
-                  return 0x18, true;
-
-              elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x30)) then -- if it's 0x30
-                  -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x30, true;
-
-              elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x40)) then -- if it's 0x40
-                  -- sendDebugMessageAndStepOut(" Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x40, true;
-
-              end
-
-              if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
-                  -- debugStepOut()
-
-                  return 0x18, true;
-
-              elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
-                  -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x30, true;
-
-              elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x40 * 2)) then
-                  -- sendDebugMessageAndStepOut("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x40, true;
-
-              end
-
-          else
-
-              if (vectorSize == 1) and (getGDTypeName(vectorPtr) == 'DICTIONARY') then -- for some reasons single-sized vectors with dict were 0x30
-                  -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
-
-                  return 0x20, true;
-
-              elseif (vectorSize == 1) then
-                  -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
-
-                  return 0x18, true; -- Usual size is 0x18 in 3.x
-
-              end
-
-              if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
-                  -- debugStepOut()
-
-                  return 0x18, true; -- Usual size is 0x18 in 3.x
-
-              elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x20)) then
-                  -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x20, true;
-
-              elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x30)) then
-                  -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x30, true; -- what's the longest for 3.x?
-              end
-
-              if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
-                  -- debugStepOut()
-
-                  return 0x18, true; -- Usual size is 0x18 in 3.x
-
-              elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x20 * 2)) then
-                  -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x20, true;
-
-              elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and
-                  getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
-                  -- sendDebugMessageAndStepOut(" redefineVariantSizeByVector: Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-
-                  return 0x30, true; -- what's the longest for 3.x?
-              end
-
+          if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
+            getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
+            -- debugStepOut()
+            return 0x18, true;
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
+            getGDTypeName(readInteger(vectorPtr + 0x30)) then -- if it's 0x30
+            -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x30, true;
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
+            getGDTypeName(readInteger(vectorPtr + 0x40)) then -- if it's 0x40
+            -- sendDebugMessageAndStepOut(" Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x40, true;
           end
 
-          -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant resize failed past 4 cases (vector: "..numtohexstr(vectorPtr)..")")
-          -- // Variant takes 24 bytes when real_t is float, and 40 bytes if double.
-          -- // It only allocates extra memory for AABB/Transform2D (24, 48 if double),
-          -- // Basis/Transform3D (48, 96 if double), Projection (64, 128 if double),
-          -- // and PackedArray/Array/Dictionary (platform-dependent).
-          return false;
+          if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and
+            getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
+            -- debugStepOut()
+            return 0x18, true;
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and
+            getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
+            -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x30, true;
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) and
+            getGDTypeName(readInteger(vectorPtr + 0x40 * 2)) then
+            -- sendDebugMessageAndStepOut("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x40, true;
+          end
+
+        elseif GDDEFS.MAJOR_VER == 3 then
+          if (vectorSize == 1) and (getGDTypeName(vectorPtr) == 'DICTIONARY') then -- for some reasons single-sized vectors with dict were 0x30
+            -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
+            return 0x20, true;
+          elseif (vectorSize == 1) then
+            -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
+            return 0x18, true; -- Usual size is 0x18 in 3.x
+          end
+
+          if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
+            getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
+            -- debugStepOut()
+            return 0x18, true; -- Usual size is 0x18 in 3.x
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
+            getGDTypeName(readInteger(vectorPtr + 0x20)) then
+            -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x20, true;
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
+            getGDTypeName(readInteger(vectorPtr + 0x30)) then
+            -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x30, true; -- what's the longest for 3.x?
+          end
+
+          if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and
+            getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
+            -- debugStepOut()
+            return 0x18, true; -- Usual size is 0x18 in 3.x
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) and
+            getGDTypeName(readInteger(vectorPtr + 0x20 * 2)) then
+            -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x20, true;
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and
+            getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
+            -- sendDebugMessageAndStepOut(" redefineVariantSizeByVector: Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+            return 0x30, true; -- what's the longest for 3.x?
+          end
+        else
+          -- TODO
+        end
+
+        -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant resize failed past 4 cases (vector: "..numtohexstr(vectorPtr)..")")
+        -- // Variant takes 24 bytes when real_t is float, and 40 bytes if double.
+        -- // It only allocates extra memory for AABB/Transform2D (24, 48 if double),
+        -- // Basis/Transform3D (48, 96 if double), Projection (64, 128 if double),
+        -- // and PackedArray/Array/Dictionary (platform-dependent).
+        return false;
       end
 
       --- returns an adjusted offset to a variant value
@@ -8576,650 +8131,375 @@
       --- takes a godot type. Returns CEType
       ---@param gdType number
       function getCETypeFromGD(gdType)
-          assert(type(gdType) == "number",
-              'getCETypeFromGD Type from enum should be a number, instead got: ' .. type(gdType))
+        assert(type(gdType) == "number", 'getCETypeFromGD Type from enum should be a number, instead got: ' .. type(gdType))
 
-          if GDDEFS.MAJOR_VER == 4 then -- TODO make it patchable
-              if (gdType == 2) then
-                  return vtDword
-              end
-              if (gdType == 1) then
-                  return vtByte
-              end
-              if (gdType == 3) then
-                  return vtDouble
-              end
-              if (gdType == 4) then
-                  return vtString
-              end -- not sure though, need to test that, GD string is 4byte per char
-              if (gdType == 27) then
-                  return vtPointer
-              end
-              if (gdType == 28) then
-                  return vtPointer
-              end
-              if (gdType == 21) then
-                  return vtPointer
-              end
-              if (gdType == 24) then
-                  return vtPointer
-              end -- object
-              if (gdType == 0) then
-                  return vtPointer
-              end
+        if GDDEFS.MAJOR_VER == 4 then -- TODO make it patchable
+          if (gdType == 2) then return vtDword end
+          if (gdType == 1) then return vtByte end
+          if (gdType == 3) then return vtDouble end
+          if (gdType == 4) then return vtString end -- not sure though, need to test that, GD string is 4byte per char
+          if (gdType == 27) then return vtPointer end
+          if (gdType == 28) then return vtPointer end
+          if (gdType == 21) then return vtPointer end
+          if (gdType == 24) then return vtPointer end -- object
+          if (gdType == 0) then return vtPointer end
 
-              if (gdType == 5) then
-                  return vtSingle
-              end -- vector is 2 floats (x,y)
-              if (gdType == 6) then
-                  return vtSingle
-              end
-              if (gdType == 7) then
-                  return vtSingle
-              end
-              if (gdType == 8) then
-                  return vtSingle
-              end
-              if (gdType == 9) then
-                  return vtSingle
-              end
-              if (gdType == 10) then
-                  return vtSingle
-              end
-              if (gdType == 11) then
-                  return vtSingle
-              end
-              if (gdType == 12) then
-                  return vtPointer
-              end
-              if (gdType == 13) then
-                  return vtPointer
-              end
-              if (gdType == 14) then
-                  return vtPointer
-              end
-              if (gdType == 15) then
-                  return vtPointer
-              end
-              if (gdType == 16) then
-                  return vtPointer
-              end
-              if (gdType == 17) then
-                  return vtPointer
-              end
-              if (gdType == 18) then
-                  return vtPointer
-              end
-              if (gdType == 19) then
-                  return vtPointer
-              end
-              if (gdType == 20) then
-                  return vtSingle
-              end
-              if (gdType == 22) then
-                  return vtPointer
-              end
-              if (gdType == 23) then
-                  return vtPointer
-              end
-              if (gdType == 25) then
-                  return vtPointer
-              end
-              if (gdType == 26) then
-                  return vtPointer
-              end
-              if (gdType == 29) then
-                  return vtPointer
-              end
-              if (gdType == 30) then
-                  return vtPointer
-              end
-              if (gdType == 31) then
-                  return vtPointer
-              end
-              if (gdType == 32) then
-                  return vtPointer
-              end
-              if (gdType == 33) then
-                  return vtPointer
-              end
-              if (gdType == 34) then
-                  return vtPointer
-              end
-              if (gdType == 35) then
-                  return vtPointer
-              end
-              if (gdType == 36) then
-                  return vtPointer
-              end
-              if (gdType == 37) then
-                  return vtPointer
-              end
-              if (gdType == 38) then
-                  return vtPointer
-              end
-              if (gdType == 39) then
-                  return vtDword
-              end
-              return vtPointer -- whatever
-          else
-              if (gdType == 2) then
-                  return vtDword
-              end
-              if (gdType == 1) then
-                  return vtByte
-              end
-              if (gdType == 3) then
-                  return vtDouble
-              end
-              if (gdType == 18) then
-                  return vtPointer
-              end
-              if (gdType == 19) then
-                  return vtPointer
-              end
-              if (gdType == 17) then
-                  return vtPointer
-              end -- object
-              if (gdType == 4) then
-                  return vtString
-              end -- not sure though, need to test that, GD string is 4byte per char
-              if (gdType == 0) then
-                  return vtPointer
-              end
+          if (gdType == 5) then return vtSingle end -- vector is 2 floats (x,y)
+          if (gdType == 6) then return vtSingle end
+          if (gdType == 7) then return vtSingle end
+          if (gdType == 8) then return vtSingle end
+          if (gdType == 9) then return vtSingle end
+          if (gdType == 10) then return vtSingle end
+          if (gdType == 11) then return vtSingle end
+          if (gdType == 12) then return vtPointer end
+          if (gdType == 13) then return vtPointer end
+          if (gdType == 14) then return vtPointer end
+          if (gdType == 15) then return vtPointer end
+          if (gdType == 16) then return vtPointer end
+          if (gdType == 17) then return vtPointer end
+          if (gdType == 18) then return vtPointer end
+          if (gdType == 19) then return vtPointer end
+          if (gdType == 20) then return vtSingle end
+          if (gdType == 22) then return vtPointer end
+          if (gdType == 23) then return vtPointer end
+          if (gdType == 25) then return vtPointer end
+          if (gdType == 26) then return vtPointer end
+          if (gdType == 29) then return vtPointer end
+          if (gdType == 30) then return vtPointer end
+          if (gdType == 31) then return vtPointer end
+          if (gdType == 32) then return vtPointer end
+          if (gdType == 33) then return vtPointer end
+          if (gdType == 34) then return vtPointer end
+          if (gdType == 35) then return vtPointer end
+          if (gdType == 36) then return vtPointer end
+          if (gdType == 37) then return vtPointer end
+          if (gdType == 38) then return vtPointer end
+          if (gdType == 39) then return vtDword end
+          return vtPointer -- whatever
+        else
+          if (gdType == 2) then return vtDword end
+          if (gdType == 1) then return vtByte end
+          if (gdType == 3) then return vtDouble end
+          if (gdType == 18) then return vtPointer end
+          if (gdType == 19) then return vtPointer end
+          if (gdType == 17) then return vtPointer end -- object
+          if (gdType == 4) then return vtString end -- not sure though, need to test that, GD string is 4byte per char
+          if (gdType == 0) then return vtPointer end
 
-              if (gdType == 5) then
-                  return vtSingle
-              end -- vector is 2 floats (x,y)
-              if (gdType == 6) then
-                  return vtSingle
-              end
-              if (gdType == 7) then
-                  return vtSingle
-              end
-              if (gdType == 8) then
-                  return vtSingle
-              end
-              if (gdType == 9) then
-                  return vtCustom
-              end
-              if (gdType == 10) then
-                  return vtCustom
-              end
-              if (gdType == 11) then
-                  return vtCustom
-              end
-              if (gdType == 12) then
-                  return vtCustom
-              end
-              if (gdType == 13) then
-                  return vtCustom
-              end
-              if (gdType == 14) then
-                  return vtDword
-              end
-              if (gdType == 15) then
-                  return vtUnicodeString
-              end
-              if (gdType == 16) then
-                  return vtPointer
-              end
-              if (gdType == 20) then
-                  return vtPointer
-              end
-              if (gdType == 21) then
-                  return vtPointer
-              end
-              if (gdType == 22) then
-                  return vtPointer
-              end
-              if (gdType == 23) then
-                  return vtPointer
-              end
-              if (gdType == 24) then
-                  return vtPointer
-              end
-              if (gdType == 25) then
-                  return vtPointer
-              end
-              if (gdType == 26) then
-                  return vtPointer
-              end
-              if (gdType == 27) then
-                  return vtPointer
-              end
-              return vtPointer -- whatever
-          end
-          --[[
-                  vtByte=0
-                  vtWord=1
-                  vtDword=2
-                  vtQword=3
-                  vtSingle=4
-                  vtDouble=5
-                  vtString=6
-                  vtUnicodeString=7 --Only used by autoguess
-                  vtByteArray=8
-                  vtBinary=9
-                  vtAutoAssembler=11
-                  vtPointer=12 --Only used by autoguess and structures
-                  vtCustom=13
-                  vtGrouped=14
-                  --]]
-          return
+          if (gdType == 5) then return vtSingle end -- vector is 2 floats (x,y)
+          if (gdType == 6) then return vtSingle end
+          if (gdType == 7) then return vtSingle end
+          if (gdType == 8) then return vtSingle end
+          if (gdType == 9) then return vtCustom end
+          if (gdType == 10) then return vtCustom end
+          if (gdType == 11) then return vtCustom end
+          if (gdType == 12) then return vtCustom end
+          if (gdType == 13) then return vtCustom end
+          if (gdType == 14) then return vtDword end
+          if (gdType == 15) then return vtUnicodeString end
+          if (gdType == 16) then return vtPointer end
+          if (gdType == 20) then return vtPointer end
+          if (gdType == 21) then return vtPointer end
+          if (gdType == 22) then return vtPointer end
+          if (gdType == 23) then return vtPointer end
+          if (gdType == 24) then return vtPointer end
+          if (gdType == 25) then return vtPointer end
+          if (gdType == 26) then return vtPointer end
+          if (gdType == 27) then return vtPointer end
+          return vtPointer -- whatever
+        end
+        --[[
+            vtByte=0
+            vtWord=1
+            vtDword=2
+            vtQword=3
+            vtSingle=4
+            vtDouble=5
+            vtString=6
+            vtUnicodeString=7 --Only used by autoguess
+            vtByteArray=8
+            vtBinary=9
+            vtAutoAssembler=11
+            vtPointer=12 --Only used by autoguess and structures
+            vtCustom=13
+            vtGrouped=14
+          ]]
+        return
       end
 
       --- takes in a godot type, returns a godot type name
       ---@param typeInt number
       function getGDTypeName(typeInt)
-          if type(typeInt) ~= "number" then
-              -- sendDebugMessage("getGDTypeName: input not a number, instead: "..tostring(typeInt))
-              return false;
-          end
+        if type(typeInt) ~= "number" then
+          -- sendDebugMessage("getGDTypeName: input not a number, instead: "..tostring(typeInt))
+          return false;
+        end
 
-          if GDDEFS.MAJOR_VER == 4 then
-              if (typeInt == 2) then
-                  return "INT"
-              end -- these go first
-              if (typeInt == 1) then
-                  return "BOOL"
-              end
-              if (typeInt == 3) then
-                  return "FLOAT"
-              end
-              if (typeInt == 4) then
-                  return "STRING"
-              end
-              if (typeInt == 27) then
-                  return "DICTIONARY"
-              end
-              if (typeInt == 28) then
-                  return "ARRAY"
-              end
-              if (typeInt == 24) then
-                  return "OBJECT"
-              end
-              if (typeInt == 21) then
-                  return "STRING_NAME"
-              end
-              if (typeInt == 0) then
-                  return "NIL"
-              end
+        if GDDEFS.MAJOR_VER == 4 then
+          if (typeInt == 2) then return "INT" end -- these go first
+          if (typeInt == 1) then return "BOOL" end
+          if (typeInt == 3) then return "FLOAT" end
+          if (typeInt == 4) then return "STRING" end
+          if (typeInt == 27) then return "DICTIONARY" end
+          if (typeInt == 28) then return "ARRAY" end
+          if (typeInt == 24) then return "OBJECT" end
+          if (typeInt == 21) then return "STRING_NAME" end
+          if (typeInt == 0) then return "NIL" end
 
-              if (typeInt == 5) then
-                  return "VECTOR2"
-              end -- (x,y)
-              if (typeInt == 6) then
-                  return "VECTOR2I"
-              end -- (x,y): int
-              if (typeInt == 7) then
-                  return "RECT2"
-              end -- (vector2,vector2)
-              if (typeInt == 8) then
-                  return "RECT2I"
-              end -- (vector2i,vector2i)
-              if (typeInt == 9) then
-                  return "VECTOR3"
-              end -- (x,y,z)
-              if (typeInt == 10) then
-                  return "VECTOR3I"
-              end -- (x,y,z): int
-              if (typeInt == 11) then
-                  return "TRANSFORM2D"
-              end
-              if (typeInt == 12) then
-                  return "VECTOR4"
-              end -- (x,y,z,w)
-              if (typeInt == 13) then
-                  return "VECTOR4I"
-              end -- (x,y,z,w): int
-              if (typeInt == 14) then
-                  return "PLANE"
-              end
-              if (typeInt == 15) then
-                  return "QUATERNION"
-              end
-              if (typeInt == 16) then
-                  return "AABB"
-              end
-              if (typeInt == 17) then
-                  return "BASIS"
-              end
-              if (typeInt == 18) then
-                  return "TRANSFORM3D"
-              end -- basis: 3x3 matix, origin: vector3
-              if (typeInt == 19) then
-                  return "PROJECTION"
-              end
-              if (typeInt == 20) then
-                  return "COLOR"
-              end -- color is 4 floats (r,g,b,a)
-              if (typeInt == 22) then
-                  return "NODE_PATH"
-              end
-              if (typeInt == 23) then
-                  return "RID"
-              end
-              if (typeInt == 25) then
-                  return "CALLABLE"
-              end
-              if (typeInt == 26) then
-                  return "SIGNAL"
-              end
-              if (typeInt == 29) then
-                  return "PACKED_BYTE_ARRAY"
-              end
-              if (typeInt == 30) then
-                  return "PACKED_INT32_ARRAY"
-              end
-              if (typeInt == 31) then
-                  return "PACKED_INT64_ARRAY"
-              end
-              if (typeInt == 32) then
-                  return "PACKED_FLOAT32_ARRAY"
-              end
-              if (typeInt == 33) then
-                  return "PACKED_FLOAT64_ARRAY"
-              end
-              if (typeInt == 34) then
-                  return "PACKED_STRING_ARRAY"
-              end
-              if (typeInt == 35) then
-                  return "PACKED_VECTOR2_ARRAY"
-              end
-              if (typeInt == 36) then
-                  return "PACKED_VECTOR3_ARRAY"
-              end
-              if (typeInt == 37) then
-                  return "PACKED_COLOR_ARRAY"
-              end
-              if (typeInt == 38) then
-                  return "PACKED_VECTOR4_ARRAY"
-              end
-              if (typeInt == 39) then
-                  return "VARIANT_MAX"
-              end
-              return "BEYOND_VARIANT_MAX"
-          else -- 3.x
-              if (typeInt == 2) then
-                  return "INT"
-              end -- these go first
-              if (typeInt == 1) then
-                  return "BOOL"
-              end
-              if (typeInt == 3) then
-                  return "FLOAT"
-              end
-              if (typeInt == 18) then
-                  return "DICTIONARY"
-              end
-              if (typeInt == 19) then
-                  return "ARRAY"
-              end
-              if (typeInt == 17) then
-                  return "OBJECT"
-              end
-              if (typeInt == 4) then
-                  return "STRING"
-              end
-              if (typeInt == 0) then
-                  return "NIL"
-              end
+          if (typeInt == 5) then return "VECTOR2" end -- (x,y)
+          if (typeInt == 6) then return "VECTOR2I" end -- (x,y): int
+          if (typeInt == 7) then return "RECT2" end -- (vector2,vector2)
+          if (typeInt == 8) then return "RECT2I" end -- (vector2i,vector2i)
+          if (typeInt == 9) then return "VECTOR3" end -- (x,y,z)
+          if (typeInt == 10) then return "VECTOR3I" end -- (x,y,z): int
+          if (typeInt == 11) then return "TRANSFORM2D" end
+          if (typeInt == 12) then return "VECTOR4" end -- (x,y,z,w)
+          if (typeInt == 13) then return "VECTOR4I" end -- (x,y,z,w): int
+          if (typeInt == 14) then return "PLANE" end
+          if (typeInt == 15) then return "QUATERNION" end
+          if (typeInt == 16) then return "AABB" end
+          if (typeInt == 17) then return "BASIS" end
+          if (typeInt == 18) then return "TRANSFORM3D" end -- basis: 3x3 matix, origin: vector3
+          if (typeInt == 19) then return "PROJECTION" end
+          if (typeInt == 20) then return "COLOR" end -- color is 4 floats (r,g,b,a)
+          if (typeInt == 22) then return "NODE_PATH" end
+          if (typeInt == 23) then return "RID" end
+          if (typeInt == 25) then return "CALLABLE" end
+          if (typeInt == 26) then return "SIGNAL" end
+          if (typeInt == 29) then return "PACKED_BYTE_ARRAY" end
+          if (typeInt == 30) then return "PACKED_INT32_ARRAY" end
+          if (typeInt == 31) then return "PACKED_INT64_ARRAY" end
+          if (typeInt == 32) then return "PACKED_FLOAT32_ARRAY" end
+          if (typeInt == 33) then return "PACKED_FLOAT64_ARRAY" end
+          if (typeInt == 34) then return "PACKED_STRING_ARRAY" end
+          if (typeInt == 35) then return "PACKED_VECTOR2_ARRAY" end
+          if (typeInt == 36) then return "PACKED_VECTOR3_ARRAY" end
+          if (typeInt == 37) then return "PACKED_COLOR_ARRAY" end
+          if (typeInt == 38) then return "PACKED_VECTOR4_ARRAY" end
+          if (typeInt == 39) then return "VARIANT_MAX" end
+          return "BEYOND_VARIANT_MAX"
+        else -- 3.x
+          if (typeInt == 2) then return "INT" end -- these go first
+          if (typeInt == 1) then return "BOOL" end
+          if (typeInt == 3) then return "FLOAT" end
+          if (typeInt == 18) then return "DICTIONARY" end
+          if (typeInt == 19) then return "ARRAY" end
+          if (typeInt == 17) then return "OBJECT" end
+          if (typeInt == 4) then return "STRING" end
+          if (typeInt == 0) then return "NIL" end
 
-              if (typeInt == 5) then
-                  return "VECTOR2"
-              end
-              if (typeInt == 6) then
-                  return "RECT2"
-              end
-              if (typeInt == 7) then
-                  return "VECTOR3"
-              end
-              if (typeInt == 8) then
-                  return "TRANSFORM2D"
-              end
-              if (typeInt == 9) then
-                  return "PLANE"
-              end
-              if (typeInt == 10) then
-                  return "QUATERNION"
-              end
-              if (typeInt == 11) then
-                  return "AABB"
-              end
-              if (typeInt == 12) then
-                  return "BASIS"
-              end
-              if (typeInt == 13) then
-                  return "TRANSFORM3D"
-              end
-              if (typeInt == 14) then
-                  return "COLOR"
-              end
-              if (typeInt == 15) then
-                  return "NODE_PATH"
-              end
-              if (typeInt == 16) then
-                  return "RID"
-              end
-              if (typeInt == 20) then
-                  return "PACKED_BYTE_ARRAY"
-              end
-              if (typeInt == 21) then
-                  return "PACKED_INT64_ARRAY"
-              end
-              if (typeInt == 22) then
-                  return "PACKED_FLOAT32_ARRAY"
-              end
-              if (typeInt == 23) then
-                  return "PACKED_STRING_ARRAY"
-              end
-              if (typeInt == 24) then
-                  return "PACKED_VECTOR2_ARRAY"
-              end
-              if (typeInt == 25) then
-                  return "PACKED_VECTOR3_ARRAY"
-              end
-              if (typeInt == 26) then
-                  return "PACKED_COLOR_ARRAY"
-              end
-              if (typeInt == 27) then
-                  return "VARIANT_MAX"
-              end
-              return "BEYOND_VARIANT_MAX"
-          end
+          if (typeInt == 5) then return "VECTOR2" end
+          if (typeInt == 6) then return "RECT2" end
+          if (typeInt == 7) then return "VECTOR3" end
+          if (typeInt == 8) then return "TRANSFORM2D" end
+          if (typeInt == 9) then return "PLANE" end
+          if (typeInt == 10) then return "QUATERNION" end
+          if (typeInt == 11) then return "AABB" end
+          if (typeInt == 12) then return "BASIS" end
+          if (typeInt == 13) then return "TRANSFORM3D" end
+          if (typeInt == 14) then return "COLOR" end
+          if (typeInt == 15) then return "NODE_PATH" end
+          if (typeInt == 16) then return "RID" end
+          if (typeInt == 20) then return "PACKED_BYTE_ARRAY" end
+          if (typeInt == 21) then return "PACKED_INT64_ARRAY" end
+          if (typeInt == 22) then return "PACKED_FLOAT32_ARRAY" end
+          if (typeInt == 23) then return "PACKED_STRING_ARRAY" end
+          if (typeInt == 24) then return "PACKED_VECTOR2_ARRAY" end
+          if (typeInt == 25) then return "PACKED_VECTOR3_ARRAY" end
+          if (typeInt == 26) then return "PACKED_COLOR_ARRAY" end
+          if (typeInt == 27) then return "VARIANT_MAX" end
+          return "BEYOND_VARIANT_MAX"
+        end
 
-          return false; -- nil
+        return false; -- nil
+
       end
 
       --- I'm gonna add a 4byte string type
       function checkGDStringType()
 
-          function codePointToUTF8(codePoint)
-              if (codePoint < 0 or codePoint > 0x10FFFF) or (codePoint >= 0xD800 and codePoint <= 0xDFFF) then
-                  return '?'
-              elseif codePoint <= 0x7F then
-                  return string.char(codePoint)
-              elseif codePoint <= 0x7FF then
-                  return string.char(0xC0 | (codePoint >> 6), 0x80 | (codePoint & 0x3F))
-              elseif codePoint <= 0xFFFF then
-                  return
-                      string.char(0xE0 | (codePoint >> 12), 0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
-              else
-                  return string.char(0xF0 | (codePoint >> 18), 0x80 | ((codePoint >> 12) & 0x3F),
-                      0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
-              end
-          end
-
-          function UTF8Codepoints(str)
-              local i, strSize = 1, #str
-
-              -- closure
-              return function()
-                  if i > strSize then
-                      return nil
-                  end
-                  local byte1 = str:byte(i)
-
-                  -- 1-byte (ASCII) | 0x00–0x7F
-                  if byte1 < 0x80 then
-                      i = i + 1
-                      return byte1
-                  end
-
-                  -- invalid lead < C2
-                  if byte1 < 0xC2 then
-                      i = i + 1
-                      return 0xFFFD
-                  end
-
-                  -- 2-byte | 0xC0–0xDF
-                  if byte1 < 0xE0 then
-                      if i + 1 > strSize then
-                          i = strSize + 1;
-                          return 0xFFFD
-                      end
-
-                      local byte2 = str:byte(i + 1)
-                      if (byte2 & 0xC0) ~= 0x80 then
-                          i = i + 1;
-                          return 0xFFFD
-                      end -- lead
-
-                      local codePoint = ((byte1 & 0x1F) << 6) | (byte2 & 0x3F) -- payload bits
-                      i = i + 2
-                      return codePoint
-
-                      -- 3-byte | 0xE0–0xEF
-                  elseif byte1 < 0xF0 then
-                      if i + 2 > strSize then
-                          i = strSize + 1;
-                          return 0xFFFD
-                      end
-
-                      local byte2, byte3 = str:byte(i + 1), str:byte(i + 2)
-                      if (byte2 & 0xC0) ~= 0x80 or (byte3 & 0xC0) ~= 0x80 then
-                          i = i + 1;
-                          return 0xFFFD
-                      end -- lead
-
-                      local codePoint = ((byte1 & 0x0F) << 12) | ((byte2 & 0x3F) << 6) | (byte3 & 0x3F) -- payload bits
-                      -- reject surrogates
-                      if codePoint >= 0xD800 and codePoint <= 0xDFFF then
-                          codePoint = 0xFFFD
-                      end
-                      i = i + 3
-                      return codePoint
-
-                      -- 4-byte | 0xF0–0xF7
-                  elseif byte1 < 0xF5 then
-                      if i + 3 > strSize then
-                          i = strSize + 1;
-                          return 0xFFFD
-                      end
-
-                      local byte2, byte3, byte4 = str:byte(i + 1), str:byte(i + 2), str:byte(i + 3)
-                      if (byte2 & 0xC0) ~= 0x80 or (byte3 & 0xC0) ~= 0x80 or (byte4 & 0xC0) ~= 0x80 then
-                          i = i + 1;
-                          return 0xFFFD
-                      end
-
-                      local codePoint = ((byte1 & 0x07) << 18) | ((byte2 & 0x3F) << 12) | ((byte3 & 0x3F) << 6) |
-                                            (byte4 & 0x3F)
-                      if codePoint > 0x10FFFF then
-                          codePoint = 0xFFFD
-                      end
-                      i = i + 4
-                      return codePoint
-                  end
-
-                  -- anything else is invalid lead
-                  i = i + 1
-                  return 0xFFFD
-              end
-          end
-
-          function gd4string_bytestovalue(b1, address)
-              local MAX_CHARS_TO_READ = 15000
-              local charTable = {}
-              local buff = 0;
-
-              for i = 0, MAX_CHARS_TO_READ do
-                  buff = readInteger(address + i * 0x4) or 0x0
-                  if buff == 0 then
-                      break
-                  end
-                  charTable[#charTable + 1] = codePointToUTF8(buff)
-              end
-
-              return table.concat(charTable)
-          end
-
-          function gd4string_valuetobytes(str, address)
-              error('Writing not implemented until I figure out how to do it properly')
-              local idx = 0
-              for codePoint in UTF8Codepoints(str) do
-                  -- clamping invalid/surrogate range
-                  if codePoint < 0 or codePoint > 0x10FFFF or codePoint >= 0xD800 and codePoint <= 0xDFFF then
-                      codePoint = 0xFFFD
-                  end
-
-                  writeInteger(address + idx * 0x4, codePoint)
-                  idx = idx + 1
-              end
-
-              -- null terminator
-              writeInteger(address + idx * 4, 0x0)
-
-              return readByte(address) or 0x0
-              -- return string.byte( str, 1 ) -- bullshit, from what I suggest, CE stores the last 8bytes (?) of the orig memory in advance and after the callback it writes
-              -- those 8 bytes replacing the first byte with a 0x0 (if returned nothing here)
-          end
-
-          if GDDEFS.MAJOR_VER == 4 then
-              if getCustomType("GD4 String") then
-                  GDDEFS.GD4_STRING_EXISTS = true
-              else
-                  registerCustomTypeLua('GD4 String', 1, gd4string_bytestovalue, gd4string_valuetobytes, false, true)
-                  GDDEFS.GD4_STRING_EXISTS = true
-              end
+        function codePointToUTF8(codePoint)
+          if (codePoint < 0 or codePoint > 0x10FFFF) or (codePoint >= 0xD800 and codePoint <= 0xDFFF) then
+            return '?'
+          elseif codePoint <= 0x7F then
+            return string.char(codePoint)
+          elseif codePoint <= 0x7FF then
+            return string.char(0xC0 | (codePoint >> 6), 0x80 | (codePoint & 0x3F))
+          elseif codePoint <= 0xFFFF then
+            return string.char(0xE0 | (codePoint >> 12), 0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
           else
-              GDDEFS.GD4_STRING_EXISTS = false
+            return string.char(0xF0 | (codePoint >> 18), 0x80 | ((codePoint >> 12) & 0x3F), 0x80 | ((codePoint >> 6) & 0x3F), 0x80 | (codePoint & 0x3F))
           end
+        end
+
+        function UTF8Codepoints(str)
+          local i, strSize = 1, #str
+
+          -- closure
+          return function()
+            if i > strSize then
+              return nil
+            end
+            local byte1 = str:byte(i)
+
+            -- 1-byte (ASCII) | 0x00–0x7F
+            if byte1 < 0x80 then
+              i = i + 1
+              return byte1
+            end
+
+            -- invalid lead < C2
+            if byte1 < 0xC2 then
+              i = i + 1
+              return 0xFFFD
+            end
+
+              -- 2-byte | 0xC0–0xDF
+            if byte1 < 0xE0 then
+              if i + 1 > strSize then
+                i = strSize + 1;
+                return 0xFFFD
+              end
+
+              local byte2 = str:byte(i + 1)
+              if (byte2 & 0xC0) ~= 0x80 then
+                i = i + 1;
+                return 0xFFFD
+              end -- lead
+
+              local codePoint = ((byte1 & 0x1F) << 6) | (byte2 & 0x3F) -- payload bits
+              i = i + 2
+              return codePoint
+
+            -- 3-byte | 0xE0–0xEF
+            elseif byte1 < 0xF0 then
+              if i + 2 > strSize then
+                i = strSize + 1;
+                return 0xFFFD
+              end
+
+              local byte2, byte3 = str:byte(i + 1), str:byte(i + 2)
+              if (byte2 & 0xC0) ~= 0x80 or (byte3 & 0xC0) ~= 0x80 then
+                i = i + 1;
+                return 0xFFFD
+              end -- lead
+
+              local codePoint = ((byte1 & 0x0F) << 12) | ((byte2 & 0x3F) << 6) | (byte3 & 0x3F) -- payload bits
+              -- reject surrogates
+              if codePoint >= 0xD800 and codePoint <= 0xDFFF then
+                codePoint = 0xFFFD
+              end
+              i = i + 3
+              return codePoint
+
+            -- 4-byte | 0xF0–0xF7
+            elseif byte1 < 0xF5 then
+              if i + 3 > strSize then
+                i = strSize + 1;
+                return 0xFFFD
+              end
+
+              local byte2, byte3, byte4 = str:byte(i + 1), str:byte(i + 2), str:byte(i + 3)
+              if (byte2 & 0xC0) ~= 0x80 or (byte3 & 0xC0) ~= 0x80 or (byte4 & 0xC0) ~= 0x80 then
+                i = i + 1;
+                return 0xFFFD
+              end
+
+              local codePoint = ((byte1 & 0x07) << 18) | ((byte2 & 0x3F) << 12) | ((byte3 & 0x3F) << 6) | (byte4 & 0x3F)
+              if codePoint > 0x10FFFF then
+                codePoint = 0xFFFD
+              end
+              i = i + 4
+              return codePoint
+              end
+
+              -- anything else is invalid lead
+              i = i + 1
+            return 0xFFFD
+          end
+        end
+
+        function gd4string_bytestovalue(b1, address)
+          local MAX_CHARS_TO_READ = 15000
+          local charTable = {}
+          local buff = 0;
+
+          for i = 0, MAX_CHARS_TO_READ do
+            buff = readInteger(address + i * 0x4) or 0x0
+            if buff == 0 then
+              break
+            end
+            charTable[#charTable + 1] = codePointToUTF8(buff)
+          end
+
+          return table.concat(charTable)
+        end
+
+        function gd4string_valuetobytes(str, address)
+          error('Writing not implemented until I figure out how to do it properly')
+          local idx = 0
+          for codePoint in UTF8Codepoints(str) do
+            -- clamping invalid/surrogate range
+            if codePoint < 0 or codePoint > 0x10FFFF or codePoint >= 0xD800 and codePoint <= 0xDFFF then
+              codePoint = 0xFFFD
+            end
+
+            writeInteger(address + idx * 0x4, codePoint)
+            idx = idx + 1
+          end
+
+          -- null terminator
+          writeInteger(address + idx * 4, 0x0)
+
+          return readByte(address) or 0x0
+          -- return string.byte( str, 1 ) -- bullshit, from what I suggest, CE stores the last 8bytes (?) of the orig memory in advance and after the callback it writes
+          -- those 8 bytes replacing the first byte with a 0x0 (if returned nothing here)
+        end
+
+        if GDDEFS.MAJOR_VER == 4 then
+          if getCustomType("GD4 String") then
+            GDDEFS.GD4_STRING_EXISTS = true
+          else
+            registerCustomTypeLua('GD4 String', 1, gd4string_bytestovalue, gd4string_valuetobytes, false, true)
+            GDDEFS.GD4_STRING_EXISTS = true
+          end
+        else
+          GDDEFS.GD4_STRING_EXISTS = false
+        end
       end
 
       function getObjectMeta(objAddr)
-          local vtable = readPointer(objAddr)
-          if not isMMVTable(vtable) then
-              return;
-          end
-          local offsetToMethod = GDDEFS.PTRSIZE * GDDEFS.GET_TYPE_INDX
-          local method = readPointer(vtable + offsetToMethod)
-          return executeMethod(0, nil, method, objAddr)
+        local vtable = readPointer(objAddr)
+        if not isMMVTable(vtable) then
+          return;
+        end
+        local offsetToMethod = GDDEFS.PTRSIZE * GDDEFS.GET_TYPE_INDX
+        local method = readPointer(vtable + offsetToMethod)
+        return executeMethod(0, nil, method, objAddr)
       end
 
       function getObjectName(objAddr)
-          -- debugStepIn()
-          -- up until 4.6, the method was StringName* Object::_get_class_namev()
-          -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object class name
-          local metaAddr = getObjectMeta(objAddr)
-          local className = ''
+        -- debugStepIn()
+        -- up until 4.6, the method was StringName* Object::_get_class_namev()
+        -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object class name
+        local metaAddr = getObjectMeta(objAddr)
+        local className = ''
 
-          if isNullOrNil(metaAddr) then
-              return '??'
-          end
+        if isNullOrNil(metaAddr) then
+          return '??'
+        end
 
-          if GDDEFS.MAJOR_VER == 3 or (GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER < 6) then
-              className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
+        if GDDEFS.MAJOR_VER == 3 or (GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER < 6) then
+          className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
 
-          else --[[if GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER >= 6 then]]
-              metaAddr = getObjectMeta(objAddr)
-              local stringNameAddr = readPointer(metaAddr + GDDEFS.PTRSIZE)
-              className = getStringNameStr(stringNameAddr or 0) or '??'
-          end
+        else --[[if GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER >= 6 then]]
+          metaAddr = getObjectMeta(objAddr)
+          local stringNameAddr = readPointer(metaAddr + GDDEFS.PTRSIZE)
+          className = getStringNameStr(stringNameAddr or 0) or '??'
+        end
 
-          -- debugStepOut()
-          return className
+        -- debugStepOut()
+        return className
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dumper
@@ -9468,10 +8748,10 @@
 
       end
 
-    if not (targetIsGodot) then --[[print('target is not godot')--]]
-      return;
-    end
-    defineGDOffsets(config)
+      if not (targetIsGodot) then --[[print('target is not godot')--]]
+        return;
+      end
+      defineGDOffsets(config)
   end
 
   godotRegisterPreinit()
