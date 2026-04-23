@@ -10,6 +10,7 @@
   -- TODO symbol handler with polling
   -- TODO more offsets for non-GDI objects
   -- TODO MONO implementation: .cs resource, etc
+  -- TODO doxygen comments
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
   -- ///---///--///---///--///---/// MEMRECS
     --- adds a memrec to parent
@@ -1449,6 +1450,28 @@
 
       -- return result
     end
+
+    function godotAA_GETNODESTRUCT(nodeName)
+      --[[
+
+        take type size into account
+        struct NODENAME
+        padding: resb 99 // decimal
+        fieldName: resb 4
+        end
+      ]]
+      
+      local nodeAddr -- = get node by Name
+      local fields = godot_node_enumVariants(nodeAddr)
+      if (fields==nil) or (#fields==0) then
+        return nil,namespace..":"..classname..translate(" has no fields")
+      end
+    end
+
+    function godot_node_enumVariants(nodeAddr)
+
+    end
+
 
   -- ///---///--///---///--///---/// GUI
 
@@ -7281,22 +7304,23 @@
 
         local function querySignatures()
             local sigs = {}
-            table.insert(sigs, { isheavy = true, sig = "4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize = 24 }) -- 4.6 ret 64<
+            table.insert(sigs, { isheavy = true,  sig = "4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize = 24 }) -- 4.6 ret 64<
             table.insert(sigs, { isheavy = false, sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize = 28 }) -- 4.6 ret 64>
             table.insert(sigs, { isheavy = false, sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 34 }) -- 4.5
+            table.insert(sigs, { isheavy = true,  sig = "4C 89 7C 24 28 89 44 24 20 48 89 ? >48 89 ? >48 89 ? E8", sigsize = 19 }) -- 4.5 ret 64<
             table.insert(sigs, { isheavy = false, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
             table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
             table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 25 }) -- 4.3 ret 64<
             table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4-4.3
             table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize = 16 }) -- 4.2
-            table.insert(sigs, { isheavy = true, sig = "4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8", sigsize = 16 }) -- 4.2 Godot Engine v4.2.2.stable.official.15073afe3
+            table.insert(sigs, { isheavy = true,  sig = "4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8", sigsize = 16 }) -- 4.2 Godot Engine v4.2.2.stable.official.15073afe3
 
             table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize = 24 }) -- 4.1
             table.insert(sigs, { isheavy = false, sig = "48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize = 30 }) -- 4.1
             table.insert(sigs, { isheavy = false, sig = "48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize = 32 }) -- 3.6
             table.insert(sigs, { isheavy = false, sig = "4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize = 36 }) -- 3.5
             table.insert(sigs, { isheavy = false, sig = "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize = 23 }) -- 3.3 - 3.4 - 3.5
-            table.insert(sigs, { isheavy = true, sig = "4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8", sigsize = 17 }) -- 3.0 prefixed by 48 C7 44 24 30 ? 000000
+            table.insert(sigs, { isheavy = true,  sig = "4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8", sigsize = 17 }) -- 3.0 prefixed by 48 C7 44 24 30 ? 000000
 
             for i, sign in ipairs(sigs) do
               if resolveVM_RELA(sign.sig, sign.sigsize) then
@@ -7335,8 +7359,8 @@
         if argsetupCallback and type(argsetupCallback) == "function" then
           argsetupCallback()
         else
-          writeQword(dumSpace + 0x100, dumSpace + 0x30) -- *p_args
-          writeQword(dumSpace + 0x108, dumSpace + 0x100) -- **p_args
+          writeQword(dumSpace + 0xFF0, dumSpace + 0x30) -- *p_args 0x1000-0x10 = 0xFF0
+          writeQword(dumSpace + 0xFF8, dumSpace + 0xFF0) -- **p_args 0x1000-0x8 = 0xFF8
         end
 
         local stdcall = 0
@@ -7346,7 +7370,6 @@
         if GDDEFS.VM_CALL_HEAVY then
           _rcx = { type = int_t, value = dumSpace + 0x80 } -- return buffer ptr
           _rdx = { type = int_t, value = func_this }
-
         else
           _rcx = { type = int_t, value = func_this }
           _rdx = { type = int_t, value = dumSpace + 0x80 } -- *someexcval
@@ -7362,39 +7385,39 @@
         local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
 
         if isNotNullOrNil(returned) then
-            writeQword(dumSpace + 0x0, returned)
-            return returned
+          writeQword(dumSpace + 0x0, returned)
+          return returned
         else
-            return true, "noret"
+          return true, "noret"
         end
 
         --[[
-            Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state)
-            rcx  *this
-            rdx  value (on stack) passed to _get_default_variant_for_data_type()
-            r8   GDScriptInstance* p_instance
-            r9   Variant** p_args (on stack)
-            -- the rest are mov'd to stack after shallow space
-            [rsp+20] int32_t p_argcount
-            [rsp+28] Callable::CallError *r_err (on stack)
-            [rsp+30] CallState *p_state (on stack, usually nullptr)
+          Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state)
+          rcx  *this
+          rdx  value (on stack) passed to _get_default_variant_for_data_type()
+          r8   GDScriptInstance* p_instance
+          r9   Variant** p_args (on stack)
+          -- the rest are mov'd to stack after shallow space
+          [rsp+20] int32_t p_argcount
+          [rsp+28] Callable::CallError *r_err (on stack)
+          [rsp+30] CallState *p_state (on stack, usually nullptr)
 
-            in case the return-by-value doesnt fit __ 64bit< Variant __ , return buffer ptr goes to rcx, else shift accordingly
-            --https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#return-values
-            rcx - buffer ptr (Variant)
-            rdx this
-            r8 GDScriptInstance* p_instance
-            r9   Variant** p_args (on stack)
-            [rsp+20] int32_t p_argcount
-            [rsp+28] Callable::CallError *r_err (on stack)
-            [rsp+30] CallState *p_state (on stack, usually nullptr)
+          in case the return-by-value doesnt fit __ 64bit< Variant __ , return buffer ptr goes to rcx, else shift accordingly
+          --https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#return-values
+          rcx - buffer ptr (Variant)
+          rdx this
+          r8 GDScriptInstance* p_instance
+          r9   Variant** p_args (on stack)
+          [rsp+20] int32_t p_argcount
+          [rsp+28] Callable::CallError *r_err (on stack)
+          [rsp+30] CallState *p_state (on stack, usually nullptr)
 
-            [ENABLE]
-            alloc(dummySpace,$1000,$process)
-            registersymbol(dummySpace)
-            [DISABLE]
-            dealloc(*)
-            unregistersymbol(*)
+          [ENABLE]
+          alloc(dummySpace,$1000,$process)
+          registersymbol(dummySpace)
+          [DISABLE]
+          dealloc(*)
+          unregistersymbol(*)
           ]]
       end
 
