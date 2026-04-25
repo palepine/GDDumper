@@ -8563,6 +8563,7 @@
           if GDDEFS.MAJOR_VER == 4 then
             nodeDict[nodeNameStr] =
             {
+              index = i,
               NAME = nodeNameStr,
               PTR = nodePtr,
               TYPE = 24, -- node
@@ -8571,6 +8572,7 @@
           else
             nodeDict[nodeNameStr] =
             {
+              index = i,
               NAME = nodeNameStr,
               PTR = nodePtr,
               TYPE = 17, -- node
