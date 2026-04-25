@@ -19,7 +19,7 @@
     ---@param CEType number
     ---@param parent userdata -- to append to
     ---@return userdata
-    function addMemRecTo(memRecName, gdPtr, CEType, parent)
+    function addMemRecTo(memRecName, gdPtr, CEType, parent, contextTable)
       local newMemRec = getAddressList().createMemoryRecord()
       newMemRec.setDescription(memRecName)
       newMemRec.setType(CEType)
@@ -29,6 +29,7 @@
             newMemRec.setType(vtCustom);
             newMemRec.CustomTypeName = "GD4 String"
             newMemRec.setAddress(readPointer(gdPtr))
+            -- newMemRec.setAddress('['.. (gdPtr or "") ..']')
           else
             newMemRec.setAddress(gdPtr)
           end
@@ -37,6 +38,7 @@
           newMemRec.String.Size = 100;
           newMemRec.String.Unicode = true;
           newMemRec.setAddress(readPointer(gdPtr))
+          -- newMemRec.setAddress('['.. (gdPtr or "") ..']')
         else
           newMemRec.setAddress(gdPtr)
         end
@@ -49,6 +51,9 @@
         newMemRec.ShowAsSigned = true;
       end -- color and int
 
+      if bAddrAppendPtr then
+        newMemRec.DropDownList.Text = contextTable.symbol;
+      end
       newMemRec.DontSave = true
       newMemRec.appendToEntry(parent)
       return newMemRec
@@ -2205,11 +2210,11 @@
           end
 
           function GDEmitters.StructEmitter.recurseDictionary(contextTable, parent, dictPtr)
-            iterateDictionaryToStruct(dictPtr, parent)
+            iterateDictionaryToStruct(dictPtr, parent, contextTable)
           end
 
           function GDEmitters.StructEmitter.recurseArray(contextTable, parent, arrPtr)
-            iterateArrayToStruct(arrPtr, parent)
+            iterateArrayToStruct(arrPtr, parent, contextTable)
           end
 
           function GDEmitters.StructEmitter.recurseNode(contextTable, parent, nodePtr)
@@ -2217,7 +2222,7 @@
           end
 
           function GDEmitters.StructEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
-            iteratePackedArrayToStruct(arrayAddr, typeName, parent)
+            iteratePackedArrayToStruct(arrayAddr, typeName, parent, contextTable)
           end
 
         ---------------------------------------------------------------------------------
@@ -2228,45 +2233,49 @@
             return (base or 0) + (offset or 0)
           end
 
+          local function makeSymAddr(base, offset)
+            return (tostring(base) or '') .. '+' .. (numtohexstr(offset) or '')
+          end
+
           function GDEmitters.AddrEmitter.leaf(contextTable, parent, label, offset, ceType)
             local created
-            synchronize(function(label, addr, ceType, parent)
-              created = addMemRecTo(label, addr, ceType, parent)
-            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent)
+            synchronize(function(label, addr, ceType, parent, contextTable)
+              created = addMemRecTo(label, addr, ceType, parent, contextTable)
+            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
             return created
           end
 
           function GDEmitters.AddrEmitter.layout(contextTable, parent, label, color, offset, ceType)
             local created
-            synchronize(function(label, addr, ceType, parent)
-              created = addMemRecTo(label, addr, ceType, parent)
-            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent)
+            synchronize(function(label, addr, ceType, parent, contextTable)
+              created = addMemRecTo(label, addr, ceType, parent, contextTable)
+            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
             return created
           end
 
           function GDEmitters.AddrEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
             local created
-            synchronize(function(label, addr, ceType, parent)
-              created = addMemRecTo(label, addr, ceType, parent)
+            synchronize(function(label, addr, ceType, parent, contextTable)
+              created = addMemRecTo(label, addr, ceType, parent, contextTable)
               created.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent)
+            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
             return created
           end
 
           function GDEmitters.AddrEmitter.recurseDictionary(contextTable, parent, dictPtr)
-            iterateDictionaryToAddr(dictPtr, parent)
+            iterateDictionaryToAddr(dictPtr, parent, contextTable)
           end
 
           function GDEmitters.AddrEmitter.recurseArray(contextTable, parent, arrPtr)
-            iterateArrayToAddr(arrPtr, parent)
+            iterateArrayToAddr(arrPtr, parent, contextTable)
           end
 
           function GDEmitters.AddrEmitter.recurseNode(contextTable, parent, nodePtr)
-            iterateMNodeToAddr(nodePtr, parent)
+            iterateMNodeToAddr(nodePtr, parent, contextTable)
           end
 
           function GDEmitters.AddrEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
-            iteratePackedArrayToAddr(arrayAddr, typeName, parent)
+            iteratePackedArrayToAddr(arrayAddr, typeName, parent, contextTable)
           end
 
         ---------------------------------------------------------------------------------
@@ -2344,28 +2353,28 @@
 
         GDEmitters.PackedStructEmitter = {}
 
-          function GDEmitters.PackedStructEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
             local stringPtrElement = addStructureElem(parent, ('strElem[%d]'):format(elemIndex), offsetToValue, vtPointer)
             stringPtrElement.ChildStruct = createStructure('StringItem')
             addStructureElem(stringPtrElement, 'String', 0x0, vtUnicodeString)
           end
 
-          function GDEmitters.PackedStructEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType)
+          function GDEmitters.PackedStructEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType, contextTable)
             addStructureElem(parent, prefixStr .. elemIndex .. ']', offsetToValue, ceType)
           end
 
-          function GDEmitters.PackedStructEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
           end
 
-          function GDEmitters.PackedStructEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: z', offsetToValue + 0x8, vtSingle)
           end
 
-          function GDEmitters.PackedStructEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
+          function GDEmitters.PackedStructEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: R', offsetToValue, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: G', offsetToValue + 0x4, vtSingle)
             addStructureElem(parent, prefixStr .. elemIndex .. ']: B', offsetToValue + 0x8, vtSingle)
@@ -2374,40 +2383,46 @@
 
         GDEmitters.PackedAddrEmitter = {}
 
-          function GDEmitters.PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
-            synchronize(function(elemIndex, arrElement, parent)
-              addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent)
-            end, elemIndex, arrElement, parent)
+          function GDEmitters.PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
+            synchronize(function(elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+              addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent, contextTable)
+            end, elemIndex, arrElement, parent, contextTable, contextTable)
           end
 
-          function GDEmitters.PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType)
-            synchronize(function(prefixStr, elemIndex, arrElement, ceType, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent)
-            end, prefixStr, elemIndex, arrElement, ceType, parent)
+          function GDEmitters.PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType, contextTable)
+            synchronize(function(prefixStr, elemIndex, arrElement, ceType, parent, contextTable) -- TODO: contextTable update
+              addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent, contextTable)
+            end, prefixStr, elemIndex, arrElement, ceType, parent, contextTable)
           end
 
-          function GDEmitters.PackedAddrEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement)
-            synchronize(function(prefixStr, elemIndex, arrElement, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
-            end, prefixStr, elemIndex, arrElement, parent)
+          function GDEmitters.PackedAddrEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
+            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
+              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
+            end, prefixStr, elemIndex, arrElement, parent, contextTable)
           end
 
-          function GDEmitters.PackedAddrEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement)
-            synchronize(function(prefixStr, elemIndex, arrElement, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: z', arrElement + 0x8, vtSingle, parent)
-            end, prefixStr, elemIndex, arrElement, parent)
+          function GDEmitters.PackedAddrEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
+            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
+              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
+              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+              addMemRecTo(prefixStr .. elemIndex .. ']: z', arrElement + 0x8, vtSingle, parent, contextTable)
+            end, prefixStr, elemIndex, arrElement, parent, contextTable)
           end
 
-          function GDEmitters.PackedAddrEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement)
-            synchronize(function(prefixStr, elemIndex, arrElement, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: B', arrElement + 0x8, vtSingle, parent)
-              addMemRecTo(prefixStr .. elemIndex .. ']: A', arrElement + 0xC, vtSingle, parent)
-            end, prefixStr, elemIndex, arrElement, parent)
+          function GDEmitters.PackedAddrEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
+            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+              addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent, contextTable)
+              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+              addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent, contextTable)
+              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+              addMemRecTo(prefixStr .. elemIndex .. ']: B', arrElement + 0x8, vtSingle, parent, contextTable)
+              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+              addMemRecTo(prefixStr .. elemIndex .. ']: A', arrElement + 0xC, vtSingle, parent, contextTable)
+            end, prefixStr, elemIndex, arrElement, parent, contextTable)
           end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS / SHARED HELPERS
@@ -2513,11 +2528,13 @@
 
         if shifted then
           offset = offset - GDDEFS.PTRSIZE
+          if currentContext.symbol then currentContext.symbol = wrapBrackets( currentContext.symbol .. '+' .. numtohexstr(entry.offsetToValue) ) end
           currentContext =
           {
             nodeAddr = contextTable.nodeAddr,
             nodeName = contextTable.nodeName,
-            baseAddress = ptr
+            baseAddress = ptr,
+            symbol = currentContext.symbol and currentContext.symbol or ''
           }
           currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer, "Wrapper")
           offset = 0x0
@@ -2579,9 +2596,19 @@
           return nextElem
         end
 
-        local nextElem = addStructureElem(currentContainer, 'Next', GDDEFS.MAP_NEXTELEM, vtPointer)
+        local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
         nextElem.ChildStruct = createStructure('ConstNext')
         return nextElem
+      end
+
+      local function createNextConstSymbol(currentSymbol)
+        local nextSymbol
+        if GDDEFS.MAJOR_VER == 4 then
+          nextSymbol = wrapBrackets( currentSymbol .. "+0" )
+        else --if GDDEFS.MAJOR_VER == 3 then
+          nextSymbol = wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
+        end
+        return nextSymbol
       end
 
       local function formatArrayEntry(entry)
@@ -2740,12 +2767,20 @@
         return packedDataArrAddr, packedVectorSize
       end
 
-      local function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter)
+      local function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter, contextTable)
 
         debugStepIn()
         sendDebugMessageAndStepOut("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
         local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
-        handler(packedDataArrAddr, packedVectorSize, parent, emitter)
+        handler(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+      end
+
+      local function getContainerFromEmitterAndContext(emitter, nodeContext)
+        if emitter == GDEmitters.StructEmitter then
+          return nodeContext.struct
+        elseif emitter == GDEmitters.AddrEmitter then
+          return nodeContext.memrec
+        end
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
@@ -2753,7 +2788,7 @@
       local function readNodeVariantEntry(mapElement, variantVector, variantSize, bNeedStructOffset)
         -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
         local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
-        local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize, bNeedStructOffset);
+        local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize--[[, bNeedStructOffset]]);
 
         local name = getVariantNameFromMapElement(mapElement);
         local finalType = resolveScriptVariantType(mapElement, runtimeType);
@@ -2766,7 +2801,8 @@
           typeId = finalType,
           typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
           variantPtr = variantPtr,
-          offsetToValue = offsetToValue or 0,
+          offsetToValue = bNeedStructOffset and offsetToValue or 0,
+          offset = offsetToValue,
           ceType = getCETypeFromGD(finalType)
         }
 
@@ -2791,6 +2827,7 @@
           typeName = typeName,
           variantPtr = variantPtr,
           offsetToValue = offsetToValue,
+          offset = offsetToValue,
           ceType = getCETypeFromGD(finalType)
         }
 
@@ -2815,6 +2852,7 @@
           typeName = getGDTypeName(constType) or "UNKNOWNTYPE",
           variantPtr = constPtr,
           offsetToValue = offsetToValue,
+          offset = offsetToValue,
           ceType = getCETypeFromGD(constType)
         }
 
@@ -2861,7 +2899,8 @@
           typeId = runtimeType,
           typeName = getGDTypeName(runtimeType) or "UNKNOWNTYPE",
           variantPtr = variantPtr,
-          offsetToValue = offsetToValue,
+          offsetToValue = offsetToValue or 0,
+          offset = offsetToValue,
           ceType = getCETypeFromGD(runtimeType)
         }
 
@@ -2887,6 +2926,7 @@
           typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
           variantPtr = valueValuePtr,
           offsetToValue = offsetToValue,
+          offset = offsetToValue,
           ceType = getCETypeFromGD(valueType),
           keyType = keyType,
           keyValueAddr = keyValueAddr
@@ -2918,24 +2958,28 @@
         GDHandlers.VariantHandlers.DICTIONARY = function(entry, emitter, parent, contextTable)
           sendDebugMessage("DICTIONARY case for name: " .. entry.name .. " address: " .. numtohexstr(entry.variantPtr) .. " offset: " .. numtohexstr(entry.offsetToValue))
           local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+          local offsetToValue = rootOffset(entry, emitter)
 
           if isNullOrNil(dictSize) then
-            emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType)
+            emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, offsetToValue, entry.ceType) -- entry.offsetToValue
             return;
           end
 
-          local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, rootOffset(entry, emitter), entry.ceType, "Dict")
+          local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, offsetToValue, entry.ceType, "Dict")
+          if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(offsetToValue) ) end
           emitter.recurseDictionary(contextTable, child, readPointer(entry.variantPtr)) -- we pass the actual base addr
         end
 
         GDHandlers.VariantHandlers.ARRAY = function(entry, emitter, parent, contextTable)
           sendDebugMessage("ARRAY case for name: " .. entry.name)
+          local offsetToValue = rootOffset(entry, emitter)
           if isArrayEmptyFromVariantPtr(entry.variantPtr) then
-            emitter.leaf(contextTable, parent, "array (empty): " .. entry.name, rootOffset(entry, emitter), entry.ceType);
+            emitter.leaf(contextTable, parent, "array (empty): " .. entry.name, offsetToValue, entry.ceType);
             return;
           end
 
-          local child = emitter.branch(contextTable, parent, "array: " .. entry.name, rootOffset(entry, emitter), entry.ceType, "Array");
+          local child = emitter.branch(contextTable, parent, "array: " .. entry.name, offsetToValue, entry.ceType, "Array");
+          if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(offsetToValue) ) end
           emitter.recurseArray(contextTable, child, readPointer(entry.variantPtr))
         end
 
@@ -2950,12 +2994,13 @@
             if emitter == GDEmitters.StructEmitter then
               local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: " .. entry.name, realOffset, vtPointer);
               nodeChild.BackgroundColor = 0x6C3157
-            else
+            else--if emitter == GDEmitters.AddrEmitter then
               local nodeChild = emitter.branch(objectContext, objectParent, "mNode: " .. entry.name, realOffset, vtPointer, "Node");
               nodeChild.BackgroundColor = 0x6C3157
 
-              if emitter.recurseNode then -- TODO: redundant?
-                emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr)) --
+              if emitter.recurseNode then
+                if objectContext.symbol then objectContext.symbol = objectContext.symbol .. '+' .. numtohexstr(realOffset) end
+                emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr))
               end
             end
 
@@ -2989,7 +3034,8 @@
             {
               nodeAddr = contextTable.nodeAddr,
               nodeName = contextTable.nodeName,
-              baseAddress = stringNameAddr + GDDEFS.STRING
+              baseAddress = stringNameAddr + GDDEFS.STRING,
+              symbol = '' --contextTable.symbol
             }
             emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
           end
@@ -2999,11 +3045,12 @@
         GDHandlers.VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
           sendDebugMessage("handlePackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
           local arrayAddr = readPointer(entry.variantPtr)
-
+          local offsetToValue = rootOffset(entry, emitter)
           if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
-            emitter.leaf(contextTable, parent, entry.typeName .. ' (empty): ' .. entry.name, rootOffset(entry, emitter), entry.ceType)
+            emitter.leaf(contextTable, parent, entry.typeName .. ' (empty): ' .. entry.name, offsetToValue, entry.ceType)
           else
-            local child = emitter.branch(contextTable, parent, entry.typeName .. ' ' .. entry.name, rootOffset(entry, emitter), entry.ceType, "P_Array")
+            local child = emitter.branch(contextTable, parent, entry.typeName .. ' ' .. entry.name, offsetToValue, entry.ceType, "P_Array")
+            if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(offsetToValue) ) end
             emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
           end
         end
@@ -3021,66 +3068,87 @@
         GDHandlers.VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
           local typeName = "Color: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
           local typeName = "Vec2: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
           local typeName = "vec2I: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
         end
 
         GDHandlers.VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
           local typeName = "Rect2: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
           local typeName = "Rect2I: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtDword)
         end
 
         GDHandlers.VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
           local typeName = "Vec3: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
           local typeName = "Vec3I: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
         end
 
         GDHandlers.VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
           local typeName = "Vec4: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
           local typeName = "Vec4I: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
+          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtDword)
         end
 
@@ -3109,86 +3177,86 @@
 
       GDHandlers.PackedArrayHandlers = {}
 
-        GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
 
             if readPointer(arrElement) ~= 0 then
-              emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement)
+              emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
             end
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_INT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_INT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x4
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_FLOAT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_FLOAT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x4
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_BYTE_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_BYTE_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x1
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte)
+            emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_VECTOR2_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_VECTOR2_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x8
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement)
+            emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_VECTOR3_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_VECTOR3_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0xC
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement)
+            emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.PACKED_COLOR_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.PACKED_COLOR_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x10
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement)
+            emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement, contextTable)
           end
         end
 
-        GDHandlers.PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter)
+        GDHandlers.PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-            emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer)
+            emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer, contextTable)
           end
         end
 
@@ -3455,13 +3523,14 @@
       --- go over child nodes in the main nodes
       ---@param nodeAddr number
       ---@param parent userdata
-      function iterateMNodeToAddr(nodeAddr, parent)
+      function iterateMNodeToAddr(nodeAddr, parent, contextTable)
         assert(type(nodeAddr) == 'number', "iterateMNodeToAddr: node addr has to be a number, instead got: " .. type(nodeAddr))
         assert(type(parent) == "userdata", "iterateMNodeToAddr: parent has to exist")
 
         debugStepIn()
 
         local nodeName = getNodeName(nodeAddr)
+        local gdscriptName = getNodeNameFromGDScript(nodeAddr)
         sendDebugMessage(' iterateMNodeToAddr: MemberNode: ' .. tostring(nodeName))
 
         for i, storedNode in ipairs(dumpedNodes) do -- check if a node was already dumped
@@ -3482,6 +3551,14 @@
           parent.setDescription(parent.Description .. ' : ' .. tostring(nodeName)) -- append node name
         end, nodeName, parent)
 
+        local nodeContext;
+        local newNodeSymStr, GDSIsym, variantVectorSym, GDScriptSym, GDScriptConstMapSym
+        newNodeSymStr = contextTable.symbol -- should be wrapped outside
+        GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )
+        variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
+        GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
+        GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )
+
         sendDebugMessage('iterateMNodeToAddr: STEP: Constants for: ' .. tostring(nodeName))
 
         if GDDEFS.CONST_MAP ~= 0 then
@@ -3497,11 +3574,14 @@
             return newConstRec
           end, parent)
 
-          iterateNodeConstToAddr(nodeAddr, newConstRec)
+          nodeContext = { addr = nodeAddr, name = nodeName, gdname = gdscriptName, memrec = newConstRec, struct = nil, symbol = GDScriptConstMapSym }
+          iterateNodeConstToAddr(nodeContext)
         end
 
         sendDebugMessage('iterateMNodeToAddr: STEP: VARIANTS for: ' .. tostring(nodeName))
-        iterateVecVarToAddr(nodeAddr, parent)
+
+        nodeContext = { addr = nodeAddr, name = nodeName, gdname = gdscriptName, memrec = parent, struct = nil, symbol = variantVectorSym }
+        iterateVecVarToAddr(nodeContext)
 
         debugStepOut()
         return
@@ -3514,24 +3594,23 @@
         debugStepIn()
 
         local nodeName = getNodeName(nodeAddr) or 'NIL';
+        local scriptName = getNodeNameFromGDScript(nodeAddr)
 
         sendDebugMessage('iterateNodeToStruct: Node: ' .. tostring(nodeName))
-
-        -- for i, storedNode in ipairs(dumpedDissectorNodes) do -- we don't go recursively
-        --   if storedNode == nodeAddr then
-        --     sendDebugMessageAndStepOut('iterateNodeToStruct: NODE ' .. tostring(nodeName) .. ' ALREADY DUMPED')
-        --     parent.Name = parent.Name .. ' /D/'
-        --     return
-        --   end
-        -- end
-        -- table.insert(dumpedDissectorNodes, nodeAddr)
-
+        
         local varVectorStructElem, scriptStructElem, constMapStructElem, functMapStructElem
         local gdScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE) or 0x0
         local gdScriptAddr = readPointer(gdScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
         local varVectorAddr = readPointer(gdScriptInstanceAddr + GDDEFS.VAR_VECTOR)
         local constMapAddr = readPointer(gdScriptAddr + GDDEFS.CONST_MAP)
         local funcMapAddr = readPointer(gdScriptAddr + GDDEFS.FUNC_MAP)
+
+        local nodeContext;
+        local newNodeSymStr = scriptName
+        local GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )
+        local variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
+        local GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
+        local GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )
 
         scriptStructElem = addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer)
 
@@ -3540,7 +3619,9 @@
           varVectorStructElem = addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer)
           sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: ' .. tostring(nodeName))
           varVectorStructElem.ChildStruct = createStructure('Vars')
-          iterateVecVarToStruct(nodeAddr, varVectorStructElem)
+
+          local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = varVectorStructElem, symbol = variantVectorSym }
+          iterateVecVarToStruct(nodeContext) -- TODO: unify
         else
           sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS skipped: nothing to process: ' .. tostring(nodeName))
         end
@@ -3549,7 +3630,7 @@
           constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
           sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: ' .. tostring(nodeName))
           constMapStructElem.ChildStruct = createStructure('Consts')
-          iterateNodeConstToStruct(nodeAddr, constMapStructElem)
+          iterateNodeConstToStruct(nodeAddr, constMapStructElem) -- TODO: unify
         else
           sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS skipped: nothing to process: ' .. tostring(nodeName))
         end
@@ -3588,12 +3669,11 @@
           end
         end
         table.insert(dumpedMonitorNodes, nodeAddr)
-        local name = getNodeName(nodeAddr)
-        if name == nil or name == "N??" then
-          name = getNodeNameFromGDScript(nodeAddr)
-        end
-
-        registerSymbol(tostring(name), nodeAddr, true)
+        -- local name = getNodeNameFromGDScript(nodeAddr) or 'N??'
+        -- if name == nil or name == "N??" then
+        --   name = getNodeNameFromGDScript(nodeAddr)
+        -- end
+        -- registerSymbol(name, nodeAddr, true)
 
         iterateVecVarForNodes(nodeAddr)
       end
@@ -3666,7 +3746,7 @@
 
       --- gets a Node by name
       ---@param nodeName string
-      function getNode(nodeName)
+      function getMainNodeByName(nodeName)
         assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
         if not (gdOffsetsDefined) then
           print('define the offsets first, silly')
@@ -3840,7 +3920,8 @@
           {
             nodeAddr = 0,
             nodeName = "FunctionConst",
-            baseAddress = entry.variantPtr
+            baseAddress = entry.variantPtr,
+            symbol = ''
           }
           local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
           handler(entry, emitter, funcConstantStructElem, contextTable)
@@ -7198,7 +7279,7 @@
         codeStructElement.VarType = vtPointer
         codeStructElement.ChildStruct = createStructure('FuncCode')
 
-        local funcConstantStructElem = funcStruct.addElement()
+        local funcConstantStructElem = funcStruct.addElement()  -- TODO: make GLOBALS and CONSTANTS dumped when building Node Struct, use bool to disassemble functions?
         funcConstantStructElem.Name = 'Constants'
         funcConstantStructElem.Offset = GDDEFS.FUNC_CONST
         funcConstantStructElem.VarType = vtPointer
@@ -7430,12 +7511,11 @@
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
 
       --- returns a head element, tail element and (hash)Map size
-      ---@param nodeAddr number
-      function getNodeConstMap(nodeAddr, constStructElement)
-        assert(type(nodeAddr) == 'number', "getNodeConstMap: NodePtr should be a number, instead got: " .. type(nodeAddr))
+      function getNodeConstMap(nodeContext)
+        assert(type(nodeContext.addr) == 'number', "getNodeConstMap: NodePtr should be a number, instead got: " .. type(nodeContext.addr))
         debugStepIn()
 
-        local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        local scriptInstanceAddr = readPointer(nodeContext.addr + GDDEFS.GDSCRIPTINSTANCE)
         if isNullOrNil(scriptInstanceAddr) then
           sendDebugMessageAndStepOut('getNodeConstMap: scriptInstance is invalid');
           return;
@@ -7457,12 +7537,12 @@
         debugStepOut()
 
         if GDDEFS.MAJOR_VER == 4 then
-          return mainElement, lastElement, mapSize, constStructElement
+          return mainElement, lastElement, mapSize, nodeContext
         else
-          if constStructElement then
+          if nodeContext.struct then
             constStructElement.ChildStruct = createStructure('ConstMapRes')
           end
-          return getLeftmostMapElem(mainElement, lastElement, mapSize, constStructElement)
+          return getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
         end
       end
 
@@ -7482,46 +7562,54 @@
       end
 
       -- iterates over const (hash)map of a node and creates addresses for it
-      ---@param nodeAddr number
-      ---@param parent userdata
-      function iterateNodeConstToAddr(nodeAddr, parent)
-        assert(type(nodeAddr) == 'number', "iterateNodeConstToAddr Node addr has to be a number, instead got: " .. type(nodeAddr))
+      function iterateNodeConstToAddr(nodeContext)
+        assert(type(nodeContext.addr) == 'number', "iterateNodeConstToAddr Node addr has to be a number, instead got: " .. type(nodeContext.addr))
 
         debugStepIn()
 
-        local nodeName = getNodeName(nodeAddr) or "UnknownNode"
-        if not checkForGDScript(nodeAddr) then
-          sendDebugMessageAndStepOut("iterateNodeConstToAddr: Node " .. tostring(nodeName) .. " with NO GDScript")
+        if not checkForGDScript(nodeContext.addr) then
+          sendDebugMessageAndStepOut("iterateNodeConstToAddr: Node " .. nodeContext.name .. " with NO GDScript")
           synchronize(function(parent)
             parent.Destroy()
-          end, parent)
+          end, nodeContext.memrec)
           return;
         end
 
-        local headElement, tailElement, mapSize = getNodeConstMap(nodeAddr)
+        local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
+
+        local headElement, tailElement, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext) -- TODO: nodeContext overwriting
         if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-          sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeAddr))
+          sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr))
           synchronize(function(parent)
             parent.Destroy()
-          end, parent)
+          end, nodeContext.memrec)
           return;
         end
 
         local emitter = GDEmitters.AddrEmitter
         local mapElement = headElement
+        local currentSymbol = nodeMapContext.symbol
+        -- local index = 0;
 
         repeat
           local entry = readNodeConstEntry(mapElement)
-          entry.name = "CONST: " .. entry.name
+          entry.name = "const: " .. entry.name
           local contextTable =
           {
-            nodeAddr = nodeAddr,
-            nodeName = nodeName or "UnknownNode",
-            baseAddress = entry.variantPtr
+            nodeAddr = nodeMapContext.addr,
+            nodeName = nodeMapContext.name or "UnknownNode",
+            scriptName = nodeMapContext.gdname,
+            baseAddress = entry.variantPtr,
+            symbol = currentSymbol
           }
           local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
-          handler(entry, emitter, parent, contextTable)
+          handler(entry, emitter, nodeContext.memrec, contextTable)
           mapElement = getNextMapElement(mapElement)
+          -- index = index + 1
+
+          if mapElement ~= 0 then
+            currentSymbol = createNextConstSymbol(currentSymbol)
+          end
 
         until (mapElement == 0)
         debugStepOut()
@@ -7531,32 +7619,37 @@
       -- iterates over const (hash)map of a node and builds the structure for it
       ---@param nodeAddr number
       ---@param constStructElement userdata
-      function iterateNodeConstToStruct(nodeAddr, constStructElement) -- TODO: MAKE IT UNIVERSAL
+      function iterateNodeConstToStruct(nodeContext)
         assert(type(nodeAddr) == 'number',
         "iterateNodeConstToStruct Node addr has to be a number, instead got: " .. type(nodeAddr))
-        if GDDEFS.MONO and (checkScriptType(nodeAddr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
+        if GDDEFS.MONO and (checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
         
         debugStepIn()
 
-        local headElement, _, mapSize, constStructElement = getNodeConstMap(nodeAddr, constStructElement)
+        local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
+
+        local headElement, _, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext)
         if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-            sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeAddr)) return;
+          sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr)) return;
         end
 
         local mapElement = headElement
         local emitter = GDEmitters.StructEmitter
-        local currentContainer = constStructElement
+        local currentContainer = nodeMapContext.struct
+        local currentSymbol = nodeMapContext.symbol
         local index = 0;
-        local nodeName = getNodeName(nodeAddr) or "UnknownNode"
+        local nodeName = getNodeName(nodeMapContext.addr) or "UnknownNode"
 
         repeat
           local entry = readNodeConstEntry(mapElement)
           entry.name = "CONST: " .. entry.name
           local contextTable =
           {
-            nodeAddr = nodeAddr,
-            nodeName = nodeName,
-            baseAddress = entry.variantPtr
+            nodeAddr = nodeMapContext.addr,
+            nodeName = nodeMapContext.name,
+            scriptName = nodeMapContext.gdname,
+            baseAddress = entry.variantPtr,
+            symbol = nodeMapContext.symbol
           }
           local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
           handler(entry, emitter, currentContainer, contextTable)
@@ -7565,7 +7658,8 @@
           index = index + 1
 
           if mapElement ~= 0 then
-              currentContainer = createNextConstContainer(currentContainer, index)
+            currentContainer = createNextConstContainer(currentContainer, index)
+            currentSymbol = createNextConstSymbol(currentSymbol)
           end
 
         until (mapElement == 0)
@@ -7580,6 +7674,7 @@
         options = options or {}
         local mapElement = dictHead
         local currentContainer = parent
+        local currentSymbol = contextSeed and contextSeed.symbol
         local index = 0
 
         repeat
@@ -7589,7 +7684,8 @@
             {
               nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
               nodeName = contextSeed and contextSeed.nodeName or "Dictionary",
-              baseAddress = entry.variantPtr
+              baseAddress = entry.variantPtr,
+              symbol = currentSymbol
             }
 
             local handler = GDHandlers.VariantHandlers[formatted.typeName] or GDHandlers.VariantHandlers.DEFAULT
@@ -7601,6 +7697,7 @@
             if isNotNullOrNil(mapElement) and options.nextContainerFactory then
               currentContainer = options.nextContainerFactory(currentContainer, index)
             end
+            currentSymbol = nextSymbolFactory(currentSymbol)
 
         until (mapElement == 0)
         return
@@ -7609,20 +7706,26 @@
       --- iterates a dictionary and adds it to a class
       ---@param dictAddr number
       ---@param parent userdata
-      function iterateDictionaryToAddr(dictAddr, parent)
+      function iterateDictionaryToAddr(dictAddr, parent, contextTable)
         assert(type(dictAddr) == 'number', 'iterateDictionaryToAddr: dictAddr has to be a number, instead got: ' .. type(dictAddr))
 
         local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
         if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then return end
+        
+        if GDDEFS.MAJOR_VER == 3 then
+          contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_LIST' )
+        end
 
-        iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Dictionary" })
+        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_HEAD' )
+        
+        iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol }) -- TODO: bNeedStructOffset
         return
       end
 
       --- iterates a dictionary and adds it to a struct
       ---@param dictAddr number
       ---@param dictStructElement userdata
-      function iterateDictionaryToStruct(dictAddr, dictStructElement)
+      function iterateDictionaryToStruct(dictAddr, dictStructElement, contextTable)
 
         local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
         if isNullOrNil(dictRoot) then return
@@ -7631,11 +7734,13 @@
 
         if GDDEFS.MAJOR_VER == 3 then
           currentRoot = createChildStructElem(currentRoot, 'dictList', GDDEFS.DICT_LIST, vtPointer, 'dictList')
+          contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_LIST' )
         end
 
         local headContainer = createChildStructElem(currentRoot, 'dictHead', GDDEFS.DICT_HEAD, vtPointer, 'dictHead')
+        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_HEAD' )
 
-        iterateDictionary(dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer }, { nodeAddr = 0, nodeName = "Dictionary" })
+        iterateDictionary(dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
         return
       end
 
@@ -7689,7 +7794,8 @@
           {
             nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
             nodeName = contextSeed and contextSeed.nodeName or "Array",
-            baseAddress = entry.variantPtr
+            baseAddress = entry.variantPtr,
+            symbol = contextSeed and contextSeed.symbol or ''
           }
           local handler = GDHandlers.VariantHandlers[formatted.typeName] or GDHandlers.VariantHandlers.DEFAULT
           handler(formatted, emitter, parent, contextTable)
@@ -7701,20 +7807,21 @@
       --- takes in an array address and address owner to append to
       ---@param arrayAddr number
       ---@param parent userdata
-      function iterateArrayToAddr(arrayAddr, parent)
+      function iterateArrayToAddr(arrayAddr, parent, contextTable)
         assert(type(arrayAddr) == 'number', "Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
         local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
         if isNullOrNil(arrVectorAddr) then return; end
 
-        iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array" })
+        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
+        iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })  -- TODO: bNeedStructOffset
         return
       end
 
       --- takes in an array address and struct owner to append to
       ---@param arrayAddr number
       ---@param parent userdata
-      function iterateArrayToStruct(arrayAddr, arrayStructElement)
+      function iterateArrayToStruct(arrayAddr, arrayStructElement, contextTable)
         assert(type(arrayAddr) == 'number', "iterateArrayToStruct: Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
         local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
@@ -7722,7 +7829,8 @@
 
         arrayStructElement = addStructureElem(arrayStructElement, 'VectorArray', GDDEFS.ARRAY_TOVECTOR, vtPointer)
         arrayStructElement.ChildStruct = createStructure('ArrayData')
-        iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array" })
+        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
+        iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol }) -- TODO: nodename and addr?
         return
       end
 
@@ -7757,14 +7865,15 @@
       ---@param packedArrayAddr number
       ---@param packedTypeName string
       ---@param parent userdata
-      function iteratePackedArrayToAddr(packedArrayAddr, packedTypeName, parent)
+      function iteratePackedArrayToAddr(packedArrayAddr, packedTypeName, parent, contextTable)
         assert(type(packedArrayAddr) == 'number', "Packed Array has to be a number, instead got: " .. type(packedArrayAddr))
         assert(type(packedTypeName) == 'string', "TypeName has to be a string, instead got: " .. type(packedTypeName))
 
         local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
         if isNullOrNil(packedDataArrAddr) then return end
 
-        iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, GDEmitters.PackedAddrEmitter)
+        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+P_ARRAY_TOARR' )
+        iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, GDEmitters.PackedAddrEmitter, contextTable)
         return
       end
 
@@ -7772,7 +7881,7 @@
       ---@param packedArrayAddr number
       ---@param packedTypeName string
       ---@param pArrayStructElement userdata
-      function iteratePackedArrayToStruct(packedArrayAddr, packedTypeName, pArrayStructElement)
+      function iteratePackedArrayToStruct(packedArrayAddr, packedTypeName, pArrayStructElement, contextTable)
         assert(type(packedArrayAddr) == 'number', "Packed Array " .. tostring(packedArrayAddr) .. " has to be a number, instead got: " .. type(packedArrayAddr))
         assert(type(packedTypeName) == 'string', "TypeName " .. tostring(packedTypeName) .. " has to be a string, instead got: " .. type(packedTypeName))
 
@@ -7780,8 +7889,8 @@
         if isNullOrNil(packedDataArrAddr) then return end
         pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDDEFS.P_ARRAY_TOARR, vtPointer)
         pArrayStructElement.ChildStruct = createStructure('PArrayData')
-
-        iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, GDEmitters.PackedStructEmitter)
+        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+P_ARRAY_TOARR' )
+        iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, GDEmitters.PackedStructEmitter, contextTable)
         return
       end
 
@@ -7791,30 +7900,31 @@
       ---@param parent userdata
       ---@param emitter table
       ---@param options table
-      function iterateVectorVariants(nodeAddr, parent, emitter, options)
-        assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr));
+      function iterateVectorVariants(nodeContext, emitter, options)
+        assert(type(nodeContext.addr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeContext.addr));
 
         debugStepIn()
 
-        local nodeName = getNodeName(nodeAddr) or "UnknownNode";
-
         options = options or {}
 
-        if options.requireGDScript and not checkForGDScript(nodeAddr) then
+        if options.requireGDScript and not checkForGDScript(nodeContext.addr) then
           
-          sendDebugMessageAndStepOut(" iterateVectorVariants: Node has NO GDScript: " .. nodeName)
-          -- synchronize(function(parent) parent.Destroy() end, parent ) -- TODO: compare the emitter?
+          sendDebugMessageAndStepOut("iterateVectorVariants: Node has NO GDScript: " .. nodeContext.name)
+          if emitter == GDEmitters.AddrEmitter then
+            synchronize(function(parent) parent.Destroy() end, nodeContext.memrec )
+          end
           return;
         end
-        if GDDEFS.MONO and (checkScriptType(nodeAddr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
 
-        local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
+        if GDDEFS.MONO and (checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
+
+        local headElement, tailElement, mapSize = getNodeVariantMap(nodeContext.addr)
         if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-          sendDebugMessageAndStepOut('iterateVectorVariants (hash)Map empty?: ' .. nodeName)
+          sendDebugMessageAndStepOut('iterateVectorVariants (hash)Map empty?: ' .. nodeContext.name)
           return;
         end
 
-        local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
+        local variantVector, vectorSize = getNodeVariantVector(nodeContext.addr)
         local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
         if not ok then
           sendDebugMessageAndStepOut("iterateVectorVariants: Variant resize strangely failed")
@@ -7827,12 +7937,14 @@
           local entry = readNodeVariantEntry(mapElement, variantVector, variantSize, options.bNeedStructOffset)
           local contextTable =
           {
-            nodeAddr = nodeAddr,
-            nodeName = nodeName,
-            baseAddress = entry.variantPtr
+            nodeAddr = nodeContext.addr,
+            nodeName = nodeContext.name,
+            baseAddress = entry.variantPtr,
+            symbol = nodeContext.symbol
           }
           local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT;
-          handler(entry, emitter, parent, contextTable);
+          local parentContainer = getContainerFromEmitterAndContext(emitter, nodeContext)
+          handler(entry, emitter, parentContainer, contextTable);
 
           mapElement = getNextMapElement(mapElement)
         until (mapElement == 0)
@@ -7842,27 +7954,23 @@
       end
 
       --- nodeAddr and owner to append to
-      ---@param nodeAddr number
-      ---@param parent userdata
-      function iterateVecVarToAddr(nodeAddr, parent)
+      function iterateVecVarToAddr(nodeContext)
         local options =
         {
-          bNeedStructOffset = false,
+          bNeedStructOffset = false, -- TODO: bNeedStructOffset
           requireGDScript = true
         };
-        iterateVectorVariants(nodeAddr, parent, GDEmitters.AddrEmitter, options);
+        iterateVectorVariants(nodeContext, GDEmitters.AddrEmitter, options);
       end
 
       --- nodeAddr and ownerStruct to append to
-      ---@param nodeAddr number
-      ---@param varStructElement userdata
-      function iterateVecVarToStruct(nodeAddr, varStructElement)
+      function iterateVecVarToStruct(nodeContext)
           local options =
           {
             bNeedStructOffset = true,
             requireGDScript = false
           }
-          iterateVectorVariants(nodeAddr, varStructElement, GDEmitters.StructEmitter, options)
+          iterateVectorVariants(nodeContext, GDEmitters.StructEmitter, options)
       end
 
       --- iterate nodes only and owner to append to
@@ -7960,9 +8068,9 @@
       ---@param index number
       ---@param varSize number
       ---@param bOffsetret boolean
-      function getVariantByIndex(vectorAddr, index, varSize, bPushOffset)
-        assert(type(vectorAddr) == 'number', ">>getVariantByIndex: vector addr should be a number, instead got: " .. type(vectorAddr))
-        assert((type(index) == 'number') and (index >= 0), ">>getVariantByIndex: index should be a valid number, instead got: " .. type(index))
+      function getVariantByIndex(vectorAddr, index, varSize--[[, bPushOffset]])
+        assert(type(vectorAddr) == 'number', "getVariantByIndex: vector addr should be a number, instead got: " .. type(vectorAddr))
+        assert((type(index) == 'number') and (index >= 0), "getVariantByIndex: index should be a valid number, instead got: " .. type(index))
 
         debugStepIn()
 
@@ -7982,11 +8090,11 @@
         end
 
         debugStepOut()
-        if bPushOffset then
+        -- if bPushOffset then
           return variantAddr, variantType, offset
-        else
-          return variantAddr, variantType
-        end
+        -- else
+        --   return variantAddr, variantType
+        -- end
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// (Hash)Map
@@ -7995,45 +8103,42 @@
       ---@param rootElement number
       ---@param endElement number
       ---@param mapSize number
-      function getLeftmostMapElem(rootElement, endElement, mapSize, struct)
+      ---@param contextTable table
+      function getLeftmostMapElem(rootElement, endElement, mapSize, contextTable--[[, options]])
         debugStepIn()
+        -- options = options or {}
 
         local mapElement = readPointer(rootElement + GDDEFS.MAP_LELEM)
+
+        if isNullOrNil(mapElement) then
+          sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
+          return 0, endElement, mapSize -- return 0 as for failure
+        end
+
+        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+MAP_LELEM' ) -- rootElem
+
+        if contextTable.struct then
+          contextTable.struct = addStructureElem(contextTable.struct, 'rootElem', GDDEFS.MAP_LELEM, vtPointer)
+          contextTable.struct.ChildStruct = createStructure('rootElem')
+        end
+
+
+        while readPointer(mapElement + GDDEFS.MAP_LELEM) ~= endElement do
+          mapElement = readPointer(mapElement + GDDEFS.MAP_LELEM)
+          contextTable.symbol = wrapBrackets( contextTable.symbol .. '+MAP_LELEM' ) -- nextElement
+          if contextTable.struct then
+            contextTable.struct = addStructureElem(contextTable.struct, 'goLeft', GDDEFS.MAP_LELEM, vtPointer)
+            contextTable.struct.ChildStruct = createStructure('goLeft')
+          end
+        end
+
         if isNullOrNil(mapElement) then
           sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
           return 0, endElement, mapSize -- return 0 as a head element
         end
 
-        local leftStructElem
-        if struct then
-          leftStructElem = addStructureElem(struct, 'rootElem', GDDEFS.MAP_LELEM, vtPointer)
-          leftStructElem.ChildStruct = createStructure('rootElem')
-        end
-
-        if (mapElement == endElement) then
-          debugStepOut();
-          return mapElement, endElement, mapSize -- not sure that's possible
-        else
-          while readPointer(mapElement + GDDEFS.MAP_LELEM) ~= endElement do
-            mapElement = readPointer(mapElement + GDDEFS.MAP_LELEM)
-            if struct then
-              leftStructElem = addStructureElem(leftStructElem, 'goLeft', GDDEFS.MAP_LELEM, vtPointer)
-              leftStructElem.ChildStruct = createStructure('goLeft')
-            end
-          end
-
-          if isNullOrNil(mapElement) then
-            sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
-            return 0, endElement, mapSize
-          end -- return 0 as a head element
-
-          debugStepOut();
-          if struct then
-            return mapElement, endElement, mapSize, leftStructElem
-          else
-            return mapElement, endElement, mapSize
-          end
-        end
+        debugStepOut();
+        return mapElement, endElement, mapSize, contextTable
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Type & Size
@@ -8557,6 +8662,7 @@
           if isNullOrNil(nodePtr) then error('getMainNodeDict: NO MAIN NODES') end
 
           local nodeNameStr = getNodeName(nodePtr)
+          local gdscriptName = getNodeNameFromGDScript(nodePtr)
           nodeNameStr = tostring(nodeNameStr)
           registerSymbol(nodeNameStr, nodePtr, true) -- TODO: remove when
 
@@ -8565,6 +8671,7 @@
             {
               index = i,
               NAME = nodeNameStr,
+              SCRIPTNAME = gdscriptName,
               PTR = nodePtr,
               TYPE = 24, -- node
               MEMREC = 0
@@ -8574,6 +8681,7 @@
             {
               index = i,
               NAME = nodeNameStr,
+              SCRIPTNAME = gdscriptName,
               PTR = nodePtr,
               TYPE = 17, -- node
               MEMREC = 0
@@ -8701,6 +8809,8 @@
         table.insert(dumpedNodes, nodeAddr)
 
         local nodeNameStr = getNodeName(nodeAddr)
+        local gdscriptName = getNodeNameFromGDScript(nodeAddr)
+
         if not checkForGDScript(nodeAddr) then
           -- sendDebugMessage('DumpNodeToAddr: node '..nodeNameStr..' doesnt have GDScript/Inst')
           return
@@ -8714,6 +8824,15 @@
             end
           end
         end, parentMemrec)
+        
+        local newNodeSymStr, GDSIsym, variantVectorSym, GDScriptSym, GDScriptConstMapSym
+        local nodeContext;
+
+        newNodeSymStr = gdscriptName
+        GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )                              -- [[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
+        variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
+        GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
+        GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
 
         if bDoConstants and (GDDEFS.CONST_MAP ~= 0) then
           -- sendDebugMessage('DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) )
@@ -8728,12 +8847,14 @@
             newConstRec.appendToEntry(parentMemrec)
             return newConstRec
           end, parentMemrec)
-
-          iterateNodeConstToAddr(nodeAddr, newConstRec)
+          nodeContext = { addr = nodeAddr, name = nodeNameStr, gdname = gdscriptName, memrec = newConstRec, struct = nil, symbol = GDScriptConstMapSym }
+          iterateNodeConstToAddr(nodeContext)
 
         end
         -- sendDebugMessage('DumpNodeToAddr: variants for node: '..tostring(nodeNameStr) )
-        iterateVecVarToAddr(nodeAddr, parentMemrec)
+
+        nodeContext = { addr = nodeAddr, name = nodeNameStr, gdname = gdscriptName, memrec = parentMemrec, struct = nil, symbol = variantVectorSym }
+        iterateVecVarToAddr(nodeContext)
         debugPrefix = 1; -- reset debug prefix
       end
 
@@ -8767,7 +8888,16 @@
 
         local mainNodeDict = getMainNodeDict()
 
+        local symbolToChildren = '[[ptVP]+CHILDREN]' -- .. '+' .. numtohexstr(GDDEFS.CHILDREN)
+        local newNodeSymStr, GDSIsym, variantVectorSym, GDScriptSym, GDScriptConstMapSym
+        local nodeContext;
+
         for key, value in pairs(mainNodeDict) do
+          newNodeSymStr = symbolToChildren .. '+' .. numtohexstr(value.index) .. "*" .. numtohexstr(GDDEFS.PTRSIZE) -- [[ptVP]+CHILDREN]+i*ptrsize
+          GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )                              -- [[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
+          variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
+          GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
+          GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
 
           value.MEMREC = synchronize(function(value, key, parentRec)
             local newNodeMemRec = addMemRecTo(key, value.PTR, getCETypeFromGD(value.TYPE), parentRec)
@@ -8789,12 +8919,13 @@
               newConstRec.appendToEntry(value.MEMREC)
               return newConstRec
             end, value)
-
-            iterateNodeConstToAddr(value.PTR, newConstRec)
+            nodeContext = { addr = value.PTR, name = value.NAME, gdname = value.SCRIPTNAME, memrec = newConstRec, struct = nil, symbol = GDScriptConstMapSym }
+            iterateNodeConstToAddr(nodeContext)
           end
 
           sendDebugMessage('MAIN: loop. STEP: VARIANTS for: ' .. key)
-          iterateVecVarToAddr(value.PTR, value.MEMREC)
+          nodeContext = { addr = value.PTR, name = value.NAME, gdname = value.SCRIPTNAME, memrec = value.MEMREC, struct = nil, symbol = variantVectorSym }
+          iterateVecVarToAddr(nodeContext)
         end
 
         debugPrefix = 1;
