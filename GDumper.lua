@@ -3620,6 +3620,7 @@
         local variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
         local GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
         local GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )
+        local GDScriptFuncMapSym = wrapBrackets( GDScriptSym .. '+FUNC_MAP' )
 
         scriptStructElem = addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer)
 
@@ -3649,7 +3650,8 @@
           functMapStructElem = addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer)
           sendDebugMessage('iterateNodeToStruct: STEP: Functions for: ' .. tostring(nodeName))
           functMapStructElem.ChildStruct = createStructure('Funcs')
-          iterateNodeFuncMapToStruct(nodeAddr, functMapStructElem)
+          local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = functMapStructElem, symbol = GDScriptFuncMapSym }
+          iterateNodeFuncMapToStruct(nodeContext)
         else
           sendDebugMessage('iterateNodeToStruct: STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
         end
@@ -3820,11 +3822,11 @@
 
       --- returns a head element, tail element and (hash)Map size
       ---@param nodeAddr number
-      function getNodeFuncMap(nodeAddr, funcStructElement)
-        assert(type(nodeAddr) == 'number', "getNodeFuncMap: NodePtr should be a number, instead got: " .. type(nodeAddr))
+      function getNodeFuncMap(nodeContext)
+        assert(type(nodeContext.addr) == 'number', "getNodeFuncMap: NodePtr should be a number, instead got: " .. type(nodeContext.addr))
         debugStepIn()
 
-        local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        local scriptInstanceAddr = readPointer(nodeContext.addr + GDDEFS.GDSCRIPTINSTANCE)
         if isNullOrNil(scriptInstanceAddr) then
           sendDebugMessageAndStepOut('getNodeFuncMap: scriptInstance is invalid')
           return
@@ -3844,14 +3846,13 @@
           return; -- return to skip if the const map is absent
         end
         debugStepOut()
-
         if GDDEFS.MAJOR_VER == 4 then
-          return mainElement, lastElement, mapSize, funcStructElement
+          return mainElement, lastElement, mapSize, nodeContext
         else
           if funcStructElement then
             funcStructElement.ChildStruct = createStructure('ConstMapRes')
           end
-          return getLeftmostMapElem(mainElement, lastElement, mapSize, funcStructElement)
+          return getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
         end
       end
 
@@ -3865,20 +3866,22 @@
           sendDebugMessage("getGDFunctionPtr: Node: " .. tostring(nodeName) .. " wasn't found");
           return;
         end
-        local mapHead = getNodeFuncMap(nodePtr)
-        return findMapEntryByName(mapHead, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement)
+        local nodeMapContext = { addr = nodePtr, name = '', gdname = '', memrec = nil, struct = nil, symbol = funcName or '' }
+        local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeMapContext)
+        return findMapEntryByName(headElement, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement)
       end
 
       --- iterates a function map and adds it to a struct
       ---@param nodeAddr number
       ---@param funcStructElement userdata
-      function iterateNodeFuncMapToStruct(nodeAddr, funcStructElement)
-        assert(type(nodeAddr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeAddr))
+      function iterateNodeFuncMapToStruct(nodeContext)
+        assert(type(nodeContext.addr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeContext.addr))
 
         debugStepIn()
-        local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeAddr, funcStructElement)
+        local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
+        local headElement, tailElement, mapSize, nodeMapContext = getNodeFuncMap(nodeMapContext)
         if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-          sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: ' .. " Address " .. numtohexstr(nodeAddr))
+          sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: ' .. " Address " .. numtohexstr(nodeContext.addr))
           return;
         end
         local mapElement = headElement
@@ -3889,12 +3892,12 @@
 
           local funcName = getFunctionMapName(mapElement) or "UNKNOWN" -- the layout is similar to constant map's
 
-          emitFunctionStructEntry(currentContainer, mapElement, funcName)
+          emitFunctionStructEntry(nodeMapContext.struct, mapElement, funcName)
 
           index = index + 1
           mapElement = advanceFunctionMapElement(mapElement)
           if mapElement ~= 0 then
-            currentContainer = createNextFunctionContainer(currentContainer, index)
+            nodeMapContext.struct = createNextFunctionContainer(nodeMapContext.struct, index)
           end
         until (mapElement == 0)
 
@@ -7550,7 +7553,7 @@
           return mainElement, lastElement, mapSize, nodeContext
         else
           if nodeContext.struct then
-            constStructElement.ChildStruct = createStructure('ConstMapRes')
+            nodeContext.struct.ChildStruct = createStructure('ConstMapRes')
           end
           return getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
         end
@@ -8069,7 +8072,7 @@
         if GDDEFS.MAJOR_VER == 4 then
           return mainElement, endElement, mapSize
         else
-          return getLeftmostMapElem(mainElement, endElement, mapSize)
+          return getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
         end
       end
 
@@ -8114,9 +8117,9 @@
       ---@param endElement number
       ---@param mapSize number
       ---@param contextTable table
-      function getLeftmostMapElem(rootElement, endElement, mapSize, contextTable--[[, options]])
+      function getLeftmostMapElem(rootElement, endElement, mapSize, nodeContext, options)
         debugStepIn()
-        -- options = options or {}
+        options = options or {}
 
         local mapElement = readPointer(rootElement + GDDEFS.MAP_LELEM)
 
@@ -8125,21 +8128,35 @@
           return 0, endElement, mapSize -- return 0 as for failure
         end
 
-        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+MAP_LELEM' ) -- rootElem
-
-        if contextTable.struct then
-          contextTable.struct = addStructureElem(contextTable.struct, 'rootElem', GDDEFS.MAP_LELEM, vtPointer)
-          contextTable.struct.ChildStruct = createStructure('rootElem')
+        if not options.silentLeftWalk then
+          if nodeContext.struct then
+            nodeContext.struct = addStructureElem(nodeContext.struct, 'rootElem', GDDEFS.MAP_LELEM, vtPointer)
+            nodeContext.struct.ChildStruct = createStructure('rootElem')
+          end
+          if nodeContext.symbol then
+            nodeContext.symbol = wrapBrackets(nodeContext.symbol .. "+" .. numtohexstr(GDDEFS.MAP_LELEM))
+          end
         end
 
+        -- if mapElement == endElement then
+        --   debugStepOut()
+        --   return mapElement, endElement, mapSize, nodeContext
+        -- end
 
         while readPointer(mapElement + GDDEFS.MAP_LELEM) ~= endElement do
           mapElement = readPointer(mapElement + GDDEFS.MAP_LELEM)
-          contextTable.symbol = wrapBrackets( contextTable.symbol .. '+MAP_LELEM' ) -- nextElement
-          if contextTable.struct then
-            contextTable.struct = addStructureElem(contextTable.struct, 'goLeft', GDDEFS.MAP_LELEM, vtPointer)
-            contextTable.struct.ChildStruct = createStructure('goLeft')
+
+          if not options.silentLeftWalk then
+            if nodeContext.symbol then
+              nodeContext.symbol = wrapBrackets( nodeContext.symbol .. '+MAP_LELEM' ) -- nextElement
+            end
+
+            if nodeContext.struct then
+              nodeContext.struct = addStructureElem(nodeContext.struct, 'goLeft', GDDEFS.MAP_LELEM, vtPointer)
+              nodeContext.struct.ChildStruct = createStructure('goLeft')
+            end
           end
+
         end
 
         if isNullOrNil(mapElement) then
@@ -8148,7 +8165,7 @@
         end
 
         debugStepOut();
-        return mapElement, endElement, mapSize, contextTable
+        return mapElement, endElement, mapSize, nodeContext
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Type & Size
