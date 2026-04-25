@@ -1687,6 +1687,7 @@
     function wrapBrackets(stringToWrap)
       return '['.. (stringToWrap or "") .. "]"
     end
+
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
 
   function initDumper(config)
@@ -8617,6 +8618,15 @@
         end
       end
 
+      function registerDumpedNodes()
+        if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then return; end
+        for _, nodeAddr in ipairs(dumpedMonitorNodes) do
+          local nodeNameStr = getNodeNameFromGDScript(nodeAddr)
+          if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
+          registerSymbol(nodeNameStr, nodeAddr, true)
+        end
+      end
+
       function nodeMonitorThread(thr)
         thr.Name = "GDMonitorThread"
         while (bMonitorNodes) do
@@ -8629,6 +8639,7 @@
               -- iterate node children
             end
           end
+          registerDumpedNodes()
           sleep(3000)
         end
         thr.terminate()
