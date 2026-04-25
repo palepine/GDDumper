@@ -1684,6 +1684,9 @@
       }
     end
 
+    function wrapBrackets(stringToWrap)
+      return '['.. (stringToWrap or "") .. "]"
+    end
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
 
   function initDumper(config)
