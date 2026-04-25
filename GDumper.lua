@@ -7620,8 +7620,8 @@
       ---@param nodeAddr number
       ---@param constStructElement userdata
       function iterateNodeConstToStruct(nodeContext)
-        assert(type(nodeAddr) == 'number',
-        "iterateNodeConstToStruct Node addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(nodeContext.addr) == 'number',
+        "iterateNodeConstToStruct Node addr has to be a number, instead got: " .. type(nodeContext.addr))
         if GDDEFS.MONO and (checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
         
         debugStepIn()
