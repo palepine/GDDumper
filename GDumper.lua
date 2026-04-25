@@ -51,8 +51,9 @@
         newMemRec.ShowAsSigned = true;
       end -- color and int
 
-      if bAddrAppendPtr then
-        newMemRec.DropDownList.Text = contextTable.symbol;
+      if bAddrAppendPtr and contextTable then
+        -- print(contextTable.symbol) -- not implemented yet, it's lost at const/var/etc
+        -- newMemRec.DropDownList.Text = contextTable.symbol;
       end
       newMemRec.DontSave = true
       newMemRec.appendToEntry(parent)
@@ -2386,7 +2387,7 @@
           function GDEmitters.PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
             synchronize(function(elemIndex, arrElement, parent, contextTable)
               addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent, contextTable)
-            end, elemIndex, arrElement, parent, contextTable, contextTable)
+            end, elemIndex, arrElement, parent, contextTable)
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType, contextTable)
@@ -2733,6 +2734,14 @@
         end
 
         return createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+      end
+
+      local function createNextSymbol(currentSymbol)
+        if GDDEFS.MAJOR_VER == 4 then
+          return wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
+        else--if GDDEFS.MAJOR_VER == 3 then
+          return wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
+        end
       end
 
       local function getPackedArrayInfo(packedArrayAddr)
@@ -7698,7 +7707,7 @@
             if isNotNullOrNil(mapElement) and options.nextContainerFactory then
               currentContainer = options.nextContainerFactory(currentContainer, index)
             end
-            currentSymbol = nextSymbolFactory(currentSymbol)
+            currentSymbol = options.nextSymbolFactory(currentSymbol)
 
         until (mapElement == 0)
         return
@@ -7719,7 +7728,7 @@
 
         contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_HEAD' )
         
-        iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol }) -- TODO: bNeedStructOffset
+        iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false, nextContainerFactory = nil, nextSymbolFactory = createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol }) -- TODO: bNeedStructOffset
         return
       end
 
@@ -7741,7 +7750,7 @@
         local headContainer = createChildStructElem(currentRoot, 'dictHead', GDDEFS.DICT_HEAD, vtPointer, 'dictHead')
         contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_HEAD' )
 
-        iterateDictionary(dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
+        iterateDictionary(dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer, nextSymbolFactory = createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
         return
       end
 
