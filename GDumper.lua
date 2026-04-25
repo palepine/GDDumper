@@ -3429,6 +3429,29 @@
         return
       end
 
+      function iterateNodeChildrenForNodes(baseAddress)
+        local childrenAddr, childrenSize = getNodeChildrenInfo(baseAddress)
+        if isNullOrNil(childrenSize) then return; end
+
+        for i = 0, (childrenSize - 1) do
+          local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
+          -- local nodeName = getNodeName(nodeAddr)
+          -- if nodeName == nil or nodeName == 'N??' then
+          --   nodeName = getNodeNameFromGDScript(nodeAddr)
+          -- end
+          -- local objectTypeName = getObjectClassName(nodeAddr)
+          -- objectTypeName = '<' .. objectTypeName .. '>'
+
+          if checkForGDScript(nodeAddr) then
+            table.insert(dumpedMonitorNodes, nodeAddr)
+            iterateVecVarForNodes(nodeAddr)
+          else
+            iterateNodeChildrenForNodes(nodeAddr)
+          end
+        end
+        return
+      end
+
       --- go over child nodes in the main nodes
       ---@param nodeAddr number
       ---@param parent userdata
@@ -8613,8 +8636,9 @@
         end
 
         for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-          local nodeNameStr = getNodeName(nodeAddr)
-          printf(">Node name: %s \t Node addr: %x", tostring(nodeNameStr), tonumber(nodeAddr))
+          local GDScriptName = getNodeNameFromGDScript(nodeAddr) or ''
+          local nodeNameStr = getNodeName(nodeAddr) or ''
+          printf(">Node Scriptname: %-50sname: %-50s \t Node addr: %x", GDScriptName, nodeNameStr, tonumber(nodeAddr))
         end
       end
 
@@ -8629,14 +8653,14 @@
 
       function nodeMonitorThread(thr)
         thr.Name = "GDMonitorThread"
-        while (bMonitorNodes) do
+        while (bMonitorNodes) do -- TODO: clone a temp into dumpedMonitorNodes upon finishing
           local mainNodeDict = getMainNodeDict()
           dumpedMonitorNodes = {};
-          for key, value in ipairs(mainNodeDict) do
+          for key, value in pairs(mainNodeDict) do
             table.insert(dumpedMonitorNodes, value.PTR)
             iterateVecVarForNodes(value.PTR)
             if checkIfObjectWithChildren(value.PTR) then
-              -- iterate node children
+              iterateNodeChildrenForNodes(value.PTR)
             end
           end
           registerDumpedNodes()
@@ -8651,8 +8675,6 @@
           print('define the offsets first, silly')
           return
         end
-        
-        if true then print('disabled so far') return end
 
         bMonitorNodes = not bMonitorNodes
         if bMonitorNodes then
@@ -8743,7 +8765,7 @@
 
         local mainNodeDict = getMainNodeDict()
 
-        for key, value in ipairs(mainNodeDict) do
+        for key, value in pairs(mainNodeDict) do
 
           value.MEMREC = synchronize(function(value, key, parentRec)
             local newNodeMemRec = addMemRecTo(key, value.PTR, getCETypeFromGD(value.TYPE), parentRec)
