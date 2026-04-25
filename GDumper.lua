@@ -2384,19 +2384,19 @@
         GDEmitters.PackedAddrEmitter = {}
 
           function GDEmitters.PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
-            synchronize(function(elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+            synchronize(function(elemIndex, arrElement, parent, contextTable)
               addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent, contextTable)
             end, elemIndex, arrElement, parent, contextTable, contextTable)
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType, contextTable)
-            synchronize(function(prefixStr, elemIndex, arrElement, ceType, parent, contextTable) -- TODO: contextTable update
+            synchronize(function(prefixStr, elemIndex, arrElement, ceType, parent, contextTable)
               addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent, contextTable)
             end, prefixStr, elemIndex, arrElement, ceType, parent, contextTable)
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
-            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable)
               addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
               contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
               addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
@@ -2404,7 +2404,7 @@
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
-            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable)
               addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
               contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
               addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
@@ -2414,7 +2414,7 @@
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
-            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable) -- TODO: contextTable update
+            synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable)
               addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent, contextTable)
               contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
               addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent, contextTable)
@@ -3621,7 +3621,7 @@
           varVectorStructElem.ChildStruct = createStructure('Vars')
 
           local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = varVectorStructElem, symbol = variantVectorSym }
-          iterateVecVarToStruct(nodeContext) -- TODO: unify
+          iterateVecVarToStruct(nodeContext)
         else
           sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS skipped: nothing to process: ' .. tostring(nodeName))
         end
@@ -3630,7 +3630,8 @@
           constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
           sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: ' .. tostring(nodeName))
           constMapStructElem.ChildStruct = createStructure('Consts')
-          iterateNodeConstToStruct(nodeAddr, constMapStructElem) -- TODO: unify
+          local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = constMapStructElem, symbol = GDScriptConstMapSym }
+          iterateNodeConstToStruct(nodeContext)
         else
           sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS skipped: nothing to process: ' .. tostring(nodeName))
         end
@@ -7577,7 +7578,7 @@
 
         local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
 
-        local headElement, tailElement, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext) -- TODO: nodeContext overwriting
+        local headElement, tailElement, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext)
         if isNullOrNil(headElement) or isNullOrNil(mapSize) then
           sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr))
           synchronize(function(parent)
@@ -8663,8 +8664,7 @@
 
           local nodeNameStr = getNodeName(nodePtr)
           local gdscriptName = getNodeNameFromGDScript(nodePtr)
-          nodeNameStr = tostring(nodeNameStr)
-          registerSymbol(nodeNameStr, nodePtr, true) -- TODO: remove when
+          registerSymbol(gdscriptName, nodePtr, true)
 
           if GDDEFS.MAJOR_VER == 4 then
             nodeDict[nodeNameStr] =
