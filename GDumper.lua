@@ -29,18 +29,20 @@
             newMemRec.setType(vtCustom);
             newMemRec.CustomTypeName = "GD4 String"
             newMemRec.setAddress(readPointer(gdPtr))
-            -- newMemRec.setAddress('['.. (gdPtr or "") ..']')
+            -- if bGDUseSymbols and contextTable then newMemRec.setAddress( wrapBrackets(contextTable.symbol or "") ) end
           else
             newMemRec.setAddress(gdPtr)
+            -- if bGDUseSymbols and contextTable then newMemRec.setAddress( contextTable.symbol or "" ) end
           end
       else
         if CEType == vtString then
           newMemRec.String.Size = 100;
           newMemRec.String.Unicode = true;
           newMemRec.setAddress(readPointer(gdPtr))
-          -- newMemRec.setAddress('['.. (gdPtr or "") ..']')
+          -- if bGDUseSymbols and contextTable then newMemRec.setAddress( wrapBrackets(contextTable.symbol or "")) end
         else
           newMemRec.setAddress(gdPtr)
+          -- if bGDUseSymbols and contextTable then newMemRec.setAddress( contextTable.symbol or "" ) end
         end
       end
 
@@ -51,10 +53,10 @@
         newMemRec.ShowAsSigned = true;
       end -- color and int
 
-      if bAddrAppendPtr and contextTable then
-        -- print(contextTable.symbol) -- not implemented yet, it's lost at const/var/etc
-        -- newMemRec.DropDownList.Text = contextTable.symbol;
+      if bGDUseSymbols and contextTable then
+        newMemRec.DropDownList.Text = contextTable.symbol;
       end
+
       newMemRec.DontSave = true
       newMemRec.appendToEntry(parent)
       return newMemRec
@@ -1368,6 +1370,7 @@
         dumpedDissectorNodes = {} -- redundant?
         -- safe to assume, that's a starting point
         local nodeName = getNodeName(baseaddr)
+        if nodeName == 'N??' then nodeName = getNodeNameFromGDScript(baseaddr) end
         nodeName = nodeName and nodeName or 'Anon Node'
         struct.Name = ' Node: ' .. nodeName
         local scriptInstStructElem = struct.addElement()
@@ -1959,6 +1962,7 @@
         gdOffsetsDefined = true
         -- check if 4.x string type reged, otherwise define it
         checkGDStringType()
+        registerGDSymbols()
         -- build disassembler
         defineGDFunctionEnums()
         fuckoffPrint()
@@ -1986,6 +1990,29 @@
           GDDEFS.PTRSIZE = 0x4
           GDDEFS._x64bit = false
         end -- for auto offsetdef and ptr arithmetics
+      end
+
+      function registerGDSymbols()
+        registerSymbol('CHILDREN', GDDEFS.CHILDREN, true)
+        registerSymbol('OBJ_STRING_NAME', GDDEFS.OBJ_STRING_NAME, true)
+        registerSymbol('GDSCRIPTINSTANCE', GDDEFS.GDSCRIPTINSTANCE, true)
+        registerSymbol('GDSCRIPTNAME', GDDEFS.GDSCRIPTNAME, true)
+        registerSymbol('FUNC_MAP', GDDEFS.FUNC_MAP, true)
+        registerSymbol('CONST_MAP', GDDEFS.CONST_MAP, true)
+        registerSymbol('VAR_VECTOR', GDDEFS.VAR_VECTOR, true)
+        registerSymbol('FUNC_CODE', GDDEFS.FUNC_CODE, true)
+        registerSymbol('FUNC_CONST', GDDEFS.FUNC_CONST, true)
+        registerSymbol('FUNC_GLOBNAMEPTR', GDDEFS.FUNC_GLOBNAMEPTR, true)
+        registerSymbol('GDSCRIPT_REF', GDDEFS.GDSCRIPT_REF, true)
+        registerSymbol('FUNC_MAPVAL', GDDEFS.FUNC_MAPVAL, true)
+        registerSymbol('ARRAY_TOVECTOR', GDDEFS.ARRAY_TOVECTOR, true)
+        registerSymbol('P_ARRAY_TOARR', GDDEFS.P_ARRAY_TOARR, true)
+        registerSymbol('DICT_HEAD', GDDEFS.DICT_HEAD, true)
+        registerSymbol('DICT_LIST', GDDEFS.DICT_LIST, true)
+        registerSymbol('MAP_LELEM', GDDEFS.MAP_LELEM, true)
+        registerSymbol('MAP_NEXTELEM', GDDEFS.MAP_NEXTELEM, true)
+        registerSymbol('DICTELEM_PAIR_NEXT', GDDEFS.DICTELEM_PAIR_NEXT, true)
+        registerSymbol('DICTELEM_VALVAL', GDDEFS.DICTELEM_VALVAL, true)
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Viewport / Window / SceneTree
@@ -2529,7 +2556,16 @@
 
         if shifted then
           offset = offset - GDDEFS.PTRSIZE
-          if currentContext.symbol then currentContext.symbol = wrapBrackets( currentContext.symbol .. '+' .. numtohexstr(entry.offsetToValue) ) end
+
+          if currentContext.symbol then
+            local symbolOffset = entry.offsetToValue or 0
+            if GDDEFS.MAJOR_VER == 3 then
+              symbolOffset = symbolOffset - GDDEFS.PTRSIZE
+            end
+            currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, symbolOffset ) )
+            currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, 0 ) )
+          end
+
           currentContext =
           {
             nodeAddr = contextTable.nodeAddr,
@@ -2537,12 +2573,13 @@
             baseAddress = ptr,
             symbol = currentContext.symbol and currentContext.symbol or ''
           }
+
           currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer, "Wrapper")
           offset = 0x0
         end
 
         sendDebugMessageAndStepOut("prepareObjectParent: " .. numtohexstr(ptr) .. " Object: " .. entry.name)
-        return currentParent, ptr, offset, currentContext
+        return currentParent, ptr, offset, currentContext, shifted
       end
 
       local function getFunctionMapName(mapElement)
@@ -2792,12 +2829,22 @@
         end
       end
 
+      local function cloneContextWithSymbol(contextTable, newSymbol)
+        return
+        {
+          nodeAddr = contextTable.nodeAddr,
+          nodeName = contextTable.nodeName,
+          baseAddress = contextTable.baseAddress,
+          symbol = newSymbol
+        }
+      end
+
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
 
       local function readNodeVariantEntry(mapElement, variantVector, variantSize, bNeedStructOffset)
         -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
         local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
-        local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize--[[, bNeedStructOffset]]);
+        local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize)
 
         local name = getVariantNameFromMapElement(mapElement);
         local finalType = resolveScriptVariantType(mapElement, runtimeType);
@@ -2810,8 +2857,8 @@
           typeId = finalType,
           typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
           variantPtr = variantPtr,
-          offsetToValue = bNeedStructOffset and offsetToValue or 0,
-          offset = offsetToValue,
+          offsetToValue = offsetToValue or 0,
+          offset = offsetToValue or 0,
           ceType = getCETypeFromGD(finalType)
         }
 
@@ -2968,57 +3015,67 @@
           sendDebugMessage("DICTIONARY case for name: " .. entry.name .. " address: " .. numtohexstr(entry.variantPtr) .. " offset: " .. numtohexstr(entry.offsetToValue))
           local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
           local offsetToValue = rootOffset(entry, emitter)
-
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           if isNullOrNil(dictSize) then
             emitter.leaf(contextTable, parent, "dict (empty): " .. entry.name, offsetToValue, entry.ceType) -- entry.offsetToValue
             return;
           end
 
           local child = emitter.branch(contextTable, parent, "dict: " .. entry.name, offsetToValue, entry.ceType, "Dict")
-          if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(offsetToValue) ) end
           emitter.recurseDictionary(contextTable, child, readPointer(entry.variantPtr)) -- we pass the actual base addr
         end
 
         GDHandlers.VariantHandlers.ARRAY = function(entry, emitter, parent, contextTable)
           sendDebugMessage("ARRAY case for name: " .. entry.name)
           local offsetToValue = rootOffset(entry, emitter)
+          if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(entry.offset) ) end
           if isArrayEmptyFromVariantPtr(entry.variantPtr) then
             emitter.leaf(contextTable, parent, "array (empty): " .. entry.name, offsetToValue, entry.ceType);
             return;
           end
 
           local child = emitter.branch(contextTable, parent, "array: " .. entry.name, offsetToValue, entry.ceType, "Array");
-          if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(offsetToValue) ) end
           emitter.recurseArray(contextTable, child, readPointer(entry.variantPtr))
         end
 
         GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
-          local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable);
+          local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable)
           local objectTypeName = getObjectName(readPointer(realPtr))
           objectTypeName = '<' .. objectTypeName .. '>'
 
           sendDebugMessage("OBJECT case: name: " .. entry.name .. " type: " .. objectTypeName .. " addr: " .. numtohexstr(realPtr))
 
+          if objectContext.symbol then -- AddrEmitter stores the real addr, so its symbol must advance by the variant field offset
+            if emitter == GDEmitters.AddrEmitter then
+              if objectContext == contextTable then
+                objectContext = cloneContextWithSymbol( objectContext, wrapBrackets( makeSymAddr( objectContext.symbol, (entry.offsetToValue or entry.offset or 0) ) ) )
+              end
+            else
+              objectContext.symbol = makeSymAddr(objectContext.symbol, realOffset)
+            end
+          end
+
           if checkForGDScript(readPointer(realPtr)) then
             if emitter == GDEmitters.StructEmitter then
-              local nodeChild = emitter.leaf(objectContext, objectParent, "mNode: " .. entry.name, realOffset, vtPointer);
+              local nodeChild = emitter.leaf(objectContext, objectParent, objectTypeName .. ' ' .. "mNode: " .. entry.name, realOffset, vtPointer)
               nodeChild.BackgroundColor = 0x6C3157
-            else--if emitter == GDEmitters.AddrEmitter then
-              local nodeChild = emitter.branch(objectContext, objectParent, "mNode: " .. entry.name, realOffset, vtPointer, "Node");
+            else
+              local nodeChild = emitter.branch(objectContext, objectParent, objectTypeName .. ' ' .. "mNode: " .. entry.name, realOffset, vtPointer, "Node")
               nodeChild.BackgroundColor = 0x6C3157
 
               if emitter.recurseNode then
-                if objectContext.symbol then objectContext.symbol = objectContext.symbol .. '+' .. numtohexstr(realOffset) end
                 emitter.recurseNode(objectContext, nodeChild, readPointer(realPtr))
               end
             end
-
           else
-            emitter.leaf(objectContext, objectParent, objectTypeName .. " obj: " .. entry.name, realOffset, vtPointer);
+            emitter.leaf(objectContext, objectParent, objectTypeName .. " obj: " .. entry.name, realOffset, vtPointer)
           end
         end
 
+
         GDHandlers.VariantHandlers.STRING = function(entry, emitter, parent, contextTable)
+          if contextTable.symbol then contextTable.symbol = wrapBrackets( makeSymAddr(contextTable.symbol, entry.offset) ) end
+
           if emitter == GDEmitters.StructEmitter then
             local outer = emitter.branch(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtPointer, "String")
             local inner = emitter.branch(contextTable, outer, "StringData: " .. entry.name, 0x0, vtUnicodeString, "stringy")
@@ -3028,6 +3085,11 @@
         end
 
         GDHandlers.VariantHandlers.STRING_NAME = function(entry, emitter, parent, contextTable)
+          if contextTable.symbol then
+            contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset)
+            contextTable.symbol =  wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+STRING' )
+          end
+
           if emitter == GDEmitters.StructEmitter then
             local outer = emitter.branch(contextTable, parent, "StringName: " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
             local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDDEFS.STRING, vtPointer, "stringy")
@@ -3044,7 +3106,7 @@
               nodeAddr = contextTable.nodeAddr,
               nodeName = contextTable.nodeName,
               baseAddress = stringNameAddr + GDDEFS.STRING,
-              symbol = '' --contextTable.symbol
+              symbol = contextTable.symbol and contextTable.symbol or ''
             }
             emitter.leaf(stringContext, parent, "StringName: " .. entry.name, 0x0, vtString)
           end
@@ -3053,13 +3115,15 @@
 
         GDHandlers.VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
           sendDebugMessage("handlePackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
+          
           local arrayAddr = readPointer(entry.variantPtr)
           local offsetToValue = rootOffset(entry, emitter)
           if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
             emitter.leaf(contextTable, parent, entry.typeName .. ' (empty): ' .. entry.name, offsetToValue, entry.ceType)
           else
             local child = emitter.branch(contextTable, parent, entry.typeName .. ' ' .. entry.name, offsetToValue, entry.ceType, "P_Array")
-            if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(offsetToValue) ) end
+            if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol ) end
             emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
           end
         end
@@ -3076,92 +3140,101 @@
 
         GDHandlers.VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
           local typeName = "Color: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
           local typeName = "Vec2: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
           local typeName = "vec2I: "
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
         end
 
         GDHandlers.VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
           local typeName = "Rect2: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
           local typeName = "Rect2I: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtDword)
         end
 
         GDHandlers.VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
           local typeName = "Vec3: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
           local typeName = "Vec3I: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
         end
 
         GDHandlers.VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
           local typeName = "Vec4: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtSingle)
         end
 
         GDHandlers.VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
           local typeName = "Vec4I: "
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
-          contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtDword)
         end
 
         GDHandlers.VariantHandlers.DEFAULT = function(entry, emitter, parent, contextTable)
+          if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "var: " .. entry.name .. " (" .. entry.typeName .. ")", rootOffset(entry, emitter), entry.ceType)
         end
 
@@ -3187,9 +3260,13 @@
       GDHandlers.PackedArrayHandlers = {}
 
         GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
 
             if readPointer(arrElement) ~= 0 then
               emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
@@ -3198,73 +3275,118 @@
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_INT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x4
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_FLOAT32_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x4
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_INT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_FLOAT64_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_BYTE_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x1
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_VECTOR2_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x8
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_VECTOR3_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0xC
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.PACKED_COLOR_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * 0x10
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement, contextTable)
           end
         end
 
         GDHandlers.PackedArrayHandlers.DEFAULT = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+          local baseSymbol;
+          if contextTable.symbol then baseSymbol = contextTable.symbol end
+
           for elemIndex = 0, packedVectorSize - 1 do
             local offsetToValue = elemIndex * GDDEFS.PTRSIZE
             local arrElement = getAddress(packedDataArrAddr + offsetToValue)
+            if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+
             emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer, contextTable)
           end
         end
@@ -3292,6 +3414,7 @@
           end
 
           local nodeNameStr = getNodeName(nodeAddr)
+          if nodeNameStr == 'N??' then nodeNameStr = getNodeNameFromGDScript(nodeAddr) end
           local gdScriptInsance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
           if isNullOrNil(gdScriptInsance) then
             sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: ScriptInstance is 0/nil')
@@ -3563,7 +3686,7 @@
         local nodeContext;
         local newNodeSymStr, GDSIsym, variantVectorSym, GDScriptSym, GDScriptConstMapSym
         newNodeSymStr = contextTable.symbol -- should be wrapped outside
-        GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )
+        GDSIsym = wrapBrackets( newNodeSymStr .. '+GDSCRIPTINSTANCE' )
         variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
         GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
         GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )
@@ -3779,6 +3902,7 @@
           end
 
           local nodeNameStr = getNodeName(nodeAddr)
+          if nodeNameStr == 'N??' then nodeNameStr = getNodeNameFromGDScript(nodeAddr) end
           if nodeNameStr == nodeName then
             return nodeAddr
           end
@@ -7652,6 +7776,7 @@
         local currentSymbol = nodeMapContext.symbol
         local index = 0;
         local nodeName = getNodeName(nodeMapContext.addr) or "UnknownNode"
+        if nodeName == 'N??' then nodeName = getNodeNameFromGDScript(nodeMapContext.addr) end
 
         repeat
           local entry = readNodeConstEntry(mapElement)
@@ -7726,10 +7851,10 @@
         if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then return end
         
         if GDDEFS.MAJOR_VER == 3 then
-          contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_LIST' )
+          contextTable.symbol = wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+DICT_LIST' )
         end
 
-        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_HEAD' )
+        contextTable.symbol = wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+DICT_HEAD' )
         
         iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false, nextContainerFactory = nil, nextSymbolFactory = createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol }) -- TODO: bNeedStructOffset
         return
@@ -8729,10 +8854,9 @@
           if isNullOrNil(nodeAddr) then
             error('getMainNodeDict: NO MAIN NODES')
           end
-
-          local nodeNameStr = getNodeName(nodeAddr)
-          nodeNameStr = tostring(nodeNameStr)
-          registerSymbol(nodeNameStr, nodeAddr, true) -- let's have them registered when we do structs
+          local nodeNameStr = getNodeNameFromGDScript(nodeAddr)
+          if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
+          registerSymbol(nodeNameStr, nodeAddr, true)
           table.insert(nodeTable, nodeAddr)
         end
         return nodeTable
@@ -8752,7 +8876,8 @@
           return;
         end
         for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-          local nodeNameStr = getNodeName(nodeAddr)
+          local nodeNameStr = getNodeNameFromGDScript(nodeAddr) or ''
+          if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
           if nodeNameStr == nodeName then
             return nodeAddr
           end
