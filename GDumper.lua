@@ -1391,7 +1391,7 @@
 
         iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-      elseif bDisasmFunc and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+      elseif bDisasmFunc and GDDEFS.MAJOR_VER ~= 3 and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
         disassembleGDFunctionCodeToStruct(baseaddr, struct)
 
       elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
@@ -7928,8 +7928,8 @@
                   local operand_arg = ''
                   if (ret) then
                     operand_arg = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + argc])
-                    addStructureElem(contextTable.codeStructElement, operand2_arg, (contextTable.instrPointer - 1 + argc) * 0x4, vtDword)
-                    operand_arg = operand2_arg .. ' = '
+                    addStructureElem(contextTable.codeStructElement, operand_arg, (contextTable.instrPointer - 1 + argc) * 0x4, vtDword)
+                    operand_arg = operand_arg .. ' = '
                   end
 
                   contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand_arg .. operand2 .. '.' .. '[' .. operand3 .. ']' .. '(' .. operandArg .. ')' -- base->call_ptr(*methodname, (const Variant **)argptrs, argc, nullptr, err);
@@ -8288,6 +8288,11 @@
                   decoderName = "BytecodeV0",
                   patches = 
                   {
+                    {
+                      kind = "insertValueAfter",
+                      anchor = GDF.OP.OPCODE_EXTENDS_TEST,
+                      value = GDF.OP.OPCODE_IS_BUILTIN
+                    },
                     {
                       kind = "insertValueAfter",
                       anchor = GDF.OP.OPCODE_ASSIGN_FALSE,
