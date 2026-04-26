@@ -3783,7 +3783,13 @@
           if checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
             sendDebugMessage("iterateNodeToStruct: Node " .. nodeName .. " has csharp script type")
             local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
-            addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
+            -- addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
+            local clrDataElem = createChildStructElem(clrPtrElem, "CLRData", 0x0, vtPointer, "CLRData")
+
+            local clrDataAddr = readPointer( readPointer( gdScriptInstanceAddr + GDDEFS.CLR_PTR ) ) or 0x0
+            if isNotNullOrNil(clrDataAddr) then
+              clrDataElem.ChildStruct.fillFromDotNetAddress(clrDataAddr , true)
+            end
           end
         end
 
@@ -8919,7 +8925,12 @@
           dumpedMonitorNodes = {};
           for key, value in pairs(mainNodeDict) do
             table.insert(dumpedMonitorNodes, value.PTR)
-            iterateVecVarForNodes(value.PTR)
+
+            if GDDEFS.MONO and (checkScriptType(value.PTR)==GDDEFS.SCRIPT_TYPES["CS"]) then
+            else
+              iterateVecVarForNodes(value.PTR)
+            end
+
             if checkIfObjectWithChildren(value.PTR) then
               iterateNodeChildrenForNodes(value.PTR)
             end
