@@ -7464,7 +7464,7 @@
               OPCODE_ASSERT = "OPCODE_ASSERT",
               OPCODE_BREAKPOINT = "OPCODE_BREAKPOINT",
               OPCODE_LINE = "OPCODE_LINE",
-              OPCODE_EN = "OPCODE_EN"
+              OPCODE_END = "OPCODE_END"
             }
           
           GDF.DisasmHandlers = {}
@@ -7939,6 +7939,11 @@
                   return contextTable.instrPointer + argc + 1
                 end
               }
+            GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_RETURN] =
+              {
+                name = "OPCODE_CALL_RETURN",
+                handler = GDF.DisasmHandlers[GDF.OP.OPCODE_CALL].handler
+              }
 
             GDF.DisasmHandlers[GDF.OP.OPCODE_CALL_BUILT_IN] = 
               {
@@ -8216,23 +8221,24 @@
                 end
               }
 
+          GDF.Decoders = {}
+            GDF.Decoders.BytecodeV0 =
+              {
+                name = "BytecodeV0",
+                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
+                  return profile.OPHandlerDefFromOPEnum[opcodeEnum]
+                end
+              }
+            GDF.Decoders.BytecodeV1 =
+              {
+                name = "BytecodeV1",
+                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum) -- TODO: version specific overriding
+                  -- for other versions redefine the handler on the fly
+                  return profile.OPHandlerDefFromOPEnum[opcodeEnum]
+                end
+              }
 
-          GDF.Decoders.BytecodeV0 =
-            {
-              name = "BytecodeV0",
-              resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
-                return profile.OPHandlerDefFromOPEnum[opcodeEnum]
-              end
-            }
-          GDF.Decoders.BytecodeV1 =
-            {
-              name = "BytecodeV1",
-              resolveOPHandlerDefFromProfile = function(profile, opcodeEnum) -- TODO: version specific overriding
-                -- for other versions redefine the handler on the fly
-                return profile.OPHandlerDefFromOPEnum[opcodeEnum]
-              end
-            }
-
+          
           GDF.ProfileSpecs =
             {
               ["3.0"] =
@@ -8345,7 +8351,7 @@
 
               ["3.6"] =
                 {
-                  base = "4.5",
+                  base = "3.5",
                   decoderName = "BytecodeV0",
                   patches = {}
                 }
