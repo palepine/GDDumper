@@ -253,7 +253,7 @@
       if majminVersionStr == "4.7" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
-        GDDEFS.DICT_SIZE = 0x3C
+        GDDEFS.DICT_SIZE = 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
         -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
@@ -313,7 +313,7 @@
       elseif majminVersionStr == "4.6" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
-        GDDEFS.DICT_SIZE = 0x3C
+        GDDEFS.DICT_SIZE = 0x34 --0x3C
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
         -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
