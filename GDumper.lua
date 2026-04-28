@@ -1360,7 +1360,6 @@
 
     --- register our own structure dissector callback
     function enableGDDissect()
-      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
       -- override CE's callback
       if GDstructDissectID ~= nil then
         unregisterStructureDissectOverride(GDstructDissectID)
@@ -1378,7 +1377,6 @@
     end
 
     function enableGDStructNameLookup()
-      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
       -- override CE's lookup
       if GDStructNameLookupID ~= nil then
         unregisterStructureNameLookup(GDStructNameLookupID)
@@ -1395,7 +1393,6 @@
     end
 
     function enableGDAddressLookup()
-      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
       -- override CE's lookup
       if GDAddressLookupID ~= nil then
         unregisterAddressLookupCallback(GDAddressLookupID)
@@ -1566,8 +1563,10 @@
         -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
         local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', appendDumperScript)
         -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
+        
+        -- addCustomMenuButtonTo(gdMenuItem, 'Append as memrec', appendDumperScriptAsMemrec)
         addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
-        addCustomMenuButtonTo(gdMenuItem, 'Print config', printGDConfig)
+        addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
         -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
       end
     end
@@ -1642,7 +1641,7 @@
       mainMemrec.Description = "Dumper"
       mainMemrec.Type = vtAutoAssembler
       mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- IMPORTANT: if you define all, you can 'Use stored offsets' to try to relieve yourself from defining the OFFSETS\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver, false otherwise\nGDDebugVer =                nil, -- if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\nnodeMonitor()\n{$asm}"
+      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver, false otherwise\nGDDebugVer =                nil, -- if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- set to true if it's using mono/C#, false otherwise\n\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets (lets you skip defining the OFFSETS below), false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\nnodeMonitor()\n{$asm}"
 
       local dumpMemrec = addrList.createMemoryRecord()
       dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1661,7 +1660,7 @@
       dumpMemrec.appendToEntry(mainMemrec)
 
       local supportPalique = addrList.createMemoryRecord()
-      supportPalique.Description = 'Support the development & author'
+      supportPalique.Description = 'Support the development & author: ko-fi.com/vesperpallens'
       supportPalique.Type = vtAutoAssembler
       supportPalique.Color = 0x8F379F
       supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
@@ -1672,6 +1671,14 @@
       local cedir = getCheatEngineDir()
       local scriptPath = cedir .. [[autorun\GDumper.lua]]
       createTableFile("GDumper", scriptPath)
+      sender.Enabled = false
+    end
+
+    -- appends the script as a memrec
+    function appendDumperScriptAsMemrec(sender)
+      local cedir = getCheatEngineDir()
+      local scriptPath = cedir .. [[autorun\GDumper.lua]]
+      
       sender.Enabled = false
     end
 
@@ -1896,7 +1903,7 @@
         end
 
         -- AUTOMATIC START
-        if bHardOffsets then
+        if bHardOffsets or config.useHardcoded then
           local offsets = getStoredOffsetsFromVersion(GDDEFS.VERSION_STRING)
           GDDEFS.CHILDREN = offsets.VPChildren
           GDDEFS.OBJ_STRING_NAME = offsets.VPObjStringName
@@ -10069,7 +10076,6 @@
       -- switches node monitoring (in a thread)
       function nodeMonitor()
         if not (gdOffsetsDefined) then
-          print('define the offsets first, silly')
           return
         end
 
@@ -10220,9 +10226,7 @@
 
       end
 
-      if not (targetIsGodot) then --[[print('target is not godot')--]]
-        return;
-      end
+      -- if not (targetIsGodot) then return; end
       defineGDOffsets(config)
   end
 
