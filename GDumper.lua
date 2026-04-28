@@ -9201,7 +9201,7 @@
       end
 
       function iterateVectorVariantsForFields(nodeAddr)
-        assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr));
+        if isNullOrNil(nodeAddr) then return {} end
         -- if not checkForGDScript(nodeAddr) then return; end
         local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
         if isNullOrNil(headElement) or isNullOrNil(mapSize) then return; end
