@@ -1506,25 +1506,20 @@
 
     function godotAA_GETNODESTRUCT(nodeName)
       --[[
-
         take type size into account
         struct NODENAME
         padding: resb 99 // decimal
         fieldName: resb 4
         end
       ]]
-      
-      local nodeAddr -- = get node by Name
-      local fields = godot_node_enumVariants(nodeAddr)
-      if (fields==nil) or (#fields==0) then
-        return nil,namespace..":"..classname..translate(" has no fields")
-      end
+      -- local nodeAddr = getDumpedNode(nodeName)
+      -- local fields = godot_node_enumVariants(nodeAddr)
+      -- if fields == nil or next(fields) == nil then return nil end
+
     end
 
     function godot_node_enumVariants(nodeAddr)
-      -- lookup a node, for now from the dumped table
-      -- walk variants and build offset table akin to CEMONO's
-      -- return
+      return iterateVectorVariantsForFields(nodeAddr)
     end
 
 
@@ -2905,7 +2900,7 @@
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
 
-      local function readNodeVariantEntry(mapElement, variantVector, variantSize, bNeedStructOffset)
+      local function readNodeVariantEntry(mapElement, variantVector, variantSize)
         -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
         local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
         local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize)
@@ -3321,6 +3316,26 @@
           visitor.visitObject(entry.variantPtr)
         end
 
+        -- GDHandlers.NodeMetaHandlers = {}
+
+        --   GDHandlers.NodeMetaHandlers.DICTIONARY = function(entry, visitor)
+        --     local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
+        --     if isNotNullOrNil(dictSize) then
+        --       visitor.recurseDictionary(readPointer(entry.variantPtr))
+        --     end
+        --   end
+
+        --   GDHandlers.NodeMetaHandlers.ARRAY = function(entry, visitor)
+        --     if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
+        --       visitor.recurseArray(readPointer(entry.variantPtr))
+        --     end
+        --   end
+
+        --   GDHandlers.NodeMetaHandlers.OBJECT = function(entry, visitor)
+        --     visitor.visitObject(entry.variantPtr)
+        --   end
+
+
       GDHandlers.PackedArrayHandlers = {}
 
         GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
@@ -3707,7 +3722,7 @@
           -- objectTypeName = '<' .. objectTypeName .. '>'
 
           if checkForGDScript(nodeAddr) then
-            table.insert(dumpedMonitorNodes, nodeAddr)
+            table.insert(tempdumpedMonitorNodes, nodeAddr)
             iterateVecVarForNodes(nodeAddr)
           else
             iterateNodeChildrenForNodes(nodeAddr)
@@ -3868,12 +3883,12 @@
           return
         end
 
-        for i, storedNode in ipairs(dumpedMonitorNodes) do -- check if a node was already dumped
+        for i, storedNode in ipairs(tempdumpedMonitorNodes) do -- check if a node was already dumped
           if storedNode == nodeAddr then
             return
           end
         end
-        table.insert(dumpedMonitorNodes, nodeAddr)
+        table.insert(tempdumpedMonitorNodes, nodeAddr)
         -- local name = getNodeNameFromGDScript(nodeAddr) or 'N??'
         -- if name == nil or name == "N??" then
         --   name = getNodeNameFromGDScript(nodeAddr)
@@ -9185,6 +9200,36 @@
         return
       end
 
+      function iterateVectorVariantsForFields(nodeAddr)
+        assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr));
+        -- if not checkForGDScript(nodeAddr) then return; end
+        local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
+        if isNullOrNil(headElement) or isNullOrNil(mapSize) then return; end
+
+        local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
+        local sizeOfVariant, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+        if not ok then return; end
+
+        local mapElement = headElement
+        local fields = {}
+        local index = 0
+
+        repeat
+          local entry = readNodeVariantEntry(mapElement, variantVector, sizeOfVariant)
+          fields[index] = {}
+          -- fields[index].index = entry.index
+          fields[index].name = entry.name
+          fields[index].offset = entry.offsetToValue
+          fields[index].sizeof = sizeOfVariant
+          fields[index].type = entry.typeId
+
+          mapElement = getNextMapElement(mapElement)
+          index = index+1
+        until (mapElement == 0)
+
+        return fields
+      end
+
       --- nodeAddr and owner to append to
       function iterateVecVarToAddr(nodeContext)
         local options =
@@ -9960,71 +10005,63 @@
       ---@param nodeName string
       function getDumpedNode(nodeName)
         assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-        if not (gdOffsetsDefined) then
-          print('define the offsets first, silly')
-          return
-        end
+        if not (gdOffsetsDefined) then print('define the offsets first, silly') return; end
 
-        if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
-          -- sendDebugMessage('getDumpedNode: dumped nodes table is nil, dump the game first')
-          return;
-        end
-        for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-          local nodeNameStr = getNodeNameFromGDScript(nodeAddr) or ''
-          if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
-          if nodeNameStr == nodeName then
-            return nodeAddr
-          end
-        end
-        return
+        if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
+
+        return dumpedMonitorNodes[nodeName]
       end
 
       --- prints all gathered nodeNames
       function printDumpedNodes()
-        if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then
-          -- sendDebugMessage('printDumpedNodes: dumped nodes table is nil, dump the game first')
-          return;
-        end
-        if not (gdOffsetsDefined) then
-          print('define the offsets first, silly')
-          return
-        end
+        if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
-        for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-          local GDScriptName = getNodeNameFromGDScript(nodeAddr) or ''
+        if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
+
+        for k, nodeAddr in pairs(dumpedMonitorNodes) do
+          -- local GDScriptName = getNodeNameFromGDScript(nodeAddr) or ''
           local nodeNameStr = getNodeName(nodeAddr) or ''
-          printf(">Node Scriptname: %-50sname: %-50s \t Node addr: %x", GDScriptName, nodeNameStr, tonumber(nodeAddr))
+          printf(">Node Scriptname: %-50sname: %-50s \t Node addr: %X", k, nodeNameStr, tonumber(nodeAddr))
         end
       end
 
       function registerDumpedNodes()
-        if (not dumpedMonitorNodes) or #dumpedMonitorNodes == 0 then return; end
-        for _, nodeAddr in ipairs(dumpedMonitorNodes) do
-          local nodeNameStr = getNodeNameFromGDScript(nodeAddr)
-          if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
-          registerSymbol(nodeNameStr, nodeAddr, true)
+        if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
+        for k, nodeAddr in pairs(dumpedMonitorNodes) do
+          registerSymbol(k, nodeAddr, true)
         end
       end
 
       function nodeMonitorThread(thr)
         thr.Name = "GDMonitorThread"
-        while (bMonitorNodes) do -- TODO: clone a temp into dumpedMonitorNodes upon finishing
-          local mainNodeDict = getMainNodeDict()
-          dumpedMonitorNodes = {};
-          for key, value in pairs(mainNodeDict) do
-            table.insert(dumpedMonitorNodes, value.PTR)
+        local function cloneArrayAsMap(tabl)
+          local result = {} -- { name, addr }
+          for i, val in ipairs(tabl) do
+            result[ getNodeNameFromGDScript(val) ] = val
+          end
+          return result
+        end
+        dumpedMonitorNodes = {};
 
-            if GDDEFS.MONO and (checkScriptType(value.PTR)==GDDEFS.SCRIPT_TYPES["CS"]) then
+        while (bMonitorNodes) do
+          local mainNodeDict = getMainNodeDict()
+          tempdumpedMonitorNodes = {}
+          for key, value in pairs(mainNodeDict) do
+            local addr = value.PTR
+            table.insert(tempdumpedMonitorNodes, addr)
+
+            if GDDEFS.MONO and (checkScriptType(addr)==GDDEFS.SCRIPT_TYPES["CS"]) then
             else
-              iterateVecVarForNodes(value.PTR)
+              iterateVecVarForNodes(addr)
             end
 
-            if checkIfObjectWithChildren(value.PTR) then
-              iterateNodeChildrenForNodes(value.PTR)
+            if checkIfObjectWithChildren(addr) then
+              iterateNodeChildrenForNodes(addr)
             end
           end
+          dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
           registerDumpedNodes()
-          sleep(3000)
+          sleep(1000)
         end
         thr.terminate()
       end
