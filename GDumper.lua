@@ -1462,7 +1462,7 @@
 
         iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-      elseif bDisasmFunc --[[and GDDEFS.MAJOR_VER ~= 3]] and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+      elseif bDisasmFunc and checkIfGDFunction(baseaddr) then
         disassembleGDFunctionCodeToStruct(baseaddr, struct)
 
       elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
@@ -1571,7 +1571,7 @@
         addCustomMenuButtonTo(gdMenuItem, 'GD Dissector', GDDissectorSwitch)
         addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
         addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
-        addCustomMenuButtonTo(gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch)
+        -- addCustomMenuButtonTo(gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch)
         addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
         addCustomMenuButtonTo(gdMenuItem, 'GD StuctName Lookup', GDStructNameLookupSwitch)
         -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
@@ -2040,6 +2040,7 @@
         end
 
         gdOffsetsDefined = true
+        bDisasmFunc= true -- on by default
         -- check if 4.x string type reged, otherwise define it
         checkGDStringType()
         registerGDSymbols()
@@ -2107,7 +2108,12 @@
           offsetToValue = offsetToValue or (offsetToNextIntr - 4)
           local relativeAddr = readInteger(addr + offsetToValue)
           local nextAddr = getAddress(addr + offsetToNextIntr)
-          local resolvedAddr = nextAddr + relativeAddr
+          local resolvedAddr
+          if GDDEFS._x64bit then
+            resolvedAddr = nextAddr + relativeAddr
+          else
+            resolvedAddr = relativeAddr -- absolute on 32
+          end
           sendDebugMessage("tryRegSceneTree: calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
           local className = getObjectName(readPointer(resolvedAddr))
           if className == "SceneTree" then
@@ -2117,29 +2123,32 @@
             return false
           end
         end
+        
         local sigs = {}
 
-        table.insert(sigs, "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?")
-        table.insert(sigs, "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?")
-        table.insert(sigs, "4C 39 ? ? ? ? ? 75 07 ? 89 35 ? ? ? ? 66 0F 6F 05")
-        table.insert(sigs, "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00")
-        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?")
-        table.insert(sigs, "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05")
-        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26")
-        table.insert(sigs, "48 C7 05 ? ? ? ? 00 00 00 00 E9 ? ? ? ? 85 C0")
+        table.insert(sigs, { sig = "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?", toRel = 3 } )
+        table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?", toRel = 3 } )
+        table.insert(sigs, { sig = "4C 39 ? ? ? ? ? 75 07 ? 89 35 ? ? ? ? 66 0F 6F 05", toRel = 3 } )
+        table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?", toRel = 3 } )
+        table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26", toRel = 3 } )
+        table.insert(sigs, { sig = "48 C7 05 ? ? ? ? 00 00 00 00 E9 ? ? ? ? 85 C0", toRel = 3 } )
 
-        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24")
-        table.insert(sigs, "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB")
-        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D")
-        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 4C 8B 2B")
-        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36")
-        table.insert(sigs, "4C 8B 0D ? ? ? ? 4C 89 B4 24")
-        table.insert(sigs, "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B")
-        table.insert(sigs, "48 8B 0D ? ? ? ? 48 83 C4 ?   5?") -- 3.0
+        table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 3D", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 3D 4C 8B 2B", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36", toRel = 3 } )
+        table.insert(sigs, { sig = "4C 8B 0D ? ? ? ? 4C 89 B4 24", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B", toRel = 3 } )
+        table.insert(sigs, { sig = "A1 ? ? ? ? 85 C0 74 ? 8B 35 ? ? ? ? 8B", toRel = 1 } ) -- 3.5 32
+        table.insert(sigs, { sig = "C7 05 ? ? ? ? 00 00 00 00 85 C0 0F 84 ? ? ? ? B9", toRel = 2 } ) -- 3.5 32
+        table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 83 C4 ?   5?", toRel = 3 } ) -- 3.0
 
         for i, sig in ipairs(sigs) do
-          if resolveRelAddr(sig, 3) then
-            sendDebugMessage('tryRegSceneTree: hit at: ' .. tostring(i) .. "\t" .. sig)
+          if resolveRelAddr(sig.sig, sig.toRel) then
+            sendDebugMessage('tryRegSceneTree: hit at: ' .. tostring(i) .. "\t" .. sig.sig)
             return true
           end
         end
@@ -2425,7 +2434,7 @@
 
         local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
           local funcRoot
-          if not bDisasmFunc then
+          if not bDisasmFunc then -- let's 
             funcRoot = createChildStructElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer, "GDFunction")
             local funcValueAddr = readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
             emitFunctionCodeStruct(funcRoot, funcName)
@@ -10080,7 +10089,7 @@
           end
           dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
           registerDumpedNodes()
-          sleep(1000)
+          sleep(100)
         end
         thr.terminate()
       end
