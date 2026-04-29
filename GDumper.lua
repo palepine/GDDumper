@@ -260,10 +260,66 @@
         GDDEFS.DICT_SIZE = 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
+
+        offsets.VPChildren = 0x140
+        offsets.VPObjStringName = 0x190
+        offsets.NodeGDScriptInstance = 0x60
+        offsets.NodeGDScriptName = 0xF0
+        offsets.GDScriptFunctionMap = 0x230
+        offsets.GDScriptConstantMap = 0x208
+        offsets.GDScriptVariantNameHM = 0x180
+        offsets.oVariantVector = 0x28
+        offsets.GDScriptVariantNameType = 0x44 -- 4.x
+        offsets.NodeVariantVectorSizeOffset = 0x10
+        offsets.GDScriptVariantNamesIndex = nil -- 3.x
+        offsets.GDScriptFunctionCode = 0x178
+        offsets.GDScriptFunctionCodeConsts = 0x198
+        offsets.GDScriptFunctionCodeGlobals = 0x1A8
+
+        if GDDEFS.DEBUGVER then
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x28
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+        end
+
+        if GDDEFS.CUSTOMVER then
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.oVariantVector = offsets.oVariantVector
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+        end
+
+        return offsets
+
+      elseif majminVersionStr == "4.7" then
+        GDDEFS.DICT_HEAD = 0x20
+        GDDEFS.DICT_TAIL = 0x28
+        GDDEFS.DICT_SIZE = 0x34
+        GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+        GDDEFS.GET_TYPE_INDX = 10
         -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
-        -- godot.windows.template_release.x86_64.exe
-        -- Godot Engine v4.6.stable.official.89cea1439
         offsets.VPChildren = 0x140
         offsets.VPObjStringName = 0x190
         offsets.NodeGDScriptInstance = 0x60
@@ -7453,6 +7509,12 @@
               ["4.7"] =
                 {
                   base = "4.6",
+                  decoderName = "BytecodeV0",
+                  patches = {}
+                },
+              ["4.8"] =
+                {
+                  base = "4.7",
                   decoderName = "BytecodeV0",
                   patches = {}
                 }
