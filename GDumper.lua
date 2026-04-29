@@ -254,7 +254,7 @@
       local offsets = {}
 
       -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
-      if majminVersionStr == "4.7" then
+      if majminVersionStr == "4.8" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
         GDDEFS.DICT_SIZE = 0x34
