@@ -1250,13 +1250,27 @@
     function printGDConfig()
       print
       (
-        ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
-        (GDDEFS.MAJOR_VER or 0x0), (GDDEFS.MINOR_VER or 0x0), (GDDEFS.CUSTOMVER or tostring(nil)),
-        (GDDEFS.DEBUGVER or tostring(nil)), (GDDEFS.CHILDREN or 0x0), (GDDEFS.OBJ_STRING_NAME or 0x0),
-        (GDDEFS.GDSCRIPTINSTANCE or 0x0), (GDDEFS.VAR_VECTOR or 0x0), (GDDEFS.SIZE_VECTOR or 0x0),
-        (GDDEFS.GDSCRIPTNAME or 0x0), (GDDEFS.FUNC_MAP or 0x0), (GDDEFS.FUNC_CODE or 0x0),
-        (GDDEFS.FUNC_CONST or 0x0), (GDDEFS.FUNC_GLOBNAMEPTR or 0x0), (GDDEFS.CONST_MAP or 0x0),
-        (GDDEFS.VAR_NAMEINDEX_MAP or 0x0), (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0), (GDDEFS.VAR_NAMEINDEX_I or 0x0))
+        ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
+        (GDDEFS.MAJOR_VER or 0x0),
+        (GDDEFS.MINOR_VER or 0x0),
+        (tostring(GDDEFS.CUSTOMVER)),
+        (tostring(GDDEFS.DEBUGVER)),
+        (tostring(GDDEFS.MONO)),
+        (tostring(true)),
+        (GDDEFS.CHILDREN or 0x0),
+        (GDDEFS.OBJ_STRING_NAME or 0x0),
+        (GDDEFS.GDSCRIPTINSTANCE or 0x0),
+        (GDDEFS.VAR_VECTOR or 0x0),
+        (GDDEFS.SIZE_VECTOR or 0x0),
+        (GDDEFS.GDSCRIPTNAME or 0x0),
+        (GDDEFS.FUNC_MAP or 0x0),
+        (GDDEFS.FUNC_CODE or 0x0),
+        (GDDEFS.FUNC_CONST or 0x0),
+        (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
+        (GDDEFS.CONST_MAP or 0x0),
+        (GDDEFS.VAR_NAMEINDEX_MAP or 0x0),
+        (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
+        (GDDEFS.VAR_NAMEINDEX_I or 0x0))
         )
     end
 
