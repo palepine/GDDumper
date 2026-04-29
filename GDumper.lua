@@ -7538,7 +7538,7 @@
               OPCODE_GET_NAMED = "OPCODE_GET_NAMED", -- 6
               OPCODE_SET_MEMBER = "OPCODE_SET_MEMBER", -- 7
               OPCODE_GET_MEMBER = "OPCODE_GET_MEMBER", -- 8
-              OPCODE_ASSIGN = "OPCODE_ASSIGN", -- 9
+              OPCODE_ASSIGN = "OPCODE_ASSIGN", -- 9 ok
               OPCODE_ASSIGN_TRUE = "OPCODE_ASSIGN_TRUE", -- 10
               OPCODE_ASSIGN_FALSE = "OPCODE_ASSIGN_FALSE", -- 11
               OPCODE_ASSIGN_TYPED_BUILTIN = "OPCODE_ASSIGN_TYPED_BUILTIN", -- 12
@@ -7550,8 +7550,8 @@
               OPCODE_CONSTRUCT = "OPCODE_CONSTRUCT", -- 18
               OPCODE_CONSTRUCT_ARRAY = "OPCODE_CONSTRUCT_ARRAY", -- 19
               OPCODE_CONSTRUCT_DICTIONARY = "OPCODE_CONSTRUCT_DICTIONARY", -- 20
-              OPCODE_CALL = "OPCODE_CALL", -- 21
-              OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN", -- 22
+              OPCODE_CALL = "OPCODE_CALL", -- 21 ok
+              OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN", -- 22 ok
               OPCODE_CALL_BUILT_IN = "OPCODE_CALL_BUILT_IN", -- 23
               OPCODE_CALL_SELF = "OPCODE_CALL_SELF", -- 24
               OPCODE_CALL_SELF_BASE = "OPCODE_CALL_SELF_BASE", -- 25
@@ -7568,7 +7568,7 @@
               OPCODE_ASSERT = "OPCODE_ASSERT", -- 36
               OPCODE_BREAKPOINT = "OPCODE_BREAKPOINT", -- 37
               OPCODE_LINE = "OPCODE_LINE", -- 38
-              OPCODE_END = "OPCODE_END" -- 39 (enum)
+              OPCODE_END = "OPCODE_END" -- 39 (enum) ok
             }
           
           GDF.DisasmHandlers = {}
@@ -7912,13 +7912,11 @@
                 name = "OPCODE_CONSTRUCT",
                 handler = function(contextTable)
                   
-                  local operand1_n = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 1])
-
                   local typeName = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 1])
-                  addStructureElem(contextTable.codeStructElement, typeName, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                  addStructureElem(contextTable.codeStructElement, typeName, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword) -- Variant::Type
 
                   local argc = contextTable.codeInts[contextTable.instrPointer + 2]
-                  addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                  addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 2) * 0x4, vtDword) -- argc
 
                   local operand3 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 3 + argc])
                   addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword) -- dest
@@ -7936,8 +7934,7 @@
 
                   addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, 0x808040, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
-                  return contextTable.instrPointer + 3 + argc
-
+                  return contextTable.instrPointer + 4 + argc
                 end
               }
 
