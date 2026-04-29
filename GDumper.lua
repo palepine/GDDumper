@@ -7521,7 +7521,7 @@
             elseif (addrType == GDF.EADDRESS['ADDR_TYPE_STACK_VARIABLE']) then  return ("stack[%d]"):format(addrIndex) -- return &p_stack[address];
             elseif (addrType == GDF.EADDRESS['ADDR_TYPE_CLASS_CONSTANT']) then  return ("Node Constants[%d]"):format(addrIndex) -- Map<StringName, Variant>::Element *E = o->constants.find(*sn); return &E->get();
             elseif (addrType == GDF.EADDRESS['ADDR_TYPE_LOCAL_CONSTANT']) then  return ("Constants[%d]"):format(addrIndex) -- return &_constants_ptr[address];
-            elseif (addrType == GDF.EADDRESS['ADDR_TYPE_GLOBAL']) then          return ("Globals[%d]"):format(addrIndex) -- return &GDScriptLanguage::get_singleton()->get_global_array()[address];
+            elseif (addrType == GDF.EADDRESS['ADDR_TYPE_GLOBAL']) then          return ("ScriptLang::GlobArray[%d]"):format(addrIndex) -- return &GDScriptLanguage::get_singleton()->get_global_array()[address];
             elseif (addrType == GDF.EADDRESS['ADDR_TYPE_MEMBER']) then          return ("Variants[%d]"):format(addrIndex) -- for clarity ("member[%d]"):format(addrIndex)
             else                                                                return ("addr?(0x%08X)"):format(addrInt)
             end
