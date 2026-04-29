@@ -224,12 +224,16 @@
 
       if (exportTableStr):match("mono") then
         GDDEFS.MONO = true
+      else
+        GDDEFS.MONO = false
       end
       
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
 
       if (godotVersionString):match("custom") then
         GDDEFS.CUSTOMVER = true
+      else
+        GDDEFS.CUSTOMVER = false
       end
 
       if isNotNullOrNil(major) and isNotNullOrNil(minor) then
@@ -238,7 +242,7 @@
         GDDEFS.VERSION_STRING = major .. '.' .. minor
       end
 
-      MainForm.setCaption(GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN")
+      MainForm.setCaption( (GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN") .. (GDDEFS.CUSTOMVER and " C" or '') .. (GDDEFS.DEBUGVER and " D" or '') .. (GDDEFS.MONO and " M" or '') )
     end
 
     function getStoredOffsetsFromVersion(majminVersionStr)
