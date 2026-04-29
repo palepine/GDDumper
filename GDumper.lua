@@ -7514,7 +7514,7 @@
               if addrIndex == GDF.EADDRESS['ADDR_TYPE_SELF'] then    return "stack(self)" end -- return &self;
               if addrIndex == GDF.EADDRESS['ADDR_TYPE_CLASS'] then   return "stack(class)" end -- &static_ref;
               if addrIndex == GDF.EADDRESS['ADDR_TYPE_NIL'] then     return "stack(nil)" end -- return &nil
-                                                                            return 'stack[' .. tostring(addrIndex) .. ']'
+                                                                     return 'stack[' .. tostring(addrIndex) .. ']'
             end
 
             if (addrType == GDF.EADDRESS['ADDR_TYPE_STACK']) then               return ("stack[%d]"):format(addrIndex) -- return &p_stack[address];
@@ -7538,7 +7538,7 @@
               OPCODE_GET_NAMED = "OPCODE_GET_NAMED", -- 6
               OPCODE_SET_MEMBER = "OPCODE_SET_MEMBER", -- 7
               OPCODE_GET_MEMBER = "OPCODE_GET_MEMBER", -- 8
-              OPCODE_ASSIGN = "OPCODE_ASSIGN", -- 9 ok
+              OPCODE_ASSIGN = "OPCODE_ASSIGN", -- 9
               OPCODE_ASSIGN_TRUE = "OPCODE_ASSIGN_TRUE", -- 10
               OPCODE_ASSIGN_FALSE = "OPCODE_ASSIGN_FALSE", -- 11
               OPCODE_ASSIGN_TYPED_BUILTIN = "OPCODE_ASSIGN_TYPED_BUILTIN", -- 12
@@ -7550,8 +7550,8 @@
               OPCODE_CONSTRUCT = "OPCODE_CONSTRUCT", -- 18
               OPCODE_CONSTRUCT_ARRAY = "OPCODE_CONSTRUCT_ARRAY", -- 19
               OPCODE_CONSTRUCT_DICTIONARY = "OPCODE_CONSTRUCT_DICTIONARY", -- 20
-              OPCODE_CALL = "OPCODE_CALL", -- 21 ok
-              OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN", -- 22 ok
+              OPCODE_CALL = "OPCODE_CALL", -- 21
+              OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN", -- 22
               OPCODE_CALL_BUILT_IN = "OPCODE_CALL_BUILT_IN", -- 23
               OPCODE_CALL_SELF = "OPCODE_CALL_SELF", -- 24
               OPCODE_CALL_SELF_BASE = "OPCODE_CALL_SELF_BASE", -- 25
@@ -7568,7 +7568,7 @@
               OPCODE_ASSERT = "OPCODE_ASSERT", -- 36
               OPCODE_BREAKPOINT = "OPCODE_BREAKPOINT", -- 37
               OPCODE_LINE = "OPCODE_LINE", -- 38
-              OPCODE_END = "OPCODE_END" -- 39 (enum) ok
+              OPCODE_END = "OPCODE_END" -- 39 (enum)
             }
           
           GDF.DisasmHandlers = {}
@@ -7946,8 +7946,6 @@
                   local argc = contextTable.codeInts[contextTable.instrPointer + 1]
                   addStructureElem(contextTable.codeStructElement, 'argc:', (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
 
-                  local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2 + argc])
-                  addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword)
                   local operandArg = '';
 
                   for i = 0, argc - 1 do
@@ -7957,6 +7955,9 @@
                     operandArg = operandArg .. formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2 + i])
                     addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2 + i]), (contextTable.instrPointer - 1 + 2 + i) * 0x4, vtDword)
                   end
+
+                  local operand2 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 2 + argc])
+                  addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2 + argc) * 0x4, vtDword) -- dest
 
                   contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. '[' .. operandArg .. ']'
 
