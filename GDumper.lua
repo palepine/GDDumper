@@ -3292,7 +3292,7 @@
         GDHandlers.VariantHandlers.PACKED_VECTOR4_ARRAY = GDHandlers.VariantHandlers.PACKED_STRING_ARRAY
 
         GDHandlers.VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
-          local typeName = "Color: "
+          local typeName = "Color"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
@@ -3304,7 +3304,7 @@
         end
 
         GDHandlers.VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec2: "
+          local typeName = "Vec2"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
@@ -3312,14 +3312,14 @@
         end
 
         GDHandlers.VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
-          local typeName = "vec2I: "
+          local typeName = "vec2I"
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
         end
 
         GDHandlers.VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
-          local typeName = "Rect2: "
+          local typeName = "Rect2"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
@@ -3331,7 +3331,7 @@
         end
 
         GDHandlers.VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
-          local typeName = "Rect2I: "
+          local typeName = "Rect2I"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
@@ -3343,7 +3343,7 @@
         end
 
         GDHandlers.VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec3: "
+          local typeName = "Vec3"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
@@ -3353,7 +3353,7 @@
         end
 
         GDHandlers.VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec3I: "
+          local typeName = "Vec3I"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
@@ -3363,7 +3363,7 @@
         end
 
         GDHandlers.VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec4: "
+          local typeName = "Vec4"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
@@ -3375,7 +3375,7 @@
         end
 
         GDHandlers.VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
-          local typeName = "Vec4I: "
+          local typeName = "Vec4I"
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
           emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
           if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
