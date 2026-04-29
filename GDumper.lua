@@ -1462,7 +1462,7 @@
 
         iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-      elseif bDisasmFunc and GDDEFS.MAJOR_VER ~= 3 and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
+      elseif bDisasmFunc --[[and GDDEFS.MAJOR_VER ~= 3]] and checkIfGDFunction(baseaddr) then -- not implemented for 3.x as of now
         disassembleGDFunctionCodeToStruct(baseaddr, struct)
 
       elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
@@ -1655,7 +1655,7 @@
       mainMemrec.Description = "Dumper"
       mainMemrec.Type = vtAutoAssembler
       mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver, false otherwise\nGDDebugVer =                nil, -- if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- set to true if it's using mono/C#, false otherwise\n\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets (lets you skip defining the OFFSETS below), false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\nnodeMonitor()\n{$asm}"
+      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver, false otherwise\nGDDebugVer =                nil, -- if it's template_debug ver, false otherwise\nisMonoTarget =              false, -- set to true if it's using mono/C#, false otherwise\n\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets (lets you skip defining the OFFSETS below), false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\nnodeMonitor()\n{$asm}"
 
       local dumpMemrec = addrList.createMemoryRecord()
       dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -7508,12 +7508,12 @@
 
           function formatDisassembledAddress(addrInt) -- redefined for 3.x
             local addrIndex = addrInt & (GDF.EADDRESS['ADDR_MASK']) -- address, lower 24 bits are indices
-            local addrType = (addrInt & (GDF.EADDRESS['ADDR_TYPE_MASK']) >> GDF.EADDRESS['ADDR_BITS']) -- the higher 8 would be types: shift to the beginning and mask
+            local addrType = ( (addrInt & GDF.EADDRESS['ADDR_TYPE_MASK']) >> GDF.EADDRESS['ADDR_BITS']) -- the higher 8 would be types: shift to the beginning and mask
 
-            if addrType == 0 and (addrIndex >= 0 and addrIndex <= 8--[[CHANGE TO MAX that's not the last]]) then
-              if addrIndex == GDF.EFIXEDADDRESSES['ADDR_TYPE_SELF'] then    return "stack(self)" end -- return &self;
-              if addrIndex == GDF.EFIXEDADDRESSES['ADDR_TYPE_CLASS'] then   return "stack(class)" end -- &static_ref;
-              if addrIndex == GDF.EFIXEDADDRESSES['ADDR_TYPE_NIL'] then     return "stack(nil)" end -- return &nil
+            if addrType == 0 and (addrIndex >= 0 and addrIndex <= 3) then
+              if addrIndex == GDF.EADDRESS['ADDR_TYPE_SELF'] then    return "stack(self)" end -- return &self;
+              if addrIndex == GDF.EADDRESS['ADDR_TYPE_CLASS'] then   return "stack(class)" end -- &static_ref;
+              if addrIndex == GDF.EADDRESS['ADDR_TYPE_NIL'] then     return "stack(nil)" end -- return &nil
                                                                             return 'stack[' .. tostring(addrIndex) .. ']'
             end
 
@@ -7529,46 +7529,46 @@
 
           GDF.OP =
             {
-              OPCODE_OPERATOR = "OPCODE_OPERATOR",
-              OPCODE_EXTENDS_TEST = "OPCODE_EXTENDS_TEST",
-              OPCODE_IS_BUILTIN = "OPCODE_IS_BUILTIN",
-              OPCODE_SET = "OPCODE_SET",
-              OPCODE_GET = "OPCODE_GET",
-              OPCODE_SET_NAMED = "OPCODE_SET_NAMED",
-              OPCODE_GET_NAMED = "OPCODE_GET_NAMED",
-              OPCODE_SET_MEMBER = "OPCODE_SET_MEMBER",
-              OPCODE_GET_MEMBER = "OPCODE_GET_MEMBER",
-              OPCODE_ASSIGN = "OPCODE_ASSIGN",
-              OPCODE_ASSIGN_TRUE = "OPCODE_ASSIGN_TRUE",
-              OPCODE_ASSIGN_FALSE = "OPCODE_ASSIGN_FALSE",
-              OPCODE_ASSIGN_TYPED_BUILTIN = "OPCODE_ASSIGN_TYPED_BUILTIN",
-              OPCODE_ASSIGN_TYPED_NATIVE = "OPCODE_ASSIGN_TYPED_NATIVE",
-              OPCODE_ASSIGN_TYPED_SCRIPT = "OPCODE_ASSIGN_TYPED_SCRIPT",
-              OPCODE_CAST_TO_BUILTIN = "OPCODE_CAST_TO_BUILTIN",
-              OPCODE_CAST_TO_NATIVE = "OPCODE_CAST_TO_NATIVE",
-              OPCODE_CAST_TO_SCRIPT = "OPCODE_CAST_TO_SCRIPT",
-              OPCODE_CONSTRUCT = "OPCODE_CONSTRUCT",
-              OPCODE_CONSTRUCT_ARRAY = "OPCODE_CONSTRUCT_ARRAY",
-              OPCODE_CONSTRUCT_DICTIONARY = "OPCODE_CONSTRUCT_DICTIONARY",
-              OPCODE_CALL = "OPCODE_CALL",
-              OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN",
-              OPCODE_CALL_BUILT_IN = "OPCODE_CALL_BUILT_IN",
-              OPCODE_CALL_SELF = "OPCODE_CALL_SELF",
-              OPCODE_CALL_SELF_BASE = "OPCODE_CALL_SELF_BASE",
-              OPCODE_YIELD = "OPCODE_YIELD",
-              OPCODE_YIELD_SIGNAL = "OPCODE_YIELD_SIGNAL",
-              OPCODE_YIELD_RESUME = "OPCODE_YIELD_RESUME",
-              OPCODE_JUMP = "OPCODE_JUMP",
-              OPCODE_JUMP_IF = "OPCODE_JUMP_IF",
-              OPCODE_JUMP_IF_NOT = "OPCODE_JUMP_IF_NOT",
-              OPCODE_JUMP_TO_DEF_ARGUMENT = "OPCODE_JUMP_TO_DEF_ARGUMENT",
-              OPCODE_RETURN = "OPCODE_RETURN",
-              OPCODE_ITERATE_BEGIN = "OPCODE_ITERATE_BEGIN",
-              OPCODE_ITERATE = "OPCODE_ITERATE",
-              OPCODE_ASSERT = "OPCODE_ASSERT",
-              OPCODE_BREAKPOINT = "OPCODE_BREAKPOINT",
-              OPCODE_LINE = "OPCODE_LINE",
-              OPCODE_END = "OPCODE_END"
+              OPCODE_OPERATOR = "OPCODE_OPERATOR", -- 0
+              OPCODE_EXTENDS_TEST = "OPCODE_EXTENDS_TEST", -- 1
+              OPCODE_IS_BUILTIN = "OPCODE_IS_BUILTIN", -- 2
+              OPCODE_SET = "OPCODE_SET", -- 3
+              OPCODE_GET = "OPCODE_GET", -- 4
+              OPCODE_SET_NAMED = "OPCODE_SET_NAMED", -- 5
+              OPCODE_GET_NAMED = "OPCODE_GET_NAMED", -- 6
+              OPCODE_SET_MEMBER = "OPCODE_SET_MEMBER", -- 7
+              OPCODE_GET_MEMBER = "OPCODE_GET_MEMBER", -- 8
+              OPCODE_ASSIGN = "OPCODE_ASSIGN", -- 9
+              OPCODE_ASSIGN_TRUE = "OPCODE_ASSIGN_TRUE", -- 10
+              OPCODE_ASSIGN_FALSE = "OPCODE_ASSIGN_FALSE", -- 11
+              OPCODE_ASSIGN_TYPED_BUILTIN = "OPCODE_ASSIGN_TYPED_BUILTIN", -- 12
+              OPCODE_ASSIGN_TYPED_NATIVE = "OPCODE_ASSIGN_TYPED_NATIVE", -- 13
+              OPCODE_ASSIGN_TYPED_SCRIPT = "OPCODE_ASSIGN_TYPED_SCRIPT", -- 14
+              OPCODE_CAST_TO_BUILTIN = "OPCODE_CAST_TO_BUILTIN", -- 15
+              OPCODE_CAST_TO_NATIVE = "OPCODE_CAST_TO_NATIVE", -- 16
+              OPCODE_CAST_TO_SCRIPT = "OPCODE_CAST_TO_SCRIPT", -- 17
+              OPCODE_CONSTRUCT = "OPCODE_CONSTRUCT", -- 18
+              OPCODE_CONSTRUCT_ARRAY = "OPCODE_CONSTRUCT_ARRAY", -- 19
+              OPCODE_CONSTRUCT_DICTIONARY = "OPCODE_CONSTRUCT_DICTIONARY", -- 20
+              OPCODE_CALL = "OPCODE_CALL", -- 21
+              OPCODE_CALL_RETURN = "OPCODE_CALL_RETURN", -- 22
+              OPCODE_CALL_BUILT_IN = "OPCODE_CALL_BUILT_IN", -- 23
+              OPCODE_CALL_SELF = "OPCODE_CALL_SELF", -- 24
+              OPCODE_CALL_SELF_BASE = "OPCODE_CALL_SELF_BASE", -- 25
+              OPCODE_YIELD = "OPCODE_YIELD", -- 26
+              OPCODE_YIELD_SIGNAL = "OPCODE_YIELD_SIGNAL", -- 27
+              OPCODE_YIELD_RESUME = "OPCODE_YIELD_RESUME", -- 28
+              OPCODE_JUMP = "OPCODE_JUMP", -- 29
+              OPCODE_JUMP_IF = "OPCODE_JUMP_IF", -- 30
+              OPCODE_JUMP_IF_NOT = "OPCODE_JUMP_IF_NOT", -- 31
+              OPCODE_JUMP_TO_DEF_ARGUMENT = "OPCODE_JUMP_TO_DEF_ARGUMENT", -- 32
+              OPCODE_RETURN = "OPCODE_RETURN", -- 33
+              OPCODE_ITERATE_BEGIN = "OPCODE_ITERATE_BEGIN", -- 34
+              OPCODE_ITERATE = "OPCODE_ITERATE", -- 35
+              OPCODE_ASSERT = "OPCODE_ASSERT", -- 36
+              OPCODE_BREAKPOINT = "OPCODE_BREAKPOINT", -- 37
+              OPCODE_LINE = "OPCODE_LINE", -- 38
+              OPCODE_END = "OPCODE_END" -- 39 (enum)
             }
           
           GDF.DisasmHandlers = {}
