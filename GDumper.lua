@@ -275,6 +275,7 @@
         offsets.GDScriptFunctionCode = 0x178
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
+        offsets.GDScriptFunctionCodeArg = 0xA0 -- 0x0 type
 
         if GDDEFS.DEBUGVER then
           offsets.VPChildren = offsets.VPChildren + 0x8
@@ -334,7 +335,8 @@
         offsets.GDScriptFunctionCode = 0x178
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           offsets.VPChildren = offsets.VPChildren + 0x8
           offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -394,6 +396,7 @@
         offsets.GDScriptFunctionCode = 0x178
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
+        offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
 
         if GDDEFS.DEBUGVER then
           offsets.VPChildren = offsets.VPChildren + 0x8
@@ -456,7 +459,8 @@
         offsets.GDScriptFunctionCode = 0x180 -- 0x178
         offsets.GDScriptFunctionCodeConsts = 0x1A0 -- 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
-
+        offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xF4 argc
+        
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
           -- Godot Engine v4.5.1.stable.official
@@ -502,7 +506,8 @@
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
         -- timer 3B8 time_left | 3C0 isactive | 3A8 waittime
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
           -- Godot Engine v4.4.1.stable.official
@@ -550,7 +555,8 @@
         offsets.GDScriptFunctionCode = 0x178
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
           -- Godot Engine v4.3.stable.official
@@ -599,7 +605,8 @@
         offsets.GDScriptFunctionCodeConsts = 0x190
         offsets.GDScriptFunctionCodeGlobals = 0x1A0
         -- timer 3a8 time_left 3b8 waittime 3c0 active
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
           --  Godot Engine v4.2.2.stable.official
@@ -648,6 +655,8 @@
         offsets.GDScriptFunctionCodeConsts = 0x100
         offsets.GDScriptFunctionCodeGlobals = 0xF0
         -- timer 3a8 time_left 3b8 waittime 3c0 active
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
           --  Godot Engine v4.1.1.stable.official
@@ -692,7 +701,8 @@
         offsets.GDScriptFunctionCode = 0x118
         offsets.GDScriptFunctionCodeConsts = 0x100
         offsets.GDScriptFunctionCodeGlobals = 0xF0
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- error("Not defined yet")
           -- GDDEFS.STRING = 0x8
@@ -734,7 +744,8 @@
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- godot.windows.opt.debug.64.exe
           -- GDDEFS.STRING = 0x8
@@ -779,7 +790,8 @@
           offsets.GDScriptFunctionCode = 0x50
           offsets.GDScriptFunctionCodeConsts = 0x20
           offsets.GDScriptFunctionCodeGlobals = 0x30
-
+          offsets.GDScriptFunctionCodeArg = 0xA0
+        
           if GDDEFS.DEBUGVER then
             -- godot.windows.opt.debug.64.exe
             -- Godot Engine 3.5.2.stable
@@ -887,7 +899,8 @@
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
         -- timer 1E0 (float) waittime 1E8 time_left 1F0 paused?
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- error("Not defined yet")
           -- GDDEFS.STRING = 0x8
@@ -931,7 +944,8 @@
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           -- error("Not defined yet")
           -- GDDEFS.STRING = 0x8
@@ -974,7 +988,8 @@
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
-
+        offsets.GDScriptFunctionCodeArg = 0xA0
+        
         if GDDEFS.DEBUGVER then
           error("Not defined yet")
           -- GDDEFS.STRING = 0x8
@@ -2609,8 +2624,12 @@
       -- TODO: make magic dereferences more obvious
 
       function getNodeChildrenInfo(nodeAddr)
+        if isNullOrNil(nodeAddr) then
+          sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
+          return nil, nil;
+        end
 
-        local childrenAddr = readPointer(nodeAddr + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
+        local childrenAddr = readPointer((nodeAddr or 0) + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
         if isNullOrNil(childrenAddr) then
           sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
           return nil, nil;
@@ -2620,7 +2639,7 @@
         if GDDEFS.MAJOR_VER == 4 then
           
           -- if GDDEFS.MINOR_VER > 2 then
-            childrenSize = readInteger(nodeAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
+            childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
           -- else
             -- childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
           -- end
@@ -4837,9 +4856,9 @@
                 name = "OPCODE_TYPE_TEST_SCRIPT",
                 handler = function(contextTable)
                   local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
-                  addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                  addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword) -- dest
                   local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
-                  addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                  addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword) -- value
                   local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
                   addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                   contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
@@ -5416,7 +5435,7 @@
 
                   addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
-                  return contextTable.instrPointer + 6 + instr_var_args
+                  return contextTable.instrPointer + 6 + argc
                 end
               }
             GDF.DisasmHandlers[GDF.OP.OPCODE_CONSTRUCT_DICTIONARY] = 
@@ -7019,15 +7038,58 @@
               {
                 name = "BytecodeV0",
                 resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
+                  if profile.OPEnumFromInternalOPID[GDF.OP.OPCODE_OPERATOR] == opcodeEnum then
+                  if profile.OPEnumFromInternalOPID[GDF.OP.OPCODE_OPERATOR] == opcodeEnum then
+                    local base = profile.OPHandlerDefFromOPEnum[opcodeEnum]
+                    profile.OPHandlerDefFromOPEnum[opcodeEnum] = {
+                      name = base.name,
+                      handler = function(contextTable)
+                        local _pointer_size = GDDEFS.PTRSIZE / 0x4
+                        local operation = contextTable.codeInts[contextTable.instrPointer + 4] -- operator is 4*0x4 after
+                        addStructureElem(contextTable.codeStructElement, 'Operator: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+                        local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR'
+                        local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                        addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                        local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                        addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                        local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
+                        addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                        contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
+                        addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                        return contextTable.instrPointer + 5
+                      end
+                    }
+                  end
+                  end
                   return profile.OPHandlerDefFromOPEnum[opcodeEnum]
                 end
               }
             GDF.Decoders.BytecodeV1 =
               {
                 name = "BytecodeV1",
-                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum) -- TODO: version specific overriding
-                  -- for other versions redefine the handler on the fly
-                  -- for example, in 4.0 GDF.OP.OPCODE_OPERATOR takes more operands than future versions
+                resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
+                  if profile.OPEnumFromInternalOPID[GDF.OP.OPCODE_OPERATOR] == opcodeEnum then
+                    local base = profile.OPHandlerDefFromOPEnum[opcodeEnum]
+                    profile.OPHandlerDefFromOPEnum[opcodeEnum] = {
+                      name = base.name,
+                      handler = function(contextTable)
+                        local _pointer_size = GDDEFS.PTRSIZE / 0x4
+                        local operation = contextTable.codeInts[contextTable.instrPointer + 4] -- operator is 4*0x4 after
+                        addStructureElem(contextTable.codeStructElement, 'Operator: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
+                        local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR'
+                        local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
+                        addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
+                        local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
+                        addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
+                        local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
+                        addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
+                        contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
+                        addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                        return contextTable.instrPointer + 7 + _pointer_size
+                      end
+                    }
+                  end
+
                   return profile.OPHandlerDefFromOPEnum[opcodeEnum]
                 end
               }
@@ -7244,7 +7306,7 @@
               ["4.2"] =
                 {
                   base = "4.1",
-                  decoderName = "BytecodeV0",
+                  decoderName = "BytecodeV1",
                   patches =
                   {
                     {
@@ -7416,7 +7478,7 @@
               ["4.3"] =
                 {
                   base = "4.2",
-                  decoderName = "BytecodeV0",
+                  decoderName = "BytecodeV1",
                   patches =
                   {
                     {
@@ -7455,7 +7517,7 @@
               ["4.4"] =
                 {
                   base = "4.3",
-                  decoderName = "BytecodeV0",
+                  decoderName = "BytecodeV1",
                   patches =
                   {
                     {
@@ -7484,7 +7546,7 @@
               ["4.5"] =
                 {
                   base = "4.4",
-                  decoderName = "BytecodeV0",
+                  decoderName = "BytecodeV1",
                   patches =
                   {
                     {
@@ -7503,19 +7565,19 @@
               ["4.6"] =
                 {
                   base = "4.5",
-                  decoderName = "BytecodeV0",
+                  decoderName = "BytecodeV1",
                   patches = {}
                 },
               ["4.7"] =
                 {
                   base = "4.6",
-                  decoderName = "BytecodeV0",
+                  decoderName = "BytecodeV1",
                   patches = {}
                 },
               ["4.8"] =
                 {
                   base = "4.7",
-                  decoderName = "BytecodeV0",
+                  decoderName = "BytecodeV1",
                   patches = {}
                 }
             }
@@ -10159,7 +10221,7 @@
           end
           dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
           registerDumpedNodes()
-          sleep(100)
+          sleep(700)
         end
         thr.terminate()
       end
