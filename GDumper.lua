@@ -249,7 +249,7 @@
         GDDEFS.MAJOR_VER = ver.major
         GDDEFS.MINOR_VER = ver.minor
         GDDEFS.PATCH_VER = ver.patch
-        GDDEFS.FULL_GDVERSION_STRING = ver.major .. '.' .. ver.minor .. '.' .. ver.patch
+        GDDEFS.FULL_GDVERSION_STRING = "Godot Engine ".. ver.major .. '.' .. ver.minor .. '.' .. ver.patch
       else
         print("getGodotVersionFromMagic: failed to find magic")
       end
@@ -2072,7 +2072,7 @@
           GDDEFS.MONO = config.isMonoTarget and config.isMonoTarget or false
         else
           defineGDVersion()
-          if isNullOrNil(GDDEFS.CUSTOMVER) then GDDEFS.CUSTOMVER = config.GDCustomver end
+          if isNullOrNil(GDDEFS.CUSTOMVER) then GDDEFS.CUSTOMVER = config.GDCustomver else GDDEFS.CUSTOMVER = false end
         end
 
         -- AUTOMATIC START
