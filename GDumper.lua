@@ -127,6 +127,45 @@
       end
     end
 
+    function getGodotVersionFromMagic()
+      local godotMagic = AOBScanModuleUnique(process, "47 44 50 43", "-W-X-C")
+      if isNotNullOrNil(godotMagic) then
+        local formatVersion = readInteger( godotMagic + 0x4*1 )
+        local majorVer = readInteger( godotMagic + 0x4*2 )
+        local minorVer = readInteger( godotMagic + 0x4*3 )
+        local patchVer = readInteger( godotMagic + 0x4*4 )
+        return
+        {
+          major = majorVer,
+          minor = minorVer,
+          patch = patchVer
+        }
+
+      else
+        local pathToExe = enumModules()[1].PathToFile
+        local gameDir, exeName = extractFilePath(pathToExe), string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
+
+        local pathList = getFileList(gameDir, exeName..".pck" )
+
+        if pathList and next(pathList) then
+          local pckPath = pathList[1]
+          local version = readGodotPckVersion(pckPath)
+          if version then
+            return
+            {
+              major = version.major,
+              minor = version.minor,
+              patch = version.patch
+            }
+          end
+
+        else
+          return nil
+        end
+      end
+
+    end
+
     --- heuristic to identify whether the process is godot
     function godotOnProcessOpened(processid, processhandle, caption)
       -- similar to monoscript.lua in implementation
@@ -151,15 +190,11 @@
               -- secondly, check if there's a package file, many apps do
               if not targetIsGodot then
                 local pathToExe = enumModules()[1].PathToFile
-                local gameDir, exeName = extractFilePath(pathToExe),
-                  string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
-                local pathList = getFileList(gameDir)
-                local pckName = exeName .. '.pck'
+                local gameDir, exeName = extractFilePath(pathToExe), string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
+                local pathList = getFileList(gameDir, exeName..".pck" )
 
-                for _, path in ipairs(pathList) do
-                  if (extractFileName(path) == pckName) then
-                    targetIsGodot = true;
-                  end
+                if pathList and next(pathList) then
+                  targetIsGodot = true;
                 end
               end
 
@@ -203,15 +238,25 @@
     end
 
     function defineGDVersion()
-      local godotVersionString = getGodotVersionString()
 
+      local major, minor, patch = 0, 0, 0
+      local godotVersionString = nil
       if isNullOrNil(GDDEFS) then GDDEFS = {} end
 
-      GDDEFS.FULL_GDVERSION_STRING = godotVersionString
-      local major, minor, patch, tag = (godotVersionString):match("v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)")
+      local ver = getGodotVersionFromMagic()
+      if isNotNullOrNil(ver) and next(ver) then
+        GDDEFS.VERSION_STRING = tostring(ver.major) .. '.' .. tostring(ver.minor)
+        GDDEFS.MAJOR_VER = ver.major
+        GDDEFS.MINOR_VER = ver.minor
+        GDDEFS.PATCH_VER = ver.patch
+        GDDEFS.FULL_GDVERSION_STRING = ver.major .. '.' .. ver.minor .. '.' .. ver.patch
+      else
+        print("getGodotVersionFromMagic: failed to find magic")
+      end
 
-      if isNullOrNil(major) or isNullOrNil(minor) then
-        major, minor, patch = (godotVersionString):match("Godot Engine v?(%d+)%.(%d+)%.?(%a*)")
+      if lregexScan and type(lregexScan) == "function" then
+        godotVersionString = getGodotVersionString()
+        GDDEFS.FULL_GDVERSION_STRING = godotVersionString
       end
 
       local exportTableStr = getExportTableName() or ""
@@ -227,10 +272,12 @@
       else
         GDDEFS.MONO = false
       end
-      
+
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
 
-      if (godotVersionString):match("custom") then
+      if isNullOrNil(godotVersionString) then
+        GDDEFS.CUSTOMVER = nil
+      elseif (godotVersionString):match("custom") then
         GDDEFS.CUSTOMVER = true
       else
         GDDEFS.CUSTOMVER = false
@@ -1114,6 +1161,35 @@
 
     end
 
+    function readGodotPckVersion(pckPath)
+      local file = io.open(pckPath, "rb")
+
+      if not file then return nil end
+
+      -- Godot PCK magic 47 44 50 43
+      local magic = file:read(4)
+
+      if magic ~= "GDPC" then
+        file:close()
+        return nil
+      end
+
+      local formatVersion = readU32LE(file)
+      local major = readU32LE(file)
+      local minor = readU32LE(file)
+      local patch = readU32LE(file)
+
+      file:close()
+
+      return
+      {
+        -- formatVersion = formatVersion,
+        major = major,
+        minor = minor,
+        patch = patch
+      }
+    end
+
   -- ///---///--///---///--///---/// POINTER HANDLERS
 
     --- checks if the value is a valid pointer
@@ -1730,7 +1806,7 @@
       mainMemrec.Description = "Dumper"
       mainMemrec.Type = vtAutoAssembler
       mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- ____You can use CERegEx plugin with 'Use stored offsets' to relieve yourself from defining everything here____\n\n-- ENGINE VER START\nmajorVersion =              nil, -- major godot ver, e.g. 4\nminorVersion =              nil, -- minor godot ver, e.g. 5\nGDCustomver =               nil, -- if it's custom build ver, false otherwise\nGDDebugVer =                nil, -- if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- set to true if it's using mono/C#, false otherwise\n\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets (lets you skip defining the OFFSETS below), false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\nnodeMonitor()\n{$asm}"
+      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- if custom build ver, false otherwise; optional if CERegEx is installed\n\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\nnodeMonitor()\n{$asm}"
 
       local dumpMemrec = addrList.createMemoryRecord()
       dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1848,6 +1924,16 @@
 
     function wrapBrackets(stringToWrap)
       return '['.. (stringToWrap or "") .. "]"
+    end
+
+    function readU32LE(f)
+      local b = f:read(4)
+
+      if not b or #b < 4 then return nil end
+
+      local b1, b2, b3, b4 = string.byte(b, 1, 4)
+
+      return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
     end
 
     GDTEAL_COLOR = 0x808040
@@ -1977,20 +2063,16 @@
         initGDDefs()
 
         if isNotNullOrNil(config.majorVersion) and isNotNullOrNil(config.minorVersion) and
-          isNotNullOrNil(config.GDCustomver) and isNotNullOrNil(config.GDDebugVer) then
+           isNotNullOrNil(config.GDCustomver) and isNotNullOrNil(config.GDDebugVer) then
           GDDEFS.VERSION_STRING = tostring(config.majorVersion) .. '.' .. tostring(config.minorVersion)
-          GDDEFS.DEBUGVER = config.GDDebugVer
-          GDDEFS.CUSTOMVER = config.GDCustomver
           GDDEFS.MAJOR_VER = config.majorVersion
           GDDEFS.MINOR_VER = config.minorVersion
+          GDDEFS.DEBUGVER = config.GDDebugVer
+          GDDEFS.CUSTOMVER = config.GDCustomver
           GDDEFS.MONO = config.isMonoTarget and config.isMonoTarget or false
         else
-          if lregexScan and type(lregexScan) == "function" then
-            defineGDVersion()
-          else
-            -- a regex plugin must be initialized for that
-            error("CERegEx plugin not installed: https://github.com/palepine/CERegEx/releases")
-          end
+          defineGDVersion()
+          if isNullOrNil(GDDEFS.CUSTOMVER) then GDDEFS.CUSTOMVER = config.GDCustomver end
         end
 
         -- AUTOMATIC START
