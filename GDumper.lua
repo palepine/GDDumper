@@ -10184,6 +10184,16 @@
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dumper
 
+      function registerNodeOffsets(nodeName)
+        local classFields = godot_node_enumVariants( getDumpedNode( nodeName ) )
+        if not (classFields) or next(classFields)==nil then
+          error('node isn\`t dumped or constructed yet, try again later')
+        end
+        for indx , field in pairs(classFields) do
+          registerSymbol( nodeName .. '.' .. field.name , field.offset , false ) -- save them
+        end
+      end
+
       --- returns a node dictionary
       function getMainNodeDict()
         local childrenAddr, childrenSize = getVPChildren()
