@@ -257,6 +257,8 @@
       if lregexScan and type(lregexScan) == "function" then
         godotVersionString = getGodotVersionString()
         GDDEFS.FULL_GDVERSION_STRING = godotVersionString
+        -- major, minor, patch, tag = (godotVersionString):match("v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)")
+        -- if isNullOrNil(major) or isNullOrNil(minor) then major, minor, patch = (godotVersionString):match("Godot Engine v?(%d+)%.(%d+)%.?(%a*)") end
       end
 
       local exportTableStr = getExportTableName() or ""
@@ -2072,7 +2074,7 @@
           GDDEFS.MONO = config.isMonoTarget and config.isMonoTarget or false
         else
           defineGDVersion()
-          if isNullOrNil(GDDEFS.CUSTOMVER) then GDDEFS.CUSTOMVER = config.GDCustomver else GDDEFS.CUSTOMVER = false end
+          if isNotNullOrNil(config.GDCustomver) then GDDEFS.CUSTOMVER = config.GDCustomver end
         end
 
         -- AUTOMATIC START
