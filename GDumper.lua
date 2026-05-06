@@ -3822,29 +3822,30 @@
 
       function checkScriptType(nodeAddr)
         if GDDEFS.MONO == false then return 0 end;
-            -- debugStepIn()
-            -- if isNullOrNil(nodeAddr) or isMMVTable( readPointer(nodeAddr) ) then
-            --   -- sendDebugMessageAndStepOut('checkScriptType: nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
-            --   return 0
-            -- end
+        -- debugStepIn()
+        if isNullOrNil(nodeAddr) or not isMMVTable( readPointer(nodeAddr) ) then
+        --   -- sendDebugMessageAndStepOut('checkScriptType: nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
+          return 0
+        end
 
         local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-            -- if isNullOrNil(scriptInstance) or isMMVTable( readPointer(scriptInstance) ) then
-            --   -- sendDebugMessageAndStepOut('checkScriptType: ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
-            --   return 0
-            -- end
+        if isNullOrNil(scriptInstance) or not isMMVTable( readPointer(scriptInstance) ) then
+        --   -- sendDebugMessageAndStepOut('checkScriptType: ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+          return 0
+        end
 
         local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-            -- if isNullOrNil(gdscript) or isMMVTable( readPointer(gdscript) ) then
-            --   -- sendDebugMessageAndStepOut('checkScriptType: GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
-            --   return 0
-            -- end
+        if isNullOrNil(gdscript) or not isMMVTable( readPointer(gdscript) ) then
+        --   -- sendDebugMessageAndStepOut('checkScriptType: GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+          return 0
+        end
         
         local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
         if isNullOrNil(gdScriptName) then
           -- sendDebugMessageAndStepOut('checkScriptType: gdScriptName invalid')
           return 0
         end
+
         local gdScriptName = readUTFString(gdScriptName)
 
         if  (gdScriptName):sub(1,4) == 'res:' then
@@ -10187,7 +10188,7 @@
       function registerNodeOffsets(nodeName)
         local classFields = godot_node_enumVariants( getDumpedNode( nodeName ) )
         if not (classFields) or next(classFields)==nil then
-          error('node isn\`t dumped or constructed yet, try again later')
+          error('node isn\'t dumped or constructed yet, try again later')
         end
         for indx , field in pairs(classFields) do
           registerSymbol( nodeName .. '.' .. field.name , field.offset , false ) -- save them
