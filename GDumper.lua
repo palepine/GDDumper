@@ -21,43 +21,44 @@
     ---@return userdata
     function addMemRecTo(memRecName, gdPtr, CEType, parent, contextTable)
       local newMemRec = getAddressList().createMemoryRecord()
-      newMemRec.setDescription(memRecName)
-      newMemRec.setType(CEType)
+      local useSymbol = bGDUseSymbols and contextTable
 
-      if GDDEFS.GD4_STRING_EXISTS then
-          if CEType == vtString then
-            newMemRec.setType(vtCustom);
-            newMemRec.CustomTypeName = "GD4 String"
-            newMemRec.setAddress(readPointer(gdPtr))
-            -- if bGDUseSymbols and contextTable then newMemRec.setAddress( wrapBrackets(contextTable.symbol or "") ) end
-          else
-            newMemRec.setAddress(gdPtr)
-            -- if bGDUseSymbols and contextTable then newMemRec.setAddress( contextTable.symbol or "" ) end
-          end
-      else
-        if CEType == vtString then
-          newMemRec.String.Size = 100;
-          newMemRec.String.Unicode = true;
+      newMemRec.setType(CEType)
+      newMemRec.setDescription(memRecName)
+
+      if CEType == vtString then
+        if GDDEFS.GD4_STRING_EXISTS then
+          newMemRec.setType(vtCustom)
+          newMemRec.CustomTypeName = "GD4 String"
+        else
+          newMemRec.String.Size = 100
+          newMemRec.String.Unicode = true
+        end
+
+        if useSymbol then
+          newMemRec.setAddress(contextTable.symbol or "")
+        else
           newMemRec.setAddress(readPointer(gdPtr))
-          -- if bGDUseSymbols and contextTable then newMemRec.setAddress( wrapBrackets(contextTable.symbol or "")) end
+        end
+      else
+        if useSymbol then
+          newMemRec.setAddress(contextTable.symbol or "")
         else
           newMemRec.setAddress(gdPtr)
-          -- if bGDUseSymbols and contextTable then newMemRec.setAddress( contextTable.symbol or "" ) end
         end
       end
 
       if CEType == vtQword then
-        newMemRec.ShowAsHex = true;
+        newMemRec.ShowAsHex = true
       end
+
       if CEType == vtDword then
-        newMemRec.ShowAsSigned = true;
+        newMemRec.ShowAsSigned = true
       end -- color and int
 
-      if bGDUseSymbols and contextTable then
-        newMemRec.DropDownList.Text = contextTable.symbol;
-      end
+      -- if bGDUseSymbols and contextTable then newMemRec.DropDownList.Text = contextTable.symbol end
 
-      newMemRec.DontSave = true
+      -- newMemRec.DontSave = true
       newMemRec.appendToEntry(parent)
       return newMemRec
     end
@@ -486,7 +487,7 @@
       elseif majminVersionStr == "4.5" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
-        GDDEFS.DICT_SIZE = 0x3C
+        GDDEFS.DICT_SIZE = 0x34 -- 0x3C
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 9
         -- A0 Vector<GDScriptDataType> argument_types; including parameter names
@@ -2155,7 +2156,7 @@
           GDDEFS.P_ARRAY_SIZE = 0x8
           GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
           GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
-          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x3C
+          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x34 -- 0x3C
           GDDEFS.DICTELEM_KEYTYPE = 0x10
           GDDEFS.DICTELEM_KEYVAL = 0x18
           GDDEFS.DICTELEM_VALTYPE = 0x28
@@ -2201,6 +2202,7 @@
         end
 
         gdOffsetsDefined = true
+        gd_nodeMonitorCD = 100
         bDisasmFunc= true -- on by default
         -- check if 4.x string type reged, otherwise define it
         checkGDStringType()
@@ -3978,7 +3980,7 @@
             newConstRec.setAddress(0xBABE)
             newConstRec.setType(vtPointer)
             newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-            newConstRec.DontSave = true
+            -- newConstRec.DontSave = true
             newConstRec.appendToEntry(parent)
             return newConstRec
           end, parent)
@@ -10316,7 +10318,7 @@
           end
           dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
           registerDumpedNodes()
-          sleep(700)
+          sleep( gd_nodeMonitorCD )
         end
         thr.terminate()
       end
@@ -10370,10 +10372,10 @@
         local nodeContext;
 
         newNodeSymStr = gdscriptName
-        GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )                              -- [[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
-        variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
-        GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
-        GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
+        GDSIsym = wrapBrackets( newNodeSymStr .. '+GDSCRIPTINSTANCE' )                                            -- [[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
+        variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
+        GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
+        GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
 
         if bDoConstants and (GDDEFS.CONST_MAP ~= 0) then
           -- sendDebugMessage('DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) )
@@ -10384,7 +10386,7 @@
             newConstRec.setAddress(0xBABE)
             newConstRec.setType(vtPointer)
             newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-            newConstRec.DontSave = true
+            -- newConstRec.DontSave = true
             newConstRec.appendToEntry(parentMemrec)
             return newConstRec
           end, parentMemrec)
@@ -10423,7 +10425,7 @@
           parentRec.setAddress(0xBABE)
           parentRec.setType(vtPointer)
           parentRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-          parentRec.DontSave = true
+          -- parentRec.DontSave = true
           return parentRec
         end)
 
@@ -10456,7 +10458,7 @@
               newConstRec.setAddress(0xBABE)
               newConstRec.setType(vtPointer)
               newConstRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-              newConstRec.DontSave = true
+              -- newConstRec.DontSave = true
               newConstRec.appendToEntry(value.MEMREC)
               return newConstRec
             end, value)
