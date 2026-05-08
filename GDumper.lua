@@ -2297,6 +2297,9 @@
         table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05", toRel = 3 } )
         table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26", toRel = 3 } )
         table.insert(sigs, { sig = "48 C7 05 ? ? ? ? 00 00 00 00 E9 ? ? ? ? 85 C0", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 85 C0 0F 11 85 ? ? ? ? 49 0F ? ? 48 89 05", toRel = 3 } ) -- 4.3
+        table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 8D 8F ? ? ? ? 48 3B C7 49 0F 44 C7 48 8B 05", toRel = 3 } )
+        table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 85 C0 74 0D 80 B8 ? ? ? ? 00 0F", toRel = 3 } )
 
         table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24", toRel = 3 } )
         table.insert(sigs, { sig = "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB", toRel = 3 } )
