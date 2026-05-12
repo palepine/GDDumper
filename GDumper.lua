@@ -423,63 +423,138 @@
 
         return offsets
       elseif majminVersionStr == "4.6" then
-        GDDEFS.DICT_HEAD = 0x20
-        GDDEFS.DICT_TAIL = 0x28
-        GDDEFS.DICT_SIZE = 0x34 --0x3C
+        
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
-        GDDEFS.GET_TYPE_INDX = 10
-        -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
+        if GDDEFS._x64bit then
+          GDDEFS.DICT_HEAD = 0x20
+          GDDEFS.DICT_TAIL = 0x28
+          GDDEFS.DICT_SIZE = 0x34 --0x3C
+          GDDEFS.GET_TYPE_INDX = 10
+          -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
-        -- godot.windows.template_release.x86_64.exe
-        -- Godot Engine v4.6.stable.official.89cea1439
-        offsets.VPChildren = 0x140
-        offsets.VPObjStringName = 0x190
-        offsets.NodeGDScriptInstance = 0x60
-        offsets.NodeGDScriptName = 0xF0
-        offsets.GDScriptFunctionMap = 0x230
-        offsets.GDScriptConstantMap = 0x208
-        offsets.GDScriptVariantNameHM = 0x180
-        offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x44 -- 4.x
-        offsets.NodeVariantVectorSizeOffset = 0x10
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
-        offsets.GDScriptFunctionCode = 0x178
-        offsets.GDScriptFunctionCodeConsts = 0x198
-        offsets.GDScriptFunctionCodeGlobals = 0x1A8
-        offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
+          -- godot.windows.template_release.x86_64.exe
+          -- Godot Engine v4.6.stable.official.89cea1439
+          offsets.VPChildren = 0x140
+          offsets.VPObjStringName = 0x190
+          offsets.NodeGDScriptInstance = 0x60
+          offsets.NodeGDScriptName = 0xF0
+          offsets.GDScriptFunctionMap = 0x230
+          offsets.GDScriptConstantMap = 0x208
+          offsets.GDScriptVariantNameHM = 0x180
+          offsets.oVariantVector = 0x28
+          offsets.GDScriptVariantNameType = 0x44 -- 4.x
+          offsets.NodeVariantVectorSizeOffset = 0x10
+          offsets.GDScriptVariantNamesIndex = nil -- 3.x
+          offsets.GDScriptFunctionCode = 0x178
+          offsets.GDScriptFunctionCodeConsts = 0x198
+          offsets.GDScriptFunctionCodeGlobals = 0x1A8
+          offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
 
-        if GDDEFS.DEBUGVER then
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-          offsets.oVariantVector = offsets.oVariantVector + 0x28
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-        end
+          if GDDEFS.DEBUGVER then
+            offsets.VPChildren = offsets.VPChildren + 0x8
+            offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+            offsets.oVariantVector = offsets.oVariantVector + 0x28
+            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+          end
 
-        if GDDEFS.CUSTOMVER then
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          -- offsets.oVariantVector = offsets.oVariantVector
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+          if GDDEFS.CUSTOMVER then
+            offsets.VPChildren = offsets.VPChildren + 0x48
+            offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+            -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
+            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+            -- offsets.oVariantVector = offsets.oVariantVector
+            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+          end
+        else
+          error("Not defined yet")
+          GDDEFS.GDSCRIPT_REF = 0x14
+          GDDEFS.FUNC_MAPVAL = 0xC
+          GDDEFS.CHILDREN_SIZE = 0x8
+          GDDEFS.MAP_SIZE = 0xC
+          GDDEFS.ARRAY_TOVECTOR = 0x8
+          GDDEFS.P_ARRAY_TOARR = 0x18
+          GDDEFS.P_ARRAY_SIZE = 0x8
+          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
+          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
+          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x34
+          GDDEFS.DICTELEM_KEYTYPE = 0x10
+          GDDEFS.DICTELEM_KEYVAL = 0x18
+          GDDEFS.DICTELEM_VALTYPE = 0x28
+          GDDEFS.CONSTELEM_KEYVAL = 0x8
+          GDDEFS.CONSTELEM_VALTYPE = 0x10
+          GDDEFS.VAR_NAMEINDEX_I = 0xC
+          GDDEFS.GET_TYPE_INDX = 10
+
+          -- custom
+          offsets.VPChildren = 0xF0
+          offsets.VPObjStringName = 0x12C
+          offsets.NodeGDScriptInstance = 0x40
+          offsets.NodeGDScriptName = 0xC4
+          offsets.GDScriptFunctionMap = 0x178
+          offsets.GDScriptConstantMap = 0x160
+          offsets.GDScriptVariantNameHM = 0x110
+          offsets.oVariantVector = 0x1C
+          offsets.GDScriptVariantNameType = 0x20 -- 4.x
+          offsets.NodeVariantVectorSizeOffset = 0x8
+          offsets.GDScriptVariantNamesIndex = nil -- 3.x
+          offsets.GDScriptFunctionCode = 0xE8
+          offsets.GDScriptFunctionCodeConsts = 0xF8
+          offsets.GDScriptFunctionCodeGlobals = 0x118
+          -- offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
+
+          if GDDEFS.DEBUGVER then
+            offsets.VPChildren = offsets.VPChildren + 0x8
+            offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+            offsets.oVariantVector = offsets.oVariantVector + 0x28
+            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+          end
+
+          -- if GDDEFS.CUSTOMVER then
+          --   offsets.VPChildren = offsets.VPChildren + 0x48
+          --   offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          --   -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
+          --   offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          --   offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          --   offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          --   offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          --   -- offsets.oVariantVector = offsets.oVariantVector
+          --   -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+          --   -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+          --   -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+          --   -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+          --   -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+          --   -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+          -- end
+
+
         end
 
         return offsets
@@ -2291,7 +2366,7 @@
 
         table.insert(sigs, { sig = "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?", toRel = 3 } )
         table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?", toRel = 3 } )
-        table.insert(sigs, { sig = "4C 39 ? ? ? ? ? 75 07 ? 89 35 ? ? ? ? 66 0F 6F 05", toRel = 3 } )
+        table.insert(sigs, { sig = "4C 39 ? ? ? ? ? 75 07 ? 89 35 ? ? ? ? 66 0F 6F 05", toRel = 3 } )    
         table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00", toRel = 3 } )
         table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?", toRel = 3 } )
         table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05", toRel = 3 } )
@@ -2301,6 +2376,7 @@
         table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 8D 8F ? ? ? ? 48 3B C7 49 0F 44 C7 48 8B 05", toRel = 3 } )
         table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 85 C0 74 0D 80 B8 ? ? ? ? 00 0F", toRel = 3 } )
 
+        table.insert(sigs, { sig = "39 0D ? ? ? ? 75 06 89 35 ? ? ? ? 0F 28 05", toRel = 2 } ) -- 32 4.6
         table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24", toRel = 3 } )
         table.insert(sigs, { sig = "48 8B 0D ? ? ? ? E8 ? ? ? ? 90 48 8B 4C 24 ? 48 85 C9 74 ? F0 0F C1 59 ? 83 FB", toRel = 3 } )
         table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 3D", toRel = 3 } )
@@ -2331,7 +2407,7 @@
           steps = 0x350 / ptrsize
         else
           ptrsize = 0x4
-          steps = 0x200 / ptrsize
+          steps = 0x250 / ptrsize
         end
 
         -- isn't elegant either
@@ -2714,25 +2790,19 @@
 
       function getNodeChildrenInfo(nodeAddr)
         if isNullOrNil(nodeAddr) then
-          sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
+          -- sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
           return nil, nil;
         end
 
         local childrenAddr = readPointer((nodeAddr or 0) + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
         if isNullOrNil(childrenAddr) then
-          sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
+          -- sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
           return nil, nil;
         end
 
         local childrenSize;
         if GDDEFS.MAJOR_VER == 4 then
-          
-          -- if GDDEFS.MINOR_VER > 2 then
             childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-          -- else
-            -- childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE) -- versions before ~4.2 have size inside the array 4 bytes behind
-          -- end
-
         else
           childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
         end
@@ -3917,17 +3987,12 @@
 
         for i = 0, (childrenSize - 1) do
           local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-          -- local nodeName = getNodeName(nodeAddr)
-          -- if nodeName == nil or nodeName == 'N??' then
-          --   nodeName = getNodeNameFromGDScript(nodeAddr)
-          -- end
-          -- local objectTypeName = getObjectClassName(nodeAddr)
-          -- objectTypeName = '<' .. objectTypeName .. '>'
-
+          
           if checkForGDScript(nodeAddr) then
             table.insert(tempdumpedMonitorNodes, nodeAddr)
             iterateVecVarForNodes(nodeAddr)
-          else
+          end
+          if checkIfObjectWithChildren(nodeAddr) then
             iterateNodeChildrenForNodes(nodeAddr)
           end
         end
@@ -4092,11 +4157,6 @@
           end
         end
         table.insert(tempdumpedMonitorNodes, nodeAddr)
-        -- local name = getNodeNameFromGDScript(nodeAddr) or 'N??'
-        -- if name == nil or name == "N??" then
-        --   name = getNodeNameFromGDScript(nodeAddr)
-        -- end
-        -- registerSymbol(name, nodeAddr, true)
 
         iterateVecVarForNodes(nodeAddr)
       end
@@ -9244,7 +9304,7 @@
       --- iterates a dictionary for nodes
       ---@param dictAddr number
       function iterateDictionaryForNodes(dictAddr)
-        assert(type(dictAddr) == 'number', 'iterateDictionaryForNodes: dictAddr has to be a number, instead got: ' .. type(dictAddr))
+        if isNullOrNil(dictAddr) then return; end
         if (not (dictAddr > 0)) then return; end
 
         local dictRoot = dictAddr
@@ -9334,7 +9394,7 @@
       --- iterates an array for nodes
       ---@param arrayAddr number
       function iterateArrayForNodes(arrayAddr)
-        assert(type(arrayAddr) == 'number', "iterateArrayForNodes: array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
+        if isNullOrNil(arrayAddr) then return end
 
         local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
         if isNullOrNil(arrVectorAddr) then return; end
@@ -9503,9 +9563,9 @@
       --- iterate nodes only and owner to append to
       ---@param nodeAddr number
       function iterateVecVarForNodes(nodeAddr)
-        assert(type(nodeAddr) == 'number', "iterateVecVarForNodes: Node addr has to be a number, instead got: " .. type(nodeAddr))
+        if isNullOrNil(nodeAddr) then return; end
 
-        if not checkForGDScript(nodeAddr) then return; end
+        -- if not checkForGDScript(nodeAddr) then return; end -- should be checked at this point
 
         local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
         if isNullOrNil(vectorSize) then return; end
@@ -9527,13 +9587,13 @@
       --- returns a vector pointer and its size via
       ---@param nodeAddr number
       function getNodeVariantVector(nodeAddr)
-        assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
+        if isNullOrNil(nodeAddr) then return; end -- assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
-        debugStepIn()
+        -- debugStepIn()
 
         local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
         if isNullOrNil(scriptInstance) then
-          sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for ' .. string.format(' %x', nodeAddr))
+          -- sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for ' .. string.format(' %x', nodeAddr))
           return;
         end
 
@@ -9541,15 +9601,15 @@
         local vectorSize = readInteger(vectorPtr - GDDEFS.SIZE_VECTOR)
 
         if isNullOrNil(vectorPtr) then
-          sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for ' .. string.format(' %x', nodeAddr))
+          -- sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for ' .. string.format(' %x', nodeAddr))
           return;
         end
         if isNullOrNil(vectorSize) then
-          sendDebugMessageAndStepOut('getNodeVariantVector: vector size is 0/nil, node ' .. string.format(' %x', nodeAddr))
+          -- sendDebugMessageAndStepOut('getNodeVariantVector: vector size is 0/nil, node ' .. string.format(' %x', nodeAddr))
           return;
         end
 
-        debugStepOut()
+        -- debugStepOut()
 
         return vectorPtr, vectorSize
       end
@@ -9707,30 +9767,24 @@
             return 0x18, true;
           end
 
-          if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-            getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
+          if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
             -- debugStepOut()
             return 0x18, true;
-          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-            getGDTypeName(readInteger(vectorPtr + 0x30)) then -- if it's 0x30
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) then -- if it's 0x30
             -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x30, true;
-          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-            getGDTypeName(readInteger(vectorPtr + 0x40)) then -- if it's 0x40
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) then -- if it's 0x40
             -- sendDebugMessageAndStepOut(" Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x40, true;
           end
 
-          if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and
-            getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
+          if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
             -- debugStepOut()
             return 0x18, true;
-          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and
-            getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
             -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x30, true;
-          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) and
-            getGDTypeName(readInteger(vectorPtr + 0x40 * 2)) then
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) and getGDTypeName(readInteger(vectorPtr + 0x40 * 2)) then
             -- sendDebugMessageAndStepOut("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x40, true;
           end
@@ -9744,30 +9798,24 @@
             return 0x18, true; -- Usual size is 0x18 in 3.x
           end
 
-          if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-            getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
+          if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
             -- debugStepOut()
             return 0x18, true; -- Usual size is 0x18 in 3.x
-          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-            getGDTypeName(readInteger(vectorPtr + 0x20)) then
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) then
             -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x20, true;
-          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and
-            getGDTypeName(readInteger(vectorPtr + 0x30)) then
+          elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) then
             -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x30, true; -- what's the longest for 3.x?
           end
 
-          if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and
-            getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
+          if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
             -- debugStepOut()
             return 0x18, true; -- Usual size is 0x18 in 3.x
-          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) and
-            getGDTypeName(readInteger(vectorPtr + 0x20 * 2)) then
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) and getGDTypeName(readInteger(vectorPtr + 0x20 * 2)) then
             -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x20, true;
-          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and
-            getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
+          elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
             -- sendDebugMessageAndStepOut(" redefineVariantSizeByVector: Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
             return 0x30, true; -- what's the longest for 3.x?
           end
@@ -10288,6 +10336,7 @@
       function registerDumpedNodes()
         if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
         for k, nodeAddr in pairs(dumpedMonitorNodes) do
+          unregisterSymbol(k)
           registerSymbol(k, nodeAddr, true)
         end
       end
