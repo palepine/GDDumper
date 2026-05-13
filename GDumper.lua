@@ -10367,6 +10367,7 @@
           sleep( gd_nodeMonitorCD )
           counter = counter+1
 
+          if #enumModules() == 0 then thr.terminate() end -- if we aren't attached, kill thread
           thr.Name = "GD Node Monitor Service | iter: " .. (counter or '?')
         end
       end
