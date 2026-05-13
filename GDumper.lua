@@ -1884,7 +1884,7 @@
       mainMemrec.Description = "Dumper"
       mainMemrec.Type = vtAutoAssembler
       mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- if custom build ver, false otherwise; optional if CERegEx is installed\n\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\nnodeMonitor()\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\nnodeMonitor()\n{$asm}"
+      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- if custom build ver, false otherwise; optional if CERegEx is installed\n\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\n--NodeMonitorServiceSwitch()\n{$asm}"
 
       local dumpMemrec = addrList.createMemoryRecord()
       dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -2822,7 +2822,7 @@
         if GDDEFS.MAJOR_VER == 4 then
           return readPointer(mapElement)
         else
-          return readPointer(mapElement + GDDEFS.DICTELEM_PAIR_NEXT)
+          return readPointer( (mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
         end
       end
 
@@ -2832,11 +2832,11 @@
         -- else
         --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
         -- end
-        return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
+        return readInteger( ( readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
       end
 
       local function isArrayEmptyFromVariantPtr(variantPtr)
-        return readPointer(readPointer(variantPtr) + GDDEFS.ARRAY_TOVECTOR) == 0
+        return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR) == 0
       end
 
       local function resolveScriptVariantType(mapElement, runtimeVariantType)
@@ -3327,7 +3327,7 @@
 
       -- for node search
       local function readDictionaryValueEntry(mapElement)
-          local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
+          local valueType = readInteger( (mapElement or 0) + GDDEFS.DICTELEM_VALTYPE)
           local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
           return
           {
@@ -4147,9 +4147,7 @@
       --- go over child nodes in the main nodes
       ---@param nodeAddr number
       function iterateMNode(nodeAddr)
-        if type(nodeAddr) ~= 'number' then
-          return
-        end
+        if isNullOrNil(nodeAddr) then return end
 
         for i, storedNode in ipairs(tempdumpedMonitorNodes) do -- check if a node was already dumped
           if storedNode == nodeAddr then
@@ -4204,7 +4202,7 @@
           -- debugStepIn()
 
           -- sendDebugMessage('checkObjectOffset: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
-          local adjustedObjectPtr = objectPtr - GDDEFS.PTRSIZE; -- shift back to get a ptr
+          local adjustedObjectPtr = (objectPtr or 0) - GDDEFS.PTRSIZE; -- shift back to get a ptr
           local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
           objectAddr = readPointer(wrapperAddr)
 
@@ -9309,17 +9307,17 @@
 
         local dictRoot = dictAddr
         if GDDEFS.MAJOR_VER == 3 then
-          dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST) -- for 3.x it's dictList actually
+          dictRoot = readPointer( (dictAddr or 0) + GDDEFS.DICT_LIST) -- for 3.x it's dictList actually
         end
 
         -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
-        local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
+        local dictSize = readInteger( (dictAddr or 0) + GDDEFS.DICT_SIZE)
 
         if isNullOrNil(dictSize) then
           return;
         end
 
-        local mapElement = readPointer(dictRoot + GDDEFS.DICT_HEAD)
+        local mapElement = readPointer( (dictRoot or 0) + GDDEFS.DICT_HEAD)
         if isNullOrNil(mapElement) then
           return
         end
@@ -9396,9 +9394,9 @@
       function iterateArrayForNodes(arrayAddr)
         if isNullOrNil(arrayAddr) then return end
 
-        local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
+        local arrVectorAddr = readPointer( (arrayAddr or 0) + GDDEFS.ARRAY_TOVECTOR)
         if isNullOrNil(arrVectorAddr) then return; end
-        local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
+        local arrVectorSize = readInteger( (arrVectorAddr or 0) - GDDEFS.SIZE_VECTOR)
         if isNullOrNil(arrVectorSize) then return; end
 
         local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
@@ -9591,14 +9589,14 @@
 
         -- debugStepIn()
 
-        local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+        local scriptInstance = readPointer( (nodeAddr or 0) + GDDEFS.GDSCRIPTINSTANCE)
         if isNullOrNil(scriptInstance) then
           -- sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for ' .. string.format(' %x', nodeAddr))
           return;
         end
 
-        local vectorPtr = readPointer(scriptInstance + GDDEFS.VAR_VECTOR)
-        local vectorSize = readInteger(vectorPtr - GDDEFS.SIZE_VECTOR)
+        local vectorPtr = readPointer( ( scriptInstance or 0) + GDDEFS.VAR_VECTOR)
+        local vectorSize = readInteger( (vectorPtr or 0) - GDDEFS.SIZE_VECTOR)
 
         if isNullOrNil(vectorPtr) then
           -- sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for ' .. string.format(' %x', nodeAddr))
@@ -9748,9 +9746,9 @@
       ---@param vectorPtr number
       ---@param vectorSize number
       function redefineVariantSizeByVector(vectorPtr, vectorSize)
-        assert((type(vectorPtr) == 'number'), "vectorPtr has to be a number, instead got: " .. type(vectorPtr))
-        assert((type(vectorSize) == 'number') and (vectorSize > 0), "VectorSize is empty or not a number, type: " .. type(vectorSize))
-
+        if isNullOrNil(vectorPtr) or isNullOrNil(vectorSize) then return 0, false; end
+        -- assert((type(vectorPtr) == 'number'), "vectorPtr has to be a number, instead got: " .. type(vectorPtr))
+        -- assert((type(vectorSize) == 'number') and (vectorSize > 0), "VectorSize is empty or not a number, type: " .. type(vectorSize))
         -- debugStepIn()
 
         if isNullOrNil(vectorSize) then
@@ -10336,13 +10334,41 @@
       function registerDumpedNodes()
         if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
         for k, nodeAddr in pairs(dumpedMonitorNodes) do
+          -- table.insert(gd_registeredNodes, k)
           unregisterSymbol(k)
           registerSymbol(k, nodeAddr, true)
         end
       end
 
+      -- function unregisterNodes()
+      --   if (not gd_registeredNodes) or next(gd_registeredNodes) == nil then return; end
+      --   for i, k in ipairs(gd_registeredNodes) do
+      --     unregisterSymbol(k)
+      --   end
+      --   gd_registeredNodes = {}
+      -- end
+
+      function nodeMonitorService(thr)
+        thr.Name = "GD Node Monitor Service"
+        bMonitorNodes = true
+        dumpedMonitorNodes = {};
+        -- gd_registeredNodes = {};
+        local counter = 0
+
+        while (true) do
+          local NodeMonitorThread = createThread(nodeMonitorThread)
+          NodeMonitorThread.waitfor()
+          NodeMonitorThread.terminate()
+          sleep( gd_nodeMonitorCD )
+          counter = counter+1
+
+          thr.Name = "GD Node Monitor Service | iter: " .. (counter or '?')
+        end
+      end
+
       function nodeMonitorThread(thr)
-        thr.Name = "GDMonitorThread"
+        thr.Name = "GD Monitor Thread"
+        thr.freeOnTerminate(false) -- we do it ourselves
         local function cloneArrayAsMap(tabl)
           local result = {} -- { name, addr }
           for i, val in ipairs(tabl) do
@@ -10350,40 +10376,42 @@
           end
           return result
         end
-        dumpedMonitorNodes = {};
 
-        while (bMonitorNodes) do
-          local mainNodeDict = getMainNodeDict()
-          tempdumpedMonitorNodes = {}
-          for key, value in pairs(mainNodeDict) do
-            local addr = value.PTR
-            table.insert(tempdumpedMonitorNodes, addr)
+        local mainNodeDict = getMainNodeDict()
+        tempdumpedMonitorNodes = {}
+        for key, value in pairs(mainNodeDict) do
+          local addr = value.PTR
+          table.insert(tempdumpedMonitorNodes, addr) -- references potentially
 
-            if GDDEFS.MONO and (checkScriptType(addr)==GDDEFS.SCRIPT_TYPES["CS"]) then
-            else
-              iterateVecVarForNodes(addr)
-            end
-
-            if checkIfObjectWithChildren(addr) then
-              iterateNodeChildrenForNodes(addr)
-            end
+          if GDDEFS.MONO and (checkScriptType(addr)==GDDEFS.SCRIPT_TYPES["CS"]) then
+          else
+            iterateVecVarForNodes(addr)
           end
-          dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
-          registerDumpedNodes()
-          sleep( gd_nodeMonitorCD )
+
+          if checkIfObjectWithChildren(addr) then
+            iterateNodeChildrenForNodes(addr)
+          end
         end
-        thr.terminate()
+        dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
+        -- unregisterNodes()
+        registerDumpedNodes()
       end
 
-      -- switches node monitoring (in a thread)
       function nodeMonitor()
-        if not (gdOffsetsDefined) then
-          return
+        error("DEPRECATED")
+      end
+
+      -- toggles the node monitor thread
+      function NodeMonitorServiceSwitch()
+        if not (gdOffsetsDefined) or isNullOrNil(NodeMonitorServiceThread) then
+          error("can't switch, uninitialized")
         end
 
         bMonitorNodes = not bMonitorNodes
         if bMonitorNodes then
-          createThread(nodeMonitorThread)
+          NodeMonitorServiceThread.suspend()
+        else
+          NodeMonitorServiceThread.resume()
         end
       end
 
@@ -10530,6 +10558,8 @@
 
       -- if not (targetIsGodot) then return; end
       defineGDOffsets(config)
+
+      NodeMonitorServiceThread = createThread(nodeMonitorService)
   end
 
   godotRegisterPreinit()
