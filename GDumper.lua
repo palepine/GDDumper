@@ -9659,8 +9659,8 @@
 
         debugStepIn()
 
-        if (index > (readInteger(vectorAddr - GDDEFS.SIZE_VECTOR) - 1)) then
-          sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring((readInteger(vectorAddr - GDDEFS.SIZE_VECTOR) - 1)))
+        if (index > (readInteger( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) - 1)) then
+          sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring((readInteger( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) - 1)))
         end
 
         local variantType = readInteger(vectorAddr + varSize * index)
