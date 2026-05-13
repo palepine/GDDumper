@@ -2484,8 +2484,12 @@
       function getViewport()
         local viewport = readPointer("ptVP")
         if isNullOrNil(viewport) then
-          print("Viewport pointer is invalid; something's wrong");
-          error('viewport pointer is invalid, couldn\'t read')
+          if inMainThread() then
+            print("Viewport pointer is invalid; something's wrong");
+            error('viewport pointer is invalid, couldn\'t read')
+          else
+            getCurrentThreadObject().terminate()
+          end
         end
         return viewport
       end
@@ -9659,8 +9663,8 @@
 
         debugStepIn()
 
-        if (index > (readInteger( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) - 1)) then
-          sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring((readInteger( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) - 1)))
+        if (index > (readInteger( ( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) or 0 ) - 1)) then
+          sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring( (index > (readInteger( ( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) or 0 ) - 1)) ))
         end
 
         local variantType = readInteger(vectorAddr + varSize * index)
@@ -9671,7 +9675,8 @@
 
         if (variantType == nil) or (variantAddr == nil) then -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or
           sendDebugMessage('getVariantByIndex: variant ptr or type invalid');
-          error('getVariantByIndex: variant ptr or type invalid')
+          -- if inMainThread() then error('getVariantByIndex: variant ptr or type invalid') else return 0,0,0 end
+          return 0,0,0
         end
 
         debugStepOut()
@@ -10253,10 +10258,10 @@
 
         if isNullOrNil(childrenAddr) then return end
 
-        for i = 0, (childrenSize - 1) do
+        for i = 0, ( (childrenSize or 0) - 1) do
 
-          local nodePtr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
-          if isNullOrNil(nodePtr) then error('getMainNodeDict: NO MAIN NODES') end
+          local nodePtr = readPointer( (childrenAddr or 0) + i * GDDEFS.PTRSIZE)
+          if isNullOrNil(nodePtr) then if inMainThread() then error('getMainNodeDict: NO MAIN NODES') else getCurrentThreadObject().terminate() end end
 
           local nodeNameStr = getNodeName(nodePtr)
           local gdscriptName = getNodeNameFromGDScript(nodePtr)
@@ -10377,7 +10382,7 @@
           return result
         end
 
-        local mainNodeDict = getMainNodeDict()
+        local mainNodeDict = getMainNodeDict() or {}
         tempdumpedMonitorNodes = {}
         for key, value in pairs(mainNodeDict) do
           local addr = value.PTR
