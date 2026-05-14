@@ -32,7 +32,6 @@ By enabling this [CE regex plugin](https://github.com/palepine/CERegEx) along wi
 6. Open `Dumper` script and configure the config object following the instructions or letting the script try it.
 
 To build a CE address tree, call `DumpAllNodesToAddr()` (dumps all viewport nodes, might become heavy on GUI) or `DumpNodeToAddr(memrec, getDumpedNode( "NodeName" ), false)` for a specific node (both can be called asynchronically).
-To use getDumpedNode, use `nodeMonitor()` to enable/disable automatic monitoring of nodes.
 For struct building, enable `GD Dissector` inside `GDumper` menu, then click `VP Struct` to build a viewport children struct.
 
 ## Support
