@@ -10193,11 +10193,243 @@
           -- those 8 bytes replacing the first byte with a 0x0 (if returned nothing here)
         end
 
+        local cAAUTF32StringTypeScript = '{$c}\n\nchar TypeName[] = "GD4 String";\nint ByteSize = 800;\nchar usesFloat = 0;\nchar usesString = 1;\nchar CallMethod = 1;\nunsigned short MaxStringSize = 800;\n\n#include <stdint.h>\n#include <stddef.h>\n\nstatic int is_valid_codepoint(uint32_t cp)\n{\n  if (cp > 0x10FFFF)\n  {\n    return 0;\n  }\n\n  if (cp >= 0xD800 && cp <= 0xDFFF)\n  {\n    return 0;\n  }\n\n  return 1;\n}\n\nstatic size_t utf32le_to_utf8(const uint32_t *input, char *output, size_t max_output)\n{\n  if (input == 0 || output == 0 || max_output == 0)\n  {\n    return 0;\n  }\n\n  size_t o = 0;\n\n  for (size_t i = 0; input[i] != 0; i++)\n  {\n    uint32_t cp = input[i];\n\n    if (!is_valid_codepoint(cp))\n    {\n      cp = 0xFFFD;\n    }\n\n    if (cp <= 0x7F)\n    {\n      if (o + 1 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)cp;\n    }\n    else if (cp <= 0x7FF)\n    {\n      if (o + 2 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)(0xC0 | (cp >> 6));\n      output[o++] = (char)(0x80 | (cp & 0x3F));\n    }\n    else if (cp <= 0xFFFF)\n    {\n      if (o + 3 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)(0xE0 | (cp >> 12));\n      output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));\n      output[o++] = (char)(0x80 | (cp & 0x3F));\n    }\n    else\n    {\n      if (o + 4 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)(0xF0 | (cp >> 18));\n      output[o++] = (char)(0x80 | ((cp >> 12) & 0x3F));\n      output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));\n      output[o++] = (char)(0x80 | (cp & 0x3F));\n    }\n  }\n\n  output[o] = \'\\0\';\n  return o;\n}\n\nstatic size_t utf8_to_utf32le(const char *input, uint32_t *output, size_t max_output)\n{\n  if (input == 0 || output == 0 || max_output == 0)\n  {\n    return 0;\n  }\n\n  size_t i = 0;\n  const unsigned char *p = (const unsigned char *)input;\n\n  while (*p != 0 && i + 1 < max_output)\n  {\n    uint32_t cp = 0xFFFD;\n\n    if (*p < 0x80)\n    {\n      cp = *p;\n      p += 1;\n    }\n    else if (*p >= 0xC2 && *p < 0xE0)\n    {\n      unsigned char b1 = p[0];\n      unsigned char b2 = p[1];\n\n      if ((b2 & 0xC0) == 0x80)\n      {\n        cp = ((uint32_t)(b1 & 0x1F) << 6) | (uint32_t)(b2 & 0x3F);\n        p += 2;\n      }\n      else\n      {\n        p += 1;\n      }\n    }\n    else if (*p < 0xF0)\n    {\n      unsigned char b1 = p[0];\n      unsigned char b2 = p[1];\n      unsigned char b3 = p[2];\n\n      if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80)\n      {\n        cp = ((uint32_t)(b1 & 0x0F) << 12) | ((uint32_t)(b2 & 0x3F) << 6) | (uint32_t)(b3 & 0x3F);\n\n        if (!is_valid_codepoint(cp))\n        {\n          cp = 0xFFFD;\n        }\n\n        p += 3;\n      }\n      else\n      {\n        p += 1;\n      }\n    }\n    else if (*p < 0xF5)\n    {\n      unsigned char b1 = p[0];\n      unsigned char b2 = p[1];\n      unsigned char b3 = p[2];\n      unsigned char b4 = p[3];\n\n      if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80 && (b4 & 0xC0) == 0x80)\n      {\n        cp = ((uint32_t)(b1 & 0x07) << 18) | ((uint32_t)(b2 & 0x3F) << 12) | ((uint32_t)(b3 & 0x3F) << 6) | (uint32_t)(b4 & 0x3F);\n\n        if (!is_valid_codepoint(cp))\n        {\n          cp = 0xFFFD;\n        }\n\n        p += 4;\n      }\n      else\n      {\n        p += 1;\n      }\n    }\n    else\n    {\n      p += 1;\n    }\n\n    output[i++] = cp;\n  }\n\n  output[i] = 0;\n  return i;\n}\n\n__cdecl int ConvertRoutine(unsigned char *data, unsigned long long address, unsigned char *output)\n{\n  const uint32_t *gd_string = (const uint32_t *)data;\n\n  utf32le_to_utf8(gd_string, (char *)output, MaxStringSize);\n\n  return 1;\n}\n\n__cdecl void ConvertBackRoutine(unsigned char *input, unsigned long long address, unsigned char *output)\n{\n  const char *s = (const char *)input;\n\n  // theres an issue where a char like \'/\' would feak CE to wrap the str with brackets\n  if (s[0] == \'[\')\n  {\n    s++;\n  }\n\n  char cleaned[512];\n  size_t len = 0;\n\n  while (s[len] != 0 && s[len] != \']\' && len + 1 < sizeof(cleaned))\n  {\n    cleaned[len] = s[len];\n    len++;\n  }\n\n  // end bracket\n  cleaned[len] = 0;\n\n  uint32_t *gd_string = (uint32_t *)output;\n  size_t max_codepoints = ByteSize / 4;\n\n  utf8_to_utf32le(cleaned, gd_string, max_codepoints);\n}\n\n{$asm}'
+        --[[
+          {$c}
+
+          char TypeName[] = "GD4 String";
+          int ByteSize = 800;
+          char usesFloat = 0;
+          char usesString = 1;
+          char CallMethod = 1;
+          unsigned short MaxStringSize = 800;
+
+          #include <stdint.h>
+          #include <stddef.h>
+
+          static int is_valid_codepoint(uint32_t cp)
+          {
+            if (cp > 0x10FFFF)
+            {
+              return 0;
+            }
+
+            if (cp >= 0xD800 && cp <= 0xDFFF)
+            {
+              return 0;
+            }
+
+            return 1;
+          }
+
+          static size_t utf32le_to_utf8(const uint32_t *input, char *output, size_t max_output)
+          {
+            if (input == 0 || output == 0 || max_output == 0)
+            {
+              return 0;
+            }
+
+            size_t o = 0;
+
+            for (size_t i = 0; input[i] != 0; i++)
+            {
+              uint32_t cp = input[i];
+
+              if (!is_valid_codepoint(cp))
+              {
+                cp = 0xFFFD;
+              }
+
+              if (cp <= 0x7F)
+              {
+                if (o + 1 >= max_output)
+                {
+                  break;
+                }
+
+                output[o++] = (char)cp;
+              }
+              else if (cp <= 0x7FF)
+              {
+                if (o + 2 >= max_output)
+                {
+                  break;
+                }
+
+                output[o++] = (char)(0xC0 | (cp >> 6));
+                output[o++] = (char)(0x80 | (cp & 0x3F));
+              }
+              else if (cp <= 0xFFFF)
+              {
+                if (o + 3 >= max_output)
+                {
+                  break;
+                }
+
+                output[o++] = (char)(0xE0 | (cp >> 12));
+                output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                output[o++] = (char)(0x80 | (cp & 0x3F));
+              }
+              else
+              {
+                if (o + 4 >= max_output)
+                {
+                  break;
+                }
+
+                output[o++] = (char)(0xF0 | (cp >> 18));
+                output[o++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+                output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                output[o++] = (char)(0x80 | (cp & 0x3F));
+              }
+            }
+
+            output[o] = '\0';
+            return o;
+          }
+
+          static size_t utf8_to_utf32le(const char *input, uint32_t *output, size_t max_output)
+          {
+            if (input == 0 || output == 0 || max_output == 0)
+            {
+              return 0;
+            }
+
+            size_t i = 0;
+            const unsigned char *p = (const unsigned char *)input;
+
+            while (*p != 0 && i + 1 < max_output)
+            {
+              uint32_t cp = 0xFFFD;
+
+              if (*p < 0x80)
+              {
+                cp = *p;
+                p += 1;
+              }
+              else if (*p >= 0xC2 && *p < 0xE0)
+              {
+                unsigned char b1 = p[0];
+                unsigned char b2 = p[1];
+
+                if ((b2 & 0xC0) == 0x80)
+                {
+                  cp = ((uint32_t)(b1 & 0x1F) << 6) | (uint32_t)(b2 & 0x3F);
+                  p += 2;
+                }
+                else
+                {
+                  p += 1;
+                }
+              }
+              else if (*p < 0xF0)
+              {
+                unsigned char b1 = p[0];
+                unsigned char b2 = p[1];
+                unsigned char b3 = p[2];
+
+                if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80)
+                {
+                  cp = ((uint32_t)(b1 & 0x0F) << 12) | ((uint32_t)(b2 & 0x3F) << 6) | (uint32_t)(b3 & 0x3F);
+
+                  if (!is_valid_codepoint(cp))
+                  {
+                    cp = 0xFFFD;
+                  }
+
+                  p += 3;
+                }
+                else
+                {
+                  p += 1;
+                }
+              }
+              else if (*p < 0xF5)
+              {
+                unsigned char b1 = p[0];
+                unsigned char b2 = p[1];
+                unsigned char b3 = p[2];
+                unsigned char b4 = p[3];
+
+                if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80 && (b4 & 0xC0) == 0x80)
+                {
+                  cp = ((uint32_t)(b1 & 0x07) << 18) | ((uint32_t)(b2 & 0x3F) << 12) | ((uint32_t)(b3 & 0x3F) << 6) | (uint32_t)(b4 & 0x3F);
+
+                  if (!is_valid_codepoint(cp))
+                  {
+                    cp = 0xFFFD;
+                  }
+
+                  p += 4;
+                }
+                else
+                {
+                  p += 1;
+                }
+              }
+              else
+              {
+                p += 1;
+              }
+
+              output[i++] = cp;
+            }
+
+            output[i] = 0;
+            return i;
+          }
+
+          __cdecl int ConvertRoutine(unsigned char *data, unsigned long long address, unsigned char *output)
+          {
+            const uint32_t *gd_string = (const uint32_t *)data;
+
+            utf32le_to_utf8(gd_string, (char *)output, MaxStringSize);
+
+            return 1;
+          }
+
+          __cdecl void ConvertBackRoutine(unsigned char *input, unsigned long long address, unsigned char *output)
+          {
+            const char *s = (const char *)input;
+
+            // there's an issue where a char like '/' would feak CE to wrap the str with brackets
+            if (s[0] == '[')
+            {
+              s++;
+            }
+
+            char cleaned[512];
+            size_t len = 0;
+
+            while (s[len] != 0 && s[len] != ']' && len + 1 < sizeof(cleaned))
+            {
+              cleaned[len] = s[len];
+              len++;
+            }
+
+            // end bracket
+            cleaned[len] = 0;
+
+            uint32_t *gd_string = (uint32_t *)output;
+            size_t max_codepoints = ByteSize / 4;
+
+            utf8_to_utf32le(cleaned, gd_string, max_codepoints);
+          }
+
+          {$asm}
+        ]]
+
         if GDDEFS.MAJOR_VER == 4 then
           if getCustomType("GD4 String") then
             GDDEFS.GD4_STRING_EXISTS = true
           else
+            -- lua implementation lacking writing functionality
             registerCustomTypeLua('GD4 String', 1, gd4string_bytestovalue, gd4string_valuetobytes, false, true)
+            
+            -- c implementation
+            -- registerCustomTypeAutoAssembler(cAAUTF32StringTypeScript)
+            -- https://github.com/cheat-engine/cheat-engine/issues/3345
+
             GDDEFS.GD4_STRING_EXISTS = true
           end
         else
@@ -10569,3 +10801,5 @@
   end
 
   godotRegisterPreinit()
+
+  
