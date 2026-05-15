@@ -2530,7 +2530,7 @@
         function NodeVisitor.visitObject(objPtr, dumpContext)
           local realPtr, bShifted = checkObjectOffset(objPtr)
           local nodeAddr = readPointer(realPtr)
-          processNode(nodeAddr, dumpContext)
+          processNodeForNodes(nodeAddr, dumpContext)
         end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// EMITTERS
@@ -3750,12 +3750,11 @@
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
 
 
-      function processNode(nodeAddr, dumpContext)
-        if not dumpContext:tryVisitNode(nodeAddr) then
-          return
-        end
+      function processNodeForNodes(nodeAddr, dumpContext)
+        if not dumpContext:tryVisitNode(nodeAddr) then return end
 
-        if checkForGDScript(nodeAddr) then
+        if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
+        elseif checkForGDScript(nodeAddr) then
           iterateVecVarForNodes(nodeAddr, dumpContext)
         end
 
@@ -4003,7 +4002,7 @@
         for i = 0, (childrenSize - 1) do
           if dumpContext:shouldStop() then return end
           local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-          processNode(childAddr, dumpContext)
+          processNodeForNodes(childAddr, dumpContext)
         end
         return
       end
@@ -9824,7 +9823,10 @@
       --- returns an adjusted offset to a variant value
       ---@param gdType number
       function getVariantValueOffset(gdType)
-        if isNullOrNil(gdType) then if inMainThread() then return 0x8 else getCurrentThreadObject().terminate() end end
+        if gdType == nil then
+          return 0x8
+          -- if inMainThread() then return 0x8 else getCurrentThreadObject().terminate() end
+        end
         if (getGDTypeName(gdType) == 'OBJECT') then
           return 0x10
         end -- objects have 0x10 offset for value
@@ -10632,7 +10634,7 @@
         local mainNodeDict = getMainNodeDict() or {}
 
         for _, value in pairs(mainNodeDict) do
-          processNode(value.PTR, dumpContext)
+          processNodeForNodes(value.PTR, dumpContext)
         end
 
         gd_dumpedMonitorNodes = cloneArrayAsMap(dumpContext.dumped)
