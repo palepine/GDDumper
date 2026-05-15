@@ -2300,7 +2300,7 @@
 
         GDDEFS.STRING = 0x10
         
-        dumpedMonitorNodes = {};
+        gd_dumpedMonitorNodes = {};
         debugPrefix = 1;
         if targetIs64Bit() then
           GDDEFS.PTRSIZE = 0x8
@@ -3337,7 +3337,7 @@
           {
             typeId = valueType,
             typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
-            variantPtr = getAddress(mapElement + offsetToValue)
+            variantPtr = getAddress( (mapElement or 0) + offsetToValue)
           }
       end
 
@@ -9837,7 +9837,7 @@
       --- returns an adjusted offset to a variant value
       ---@param gdType number
       function getVariantValueOffset(gdType)
-        assert(type(gdType) == "number", 'getVariantValueOffset: Type from enum should be a number, instead got: ' .. type(gdType))
+        if isNullOrNil(gdType) then if inMainThread() then return 0x8 else getCurrentThreadObject().terminate() end end
         if (getGDTypeName(gdType) == 'OBJECT') then
           return 0x10
         end -- objects have 0x10 offset for value
@@ -10550,18 +10550,18 @@
         assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
         if not (gdOffsetsDefined) then print('define the offsets first, silly') return; end
 
-        if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
+        if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
 
-        return dumpedMonitorNodes[nodeName]
+        return gd_dumpedMonitorNodes[nodeName]
       end
 
       --- prints all gathered nodeNames
       function printDumpedNodes()
         if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
-        if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
+        if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
 
-        for k, nodeAddr in pairs(dumpedMonitorNodes) do
+        for k, nodeAddr in pairs(gd_dumpedMonitorNodes) do
           -- local GDScriptName = getNodeNameFromGDScript(nodeAddr) or ''
           local nodeNameStr = getNodeName(nodeAddr) or ''
           printf(">Node Scriptname: %-50sname: %-50s \t Node addr: %X", k, nodeNameStr, tonumber(nodeAddr))
@@ -10569,27 +10569,27 @@
       end
 
       function registerDumpedNodes()
-        if (not dumpedMonitorNodes) or next(dumpedMonitorNodes) == nil then return; end
-        for k, nodeAddr in pairs(dumpedMonitorNodes) do
-          -- table.insert(gd_registeredNodes, k)
-          unregisterSymbol(k)
+        if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
+        unregisterNodes() -- unregister the current & freed nodes
+        for k, nodeAddr in pairs(gd_dumpedMonitorNodes) do
+          table.insert(gd_registeredNodes, k)
           registerSymbol(k, nodeAddr, true)
         end
       end
 
-      -- function unregisterNodes()
-      --   if (not gd_registeredNodes) or next(gd_registeredNodes) == nil then return; end
-      --   for i, k in ipairs(gd_registeredNodes) do
-      --     unregisterSymbol(k)
-      --   end
-      --   gd_registeredNodes = {}
-      -- end
+      function unregisterNodes()
+        if (not gd_registeredNodes) or next(gd_registeredNodes) == nil then return; end
+        for i, k in ipairs(gd_registeredNodes) do
+          unregisterSymbol(k)
+        end
+        gd_registeredNodes = {}
+      end
 
       function nodeMonitorService(thr)
         thr.Name = "GD Node Monitor Service"
         bMonitorNodes = true
-        dumpedMonitorNodes = {};
-        -- gd_registeredNodes = {};
+        gd_dumpedMonitorNodes = {};
+        gd_registeredNodes = {};
         local counter = 0
 
         while (true) do
@@ -10630,7 +10630,7 @@
             iterateNodeChildrenForNodes(addr)
           end
         end
-        dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
+        gd_dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
         -- unregisterNodes()
         registerDumpedNodes()
       end
