@@ -2278,6 +2278,7 @@
 
         gdOffsetsDefined = true
         gd_nodeMonitorCD = 100
+        gd_nodeMonitorWatchDogCD = 45 * 1000
         bDisasmFunc= true -- on by default
         -- check if 4.x string type reged, otherwise define it
         checkGDStringType()
@@ -2518,21 +2519,18 @@
 
       local NodeVisitor = {}
 
-        function NodeVisitor.recurseDictionary(dictPtr)
-          iterateDictionaryForNodes(dictPtr)
+        function NodeVisitor.recurseDictionary(dictPtr, dumpContext)
+          iterateDictionaryForNodes(dictPtr, dumpContext)
         end
 
-        function NodeVisitor.recurseArray(arrPtr)
-          iterateArrayForNodes(arrPtr)
+        function NodeVisitor.recurseArray(arrPtr, dumpContext)
+          iterateArrayForNodes(arrPtr, dumpContext)
         end
 
-        function NodeVisitor.visitObject(objPtr)
+        function NodeVisitor.visitObject(objPtr, dumpContext)
           local realPtr, bShifted = checkObjectOffset(objPtr)
-          local nodePtr = readPointer(realPtr)
-          if checkForGDScript(nodePtr) then
-            iterateMNode(nodePtr)
-          elseif true then
-          end
+          local nodeAddr = readPointer(realPtr)
+          processNode(nodeAddr, dumpContext)
         end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// EMITTERS
@@ -3575,21 +3573,24 @@
 
       GDHandlers.NodeDiscoveryHandlers = {}
 
-        GDHandlers.NodeDiscoveryHandlers.DICTIONARY = function(entry, visitor)
+        GDHandlers.NodeDiscoveryHandlers.DICTIONARY = function(entry, visitor, dumpContext)
+          if dumpContext:shouldStop() then return end
           local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
           if isNotNullOrNil(dictSize) then
-            visitor.recurseDictionary(readPointer(entry.variantPtr))
+            visitor.recurseDictionary(readPointer(entry.variantPtr), dumpContext)
           end
         end
 
-        GDHandlers.NodeDiscoveryHandlers.ARRAY = function(entry, visitor)
+        GDHandlers.NodeDiscoveryHandlers.ARRAY = function(entry, visitor, dumpContext)
+          if dumpContext:shouldStop() then return end
           if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
-            visitor.recurseArray(readPointer(entry.variantPtr))
+            visitor.recurseArray(readPointer(entry.variantPtr), dumpContext)
           end
         end
 
-        GDHandlers.NodeDiscoveryHandlers.OBJECT = function(entry, visitor)
-          visitor.visitObject(entry.variantPtr)
+        GDHandlers.NodeDiscoveryHandlers.OBJECT = function(entry, visitor, dumpContext)
+          if dumpContext:shouldStop() then return end
+          visitor.visitObject(entry.variantPtr, dumpContext)
         end
 
         -- GDHandlers.NodeMetaHandlers = {}
@@ -3747,6 +3748,21 @@
         end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
+
+
+      function processNode(nodeAddr, dumpContext)
+        if not dumpContext:tryVisitNode(nodeAddr) then
+          return
+        end
+
+        if checkForGDScript(nodeAddr) then
+          iterateVecVarForNodes(nodeAddr, dumpContext)
+        end
+
+        if checkIfObjectWithChildren(nodeAddr) then
+          iterateNodeChildrenForNodes(nodeAddr, dumpContext)
+        end
+      end
 
       --- returns a code with a ScriptInstance initialized
       ---@param nodeName string
@@ -3939,20 +3955,13 @@
 
       function checkIfObjectWithChildren(objAddr)
         
-        -- if object itself is valid & has a vtable
-        if isNullOrNil(objAddr) or not isMMVTable( readPointer(objAddr) ) then return false end
-
-        -- check children & if it's a valid pointer
-        local objectChildren, childrenSize = getNodeChildrenInfo(objAddr)
-
-        -- if no children, we don't need it
-        if isNullOrNil(childrenSize) then return false end
-
-        -- let's check the 0th object for vtable
+        if isNullOrNil(objAddr) or not isMMVTable( readPointer(objAddr) ) then return false end -- if object itself is valid & has a vtable
+        local objectChildren, childrenSize = getNodeChildrenInfo(objAddr) -- check children & if it's a valid pointer
+        if isNullOrNil(childrenSize) then return false end -- if no children, we don't need it
         local childAddr = readPointer(objectChildren)
-        if isNullOrNil(childAddr) or not isMMVTable( readPointer(childAddr) ) then return false end
-
+        if isNullOrNil(childAddr) or not isMMVTable( readPointer(childAddr) ) then return false end  -- let's check the 0th object for vtable
         return true
+        
       end
 
       --- builds a structure layout for a node's children array
@@ -3985,20 +3994,16 @@
         return
       end
 
-      function iterateNodeChildrenForNodes(baseAddress)
+      function iterateNodeChildrenForNodes(baseAddress, dumpContext)
+        if dumpContext:shouldStop() then return end
+
         local childrenAddr, childrenSize = getNodeChildrenInfo(baseAddress)
         if isNullOrNil(childrenSize) then return; end
 
         for i = 0, (childrenSize - 1) do
-          local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-          
-          if checkForGDScript(nodeAddr) then
-            table.insert(tempdumpedMonitorNodes, nodeAddr)
-            iterateVecVarForNodes(nodeAddr)
-          end
-          if checkIfObjectWithChildren(nodeAddr) then
-            iterateNodeChildrenForNodes(nodeAddr)
-          end
+          if dumpContext:shouldStop() then return end
+          local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
+          processNode(childAddr, dumpContext)
         end
         return
       end
@@ -4146,21 +4151,6 @@
 
         debugStepOut()
         return
-      end
-
-      --- go over child nodes in the main nodes
-      ---@param nodeAddr number
-      function iterateMNode(nodeAddr)
-        if isNullOrNil(nodeAddr) then return end
-
-        for i, storedNode in ipairs(tempdumpedMonitorNodes) do -- check if a node was already dumped
-          if storedNode == nodeAddr then
-            return
-          end
-        end
-        table.insert(tempdumpedMonitorNodes, nodeAddr)
-
-        iterateVecVarForNodes(nodeAddr)
       end
 
       --- gets a GDScript name, best use to return 1st 3 chars for 'res'
@@ -9305,33 +9295,28 @@
 
       --- iterates a dictionary for nodes
       ---@param dictAddr number
-      function iterateDictionaryForNodes(dictAddr)
-        if isNullOrNil(dictAddr) then return; end
-        if (not (dictAddr > 0)) then return; end
+      function iterateDictionaryForNodes(dictAddr, dumpContext)
+        if dumpContext:shouldStop() or isNullOrNil(dictAddr) then return end -- if (not (dictAddr > 0)) then return; end
 
         local dictRoot = dictAddr
         if GDDEFS.MAJOR_VER == 3 then
           dictRoot = readPointer( (dictAddr or 0) + GDDEFS.DICT_LIST) -- for 3.x it's dictList actually
         end
 
-        -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
         local dictSize = readInteger( (dictAddr or 0) + GDDEFS.DICT_SIZE)
-
-        if isNullOrNil(dictSize) then
-          return;
-        end
+        if isNullOrNil(dictSize) then return; end
 
         local mapElement = readPointer( (dictRoot or 0) + GDDEFS.DICT_HEAD)
-        if isNullOrNil(mapElement) then
-          return
-        end
+        if isNullOrNil(mapElement) then return end
+
         local visitor = NodeVisitor
 
         repeat
+          if dumpContext:shouldStop() then return end
           local entry = readDictionaryValueEntry(mapElement)
           local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
           if handler then
-            handler(entry, visitor)
+            handler(entry, visitor, dumpContext)
           end
           mapElement = getDictElemPairNext(mapElement)
         until (mapElement == 0)
@@ -9395,8 +9380,8 @@
 
       --- iterates an array for nodes
       ---@param arrayAddr number
-      function iterateArrayForNodes(arrayAddr)
-        if isNullOrNil(arrayAddr) then return end
+      function iterateArrayForNodes(arrayAddr, dumpContext)
+        if dumpContext:shouldStop() or isNullOrNil(arrayAddr) then return end
 
         local arrVectorAddr = readPointer( (arrayAddr or 0) + GDDEFS.ARRAY_TOVECTOR)
         if isNullOrNil(arrVectorAddr) then return; end
@@ -9409,12 +9394,13 @@
         local visitor = NodeVisitor
 
         for varIndex = 0, arrVectorSize - 1 do
+          if dumpContext:shouldStop() then return end
           local entry = readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
 
           if isNotNullOrNil(entry.variantPtr) then
             local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
             if handler then
-              handler(entry, visitor)
+              handler(entry, visitor, dumpContext)
             end
           end
         end
@@ -9562,15 +9548,15 @@
           iterateVectorVariants(nodeContext, GDEmitters.StructEmitter, options)
       end
 
-      --- iterate nodes only and owner to append to
+      --- iterate nodes only
       ---@param nodeAddr number
-      function iterateVecVarForNodes(nodeAddr)
+      function iterateVecVarForNodes(nodeAddr, dumpContext)
+        if dumpContext:shouldStop() then return end
         if isNullOrNil(nodeAddr) then return; end
-
         -- if not checkForGDScript(nodeAddr) then return; end -- should be checked at this point
 
         local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-        if isNullOrNil(vectorSize) then return; end
+        if isNullOrNil(vectorSize) --[[or vectorSize > 1500]] then return; end
 
         local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
         if not ok then return; end
@@ -9578,10 +9564,11 @@
         local visitor = NodeVisitor
 
         for variantIndex = 0, vectorSize - 1 do
+          if dumpContext:shouldStop() then return end
           local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize)
           local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
           if handler then
-            handler(entry, visitor)
+            handler(entry, visitor, dumpContext)
           end
         end
       end
@@ -10587,28 +10574,55 @@
 
       function nodeMonitorService(thr)
         thr.Name = "GD Node Monitor Service"
-        bMonitorNodes = true
+        thr.freeOnTerminate(false) -- we do it ourselves
+        -- bMonitorNodes = true
         gd_dumpedMonitorNodes = {};
         gd_registeredNodes = {};
         local counter = 0
 
-        while (true) do
-          local NodeMonitorThread = createThread(nodeMonitorThread)
-          NodeMonitorThread.waitfor()
-          NodeMonitorThread.terminate()
+        while not thr.Terminated do
+          local startedAt = getTickCount()
+          local gd_currNodeMonitorThread = createThread(nodeMonitorThread--[[, counter]])
+          -- synchronize( function() createTimer( gd_nodeMonitorWatchDogCD, function() if gd_currNodeMonitorThread and not (gd_currNodeMonitorThread.Finished or gd_currNodeMonitorThread.Terminated) then gd_currNodeMonitorThread.terminate() end end) end)
+          gd_currNodeMonitorThread.waitfor()
+          gd_currNodeMonitorThread.terminate()
           sleep( gd_nodeMonitorCD )
           counter = counter+1
+          local timeDelta = getTickCount() - startedAt or 0
 
-          if #enumModules() == 0 then thr.terminate() end -- if we aren't attached, kill thread
-          thr.Name = "GD Node Monitor Service | iter: " .. (counter or '?')
+          if #enumModules() == 0 then thr.terminate() end -- if we aren't attached, kill this thread
+          thr.Name = "GD Node Monitor Service | lastDiff " .. timeDelta .. " ms " .. " | iter " .. counter
         end
       end
 
       function nodeMonitorThread(thr)
         thr.Name = "GD Monitor Thread"
         thr.freeOnTerminate(false) -- we do it ourselves
+        local dumpContext =
+          {
+            startedAt = getTickCount(),
+            dumped = {}, -- only nodes with GDScript
+            visited = {}, -- every encountered node
+            budgetMs = GD_MONITOR_BUDGET_MS or 45*1000,
+            thread = thr,
+          }
+
+        function dumpContext:tryVisitNode(addr)
+          if isNullOrNil(addr) then return false end
+          if self.visited[addr] then return false end
+          self.visited[addr] = true
+          if checkForGDScript(addr) then
+            table.insert(self.dumped, addr)
+          end
+          return true
+        end
+
+        function dumpContext:shouldStop()
+          return self.thread.Terminated or (getTickCount() - self.startedAt) > self.budgetMs
+        end
+
         local function cloneArrayAsMap(tabl)
-          local result = {} -- { name, addr }
+          local result = {} -- { name : addr }
           for i, val in ipairs(tabl) do
             result[ getNodeNameFromGDScript(val) ] = val
           end
@@ -10616,22 +10630,12 @@
         end
 
         local mainNodeDict = getMainNodeDict() or {}
-        tempdumpedMonitorNodes = {}
-        for key, value in pairs(mainNodeDict) do
-          local addr = value.PTR
-          table.insert(tempdumpedMonitorNodes, addr) -- references potentially
 
-          if GDDEFS.MONO and (checkScriptType(addr)==GDDEFS.SCRIPT_TYPES["CS"]) then
-          else
-            iterateVecVarForNodes(addr)
-          end
-
-          if checkIfObjectWithChildren(addr) then
-            iterateNodeChildrenForNodes(addr)
-          end
+        for _, value in pairs(mainNodeDict) do
+          processNode(value.PTR, dumpContext)
         end
-        gd_dumpedMonitorNodes = cloneArrayAsMap(tempdumpedMonitorNodes)
-        -- unregisterNodes()
+
+        gd_dumpedMonitorNodes = cloneArrayAsMap(dumpContext.dumped)
         registerDumpedNodes()
       end
 
