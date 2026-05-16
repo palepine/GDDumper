@@ -3414,7 +3414,6 @@
           end
         end
 
-
         GDHandlers.VariantHandlers.STRING = function(entry, emitter, parent, contextTable)
           if contextTable.symbol then contextTable.symbol = wrapBrackets( makeSymAddr(contextTable.symbol, entry.offset) ) end
 
@@ -3755,7 +3754,7 @@
             emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer, contextTable)
           end
         end
-
+      GDHandlers.ConstVectorHandlers = {}
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
 
 
@@ -9050,6 +9049,8 @@
       end
 
       function executeGDFunction(func_this, GDScriptInstanceAddr, argsetupCallback, argCount)
+        assert( isNotNullOrNil(func_this) , "this ptr invalid" )
+        assert( isNotNullOrNil(GDScriptInstanceAddr) , "GDSI invalid" )
         -- so far the calling conventions match seamlessly
 
         local dumSpace = getAddress("dummySpace")
