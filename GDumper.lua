@@ -3,8 +3,6 @@
 -- Source code on github: https://github.com/palepine/GDDumper
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
   -- TODO dump nodes schema with the addresslist?
-  -- TODO add more functionality for function overriding ==>
-  -- TODO bytecode patching function that assembles a function for return;end. or return true;end It should store the original function (address association?)
   -- TODO addresslist should include node's children of children
   -- TODO tree view form with polling
   -- TODO symbol handler with polling
@@ -4299,6 +4297,11 @@
         return readPointer(funcAddr + GDDEFS.FUNC_CODE)
       end
 
+      local function getFuncObjectConstAddr(funcAddr)
+        assert(type(funcAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcAddr))
+        return readPointer(funcAddr + GDDEFS.FUNC_CONST)
+      end
+
       --- returns a head element, tail element and (hash)Map size
       ---@param nodeAddr number
       function getNodeFuncMap(nodeContext)
@@ -4364,6 +4367,39 @@
         for _, opcode in ipairs(patchToBytes) do
           writeInteger( funcCode + position*4, opcode )
           position=position+1
+        end
+      end
+
+      --- patch a function's constant with a value
+      ---@param funcObjAddr number
+      ---@param constIndex number@0-based position to start patching from
+      ---@param CEvalueType number@type must match
+      ---@param value number
+      function patchGDFunctionConst( funcObjAddr, constIndex, CEvalueType, value  )
+        assert(type(funcObjAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcObjAddr))
+        assert(type(constIndex) == 'number', "Const index must be a number, instead got: " .. type(constIndex))
+        assert(type(value) == 'number', "value has to be a number, instead got: " .. type(value))
+        assert(type(CEvalueType) == 'number', "ce value type has to be a number, instead got: " .. type(CEvalueType))
+
+        local funcConstAddr = getFuncObjectConstAddr(funcObjAddr)
+        if isNullOrNil(funcConstAddr) then error("function const addr is invalid") end
+
+        local vectorSize = readInteger(funcConstAddr - GDDEFS.SIZE_VECTOR)
+        local sizeOfVariant, ok = redefineVariantSizeByVector(funcConstAddr, vectorSize)
+        if not ok then error("size refedinition failed") end
+        local targetConstAddr = getVariantByIndex(funcConstAddr, constIndex, sizeOfVariant)
+
+        -- todo: base it on handlers
+        if vtByte then
+          writeByte(targetConstAddr, value)
+        elseif vtDword then
+          writeInteger(targetConstAddr, value, true)
+        elseif vtDouble then
+          writeDouble(targetConstAddr, value)
+        elseif vtQword then
+          writeQword(targetConstAddr, value)
+        else
+          error("yet unhandled type")
         end
       end
 
@@ -10627,7 +10663,7 @@
           counter = counter+1
           local timeDelta = getTickCount() - startedAt or 0
 
-          if #enumModules() == 0 then thr.terminate() end -- if we aren't attached, kill this thread
+          if #enumModules() == 0 then thr.terminate() return end -- if we aren't attached, kill this thread
           thr.Name = "GD Node Monitor Service | lastDiff " .. timeDelta .. " ms " .. " | iter " .. counter
         end
       end
