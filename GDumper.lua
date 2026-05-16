@@ -2940,9 +2940,7 @@
       end
 
       local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
-        if isNullOrNil(mapHead) then
-            return nil
-        end
+        if isNullOrNil(mapHead) then return nil end
 
         local mapElement = mapHead
 
@@ -4281,7 +4279,7 @@
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Func
 
-      --- returns a lua string for function name
+      --- returns a lua string for a map element
       ---@param mapElement number
       function getGDFunctionName(mapElement)
         debugStepIn()
@@ -4294,6 +4292,11 @@
 
         debugStepOut()
         return getStringNameStr(mapElementValue)
+      end
+
+      local function getFuncObjectCodeAddr(funcAddr)
+        assert(type(funcAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcAddr))
+        return readPointer(funcAddr + GDDEFS.FUNC_CODE)
       end
 
       --- returns a head element, tail element and (hash)Map size
@@ -4333,18 +4336,35 @@
       end
 
       --- gets a functionPtr by nodename (root children) and funcname
-      ---@param nodeName string
+      ---@param nodeAddr number
       ---@param funcName string
-      function getGDFunctionPtr(nodeName, funcName)
-        assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
-        local nodePtr = getNodeWithGDScriptInstance(nodeName)
-        if isNullOrNil(nodePtr) then
-          sendDebugMessage("getGDFunctionPtr: Node: " .. tostring(nodeName) .. " wasn't found");
-          return;
-        end
-        local nodeMapContext = { addr = nodePtr, name = '', gdname = '', memrec = nil, struct = nil, symbol = funcName or '' }
+      function getGDFunctionFromNode(nodeAddr, funcName)
+        assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
+        assert(type(funcName) == 'string', "Func name has to be a string, instead got: " .. type(funcName))
+        assert(checkForGDScript(nodeAddr) == true, "Node addr doesn't have a GDScript" )
+
+        local gdScriptName = getNodeNameFromGDScript(nodeAddr) or "N??"
+        local nodeMapContext = { addr = nodeAddr, name = '', gdname = '', memrec = nil, struct = nil, symbol = funcName or '' }
         local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeMapContext)
         return findMapEntryByName(headElement, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement)
+      end
+
+      --- patch a function's code with the bytes starting at an arbitrary pos
+      ---@param funcObjAddr number
+      ---@param patchToBytes table
+      ---@param startPos number @0-based position to start patching from
+      function patchGDFunction( funcObjAddr, patchToBytes, startPos  )
+        assert(type(funcObjAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcObjAddr))
+        assert(type(patchToBytes) == 'table', "Patch Bytes have to be a table, instead got: " .. type(patchToBytes))
+
+        local position = startPos or 0x0
+        local funcCode = getFuncObjectCodeAddr(funcObjAddr)
+        if isNullOrNil(funcCode) then error("function code is invalid") end
+
+        for _, opcode in ipairs(patchToBytes) do
+          writeInteger( funcCode + position*4, opcode )
+          position=position+1
+        end
       end
 
       --- iterates a function map and adds it to a struct
@@ -10474,6 +10494,8 @@
       end
 
     -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dumper
+
+      local API = {}
 
       function registerNodeOffsets(nodeName)
         local classFields = godot_node_enumVariants( getDumpedNode( nodeName ) )
