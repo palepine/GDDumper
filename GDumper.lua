@@ -9868,10 +9868,14 @@
         local entry = readNodeVariantEntry(mapElement, variantVector, sizeOfVariant)
         fields[index] = {}
         -- fields[index].index = entry.index
-        fields[index].name = entry.name
-        fields[index].offset = entry.offsetToValue
-        fields[index].sizeof = sizeOfVariant
-        fields[index].type = entry.typeId
+        -- fields[index].name = entry.name
+        fields[index].Name = entry.name
+        -- fields[index].offset = entry.offsetToValue
+        fields[index].Offset = entry.offsetToValue
+        -- fields[index].sizeof = sizeOfVariant
+        fields[index].Sizeof = sizeOfVariant
+        -- fields[index].type = entry.typeId
+        fields[index].Type = entry.typeId
 
         mapElement = getNextMapElement(mapElement)
         index = index+1
@@ -10720,25 +10724,27 @@
       if isNullOrNil(nodeAddr) then error('node addr not found') end
       namespace = (namespace and namespace ~= '' and namespace .. '.') or ''
 
-      -- what script type 
-      local classFields
+      local classFields = {}
       if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
-        error("dotnet not implemented")
         local GDSI = getNodeGDScriptInstance(nodeAddr) or 0x0
         local clrDataAddr = readPointer( readPointer( GDSI + GDDEFS.CLR_PTR ) )
         if isNullOrNil(clrDataAddr) then error('clr data invalid') end
-        local cs_ClassObject = mono_object_getClass( clrDataAddr )
-        -- classFields = enumFields( cs_ClassObject )
-      else
+        if DataSource.DotNetDataCollector==nil then
+          DataSource={}
+          DataSource.DotNetDataCollector = getDotNetDataCollector() -- shouldn't get messy?
+        end
+        local dotnetObjInfo = DataSource.DotNetDataCollector.getAddressData( clrDataAddr ) -- dotnetinfo.lua
+        for _, v in ipairs(dotnetObjInfo.Fields) do
+          if not v.IsStatic then table.insert(classFields, v) end
+        end
+      else -- GD script
         classFields = godot_node_enumVariants( nodeAddr )
       end
 
-      if not (classFields) or next(classFields)==nil then
-        error('node isn\'t dumped or constructed yet, try again later')
-      end
+      if not (classFields) or next(classFields)==nil then error('node isn\'t dumped or constructed yet, try again later') end
 
-      for indx , field in pairs(classFields) do
-        registerSymbol( namespace .. nodeName .. '.' .. field.name , field.offset , false ) -- save them
+      for _ , field in pairs(classFields) do
+        registerSymbol( namespace .. nodeName .. '.' .. field.Name , field.Offset , false ) -- save them
       end
     end
 
@@ -10854,15 +10860,18 @@
 
       while not thr.Terminated do
         local startedAt = getTickCount()
-        local gd_currNodeMonitorThread = createThread(nodeMonitorThread--[[, counter]])
-        -- synchronize( function() createTimer( gd_nodeMonitorWatchDogCD, function() if gd_currNodeMonitorThread and not (gd_currNodeMonitorThread.Finished or gd_currNodeMonitorThread.Terminated) then gd_currNodeMonitorThread.terminate() end end) end)
+        local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
         gd_currNodeMonitorThread.waitfor()
         gd_currNodeMonitorThread.terminate()
         sleep( gd_nodeMonitorCD )
         counter = counter+1
         local timeDelta = getTickCount() - startedAt or 0
 
-        if #enumModules() == 0 then thr.terminate() return end -- if we aren't attached, kill this thread
+        if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
+          if not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
+          thr.terminate()
+          return
+        end
         thr.Name = "GD Node Monitor Service | lastDiff " .. timeDelta .. " ms " .. " | iter " .. counter
       end
     end
