@@ -3870,16 +3870,15 @@
           sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
           return 'N??'
         end
-
-        GDScriptName = string.match(GDScriptName, "([^/]+)%.gd$")
-        if GDScriptName == nil then
+        local scriptMatch = GDScriptName:match("([^/]+)%.[^.]+$") --"([^/]+)%.gd$"
+        if scriptMatch == nil then
           sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
           return 'N??'
         end
 
         debugStepOut()
 
-        return GDScriptName
+        return scriptMatch
       end
 
       --- Used to validate an object as a Node with GDScript, returns true if valid
