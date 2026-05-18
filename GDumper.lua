@@ -4498,7 +4498,6 @@
       local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr) -- children should be valid
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-        local scriptName = getNodeNameFromGDScript(childAddr)
         if gdName == getNodeNameFromGDScript(childAddr) then
           return childAddr
         end
@@ -4513,7 +4512,6 @@
       local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr)
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-        local scriptName = getNodeName(childAddr)
         if nodeName == getNodeName(childAddr) then
           return childAddr
         end
