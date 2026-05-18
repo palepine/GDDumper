@@ -12,22 +12,30 @@
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DECLARATIONS
   local GDAPI = {}
+  local Node = {}
+  local Func = {}
+  local Const = {}
+  local Var = {}
+  local Map = {}
+  Var.Dict = {}
+  Var.Arr = {}
+  Var.PArr = {}
 
   local addMemRecTo
   
-  -- local isValidPointer
-  -- local isInvalidPointer
-  -- local isPointerNotNull
+  local isValidPointer
+  local isInvalidPointer
+  local isPointerNotNull
   local getSectionBounds
   local isMMVTable
   local isInsideSectionRange
   local isInsideRDataStatic
 
-  -- local fuckoffPrint
-  -- local isNullOrNil
-  -- local isNotNullOrNil
+  local fuckoffPrint
+  local isNullOrNil
+  local isNotNullOrNil
   
-  -- local strMul
+  local strMul
   -- local numtohexstr
   local debugStepIn
   local debugStepOut
@@ -50,7 +58,6 @@
   local GDStructNameLookup
   local GDAddressLookup
 
-  local buildGDGUI
   local GDDissectorSwitch
   local GDStructNameLookupSwitch
   local GDAddressLookupSwitch
@@ -348,10 +355,6 @@
       end
       return false
     end
-
-
-
-
 
   -- ///---///--///---///--///---/// MEMRECS
     --- adds a memrec to parent
@@ -767,7 +770,7 @@
   -- ///---///--///---///--///---/// GUI
 
     --- creates a menu button in the main menu
-    function buildGDGUI()
+    function GDAPI.buildGDGUI()
       if GDGUIInit then
         return
       end
@@ -4060,38 +4063,6 @@
       end
     end
 
-    -- --- returns a code with a ScriptInstance initialized
-    -- ---@param nodeName string
-    -- function GDAPI.getNodeWithGDScriptInstance(nodeName) -- TODO: should query node children
-    --   assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-    --   debugStepIn()
-
-    --   local childrenPtr, childrenSize = getVPChildren()
-    --   if isNullOrNil(childrenPtr) then debugStepOut() return nil
-    --   end
-
-    --   for i = 0, (childrenSize - 1) do
-
-    --     local nodeAddr = readPointer(childrenPtr + i * GDDEFS.PTRSIZE)
-    --     if isNullOrNil(nodeAddr) then
-    --       sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: nodeAddr invalid')
-    --       return nil
-    --     end
-
-    --     local nodeNameStr = getNodeName(nodeAddr)
-    --     if nodeNameStr == 'N??' then nodeNameStr = getNodeNameFromGDScript(nodeAddr) end
-    --     local gdScriptInsance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-    --     if isNullOrNil(gdScriptInsance) then
-    --       sendDebugMessageAndStepOut('getNodeWithGDScriptInstance: ScriptInstance is 0/nil')
-    --       return nil
-    --     end
-
-    --     if nodeNameStr == nodeName then debugStepOut() return nodeAddr end
-    --   end
-    --   debugStepOut()
-    --   return nil
-    -- end
-
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
     function GDAPI.getNodeGDScriptInstance(nodeAddr)
@@ -4129,38 +4100,38 @@
     function GDAPI.getNodeNameFromGDScript(nodeAddr)
       assert(type(nodeAddr) == 'number', "getNodeNameFromGDScript: Node Addr has to be a number, instead got: " .. type(nodeAddr))
 
-      debugStepIn()
+      -- debugStepIn()
 
       local GDScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(GDScriptInstanceAddr) then
-        sendDebugMessageAndStepOut('getNodeNameFromGDScript: ScriptInstance is 0/nil')
+        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: ScriptInstance is 0/nil')
         return 'N??'
       end
       local GDScriptAddr = readPointer(GDScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(GDScriptAddr) then
-        sendDebugMessageAndStepOut(' getNodeNameFromGDScript: GDScript is 0/nil')
+        -- sendDebugMessageAndStepOut(' getNodeNameFromGDScript: GDScript is 0/nil')
         return 'N??'
       end
       local GDScriptNameAddr = readPointer(GDScriptAddr + GDDEFS.GDSCRIPTNAME)
 
       if isNullOrNil(GDScriptNameAddr) then
-        sendDebugMessageAndStepOut('getNodeNameFromGDScript: nodeName invalid or not a pointer (?)')
+        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: nodeName invalid or not a pointer (?)')
         return 'N??'
       end
 
       -- immediate String
       local GDScriptName = readUTFString(GDScriptNameAddr)
       if GDScriptName == nil or GDScriptName == '' then
-        sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
         return 'N??'
       end
       local scriptMatch = GDScriptName:match("([^/]+)%.[^.]+$") --"([^/]+)%.gd$"
       if scriptMatch == nil then
-        sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
         return 'N??'
       end
 
-      debugStepOut()
+      -- debugStepOut()
 
       return scriptMatch
     end
@@ -4509,53 +4480,48 @@
       end
     end
 
-    --- gets a Node by name
-    ---@param nodeName string
-    function GDAPI.getMainNodeByName(nodeName)
-      assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-      if not (gdOffsetsDefined) then
-        print('define the offsets first, silly')
-        return
-      end
+    --- returns a const ptr and its type
+    ---@param nodeAddr number
+    ---@param constName string
+    function GDAPI.getNodeConstPtr(nodeAddr, constName)
+      assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
+      assert(type(constName) == 'string', "Constant name has to be a string, instead got: " .. type(constName))
 
-      local childrenPtr, childrenSize = getVPChildren()
-      if isNullOrNil(childrenPtr) then
-        return
-      end
-
-      for i = 0, (childrenSize - 1) do
-
-        local nodeAddr = readPointer(childrenPtr + i * GDDEFS.PTRSIZE)
-        if isNullOrNil(nodeAddr) then
-          -- sendDebugMessage('getNode: nodeAddr invalid' )
-          return
-        end
-
-        local nodeNameStr = getNodeName(nodeAddr)
-        if nodeNameStr == 'N??' then nodeNameStr = getNodeNameFromGDScript(nodeAddr) end
-        if nodeNameStr == nodeName then
-          return nodeAddr
-        end
-      end
-      return
+      local mapHead = getNodeConstantMap(nodeAddr)
+      return findMapEntryByName(mapHead, constName, getNodeConstName, getConstMapLookupResult, getNextMapElement)
     end
 
-    -- --- returns a const ptr and its type
-    -- ---@param nodeName string
-    -- ---@param constName string
-    -- function GDAPI.getNodeConstPtr(nodeName, constName)
-    --   assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
-    --   assert(type(constName) == 'string', "Constant name has to be a string, instead got: " .. type(constName))
+    function GDAPI.getNodeChildByGDName(nodeAddr, gdName)
+      assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
+      assert(type(gdName) == 'string', "Node gdname has to be a string, instead got: " .. type(gdName))
+      assert(checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
+      local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr) -- children should be valid
 
-    --   local nodePtr = getNodeWithGDScriptInstance(nodeName)
-    --   if isNullOrNil(nodePtr) then
-    --     -- sendDebugMessage("getNodeConstPtr: Node + GDSI: "..tostring(nodeName).." wasn't found")
-    --     return
-    --   end
+      for i = 0, (childrenSize - 1) do
+        local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
+        local scriptName = getNodeNameFromGDScript(childAddr)
+        if gdName == getNodeNameFromGDScript(childAddr) then
+          return childAddr
+        end
+      end
+      return nil
+    end
 
-    --   local mapHead = getNodeConstantMap(nodePtr)
-    --   return findMapEntryByName(mapHead, constName, getNodeConstName, getConstMapLookupResult, getNextMapElement)
-    -- end
+    function GDAPI.getNodeChildByName(nodeAddr, nodeName)
+      assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
+      assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
+      assert(checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
+      local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr) -- children should be valid
+
+      for i = 0, (childrenSize - 1) do
+        local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
+        local scriptName = getNodeNameFromGDScript(childAddr)
+        if nodeName == getNodeNameFromGDScript(childAddr) then
+          return childAddr
+        end
+      end
+      return nil
+    end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Func
 
@@ -10894,6 +10860,10 @@
         self.visited[addr] = true
         if checkForGDScript(addr) then
           table.insert(self.dumped, addr)
+          -- will (un)register twice, but early, potentially
+          local name = getNodeNameFromGDScript(addr)
+          registerSymbol(name, addr, true)
+          table.insert(gd_registeredNodes, name)
         end
         return true
       end
@@ -11085,6 +11055,7 @@
 
   
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// API
+  buildGDGUI = GDAPI.buildGDGUI
   printDumpedNodes = GDAPI.printDumpedNodes
   getDumpedNode = GDAPI.getDumpedNode
   registerNodeOffsets = GDAPI.registerNodeOffsets
@@ -11093,12 +11064,10 @@
   patchGDFunctionConst = GDAPI.patchGDFunctionConst
   patchGDFunction = GDAPI.patchGDFunction
   getGDFunctionFromNode = GDAPI.getGDFunctionFromNode
-  -- getNodeConstPtr = GDAPI.getNodeConstPtr
-  getMainNodeByName = GDAPI.getMainNodeByName
+  getNodeConstPtr = GDAPI.getNodeConstPtr
   getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
   getNodeName = GDAPI.getNodeName
   getNodeGDScriptInstance = GDAPI.getNodeGDScriptInstance
-  -- getNodeWithGDScriptInstance = GDAPI.getNodeWithGDScriptInstance
   godot_node_enumVariants = GDAPI.godot_node_enumVariants
   godotAA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
   gd_monitorProfile = GDAPI.gd_monitorProfile
@@ -11107,3 +11076,5 @@
   DumpNodeToAddr = GDAPI.DumpNodeToAddr
   DumpAllNodesToAddr = GDAPI.DumpAllNodesToAddr
   initDumper = GDAPI.initDumper
+  getNodeChildByGDName = GDAPI.getNodeChildByGDName
+  getNodeChildByName = GDAPI.getNodeChildByName
