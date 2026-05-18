@@ -3108,7 +3108,7 @@
 
       local childrenSize;
       if GDDEFS.MAJOR_VER == 4 then
-          childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
+        childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
       else
         childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
       end
@@ -4496,7 +4496,6 @@
       assert(type(gdName) == 'string', "Node gdname has to be a string, instead got: " .. type(gdName))
       assert(checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
       local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr) -- children should be valid
-
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
         local scriptName = getNodeNameFromGDScript(childAddr)
@@ -4511,12 +4510,11 @@
       assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
       assert(checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
-      local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr) -- children should be valid
-
+      local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr)
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-        local scriptName = getNodeNameFromGDScript(childAddr)
-        if nodeName == getNodeNameFromGDScript(childAddr) then
+        local scriptName = getNodeName(childAddr)
+        if nodeName == getNodeName(childAddr) then
           return childAddr
         end
       end
