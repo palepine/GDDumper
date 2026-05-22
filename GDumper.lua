@@ -9296,7 +9296,7 @@
       return nil
     end
 
-    function GDAPI.executeGDFunction(func_this, GDScriptInstanceAddr, argTable --[[, argCount]])
+    function GDAPI.executeGDFunction(func_this, GDScriptInstanceAddr, argTable)
       assert( isNotNullOrNil(func_this) , "this ptr invalid" )
       assert( isNotNullOrNil(GDScriptInstanceAddr) , "GDSI invalid" )
       -- so far the calling conventions match seamlessly
@@ -9399,6 +9399,18 @@
       end
     end
 
+    function GDAPI.callGDFunctionFromNode(nodeAddr, funcName, argTable)
+      assert(isNotNullOrNil(nodeAddr), "Node Addr must be valid")
+      assert(type(funcName) == 'string', "function name must be a string, instead got: " .. type(funcName))
+
+      local gdScriptInstance = getNodeGDScriptInstance(nodeAddr)
+      if isNullOrNil(gdScriptInstance) then error("Nodes' script instance not found") end
+
+      local functionAddr = getGDFunctionFromNode( nodeAddr, funcName )
+      if isNullOrNil(functionAddr) then error("Function address not found") end
+
+      return GDAPI.executeGDFunction(functionAddr, gdScriptInstance, argTable)
+    end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
 
@@ -11288,6 +11300,7 @@
   registerNodeOffsets = GDAPI.registerNodeOffsets
   getGDObjectName = GDAPI.getGDObjectName
   executeGDFunction = GDAPI.executeGDFunction
+  callGDFunctionFromNode = GDAPI.callGDFunctionFromNode
   patchGDFunctionConst = GDAPI.patchGDFunctionConst
   patchGDFunction = GDAPI.patchGDFunction
   getGDFunctionFromNode = GDAPI.getGDFunctionFromNode
