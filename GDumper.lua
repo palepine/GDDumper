@@ -171,6 +171,7 @@
   local formatDisassembledAddress
   local checkIfGDFunction
   local getGDVMCallPtr
+  local setupCallArgs
 
   local getNodeConstMap
   local getNodeConstName
@@ -195,6 +196,8 @@
   local getNodeVariantVector
   local getNodeVariantMap
   local getVariantByIndex
+  local VariantArena
+  local GDVariant
   
   local getLeftmostMapElem
 
@@ -9266,7 +9269,7 @@
           table.insert(sigs, { isheavy = false, sig = "48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize = 30 }) -- 4.1
           table.insert(sigs, { isheavy = false, sig = "48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize = 32 }) -- 3.6
           table.insert(sigs, { isheavy = false, sig = "4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize = 36 }) -- 3.5
-          table.insert(sigs, { isheavy = false, sig = "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize = 23 }) -- 3.3 - 3.4 - 3.5
+          table.insert(sigs, { isheavy = true, sig = "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize = 23 }) -- 3.3 - 3.4 - 3.5
           table.insert(sigs, { isheavy = true,  sig = "4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8", sigsize = 17 }) -- 3.0 prefixed by 48 C7 44 24 30 ? 000000
 
           for i, sign in ipairs(sigs) do
@@ -9293,7 +9296,7 @@
       return nil
     end
 
-    function GDAPI.executeGDFunction(func_this, GDScriptInstanceAddr, argsetupCallback, argCount)
+    function GDAPI.executeGDFunction(func_this, GDScriptInstanceAddr, argTable --[[, argCount]])
       assert( isNotNullOrNil(func_this) , "this ptr invalid" )
       assert( isNotNullOrNil(GDScriptInstanceAddr) , "GDSI invalid" )
       -- so far the calling conventions match seamlessly
@@ -9304,41 +9307,39 @@
       local vmCallAddr = getGDVMCallPtr()
       if isNullOrNil(vmCallAddr) then error("::call() isn't found") end
 
-      -- setting up space
-      if argsetupCallback and type(argsetupCallback) == "function" then
-        argsetupCallback()
-      else
-        writeQword(dumSpace + 0xFF0, dumSpace + 0x30) -- *p_args 0x1000-0x10 = 0xFF0
-        writeQword(dumSpace + 0xFF8, dumSpace + 0xFF0) -- **p_args 0x1000-0x8 = 0xFF8
+      -- setup arguments & space
+      if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
+        setupCallArgs(argTable)
       end
 
       local stdcall = 0
       local timeout = 0
       local int_t = 0
+      local argCount = (argTable and #argTable) or 0
       local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3, _rax
       if GDDEFS.VM_CALL_HEAVY then
-        _rcx = { type = int_t, value = dumSpace + 0x80 } -- return buffer ptr
+        _rcx = { type = int_t, value = dumSpace + VariantArena.returnBufOffset } -- return buffer ptr
         _rdx = { type = int_t, value = func_this }
       else
         _rcx = { type = int_t, value = func_this }
-        _rdx = { type = int_t, value = dumSpace + 0x80 } -- *someexcval
+        _rdx = { type = int_t, value = dumSpace + VariantArena.excptOffset } -- *someexcval
       end
 
       _r8 =   { type = int_t, value = GDScriptInstanceAddr } -- GDScriptInstance *p_instance
-      _r9 =   { type = int_t, value = dumSpace + 0x78 } -- const Variant **p_args
-      _st1 =  { type = int_t, value = argCount or 0x0 } -- int p_argcount
-      _st2 =  { type = int_t, value = dumSpace + 0x90 } -- Callable::CallError &r_err
+      _r9 =   { type = int_t, value = dumSpace + VariantArena.argListOffset } -- const Variant **p_args
+      _st1 =  { type = int_t, value = argCount } -- int p_argcount
+      _st2 =  { type = int_t, value = dumSpace + VariantArena.callErrorOffset } -- Callable::CallError &r_err
       _st3 =  { type = int_t, value = 0x0 } -- CallState *p_state
-      _rax =  { type = int_t, value = 0x0 } -- lastArgument
+      _rax =  { type = int_t, value = dumSpace } -- lastArgument
 
       local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
 
-      if isNotNullOrNil(returned) then
-        writeQword(dumSpace + 0x0, returned)
-        return returned
-      else
-        return true, "noret"
+      if GDDEFS.VM_CALL_HEAVY then
+        return dumSpace + VariantArena.returnBufOffset, true
       end
+
+      -- needs testing
+      return returned, true
 
       --[[
         Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state)
@@ -9369,6 +9370,35 @@
         unregistersymbol(*)
         ]]
     end
+
+    function setupCallArgs(args)
+      VariantArena:init()
+      VariantArena:reset()
+
+      local argPtrs = {}
+
+      for i, arg in ipairs(args) do
+        if arg.type == "INT" then
+          argPtrs[i] = GDVariant.INT(VariantArena, arg.value)
+        elseif arg.type == "FLOAT" then
+          argPtrs[i] = GDVariant.FLOAT(VariantArena, arg.value)
+        elseif arg.type == "BOOL" then
+          argPtrs[i] = GDVariant.BOOL(VariantArena, arg.value)
+        elseif arg.type == "OBJECT" then
+          argPtrs[i] = GDVariant.OBJECT(VariantArena, arg.value)
+        else
+          error("unsupported custom Variant arg type: " .. tostring(arg.type))
+        end
+      end
+
+      -- this is an array of ptrs we fill, Variant **p_args, we have at least 35 pts
+      local argArray = VariantArena.base + VariantArena.argListOffset
+
+      for i, ptr in ipairs(argPtrs) do
+        writeQword( argArray + ((i - 1) * GDDEFS.PTRSIZE) , ptr) -- fill the array with arg ptrs
+      end
+    end
+
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
 
@@ -9992,6 +10022,113 @@
       -- end
     end
 
+    VariantArena =
+      {
+        base = nil, -- dummySpace
+        size = 0x1000, -- allocated space
+        cursor = 0, -- current offset
+        variantSize = 0x40, -- for enough padding
+        argListOffset = 0x100, -- where const Variant **p_args
+        scratchStart = 0x200, -- space before is reserved
+        scratchEnd = 0xF00, -- should suffice
+
+        excptOffset = 0x48,
+        returnBufOffset = 0x0,
+        callErrorOffset = 0x1B0,
+      }
+
+      function VariantArena:init()
+        self.base = getAddress("dummySpace")
+        if isNullOrNil(self.base) then error("'dummySpace' isn't alloced") end
+        self.cursor = self.scratchStart
+      end
+
+      function VariantArena:reset()
+        self.cursor = self.scratchStart
+      end
+
+      function VariantArena:align(alignment)
+        local remaining = self.cursor % alignment -- get remaining bytes for alignment
+        if remaining ~= 0 then self.cursor = self.cursor + (alignment - remaining) end
+      end
+
+      function VariantArena:alloc(bytes, align)
+        self:align(align or 8)
+
+        -- just in case overflow happens
+        if self.cursor + bytes > self.scratchEnd then
+          error( ("VariantArena overflow: need 0x%X bytes, cursor=0x%X"):format(bytes, self.cursor) )
+        end
+
+        -- borrow space w/ ptr
+        local ptr = self.base + self.cursor
+        -- adjust the position
+        self.cursor = self.cursor + bytes
+        return ptr
+      end
+
+      function VariantArena:allocVariant()
+        local ptr = self:alloc(self.variantSize, GDDEFS.PTRSIZE)
+
+        -- clear the slot so stale data from previous calls cannot leak into a new Variant
+        for off = 0, self.variantSize - 1, 8 do
+          writeQword(ptr + off, 0)
+        end
+
+        return ptr
+      end
+
+    GDVariant = {}
+
+      function GDVariant.BOOL(arena, value)
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('BOOL') )
+        writeByte(v + 0x8, value and 1 or 0)
+        return v
+      end
+
+      function GDVariant.INT(arena, value)
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('INT') )
+        writeInteger(v + 0x8, value)
+        return v
+      end
+
+      function GDVariant.FLOAT(arena, value)
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('FLOAT') )
+        writeDouble(v + 0x8, value)
+        return v
+      end
+
+      function GDVariant.OBJECT(arena, objectPtr)
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
+        writeQword(v + 0x10, objectPtr)
+        return v
+      end
+
+      function GDVariant.STRING(arena, str)
+        error("not implemented yet")
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('STRING') )
+        return v
+      end
+
+      function GDVariant.VECTOR2(arena, str)
+        error("not implemented yet")
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR2') )
+        return v
+      end
+
+      function GDVariant.VECTOR2I(arena, str)
+        error("not implemented yet")
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR2I') )
+        return v
+      end
+
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// (Hash)Map
 
     --- will return the leftmost map element @3.x
@@ -10359,6 +10496,100 @@
         return "BEYOND_VARIANT_MAX" -- whatever
       end
     end
+
+    --- takes in a godot type, returns a godot type name
+    ---@param typeInt number
+    function getGDTypeEnumFromName(typeName)
+      if type(typeName) ~= "string" then error("invalid typename") end
+
+      if isNullOrNil(GDDEFS.VARIANT_TYPE_ENUMS) then
+        if GDDEFS.MAJOR_VER == 4 then
+          GDDEFS.VARIANT_TYPE_ENUMS =
+            { -- TODO: patches
+              ["NIL"] = 0,
+              ["BOOL"] = 1,
+              ["INT"] = 2,
+              ["FLOAT"] = 3,
+              ["STRING"] = 4,
+              ["VECTOR2"] = 5,
+              ["VECTOR2I"] = 6,
+              ["RECT2"] = 7,
+              ["RECT2I"] = 8,
+              ["VECTOR3"] = 9,
+              ["VECTOR3I"] = 10,
+              ["TRANSFORM2D"] = 11,
+              ["VECTOR4"] = 12,
+              ["VECTOR4I"] = 13,
+              ["PLANE"] = 14,
+              ["QUATERNION"] = 15,
+              ["AABB"] = 16,
+              ["BASIS"] = 17,
+              ["TRANSFORM3D"] = 18,
+              ["PROJECTION"] = 19,
+              ["COLOR"] = 20,
+              ["STRING_NAME"] = 21,
+              ["NODE_PATH"] = 22,
+              ["RID"] = 23,
+              ["OBJECT"] = 24,
+              ["CALLABLE"] = 25,
+              ["SIGNAL"] = 26,
+              ["DICTIONARY"] = 27,
+              ["ARRAY"] = 28,
+              ["PACKED_BYTE_ARRAY"] = 29,
+              ["PACKED_INT32_ARRAY"] = 30,
+              ["PACKED_INT64_ARRAY"] = 31,
+              ["PACKED_FLOAT32_ARRAY"] = 32,
+              ["PACKED_FLOAT64_ARRAY"] = 33,
+              ["PACKED_STRING_ARRAY"] = 34,
+              ["PACKED_VECTOR2_ARRAY"] = 35,
+              ["PACKED_VECTOR3_ARRAY"] = 36,
+              ["PACKED_COLOR_ARRAY"] = 37,
+              ["PACKED_VECTOR4_ARRAY"] = 38,
+              ["VARIANT_MAX"] = 39,
+            }
+        elseif GDDEFS.MAJOR_VER == 3 then
+          GDDEFS.VARIANT_TYPE_ENUMS =
+            {
+              ["NIL"] = 0,
+              ["BOOL"] = 1,
+              ["INT"] = 2,
+              ["FLOAT"] = 3,
+              ["STRING"] = 4,
+              ["VECTOR2"] = 5,
+              ["RECT2"] = 6,
+              ["VECTOR3"] = 7,
+              ["TRANSFORM2D"] = 8,
+              ["PLANE"] = 9,
+              ["QUATERNION"] = 10,
+              ["AABB"] = 11 ,
+              ["BASIS"] = 12,
+              ["TRANSFORM3D"] = 13,
+              ["COLOR"] = 14,
+              ["NODE_PATH"] = 15,
+              ["RID"] = 16,
+              ["OBJECT"] = 17,
+              ["DICTIONARY"] = 18,
+              ["ARRAY"] = 19,
+              ["PACKED_BYTE_ARRAY"] = 20,
+              ["PACKED_INT64_ARRAY"] = 21,
+              ["PACKED_FLOAT32_ARRAY"] = 22,
+              ["PACKED_STRING_ARRAY"] = 23,
+              ["PACKED_VECTOR2_ARRAY"] = 24,
+              ["PACKED_VECTOR3_ARRAY"] = 25,
+              ["PACKED_COLOR_ARRAY"] = 26,
+              ["VARIANT_MAX"] = 27,
+            }
+
+          else
+            error("unexpected version")
+          end
+      end
+
+      local enum = GDDEFS.VARIANT_TYPE_ENUMS[typeName]
+      if isNullOrNil(enum) then error("getGDTypeEnumFromName: invalid typename ".. typeName) end
+      return enum
+    end
+
 
     --- I'm gonna add a 4byte string type
     function checkGDStringType()
