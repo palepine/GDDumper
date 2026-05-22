@@ -26,7 +26,6 @@
   local isValidPointer
   local isInvalidPointer
   local isPointerNotNull
-  local getSectionBounds
   local isMMVTable
   local isInsideSectionRange
   local isInsideRDataStatic
@@ -242,7 +241,7 @@
     --- gets some section info (bounds)
     ---@param sectionName number
     ---@return table
-    function getSectionBounds(sectionName)
+    function GDAPI.getSectionBounds(sectionName)
       local base = getAddress(process)
       if base == 0 or base == nil then
         base = enumModules()[1].Address
@@ -11318,3 +11317,4 @@
   initDumper = GDAPI.initDumper
   getNodeChildByGDName = GDAPI.getNodeChildByGDName
   getNodeChildByName = GDAPI.getNodeChildByName
+  getSectionBounds = GDAPI.getSectionBounds
