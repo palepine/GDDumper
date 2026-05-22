@@ -1114,24 +1114,35 @@
       else
         local pathToExe = enumModules()[1].PathToFile
         local gameDir, exeName = extractFilePath(pathToExe), string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
+        -- local pathList = getFileList(gameDir, exeName..".pck" ) -- names may contain unescaped regex chars
 
-        local pathList = getFileList(gameDir, exeName..".pck" )
-
-        if pathList and next(pathList) then
-          local pckPath = pathList[1]
-          local version = readGodotPckVersion(pckPath)
-          if version then
-            return
-            {
-              major = version.major,
-              minor = version.minor,
-              patch = version.patch
-            }
-          end
-
+        local targetPck = gameDir..exeName..".pck" -- abs path to the pck, if it exists, it will succeed 
+        local version = readGodotPckVersion(targetPck)
+        if version then
+          return
+          {
+            major = version.major,
+            minor = version.minor,
+            patch = version.patch
+          }
         else
           return nil
         end
+
+        -- if pathList and next(pathList) then
+        --   local pckPath = pathList[1]
+        --   local version = readGodotPckVersion(pckPath)
+        --   if version then
+        --     return
+        --     {
+        --       major = version.major,
+        --       minor = version.minor,
+        --       patch = version.patch
+        --     }
+        --   end
+        -- else
+        --   return nil
+        -- end
       end
 
     end
@@ -1161,7 +1172,7 @@
               if not targetIsGodot then
                 local pathToExe = enumModules()[1].PathToFile
                 local gameDir, exeName = extractFilePath(pathToExe), string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
-                local pathList = getFileList(gameDir, exeName..".pck" )
+                local pathList = getFileList(gameDir, exeName..".pck" ) -- TODO: regex chars will invalidate the mask
 
                 if pathList and next(pathList) then
                   targetIsGodot = true;
