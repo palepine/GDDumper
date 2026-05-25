@@ -197,6 +197,8 @@
   local getVariantByIndex
   local VariantArena
   local GDVariant
+  local GDXIVariantArena
+  local GDXIVariant
   
   local getLeftmostMapElem
 
@@ -2593,16 +2595,10 @@
         sendDebugMessage("Couldn't find SceneTree & toVP offset")
       end
 
-      gdOffsetsDefined = true
-      gd_nodeMonitorCD = 100
-      -- gd_nodeMonitorWatchDogCD = 45 * 1000
-      bDisasmFunc= true -- on by default
-      -- check if 4.x string type reged, otherwise define it
-      checkGDStringType()
-      registerGDSymbols()
-      -- build disassembler
-      defineGDFunctionEnums()
-      fuckoffPrint()
+      -- GDDEFS.GDSCRIPT_INSTANTIATE_INDX = 40
+      -- GDDEFS.GDSCRIPT_SETSRC = 45
+      -- GDDEFS.GDSCRIPT_RELOAD_INDX = 46
+
     end
 
     --- inits the GDDEFS object
@@ -4530,6 +4526,224 @@
         end
       end
       return nil
+    end
+
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// GDScript
+
+
+    local function findGDExtensionInterfacePtr()
+      local function findFuncPointer(aobSignature)
+        local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+        if addr == 0 or addr == nil then
+          return false
+        end
+        GDDEFS.GDXTENSION_GETPROC = addr
+        return true
+      end
+      local sigs = {}
+      table.insert(sigs, "53 48 83 EC ? 45 31 C0 48 89 CA 48 8D 4C 24 ? E8 ? ? ? ? 48 8D 4C 24 ? E8" ) -- 4.6
+      table.insert(sigs, "40 53 48 83 EC ? 48 8B D1 45 33 C0 48 8D ? 24 ? E8 ? ? ? ? 48 8D ? 24 ? E8" ) -- 4.6, 4.3 4.1, just a swapped encoding
+      table.insert(sigs, "56 53 48 83 EC ? 45 31 C0 48 8D ? 24 ? 48 89 CA 48 89 F1 E8 ? ? ? ? 48 89 F1 E8" ) -- 4.5 4.4
+
+      table.insert(sigs, "41 57 41 56 41 55 41 54 55 57 56 53 48 83 EC ? 4? 8D ? 24 ? 48 89 CA ? 89 ? E8" ) -- merged 4.1 4.2
+      table.insert(sigs, "41 57 41 56 41 55 41 54 55 57 56 53 48 83 EC ? 4? 8D ? 24 ? 48 89 CA ? 89 ? 48 89 44 24 ? E8 ? ? ? ? 4C 8B 05 ? ? ? ? 48 8B 6C 24 ? 4D 8B 70 ? 4D 85 F6 OF" ) -- merged 4.3 / 4.1
+
+      for i, sig in ipairs(sigs) do
+        if findFuncPointer(sig) then
+          sendDebugMessage('findGDExtensionInterfacePtr: hit at: ' .. tostring(i) .. "\t" .. sig)
+          return true
+        end
+      end
+      return false
+    end
+
+
+    function GDAPI.getGDExtensionFunc(funcName)
+      assert(type(funcName) == "string", 'function name has to be a string, instead got: ' .. type(funcName))
+      assert(GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1, "GDExtension Interface is for 4.1+ only")
+
+      -- get func ptr
+      if isNullOrNil(GDDEFS.GDXTENSION_GETPROC) then 
+        findGDExtensionInterfacePtr()
+      end
+      local getProcAddr = GDDEFS.GDXTENSION_GETPROC
+
+      if getProcAddr == nil then error('interface not found') end
+
+      -- allocate space for the string
+      local strlen = funcName:len()
+
+      -- allocateMemory(size, BaseAddress OPTIONAL, Protection OPTIONAL) 
+      local allocStrSpace = allocateMemory(strlen + 1) -- cstr with nullterminator in the target, but actually callocates 0x1000
+
+      local ok = writeString(allocStrSpace,funcName) -- handles 0-term
+      if not ok then deAlloc(allocStrSpace) error('string mapping failed') end
+      
+      local stdcall = 0
+      local timeout = nil
+
+      local retFuncPtr = executeCodeEx(stdcall, timeout, getProcAddr, allocStrSpace )
+      deAlloc(allocStrSpace) -- free string
+
+      return retFuncPtr
+    end
+
+    -- global Godot Engine Extension Interface
+    GDXI = {}
+
+    function GDXI.variant_construct( gdtypeStr, argTable )
+      error('not implemented yet')
+      assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
+      assert(type(argTable) == "table" and isNotNullOrNil(#argTable), 'argument table must be valid')
+
+      local varGetConstrPtr = GDAPI.getGDExtensionFunc('variant_construct')
+      local mallocPtr = GDAPI.getGDExtensionFunc('mem_alloc')
+      if isNullOrNil(varGetConstrPtr) then error('variant_construct func ptr not found') end
+      if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+
+      local stdcall = 0
+      local timeout = nil
+      
+      local variantSpaceAlloc = 0x40 -- storage for the dest object
+      local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- ctor should place the ptr
+      if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+
+      local argListPtr = setupCallArgs(GDXIVariantArena, GDXIVariant, argTable)
+      local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+      local argCount = (argTable and #argTable) or 0
+      local callError = 0 -- TODO:
+
+      executeCodeEx(stdcall, timeout, varGetConstrPtr, typeEnum, objAlloc, argListPtr, argCount)
+
+      return objAlloc
+    end
+
+    function GDXI.variant_get_ptr_destructor( gdtypeStr )
+      assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
+      local varGetConstrPtr = GDAPI.getGDExtensionFunc('variant_get_ptr_destructor')
+      if isNullOrNil(varGetConstrPtr) then error('variant_get_ptr_destructor func ptr not found') end
+      local stdcall = 0
+      local timeout = nil
+      local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+      return executeCodeEx(stdcall, timeout, varGetConstrPtr, typeEnum)
+    end
+
+    function GDXI.variant_get_ptr_constructor( gdtypeStr, constructorID )
+      assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
+      assert(type(constructorID) == 'number', 'constructorid must be a number, instead got: ' .. type(constructorID))
+      local varGetConstrPtr = GDAPI.getGDExtensionFunc('variant_get_ptr_constructor')
+      if isNullOrNil(varGetConstrPtr) then error('variant_get_ptr_constructor func ptr not found') end
+      local stdcall = 0
+      local timeout = nil
+      local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+      return executeCodeEx(stdcall, timeout, varGetConstrPtr, typeEnum, constructorID)
+    end
+
+    function GDXI.string_new_with_latin1_chars( str )
+      assert(type(str) == 'string', 'string must be a string, instead got: ' .. type(str))
+      assert(#str > 0, 'string must be of valid size')
+
+      local strlen = str:len()
+      -- local mallocPtr = GDAPI.getGDExtensionFunc('mem_alloc') -- since we get the pointer, there's barely any need to allocate internally
+      local stringCtor = GDAPI.getGDExtensionFunc('string_new_with_latin1_chars')
+      if isNullOrNil(stringCtor) then error('string_new_with_latin1_chars func ptr not found') end
+      -- if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+
+      -- setup cstring content param in the target via CE API
+      local strlen = str:len()
+      local allocStrSpace = allocateMemory(strlen + 1) -- well, 0x1000 calloced if less anyways
+      local ok = writeString(allocStrSpace,str) -- handles 0-term
+      if not ok then deAlloc(allocStrSpace) error('string mapping failed') end
+      
+      -- local stringSpace = 0x8 -- storage for the dest object
+      local stdcall = 0
+      local timeout = nil
+      -- local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, stringSpace ) -- ctor should place the ptr
+      local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+      -- if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+
+      executeCodeEx(stdcall, timeout, stringCtor, objAlloc, allocStrSpace) -- this does placement new alloc
+      local objPtr = readPointer(objAlloc)
+      deAlloc(allocStrSpace)
+      deAlloc(objAlloc)
+      return objPtr
+    end
+
+    function GDXI.string_name_new_with_latin1_chars( str )
+      assert(type(str) == 'string', 'string must be a string, instead got: ' .. type(str))
+      assert(#str > 0, 'string must be of valid size')
+
+      -- find pointers, otherwise early exit
+      -- local mallocPtr = GDAPI.getGDExtensionFunc('mem_alloc')
+      -- local deallocPtr = GDAPI.getGDExtensionFunc('mem_free')
+      local stringCtor = GDAPI.getGDExtensionFunc('string_name_new_with_latin1_chars')
+      -- if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+      if isNullOrNil(stringCtor) then error('string_name_new_with_latin1_chars func ptr not found') end
+
+      -- setup cstring content param in the target via CE API
+      local strlen = str:len()
+      local allocStrSpace = allocateMemory(strlen + 1) -- well, 0x1000 calloced if less anyways
+      local ok = writeString(allocStrSpace,str) -- handles 0-term
+      if not ok then deAlloc(allocStrSpace) error('string mapping failed') end
+
+      -- local SNameSpace = 0x8 -- storage for the dest object
+      local isStatic = 0 -- we never do static which is 'The StringName will reuse the `p_contents` buffer instead of copying it', there's no reason to handle ownership of that
+      local stdcall = 0
+      local timeout = nil
+
+      -- allocating target memory via GD API
+      -- local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, SNameSpace) -- ctor should place the ptr
+      local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+      if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+      
+      -- construct SName
+      executeCodeEx(stdcall, timeout, stringCtor, objAlloc, allocStrSpace, isStatic) -- this does placement new alloc
+      local objPtr = readPointer(objAlloc)
+      deAlloc(allocStrSpace) -- free the string content
+      deAlloc(objAlloc)
+      return objPtr
+    end
+
+    function GDXI.mem_alloc(size)
+      assert(type(size) == 'number', 'size must be a number, instead got: ' .. type(size))
+      assert(size > 0, 'size must be a valid size')
+
+      local funcPtr = GDAPI.getGDExtensionFunc('mem_alloc')
+      if isNullOrNil(funcPtr) then error('mem_alloc func ptr not found') end
+      local stdcall = 0
+      local timeout = nil
+      local alloc = executeCodeEx(stdcall, timeout, funcPtr, size)
+      if isNullOrNil(alloc) then error('mem_alloc failed to allocate') end
+      return alloc
+    end
+
+    function GDXI.mem_free(allocPtr)
+      assert(type(allocPtr) == 'number', 'pointer must be a number, instead got: ' .. type(allocPtr))
+      assert(allocPtr ~= 0, 'pointer mustnt be null')
+
+      local funcPtr = GDAPI.getGDExtensionFunc('mem_free')
+      if isNullOrNil(funcPtr) then error('mem_free func ptr not found') end
+      local stdcall = 0
+      local timeout = nil
+      executeCodeEx(stdcall, timeout, funcPtr, allocPtr)
+    end
+
+    function GDAPI.recompileGDScript(nodeAddr, newScript)
+      --[[
+        if (!binary_tokens.is_empty())
+        {
+          err = parser.parse_binary(binary_tokens, path);
+        }
+        else
+        {
+          err = parser.parse(source, path, false);
+        }
+      -- void GDScript::set_source_code(const String &p_code)
+      -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
+      -- Object::set_script isn't virtual in non-debug
+      
+      .gdc: fuck binary tokens to size of 0, set new source from allocated space (or with GDScript::set_source_code), reload the script with GDScript::reload(bool p_keep_state) (no new members)
+      ]]
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Func
@@ -9319,11 +9533,11 @@
 
       -- setup arguments & space
       if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
-        setupCallArgs(argTable)
+        setupCallArgs(VariantArena, GDVariant, argTable)
       end
 
       local stdcall = 0
-      local timeout = 0
+      local timeout = nil
       local int_t = 0
       local argCount = (argTable and #argTable) or 0
       local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3, _rax
@@ -9381,28 +9595,28 @@
         ]]
     end
 
-    function setupCallArgs(args)
-      VariantArena:init()
-      VariantArena:reset()
+    function setupCallArgs(arena, handler, args)
+      arena:init()
+      arena:reset()
 
       local argPtrs = {}
 
       for i, arg in ipairs(args) do
         if arg.type == "INT" then
-          argPtrs[i] = GDVariant.INT(VariantArena, arg.value)
+          argPtrs[i] = handler.INT(arena, arg.value)
         elseif arg.type == "FLOAT" then
-          argPtrs[i] = GDVariant.FLOAT(VariantArena, arg.value)
+          argPtrs[i] = handler.FLOAT(arena, arg.value)
         elseif arg.type == "BOOL" then
-          argPtrs[i] = GDVariant.BOOL(VariantArena, arg.value)
+          argPtrs[i] = handler.BOOL(arena, arg.value)
         elseif arg.type == "OBJECT" then
-          argPtrs[i] = GDVariant.OBJECT(VariantArena, arg.value)
+          argPtrs[i] = handler.OBJECT(arena, arg.value)
         else
           error("unsupported custom Variant arg type: " .. tostring(arg.type))
         end
       end
 
       -- this is an array of ptrs we fill, Variant **p_args, we have at least 35 pts
-      local argArray = VariantArena.base + VariantArena.argListOffset
+      local argArray = arena.base + arena.argListOffset
 
       for i, ptr in ipairs(argPtrs) do
         writeQword( argArray + ((i - 1) * GDDEFS.PTRSIZE) , ptr) -- fill the array with arg ptrs
@@ -10057,11 +10271,15 @@
         excptOffset = 0x48,
         returnBufOffset = 0x0,
         callErrorOffset = 0x1B0,
+        inited = false,
       }
 
       function VariantArena:init()
-        self.base = getAddress("dummySpace")
-        if isNullOrNil(self.base) then error("'dummySpace' isn't alloced") end
+        if not self.inited then
+          self.base = getAddress("dummySpace")
+          self.inited = true
+        end
+        if isNullOrNil(self.base) then error("dummySpace isn't alloced") end
         self.cursor = self.scratchStart
       end
 
@@ -10099,6 +10317,73 @@
 
         return ptr
       end
+    
+    GDXIVariantArena =
+      {
+        base = nil, -- alloc ptr
+        size = 0x2000, -- allocated space
+        cursor = 0, -- current offset
+        variantSize = 0x40, -- for enough padding
+        argListOffset = 0x100, -- where const Variant **p_args
+        scratchStart = 0x500, -- space before is reserved
+        scratchEnd = 0x1F00, -- should suffice
+
+        excptOffset = 0x48,
+        returnBufOffset = 0x0,
+        callErrorOffset = 0x1B0,
+        inited = false,
+      }
+
+      function GDXIVariantArena:init()
+        if not self.inited then
+          self.base = allocateMemory(self.size)
+          self.inited = true
+        end
+        if isNullOrNil(self.base) then error("alloc failed") end
+        self.cursor = self.scratchStart
+      end
+
+      function GDXIVariantArena:close()
+        if self.inited then
+          deAlloc(self.base)
+          self.inited = false
+        end
+      end
+
+      function GDXIVariantArena:reset()
+        self.cursor = self.scratchStart
+      end
+
+      function GDXIVariantArena:align(alignment)
+        local remaining = self.cursor % alignment -- get remaining bytes for alignment
+        if remaining ~= 0 then self.cursor = self.cursor + (alignment - remaining) end
+      end
+
+      function GDXIVariantArena:alloc(bytes, align)
+        self:align(align or 8)
+
+        -- just in case overflow happens
+        if self.cursor + bytes > self.scratchEnd then
+          error( ("GDXIVariantArena overflow: need 0x%X bytes, cursor=0x%X"):format(bytes, self.cursor) )
+        end
+
+        -- borrow space w/ ptr
+        local ptr = self.base + self.cursor
+        -- adjust the position
+        self.cursor = self.cursor + bytes
+        return ptr
+      end
+
+      function GDXIVariantArena:allocVariant()
+        local ptr = self:alloc(self.variantSize, GDDEFS.PTRSIZE)
+
+        -- clear the slot so stale data from previous calls cannot leak into a new Variant
+        for off = 0, self.variantSize - 1, 8 do
+          writeQword(ptr + off, 0)
+        end
+
+        return ptr
+      end
 
     GDVariant = {}
 
@@ -10112,7 +10397,7 @@
       function GDVariant.INT(arena, value)
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('INT') )
-        writeInteger(v + 0x8, value)
+        writeQword(v + 0x8, value) -- int64_t
         return v
       end
 
@@ -10123,9 +10408,10 @@
         return v
       end
 
-      function GDVariant.OBJECT(arena, objectPtr)
+      function GDVariant.OBJECT(arena, object_id, objectPtr)
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
+        writeQword(v + 0x8, object_id)
         writeQword(v + 0x10, objectPtr)
         return v
       end
@@ -10150,6 +10436,8 @@
         writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR2I') )
         return v
       end
+
+    GDXIVariant = {}
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// (Hash)Map
 
@@ -10886,11 +11174,12 @@
         else
           -- lua implementation lacking writing functionality
           registerCustomTypeLua('GD4 String', 1, gd4string_bytestovalue, gd4string_valuetobytes, false, true)
-          
-          -- c implementation
-          -- registerCustomTypeAutoAssembler(cAAUTF32StringTypeScript)
-          -- https://github.com/cheat-engine/cheat-engine/issues/3345
 
+          -- c implementation
+          -- https://github.com/cheat-engine/cheat-engine/issues/3345
+          -- local procName = process
+          -- registerCustomTypeAutoAssembler(cAAUTF32StringTypeScript)
+          -- OpenProcess(procName)
           GDDEFS.GD4_STRING_EXISTS = true
         end
       else
@@ -11298,6 +11587,18 @@
       -- if not (targetIsGodot) then return; end
       defineGDOffsets(config)
 
+      gdOffsetsDefined = true
+      gd_nodeMonitorCD = 100
+      -- gd_nodeMonitorWatchDogCD = 45 * 1000
+      bDisasmFunc= true -- on by default
+      -- check if 4.x string type reged, otherwise define it
+      checkGDStringType()
+      registerGDSymbols()
+
+      -- build disassembler
+      defineGDFunctionEnums()
+      fuckoffPrint()
+
       NodeMonitorServiceThread = createThread(nodeMonitorService)
     end
     godotRegisterPreinit()
@@ -11329,3 +11630,5 @@
   getNodeChildByGDName = GDAPI.getNodeChildByGDName
   getNodeChildByName = GDAPI.getNodeChildByName
   getSectionBounds = GDAPI.getSectionBounds
+
+  getGDExtensionFunc = GDAPI.getGDExtensionFunc
