@@ -10573,7 +10573,6 @@
       function GDVariant.STRING(arena, value, copy)
         if isValidPointer(copy) then return copy end
         -- value is a lua string, the ctor checks it, it will copy the string
-        error('not implemented yet')
         local stringPtr = GDXI.string_new_with_latin1_chars(value)
         local varCtorPtr = GDXI.get_variant_from_type_constructor('STRING')
         local mallocPtr = GDAPI.getGDExtensionFunc('mem_alloc')
@@ -10593,7 +10592,6 @@
 
       function GDVariant.STRING_NAME(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error('not implemented yet')
         local stringPtr = GDXI.string_name_new_with_latin1_chars(value)
         local varCtorPtr = GDXI.get_variant_from_type_constructor('STRING_NAME')
         local mallocPtr = GDAPI.getGDExtensionFunc('mem_alloc')
