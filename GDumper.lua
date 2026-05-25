@@ -10583,10 +10583,13 @@
         local timeout = nil
         local variantSpaceAlloc = 0x40 -- uninit dest store
         -- malloc
-        local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- ctor should place the ptr
+        local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc)
         if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
         -- constructing variant string name
-        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, stringPtr)
+        local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
+        writeQword(ptrContainer, objAlloc)
+        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
+        deAlloc(ptrContainer)
         return objAlloc
       end
 
@@ -10605,7 +10608,10 @@
         local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- ctor should place the ptr
         if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
         -- constructing variant string name
-        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, stringPtr)
+        local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
+        writeQword(ptrContainer, objAlloc)
+        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
+        deAlloc(ptrContainer)
         return objAlloc
       end
 
