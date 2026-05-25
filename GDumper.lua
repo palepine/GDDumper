@@ -197,8 +197,6 @@
   local getVariantByIndex
   local VariantArena
   local GDVariant
-  local GDXIVariantArena
-  local GDXIVariant
   
   local getLeftmostMapElem
 
@@ -892,7 +890,7 @@
       mainMemrec.Description = "Dumper"
       mainMemrec.Type = vtAutoAssembler
       mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      mainMemrec.Script = "[ENABLE]\nalloc(dummySpace,$1000,$process)\nregistersymbol(dummySpace)\n{$lua}\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n\n{$asm}\n[DISABLE]\ndealloc(*)\nunregistersymbol(*)\n{$lua}\nif syntaxcheck then return end\n--NodeMonitorServiceSwitch()\n{$asm}"
+      mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
 
       local dumpMemrec = addrList.createMemoryRecord()
       dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -4590,9 +4588,15 @@
 
     -- global Godot Engine Extension Interface
     GDXI = {}
+    -- for 3.x investigate native api void GDAPI godot_string_new(godot_string *r_dest);
+    -- godot_gdnative_init \ gdnative_init
+    -- godot_gdnative_terminate \ gdnative_terminate
+    -- godot_nativescript_init \ nativescript_init
 
+    --- constructs a variant from other variants whenever that's needed
+    ---@param gdtypeStr string
+    ---@param argTable table @ should fill copy ptr
     function GDXI.variant_construct( gdtypeStr, argTable )
-      error('not implemented yet')
       assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
       assert(type(argTable) == "table" and isNotNullOrNil(#argTable), 'argument table must be valid')
 
@@ -4603,19 +4607,35 @@
 
       local stdcall = 0
       local timeout = nil
-      
+      -- setup arguments & space
+      if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
+        setupCallArgs(VariantArena, GDVariant, argTable)
+      else 
+        error("arg table has to be filled to construct")
+      end
+
       local variantSpaceAlloc = 0x40 -- storage for the dest object
       local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- ctor should place the ptr
       if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
 
-      local argListPtr = setupCallArgs(GDXIVariantArena, GDXIVariant, argTable)
+      local argListPtr = VariantArena.base + VariantArena.argListOffset
       local typeEnum = getGDTypeEnumFromName(gdtypeStr)
       local argCount = (argTable and #argTable) or 0
-      local callError = 0 -- TODO:
+      local callError = VariantArena.base + VariantArena.callErrorOffset
 
       executeCodeEx(stdcall, timeout, varGetConstrPtr, typeEnum, objAlloc, argListPtr, argCount)
 
       return objAlloc
+    end
+
+    function GDXI.get_variant_from_type_constructor( gdtypeStr )
+      assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
+      local varCtorPtr = GDAPI.getGDExtensionFunc('get_variant_from_type_constructor')
+      if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
+      local stdcall = 0
+      local timeout = nil
+      local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+      return executeCodeEx(stdcall, timeout, varCtorPtr, typeEnum)
     end
 
     function GDXI.variant_get_ptr_destructor( gdtypeStr )
@@ -4626,6 +4646,16 @@
       local timeout = nil
       local typeEnum = getGDTypeEnumFromName(gdtypeStr)
       return executeCodeEx(stdcall, timeout, varGetConstrPtr, typeEnum)
+    end
+
+    function GDXI.variant_destroy( gdtypeStr, obj )
+      assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
+      local varDestructPtr = GDXI.variant_get_ptr_destructor(gdtypeStr)
+      if isNullOrNil(varDestructPtr) then error('var destructor func ptr not found') end
+      local stdcall = 0
+      local timeout = nil
+      local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+      return executeCodeEx(stdcall, timeout, varDestructPtr, typeEnum)
     end
 
     function GDXI.variant_get_ptr_constructor( gdtypeStr, constructorID )
@@ -4742,6 +4772,7 @@
       -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
       -- Object::set_script isn't virtual in non-debug
       
+      -- GDXI.string_name_new_with_latin1_chars(script)
       .gdc: fuck binary tokens to size of 0, set new source from allocated space (or with GDScript::set_source_code), reload the script with GDScript::reload(bool p_keep_state) (no new members)
       ]]
     end
@@ -9525,8 +9556,8 @@
       assert( isNotNullOrNil(GDScriptInstanceAddr) , "GDSI invalid" )
       -- so far the calling conventions match seamlessly
 
-      local dumSpace = getAddress("dummySpace")
-      if isNullOrNil(dumSpace) then error("'stack' space isn't alloced") end
+      -- we need the dummy stack even when no arguments
+      if not VariantArena:init() then error("'stack' space isn't alloced") end
 
       local vmCallAddr = getGDVMCallPtr()
       if isNullOrNil(vmCallAddr) then error("::call() isn't found") end
@@ -9542,24 +9573,24 @@
       local argCount = (argTable and #argTable) or 0
       local _rcx, _rdx, _r8, _r8, _r9, _st1, _st2, _st3, _rax
       if GDDEFS.VM_CALL_HEAVY then
-        _rcx = { type = int_t, value = dumSpace + VariantArena.returnBufOffset } -- return buffer ptr
+        _rcx = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- return buffer ptr
         _rdx = { type = int_t, value = func_this }
       else
         _rcx = { type = int_t, value = func_this }
-        _rdx = { type = int_t, value = dumSpace + VariantArena.excptOffset } -- *someexcval
+        _rdx = { type = int_t, value = VariantArena.base + VariantArena.excptOffset } -- *someexcval
       end
 
       _r8 =   { type = int_t, value = GDScriptInstanceAddr } -- GDScriptInstance *p_instance
-      _r9 =   { type = int_t, value = dumSpace + VariantArena.argListOffset } -- const Variant **p_args
+      _r9 =   { type = int_t, value = VariantArena.base + VariantArena.argListOffset } -- const Variant **p_args
       _st1 =  { type = int_t, value = argCount } -- int p_argcount
-      _st2 =  { type = int_t, value = dumSpace + VariantArena.callErrorOffset } -- Callable::CallError &r_err
+      _st2 =  { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset } -- Callable::CallError &r_err
       _st3 =  { type = int_t, value = 0x0 } -- CallState *p_state
-      _rax =  { type = int_t, value = dumSpace } -- lastArgument
+      _rax =  { type = int_t, value = VariantArena.base } -- lastArgument
 
       local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
 
       if GDDEFS.VM_CALL_HEAVY then
-        return dumSpace + VariantArena.returnBufOffset, true
+        return VariantArena.base + VariantArena.returnBufOffset, true
       end
 
       -- needs testing
@@ -9585,31 +9616,96 @@
         [rsp+20] int32_t p_argcount
         [rsp+28] Callable::CallError *r_err (on stack)
         [rsp+30] CallState *p_state (on stack, usually nullptr)
-
-        [ENABLE]
-        alloc(dummySpace,$1000,$process)
-        registersymbol(dummySpace)
-        [DISABLE]
-        dealloc(*)
-        unregistersymbol(*)
         ]]
     end
 
     function setupCallArgs(arena, handler, args)
-      arena:init()
+      arena:init() -- should be calloced already
       arena:reset()
 
       local argPtrs = {}
 
-      for i, arg in ipairs(args) do
-        if arg.type == "INT" then
-          argPtrs[i] = handler.INT(arena, arg.value)
+      for i, arg in ipairs(args) do -- TODO: make a cleaner version with table retrieval
+        -- unreffed primitived
+        if arg.type == "BOOL" then
+          argPtrs[i] = handler.BOOL(arena, arg.value, arg.copy)
+        elseif arg.type == "INT" then
+          argPtrs[i] = handler.INT(arena, arg.value, arg.copy)
         elseif arg.type == "FLOAT" then
-          argPtrs[i] = handler.FLOAT(arena, arg.value)
-        elseif arg.type == "BOOL" then
-          argPtrs[i] = handler.BOOL(arena, arg.value)
+          argPtrs[i] = handler.FLOAT(arena, arg.value, arg.copy)
+        elseif arg.type == "VECTOR2" then
+          argPtrs[i] = handler.VECTOR2(arena, arg.value, arg.copy)
+        elseif arg.type == "VECTOR2I" then
+          argPtrs[i] = handler.VECTOR2I(arena, arg.value, arg.copy)
+        elseif arg.type == "RECT2" then
+          argPtrs[i] = handler.RECT2(arena, arg.value, arg.copy)
+        elseif arg.type == "RECT2I" then
+          argPtrs[i] = handler.RECT2I(arena, arg.value, arg.copy)
+        elseif arg.type == "VECTOR3" then
+          argPtrs[i] = handler.VECTOR3(arena, arg.value, arg.copy)
+        elseif arg.type == "VECTOR3I" then
+          argPtrs[i] = handler.VECTOR3I(arena, arg.value, arg.copy)
+        elseif arg.type == "VECTOR4" then
+          argPtrs[i] = handler.VECTOR4(arena, arg.value, arg.copy)
+        elseif arg.type == "VECTOR4I" then
+          argPtrs[i] = handler.VECTOR4I(arena, arg.value, arg.copy)
+        elseif arg.type == "PLANE" then
+          argPtrs[i] = handler.PLANE(arena, arg.value, arg.copy)
+        elseif arg.type == "QUATERNION" then
+          argPtrs[i] = handler.QUATERNION(arena, arg.value, arg.copy)
+        elseif arg.type == "COLOR" then
+          argPtrs[i] = handler.COLOR(arena, arg.value, arg.copy)
+        elseif arg.type == "RID" then
+          argPtrs[i] = handler.RID(arena, arg.value, arg.copy)
+
         elseif arg.type == "OBJECT" then
-          argPtrs[i] = handler.OBJECT(arena, arg.value)
+          argPtrs[i] = handler.OBJECT(arena, arg.value, arg.copy)
+
+        -- internally-coupled management
+        elseif arg.type == "STRING" then
+          argPtrs[i] = handler.STRING(arena, arg.value, arg.copy)
+        elseif arg.type == "STRING_NAME" then
+          argPtrs[i] = handler.STRING_NAME(arena, arg.value, arg.copy)
+        elseif arg.type == "NODE_PATH" then
+          argPtrs[i] = handler.NODE_PATH(arena, arg.value, arg.copy)
+        elseif arg.type == "CALLABLE" then
+          argPtrs[i] = handler.CALLABLE(arena, arg.value, arg.copy)
+        elseif arg.type == "SIGNAL" then
+          argPtrs[i] = handler.SIGNAL(arena, arg.value, arg.copy)
+        elseif arg.type == "DICTIONARY" then
+          argPtrs[i] = handler.DICTIONARY(arena, arg.value, arg.copy)
+        elseif arg.type == "ARRAY" then
+          argPtrs[i] = handler.ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_BYTE_ARRAY" then
+          argPtrs[i] = handler.PACKED_BYTE_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_INT32_ARRAY" then
+          argPtrs[i] = handler.PACKED_INT32_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_INT64_ARRAY" then
+          argPtrs[i] = handler.PACKED_INT64_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_FLOAT32_ARRAY" then
+          argPtrs[i] = handler.PACKED_FLOAT32_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_FLOAT64_ARRAY" then
+          argPtrs[i] = handler.PACKED_FLOAT64_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_STRING_ARRAY" then
+          argPtrs[i] = handler.PACKED_STRING_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_VECTOR2_ARRAY" then
+          argPtrs[i] = handler.PACKED_VECTOR2_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_VECTOR3_ARRAY" then
+          argPtrs[i] = handler.PACKED_VECTOR3_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_COLOR_ARRAY" then
+          argPtrs[i] = handler.PACKED_COLOR_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "PACKED_VECTOR4_ARRAY" then
+          argPtrs[i] = handler.PACKED_VECTOR4_ARRAY(arena, arg.value, arg.copy)
+        elseif arg.type == "TRANSFORM2D" then
+          argPtrs[i] = handler.TRANSFORM2D(arena, arg.value, arg.copy)
+        elseif arg.type == "AABB" then
+          argPtrs[i] = handler.AABB(arena, arg.value, arg.copy)
+        elseif arg.type == "BASIS" then
+          argPtrs[i] = handler.BASIS(arena, arg.value, arg.copy)
+        elseif arg.type == "TRANSFORM3D" then
+          argPtrs[i] = handler.TRANSFORM3D(arena, arg.value, arg.copy)
+        elseif arg.type == "PROJECTION" then
+          argPtrs[i] = handler.PROJECTION(arena, arg.value, arg.copy)
         else
           error("unsupported custom Variant arg type: " .. tostring(arg.type))
         end
@@ -10259,14 +10355,14 @@
     end
 
     VariantArena =
-      {
-        base = nil, -- dummySpace
-        size = 0x1000, -- allocated space
+      { -- TODO: optimize space
+        base = nil, -- alloc ptr
+        size = 0x2000, -- allocated space
         cursor = 0, -- current offset
         variantSize = 0x40, -- for enough padding
         argListOffset = 0x100, -- where const Variant **p_args
-        scratchStart = 0x200, -- space before is reserved
-        scratchEnd = 0xF00, -- should suffice
+        scratchStart = 0x500, -- space before is reserved
+        scratchEnd = 0x1F00, -- should suffice
 
         excptOffset = 0x48,
         returnBufOffset = 0x0,
@@ -10276,11 +10372,12 @@
 
       function VariantArena:init()
         if not self.inited then
-          self.base = getAddress("dummySpace")
+          self.base = allocateMemory(self.size)
           self.inited = true
         end
-        if isNullOrNil(self.base) then error("dummySpace isn't alloced") end
+        if isNullOrNil(self.base) then error("alloc failed") end
         self.cursor = self.scratchStart
+        return true
       end
 
       function VariantArena:reset()
@@ -10317,127 +10414,303 @@
 
         return ptr
       end
-    
-    GDXIVariantArena =
-      {
-        base = nil, -- alloc ptr
-        size = 0x2000, -- allocated space
-        cursor = 0, -- current offset
-        variantSize = 0x40, -- for enough padding
-        argListOffset = 0x100, -- where const Variant **p_args
-        scratchStart = 0x500, -- space before is reserved
-        scratchEnd = 0x1F00, -- should suffice
-
-        excptOffset = 0x48,
-        returnBufOffset = 0x0,
-        callErrorOffset = 0x1B0,
-        inited = false,
-      }
-
-      function GDXIVariantArena:init()
-        if not self.inited then
-          self.base = allocateMemory(self.size)
-          self.inited = true
-        end
-        if isNullOrNil(self.base) then error("alloc failed") end
-        self.cursor = self.scratchStart
-      end
-
-      function GDXIVariantArena:close()
-        if self.inited then
-          deAlloc(self.base)
-          self.inited = false
-        end
-      end
-
-      function GDXIVariantArena:reset()
-        self.cursor = self.scratchStart
-      end
-
-      function GDXIVariantArena:align(alignment)
-        local remaining = self.cursor % alignment -- get remaining bytes for alignment
-        if remaining ~= 0 then self.cursor = self.cursor + (alignment - remaining) end
-      end
-
-      function GDXIVariantArena:alloc(bytes, align)
-        self:align(align or 8)
-
-        -- just in case overflow happens
-        if self.cursor + bytes > self.scratchEnd then
-          error( ("GDXIVariantArena overflow: need 0x%X bytes, cursor=0x%X"):format(bytes, self.cursor) )
-        end
-
-        -- borrow space w/ ptr
-        local ptr = self.base + self.cursor
-        -- adjust the position
-        self.cursor = self.cursor + bytes
-        return ptr
-      end
-
-      function GDXIVariantArena:allocVariant()
-        local ptr = self:alloc(self.variantSize, GDDEFS.PTRSIZE)
-
-        -- clear the slot so stale data from previous calls cannot leak into a new Variant
-        for off = 0, self.variantSize - 1, 8 do
-          writeQword(ptr + off, 0)
-        end
-
-        return ptr
-      end
 
     GDVariant = {}
 
-      function GDVariant.BOOL(arena, value)
+      -- non-managed
+      function GDVariant.BOOL(arena, value, copy)
+        if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('BOOL') )
         writeByte(v + 0x8, value and 1 or 0)
         return v
       end
 
-      function GDVariant.INT(arena, value)
+      function GDVariant.INT(arena, value, copy)
+        if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('INT') )
         writeQword(v + 0x8, value) -- int64_t
         return v
       end
 
-      function GDVariant.FLOAT(arena, value)
+      function GDVariant.FLOAT(arena, value, copy)
+        if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('FLOAT') )
         writeDouble(v + 0x8, value)
         return v
       end
 
-      function GDVariant.OBJECT(arena, object_id, objectPtr)
-        local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
-        writeQword(v + 0x8, object_id)
-        writeQword(v + 0x10, objectPtr)
-        return v
-      end
-
-      function GDVariant.STRING(arena, str)
-        error("not implemented yet")
-        local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('STRING') )
-        return v
-      end
-
-      function GDVariant.VECTOR2(arena, str)
-        error("not implemented yet")
+      function GDVariant.VECTOR2(arena, value, copy)
+        if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR2') )
+        writeFloat(v + 0x8, value.x)
+        writeFloat(v + 0xC, value.y)
         return v
       end
 
-      function GDVariant.VECTOR2I(arena, str)
-        error("not implemented yet")
+      function GDVariant.VECTOR2I(arena, value, copy)
+        if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR2I') )
+        writeInteger(v + 0x8, value.x)
+        writeInteger(v + 0xC, value.y)
         return v
       end
 
-    GDXIVariant = {}
+      function GDVariant.RECT2(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('RECT2') )
+        writeFloat(v + 0x8, value.x)
+        writeFloat(v + 0xC, value.y)
+        writeFloat(v + 0x10, value.w)
+        writeFloat(v + 0x14, value.h)
+        return v
+      end
+
+      function GDVariant.RECT2I(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('RECT2I') )
+        writeInteger(v + 0x8, value.x)
+        writeInteger(v + 0xC, value.y)
+        writeInteger(v + 0x10, value.w)
+        writeInteger(v + 0x14, value.h)
+        return v
+      end
+
+      function GDVariant.VECTOR3(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR3') )
+        writeFloat(v + 0x8, value.x)
+        writeFloat(v + 0xC, value.y)
+        writeFloat(v + 0x10, value.z)
+        return v
+      end
+
+      function GDVariant.VECTOR3I(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR3I') )
+        writeInteger(v + 0x8, value.x)
+        writeInteger(v + 0xC, value.y)
+        writeInteger(v + 0x10, value.z)
+        return v
+      end
+
+      function GDVariant.VECTOR4(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR4') )
+        writeFloat(v + 0x8, value.x)
+        writeFloat(v + 0xC, value.y)
+        writeFloat(v + 0x10, value.z)
+        writeFloat(v + 0x14, value.w)
+        return v
+      end
+
+      function GDVariant.VECTOR4I(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR4I') )
+        writeInteger(v + 0x8, value.x)
+        writeInteger(v + 0xC, value.y)
+        writeInteger(v + 0x10, value.z)
+        writeInteger(v + 0x14, value.w)
+        return v
+      end
+
+      function GDVariant.PLANE(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('PLANE') )
+        return v
+      end
+
+      function GDVariant.QUATERNION(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('QUATERNION') )
+        return v
+      end
+
+      function GDVariant.COLOR(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('COLOR') )
+        writeFloat(v + 0x8, value.r)
+        writeFloat(v + 0xC, value.g)
+        writeFloat(v + 0x10, value.b)
+        writeFloat(v + 0x14, value.a)
+        return v
+      end
+
+      function GDVariant.RID(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('RID') )
+        return v
+      end
+
+      -- managed
+      function GDVariant.OBJECT(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        if isNotNullOrNil(value) then error("object value invalid") end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
+        writeQword(v + 0x8, value.id)
+        writeQword(v + 0x10, value.obj)
+        return v
+      end
+
+      function GDVariant.STRING(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        -- value is a lua string, the ctor checks it, it will copy the string
+        error('not implemented yet')
+        local stringPtr = GDXI.string_new_with_latin1_chars(value)
+        local varCtorPtr = GDXI.get_variant_from_type_constructor('STRING')
+        local mallocPtr = GDAPI.getGDExtensionFunc('mem_alloc')
+        if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+        if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
+      
+        local stdcall = 0
+        local timeout = nil
+        local variantSpaceAlloc = 0x40 -- uninit dest store
+        -- malloc
+        local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- ctor should place the ptr
+        if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+        -- constructing variant string name
+        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, stringPtr)
+        return objAlloc
+      end
+
+      function GDVariant.STRING_NAME(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error('not implemented yet')
+        local stringPtr = GDXI.string_name_new_with_latin1_chars(value)
+        local varCtorPtr = GDXI.get_variant_from_type_constructor('STRING_NAME')
+        local mallocPtr = GDAPI.getGDExtensionFunc('mem_alloc')
+        if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+        if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
+      
+        local stdcall = 0
+        local timeout = nil
+        local variantSpaceAlloc = 0x40 -- uninit dest store
+        -- malloc
+        local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- ctor should place the ptr
+        if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+        -- constructing variant string name
+        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, stringPtr)
+        return objAlloc
+      end
+
+      function GDVariant.NODE_PATH(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error('not implemented yet')
+        return 
+      end
+
+      function GDVariant.CALLABLE(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error('not implemented yet')
+      end
+
+      function GDVariant.SIGNAL(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error('not implemented yet')
+      end
+
+      function GDVariant.DICTIONARY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error('not implemented yet')
+      end
+
+      function GDVariant.ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error('not implemented yet')
+      end
+
+      function GDVariant.PACKED_BYTE_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_INT32_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_INT64_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_FLOAT32_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_FLOAT64_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_STRING_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_VECTOR2_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_VECTOR3_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_COLOR_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PACKED_VECTOR4_ARRAY(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.TRANSFORM2D(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.AABB(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.BASIS(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.TRANSFORM3D(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
+
+      function GDVariant.PROJECTION(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        error("not implemented yet")
+      end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// (Hash)Map
 
