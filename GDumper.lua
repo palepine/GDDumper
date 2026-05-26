@@ -9,6 +9,8 @@
   -- TODO more offsets for non-GDI objects
   -- TODO MONO implementation: .cs resource, etc
   -- TODO doxygen comments
+  -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
+  -- TODO: explore what can be extracted from GDNative script endpoints
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DECLARATIONS
   local GDAPI = {}
@@ -1430,6 +1432,7 @@
           offsets.GDScriptFunctionCodeConsts = 0x198
           offsets.GDScriptFunctionCodeGlobals = 0x1A8
           offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
+          offsets.GDScriptRealoadIndex = 46
 
           if GDDEFS.DEBUGVER then
             offsets.VPChildren = offsets.VPChildren + 0x8
@@ -1440,6 +1443,8 @@
             offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
             offsets.oVariantVector = offsets.oVariantVector + 0x28
+            -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
+
             -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
             -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
             -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
@@ -1456,6 +1461,8 @@
             offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
             offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+            -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
+
             -- offsets.oVariantVector = offsets.oVariantVector
             -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
             -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
@@ -1566,6 +1573,7 @@
         offsets.GDScriptFunctionCodeConsts = 0x1A0 -- 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
         offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xF4 argc
+        offsets.GDScriptRealoadIndex = 47
         
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
@@ -1578,6 +1586,7 @@
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x28
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 19
         end
 
         if GDDEFS.CUSTOMVER then
@@ -1589,6 +1598,7 @@
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
         end
 
         return offsets
@@ -1613,7 +1623,8 @@
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
         -- timer 3B8 time_left | 3C0 isactive | 3A8 waittime
         offsets.GDScriptFunctionCodeArg = 0xA0
-        
+        offsets.GDScriptRealoadIndex = 46
+
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
           -- Godot Engine v4.4.1.stable.official
@@ -1628,6 +1639,8 @@
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 19
+
         end
         if GDDEFS.CUSTOMVER then
           GDDEFS.STRING = 0x10
@@ -1639,6 +1652,8 @@
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
+
         end
         return offsets
 
@@ -1662,6 +1677,7 @@
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
         offsets.GDScriptFunctionCodeArg = 0xA0
+        offsets.GDScriptRealoadIndex = 44
         
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe (0x8 string, static names that are ascii)
@@ -1688,6 +1704,7 @@
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
         end
 
         return offsets
@@ -1712,6 +1729,7 @@
         offsets.GDScriptFunctionCodeGlobals = 0x1A0
         -- timer 3a8 time_left 3b8 waittime 3c0 active
         offsets.GDScriptFunctionCodeArg = 0xA0
+        -- offsets.GDScriptRealoadIndex = 
         
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
@@ -1726,6 +1744,8 @@
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+          offsets.GDScriptRealoadIndex = 61
+
         end
         if GDDEFS.CUSTOMVER then
           error("Not defined yet")
@@ -1737,6 +1757,8 @@
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+          -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
+
         end
 
         return offsets
@@ -1762,7 +1784,8 @@
         offsets.GDScriptFunctionCodeGlobals = 0xF0
         -- timer 3a8 time_left 3b8 waittime 3c0 active
         offsets.GDScriptFunctionCodeArg = 0xA0
-        
+        offsets.GDScriptRealoadIndex = 44
+
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
           --  Godot Engine v4.1.1.stable.official
@@ -1775,6 +1798,7 @@
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
+          -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
         end
         if GDDEFS.CUSTOMVER then
           -- Godot Engine v4.1.2.rc.custom_build
@@ -1787,6 +1811,7 @@
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
           offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCode + 0x58 -- 0x170
           offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeConsts + 0x10
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 2
         end
 
         return offsets
@@ -2481,7 +2506,7 @@
         GDDEFS.FUNC_MAP = offsets.GDScriptFunctionMap
         GDDEFS.CONST_MAP = offsets.GDScriptConstantMap
         GDDEFS.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
-        GDDEFS.GDSCRIPT_TOKENS = offsets.GDScriptTokens
+        GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex
         GDDEFS.VAR_VECTOR = offsets.oVariantVector
         GDDEFS.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
         GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
@@ -2492,44 +2517,35 @@
       -- AUTOMATIC END
       else
       -- MANUAL START
+        GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
+        GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
+        GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
+        GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
+        GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
+        GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
+        GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
+        GDDEFS.GDSCRIPT_RELOAD_INDX = config.GDScriptRealoadIndex
+        GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
+
         if GDDEFS.MAJOR_VER == 4 then
-          GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
-          GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-          GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-          GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-          GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
-          GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
-          GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
           GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
-          GDDEFS.GDSCRIPT_TOKENS = config.GDScriptTokens or 0x0
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
-          GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE + 0x20)
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
           -- for Object vtable 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
-            if GDDEFS.MINOR_VER <= 4 then
+            if GDDEFS.MINOR_VER <= 4 then -- if config.vtGetClassNameIndex then GDDEFS.GET_TYPE_INDX = config.vtGetClassNameIndex end
               GDDEFS.GET_TYPE_INDX = 8
             elseif GDDEFS.MINOR_VER == 5 then
               GDDEFS.GET_TYPE_INDX = 9
             elseif GDDEFS.MINOR_VER >= 6 then
               GDDEFS.GET_TYPE_INDX = 10
             end
-            -- if config.vtGetClassNameIndex then GDDEFS.GET_TYPE_INDX = config.vtGetClassNameIndex end
         elseif GDDEFS.MAJOR_VER == 3 then
           GDDEFS.MAJOR_VER = 3
-          GDDEFS.CHILDREN = config.offsetNodeChildren or 0x0
-          GDDEFS.OBJ_STRING_NAME = config.offsetNodeStringName or 0x0
-          GDDEFS.GDSCRIPTINSTANCE = config.offsetGDScriptInstance or 0x0
-          GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
-          GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
-          GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
-          GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
-          GDDEFS.GDSCRIPT_TOKENS = config.GDScriptTokens or 0x0
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
           GDDEFS.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
-          GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR - 0x10)
           -- for Object vtable 3.0-3.6 [6]
@@ -2599,8 +2615,6 @@
 
       -- GDDEFS.GDSCRIPT_INSTANTIATE_INDX = 40
       -- GDDEFS.GDSCRIPT_SETSRC_INDX = 45
-      GDDEFS.GDSCRIPT_RELOAD_INDX = 46
-
     end
 
     --- inits the GDDEFS object
@@ -4779,10 +4793,35 @@
         executeCodeEx(stdcall, timeout, funcPtr, allocPtr)
       end
 
+    local function resolveGDTokenOffset(gdscriptVtable)
+      -- by having a vtable method, we can assume the source and binary token offset
+      local setScriptMethodAddr = readPointer(gdscriptVtable + (GDDEFS.GDSCRIPT_RELOAD_INDX*GDDEFS.PTRSIZE) - GDDEFS.PTRSIZE) -- previous method
+      local instrSteps = 14 -- how many instructions we check
+      local instrPointer = setScriptMethodAddr -- initial pos
+      local sourceOffset
+
+      -- we walk instr by instr and check the first lea for the source offset
+      for i=0, instrSteps-1 do
+        local instrSize = getInstructionSize(instrPointer)
+        local extra, opcode, bytes, address = splitDisassembledString( disassemble(instrPointer) )
+
+        -- ~lea rcx,[rcx+XXX]
+        local offsetStr = opcode:match("lea r.x,%[rcx%+([%x]+)%]")
+        if isNotNullOrNil(offsetStr) then
+          sourceOffset = tonumber(offsetStr, 16)
+          GDDEFS.GDSCRIPT_SRC = sourceOffset
+          GDDEFS.GDSCRIPT_BINARYTOKENS = sourceOffset + 2*GDDEFS.PTRSIZE -- not sure about alignment on x32
+          return
+        end
+        instrPointer = instrPointer+instrSize -- next instruction
+      end
+      error('essential reload script offsets not found')
+    end
+
     function GDAPI.recompileGDScript(nodeAddr, fileName)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(type(fileName)=='string', 'Script file name has to be a string, instead got: '..type(fileName))
-      assert(isNotNullOrNil(GDDEFS.GDSCRIPT_TOKENS), 'TKN Offset has to be defined')
+      assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
       -- passing strings won't work, gotta stream the attached files
@@ -4794,28 +4833,31 @@
       local newScript = stringStream.DataString
       stringStream.destroy()
 
+      -- get gdscript and its vtable
       local gdscript = getNodeGDScript(nodeAddr) or 0
       local gdscriptVtable = readPointer(gdscript)
+
+      -- figure out the obj offsets
+      if isNullOrNil(GDDEFS.GDSCRIPT_SRC) then resolveGDTokenOffset(gdscriptVtable) end
+
+      -- get reload method
       local reloadMethodPtr = readPointer(gdscriptVtable + GDDEFS.GDSCRIPT_RELOAD_INDX*GDDEFS.PTRSIZE)
       if isNullOrNil(reloadMethodPtr) then error('method not founds') end
 
+      -- construct a managed string from the streamed script file
       local newScriptAddr = GDXI.string_new_with_latin1_chars(newScript)
-      local binaryTockensAddr = readPointer(gdscript + GDDEFS.GDSCRIPT_TOKENS)
+      local binaryTockensAddr = readPointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS)
       if isNullOrNil(binaryTockensAddr) then error('tokens invalid') end
        
       -- making it nullptr is seemingly less messier to avoid !binary_tokens.is_empty()
-      if GDDEFS._x64bit then
-        writeQword(gdscript + GDDEFS.GDSCRIPT_TOKENS, 0)
-        writeQword(gdscript + GDDEFS.GDSCRIPT_TOKENS - GDDEFS.PTRSIZE*2 , newScriptAddr ) -- TODO: its own const
-      else
-        writeDword(gdscript + GDDEFS.GDSCRIPT_TOKENS, 0)
-        writeDword(gdscript + GDDEFS.GDSCRIPT_TOKENS - GDDEFS.PTRSIZE*2 , newScriptAddr )
-      end
+      writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, 0)
+      writePointer(gdscript + GDDEFS.GDSCRIPT_SRC , newScriptAddr )
 
-      return executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
+      -- 0 OK, 22 ERR_ALREADY_IN_USE, 43 ERR_PARSE_ERROR
       -- void GDScript::set_source_code(const String &p_code)
       -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
       -- Object::set_script isn't virtual in non-debug
+      return executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Func
@@ -9756,7 +9798,7 @@
       local argArray = arena.base + arena.argListOffset
 
       for i, ptr in ipairs(argPtrs) do
-        writeQword( argArray + ((i - 1) * GDDEFS.PTRSIZE) , ptr) -- fill the array with arg ptrs
+        writePointer( argArray + ((i - 1) * GDDEFS.PTRSIZE) , ptr) -- fill the array with arg ptrs
       end
     end
 
@@ -10450,7 +10492,7 @@
 
         -- clear the slot so stale data from previous calls cannot leak into a new Variant
         for off = 0, self.variantSize - 1, 8 do
-          writeQword(ptr + off, 0)
+          writePointer(ptr + off, 0)
         end
 
         return ptr
@@ -10606,8 +10648,8 @@
         if isNotNullOrNil(value) then error("object value invalid") end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
-        writeQword(v + 0x8, value.id)
-        writeQword(v + 0x10, value.obj)
+        writeInteger(v + 0x8, value.id)
+        writePointer(v + 0x10, value.obj)
         return v
       end
 
@@ -10628,7 +10670,7 @@
         if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
         -- constructing variant string name
         local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
-        writeQword(ptrContainer, objAlloc)
+        writePointer(ptrContainer, objAlloc)
         executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
         deAlloc(ptrContainer)
         return objAlloc
@@ -10650,7 +10692,7 @@
         if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
         -- constructing variant string name
         local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
-        writeQword(ptrContainer, objAlloc)
+        writePointer(ptrContainer, objAlloc)
         executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
         deAlloc(ptrContainer)
         return objAlloc
