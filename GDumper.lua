@@ -2,12 +2,9 @@
 -- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code initially.
 -- Source code on github: https://github.com/palepine/GDDumper
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
-  -- TODO dump nodes schema with the addresslist?
   -- TODO addresslist should include node's children of children
   -- TODO tree view form with polling
-  -- TODO symbol handler with polling
   -- TODO more offsets for non-GDI objects
-  -- TODO MONO implementation: .cs resource, etc
   -- TODO doxygen comments
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
   -- TODO: explore what can be extracted from GDNative script endpoints
@@ -1461,7 +1458,7 @@
             offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
             offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-            -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
+            offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
 
             -- offsets.oVariantVector = offsets.oVariantVector
             -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
@@ -1652,7 +1649,7 @@
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
 
         end
         return offsets
@@ -1729,7 +1726,7 @@
         offsets.GDScriptFunctionCodeGlobals = 0x1A0
         -- timer 3a8 time_left 3b8 waittime 3c0 active
         offsets.GDScriptFunctionCodeArg = 0xA0
-        -- offsets.GDScriptRealoadIndex = 
+        offsets.GDScriptRealoadIndex = 44
         
         if GDDEFS.DEBUGVER then
           -- godot.windows.template_debug.x86_64.exe
@@ -1744,7 +1741,7 @@
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
-          offsets.GDScriptRealoadIndex = 61
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 17
 
         end
         if GDDEFS.CUSTOMVER then
@@ -4790,7 +4787,10 @@
         if isNullOrNil(funcPtr) then error('mem_free func ptr not found') end
         local stdcall = 0
         local timeout = nil
+        -- local allocSpace = allocateMemory(GDDEFS.PTRSIZE)
+        -- writePointer(allocSpace, allocPtr)
         executeCodeEx(stdcall, timeout, funcPtr, allocPtr)
+        -- deAlloc(allocSpace)
       end
 
     local function resolveGDTokenOffset(gdscriptVtable)
@@ -10960,303 +10960,283 @@
       return 0x8 -- the rest have this offset
     end
 
+    local function defineVariantTypeProfile()
+      if isNotNullOrNil(GDDEFS.VARIANT_TYPE_PROFILE) then
+        return GDDEFS.VARIANT_TYPE_PROFILE
+      end
+
+      local function cloneArray(tabl)
+        local result = {}
+        for i, val in ipairs(tabl) do result[i] = val end
+        return result
+      end
+
+      local function insertValueBefore(list, anchor, valueToInsert)
+        for i, val in ipairs(list) do
+          if val == anchor then
+            table.insert(list, i, valueToInsert)
+            return
+          end
+        end
+        error("insertValueBefore: anchor not found: " .. tostring(anchor))
+      end
+
+      local function insertValueAfter(list, anchor, valueToInsert)
+        for i, val in ipairs(list) do
+          if val == anchor then
+            table.insert(list, i + 1, valueToInsert)
+            return
+          end
+        end
+        error("insertValueAfter: anchor not found: " .. tostring(anchor))
+      end
+
+      local function removeValue(list, valueToRemove)
+        for i, val in ipairs(list) do
+          if val == valueToRemove then
+            table.remove(list, i)
+            return
+          end
+        end
+        error("removeValue: value not found: " .. tostring(valueToRemove))
+      end
+
+      local function applyPatchOnList(list, patch)
+        if patch.kind == "insertValueBefore" then
+          insertValueBefore(list, patch.anchor, patch.value)
+        elseif patch.kind == "insertValueAfter" then
+          insertValueAfter(list, patch.anchor, patch.value)
+        elseif patch.kind == "removeValue" then
+          removeValue(list, patch.value)
+        else
+          error("Unknown patch kind: " .. tostring(patch.kind))
+        end
+      end
+
+      local function prepareProfileSpec(version, specs, visited)
+        local spec = specs[version]
+        if not spec then
+          error("Unknown Variant type version: " .. tostring(version))
+        end
+
+        visited = visited or {}
+        if visited[version] then
+          error("Circular Variant type profile inheritance for version: " .. tostring(version))
+        end
+        visited[version] = true
+
+        local resolved = { version = version, orderedTypes = nil }
+
+        if spec.base then
+          local parent = prepareProfileSpec(spec.base, specs, visited)
+          resolved.orderedTypes = cloneArray(parent.orderedTypes)
+
+          if spec.patches then
+            for _, patch in ipairs(spec.patches) do
+              applyPatchOnList(resolved.orderedTypes, patch)
+            end
+          end
+        else
+          resolved.orderedTypes = cloneArray(spec.orderedTypes or {})
+        end
+
+        return resolved
+      end
+
+      local ceTypeByName =
+        {
+          NIL = vtPointer,
+          BOOL = vtByte,
+          INT = vtDword,
+          FLOAT = vtDouble,
+          STRING = vtString,
+
+          VECTOR2 = vtSingle,
+          VECTOR2I = vtSingle,
+          RECT2 = vtSingle,
+          RECT2I = vtSingle,
+          VECTOR3 = vtSingle,
+          VECTOR3I = vtSingle,
+          TRANSFORM2D = vtSingle,
+          VECTOR4 = vtSingle,
+          VECTOR4I = vtSingle,
+          COLOR = vtSingle,
+
+          PLANE = vtPointer,
+          QUATERNION = vtPointer,
+          AABB = vtPointer,
+          BASIS = vtPointer,
+          TRANSFORM3D = vtPointer,
+          PROJECTION = vtPointer,
+          STRING_NAME = vtPointer,
+          NODE_PATH = vtPointer,
+          RID = vtPointer,
+          OBJECT = vtPointer,
+          CALLABLE = vtPointer,
+          SIGNAL = vtPointer,
+          DICTIONARY = vtPointer,
+          ARRAY = vtPointer,
+          PACKED_BYTE_ARRAY = vtPointer,
+          PACKED_INT32_ARRAY = vtPointer,
+          PACKED_INT64_ARRAY = vtPointer,
+          PACKED_FLOAT32_ARRAY = vtPointer,
+          PACKED_FLOAT64_ARRAY = vtPointer,
+          PACKED_STRING_ARRAY = vtPointer,
+          PACKED_VECTOR2_ARRAY = vtPointer,
+          PACKED_VECTOR3_ARRAY = vtPointer,
+          PACKED_COLOR_ARRAY = vtPointer,
+          PACKED_VECTOR4_ARRAY = vtPointer,
+          VARIANT_MAX = vtPointer
+        }
+
+      local specs =
+        {
+          -- no changes on major-minor
+          ["3.0"] =
+            {
+              orderedTypes =
+              {
+                "NIL",
+                "BOOL",
+                "INT",
+                "FLOAT", -- REAL
+                "STRING",
+                "VECTOR2",
+                "RECT2",
+                "VECTOR3",
+                "TRANSFORM2D",
+                "PLANE",
+                "QUATERNION", -- QUAT
+                "AABB",
+                "BASIS",
+                "TRANSFORM3D",
+                "COLOR",
+                "NODE_PATH",
+                "RID", -- _RID
+                "OBJECT",
+                "DICTIONARY",
+                "ARRAY",
+                "PACKED_BYTE_ARRAY",
+                "PACKED_INT64_ARRAY",
+                "PACKED_FLOAT32_ARRAY", -- REAL
+                "PACKED_STRING_ARRAY",
+                "PACKED_VECTOR2_ARRAY",
+                "PACKED_VECTOR3_ARRAY",
+                "PACKED_COLOR_ARRAY",
+                "VARIANT_MAX"
+              }
+            },
+          ["3.1"] = { base = "3.0", patches = {} },
+          ["3.2"] = { base = "3.1", patches = {} },
+          ["3.3"] = { base = "3.2", patches = {} },
+          ["3.4"] = { base = "3.3", patches = {} },
+          ["3.5"] = { base = "3.4", patches = {} },
+          ["3.6"] = { base = "3.5", patches = {} },
+
+          ["4.0"] =
+            {
+              orderedTypes =
+              {
+                "NIL",
+                "BOOL",
+                "INT",
+                "FLOAT",
+                "STRING",
+                "VECTOR2",
+                "VECTOR2I",
+                "RECT2",
+                "RECT2I",
+                "VECTOR3",
+                "VECTOR3I",
+                "TRANSFORM2D",
+                "VECTOR4",
+                "VECTOR4I",
+                "PLANE",
+                "QUATERNION",
+                "AABB",
+                "BASIS",
+                "TRANSFORM3D",
+                "PROJECTION",
+                "COLOR",
+                "STRING_NAME",
+                "NODE_PATH",
+                "RID",
+                "OBJECT",
+                "CALLABLE",
+                "SIGNAL",
+                "DICTIONARY",
+                "ARRAY",
+                "PACKED_BYTE_ARRAY",
+                "PACKED_INT32_ARRAY",
+                "PACKED_INT64_ARRAY",
+                "PACKED_FLOAT32_ARRAY",
+                "PACKED_FLOAT64_ARRAY",
+                "PACKED_STRING_ARRAY",
+                "PACKED_VECTOR2_ARRAY",
+                "PACKED_VECTOR3_ARRAY",
+                "PACKED_COLOR_ARRAY",
+                "VARIANT_MAX"
+              }
+            },
+
+          ["4.1"] = { base = "4.0", patches = {} },
+          ["4.2"] = { base = "4.1", patches = {} },
+          ["4.3"] = { base = "4.2", patches = {} },
+          ["4.4"] = { base = "4.3", patches = { kind = "insertValueAfter", anchor = "PACKED_COLOR_ARRAY", value = "PACKED_VECTOR4_ARRAY" } },
+          ["4.5"] = { base = "4.4", patches = {} },
+          ["4.6"] = { base = "4.5", patches = {} },
+          ["4.7"] = { base = "4.6", patches = {} },
+          ["4.8"] = { base = "4.7", patches = {} },
+        }
+
+      local version = GDDEFS.VERSION_STRING
+      local resolved = prepareProfileSpec(version, specs)
+
+      local profile =
+        {
+          version = version,
+          names = {},
+          enums = {},
+          ceTypes = {},
+          maxType = #resolved.orderedTypes - 1
+        }
+
+      for i, typeName in ipairs(resolved.orderedTypes) do
+        local enum = i - 1
+        profile.names[enum] = typeName
+        profile.enums[typeName] = enum
+        profile.ceTypes[enum] = ceTypeByName[typeName] or vtPointer
+      end
+
+      GDDEFS.VARIANT_TYPE_PROFILE = profile
+      GDDEFS.VARIANT_TYPE_NAMES = profile.names
+      GDDEFS.VARIANT_TYPE_ENUMS = profile.enums
+      GDDEFS.VARIANT_TYPES = profile.ceTypes
+      GDDEFS.MAXTYPE = profile.maxType
+
+      return profile
+    end
+
     --- takes a godot type. Returns CEType
     ---@param gdType number
     function getCETypeFromGD(gdType)
-      assert(type(gdType) == "number", 'getCETypeFromGD Type from enum should be a number, instead got: ' .. type(gdType))
-
-      if isNullOrNil(GDDEFS.VARIANT_TYPES) then
-        if GDDEFS.MAJOR_VER == 4 then
-          GDDEFS.VARIANT_TYPES =
-            {
-              [0] = vtPointer,
-              [1] = vtByte,
-              [2] = vtDword,
-              [3] = vtDouble,
-              [4] = vtString,
-              [5] = vtSingle,
-              [6] = vtSingle,
-              [7] = vtSingle,
-              [8] = vtSingle,
-              [9] = vtSingle,
-              [10] = vtSingle,
-              [11] = vtSingle,
-              [12] = vtPointer,
-              [13] = vtPointer,
-              [14] = vtPointer,
-              [15] = vtPointer,
-              [16] = vtPointer,
-              [17] = vtPointer,
-              [18] = vtPointer,
-              [19] = vtPointer,
-              [20] = vtPointer,
-              [21] = vtPointer,
-              [22] = vtPointer,
-              [23] = vtPointer,
-              [24] = vtPointer, -- object
-              [25] = vtPointer,
-              [26] = vtPointer,
-              [27] = vtPointer,
-              [28] = vtPointer,
-              [29] = vtPointer,
-              [30] = vtPointer,
-              [31] = vtPointer,
-              [32] = vtPointer,
-              [33] = vtPointer,
-              [34] = vtPointer,
-              [35] = vtPointer,
-              [36] = vtPointer,
-              [37] = vtPointer,
-              [38] = vtPointer,
-              [39] = vtPointer
-            }
-        elseif GDDEFS.MAJOR_VER == 3 then
-          GDDEFS.VARIANT_TYPES =
-            {
-              [0] = vtPointer,
-              [1] = vtByte,
-              [2] = vtDword,
-              [3] = vtDouble,
-              [4] = vtString,
-              [5] = vtSingle,
-              [6] = vtSingle,
-              [7] = vtSingle,
-              [8] = vtSingle,
-              [9] = vtPointer,
-              [10] = vtPointer,
-              [11] = vtPointer,
-              [12] = vtPointer,
-              [13] = vtPointer,
-              [14] = vtDword,
-              [15] = vtPointer,
-              [16] = vtPointer,
-              [17] = vtPointer, -- object
-              [18] = vtPointer,
-              [19] = vtPointer,
-              [20] = vtPointer,
-              [21] = vtPointer,
-              [22] = vtPointer,
-              [23] = vtPointer,
-              [24] = vtPointer,
-              [25] = vtPointer,
-              [26] = vtPointer,
-              [27] = vtPointer
-            }
-
-          else
-            error("unexpected version")
-            --[[
-                vtByte=0
-                vtWord=1
-                vtDword=2
-                vtQword=3
-                vtSingle=4
-                vtDouble=5
-                vtString=6
-                vtUnicodeString=7 --Only used by autoguess
-                vtByteArray=8
-                vtBinary=9
-                vtAutoAssembler=11
-                vtPointer=12 --Only used by autoguess and structures
-                vtCustom=13
-                vtGrouped=14
-              ]]
-
-          end
-      end
-
-      if GDDEFS.MAXTYPE >= gdType then
-        return GDDEFS.VARIANT_TYPES[gdType]
-      else
-        return vtPointer -- whatever
-      end
+      if type(gdType) ~= "number" then return vtPointer end
+      return GDDEFS.VARIANT_TYPE_PROFILE.ceTypes[gdType] or vtPointer
     end
 
     --- takes in a godot type, returns a godot type name
     ---@param typeInt number
     function getGDTypeName(typeInt)
-      if type(typeInt) ~= "number" then --[[sendDebugMessage("getGDTypeName: input not a number, instead: "..tostring(typeInt))]] return false; end
-
-      if isNullOrNil(GDDEFS.VARIANT_TYPE_NAMES) then
-        if GDDEFS.MAJOR_VER == 4 then
-          GDDEFS.VARIANT_TYPE_NAMES =
-            { -- TODO: patches
-              [0] = "NIL",
-              [1] = "BOOL",
-              [2] = "INT",
-              [3] = "FLOAT",
-              [4] = "STRING",
-              [5] = "VECTOR2",
-              [6] = "VECTOR2I",  -- (x,y): int
-              [7] = "RECT2", -- (vector2,vector2)
-              [8] = "RECT2I", -- (vector2i,vector2i)
-              [9] = "VECTOR3", -- (x,y,z)
-              [10] = "VECTOR3I", -- (x,y,z): int
-              [11] = "TRANSFORM2D", 
-              [12] = "VECTOR4",  -- (x,y,z,w)
-              [13] = "VECTOR4I", -- (x,y,z,w): int
-              [14] = "PLANE",
-              [15] = "QUATERNION",
-              [16] = "AABB",
-              [17] = "BASIS",
-              [18] = "TRANSFORM3D", -- basis: 3x3 matix, origin: vector3
-              [19] = "PROJECTION",
-              [20] = "COLOR",  -- color is 4 floats (r,g,b,a)
-              [21] = "STRING_NAME",
-              [22] = "NODE_PATH",
-              [23] = "RID",
-              [24] = "OBJECT",
-              [25] = "CALLABLE",
-              [26] = "SIGNAL",
-              [27] = "DICTIONARY",
-              [28] = "ARRAY",
-              [29] = "PACKED_BYTE_ARRAY",
-              [30] = "PACKED_INT32_ARRAY",
-              [31] = "PACKED_INT64_ARRAY",
-              [32] = "PACKED_FLOAT32_ARRAY",
-              [33] = "PACKED_FLOAT64_ARRAY",
-              [34] = "PACKED_STRING_ARRAY",
-              [35] = "PACKED_VECTOR2_ARRAY",
-              [36] = "PACKED_VECTOR3_ARRAY",
-              [37] = "PACKED_COLOR_ARRAY",
-              [38] = "PACKED_VECTOR4_ARRAY",
-              [39] = "VARIANT_MAX"
-            }
-        elseif GDDEFS.MAJOR_VER == 3 then
-          GDDEFS.VARIANT_TYPE_NAMES =
-            {
-              [0] = "NIL",
-              [1] = "BOOL",
-              [2] = "INT",
-              [3] = "FLOAT",
-              [4] = "STRING",
-              [5] = "VECTOR2",
-              [6] = "RECT2",
-              [7] = "VECTOR3",
-              [8] = "TRANSFORM2D",
-              [9] = "PLANE",
-              [10] = "QUATERNION",
-              [11] = "AABB", 
-              [12] = "BASIS",
-              [13] = "TRANSFORM3D",
-              [14] = "COLOR",
-              [15] = "NODE_PATH",
-              [16] = "RID",
-              [17] = "OBJECT",
-              [18] = "DICTIONARY",
-              [19] = "ARRAY",
-              [20] = "PACKED_BYTE_ARRAY",
-              [21] = "PACKED_INT64_ARRAY",
-              [22] = "PACKED_FLOAT32_ARRAY",
-              [23] = "PACKED_STRING_ARRAY",
-              [24] = "PACKED_VECTOR2_ARRAY",
-              [25] = "PACKED_VECTOR3_ARRAY",
-              [26] = "PACKED_COLOR_ARRAY",
-              [27] = "VARIANT_MAX",
-            }
-
-          else
-            error("unexpected version")
-          end
-      end
-
-      if GDDEFS.MAXTYPE >= typeInt then
-        return GDDEFS.VARIANT_TYPE_NAMES[typeInt]
-      else
-        return "BEYOND_VARIANT_MAX" -- whatever
-      end
+      if type(typeInt) ~= "number" then return false; end
+      return GDDEFS.VARIANT_TYPE_PROFILE.names[typeInt] or "BEYOND_VARIANT_MAX"
     end
 
     --- takes in a godot type, returns a godot type name
     ---@param typeInt number
     function getGDTypeEnumFromName(typeName)
       if type(typeName) ~= "string" then error("invalid typename") end
-
-      if isNullOrNil(GDDEFS.VARIANT_TYPE_ENUMS) then
-        if GDDEFS.MAJOR_VER == 4 then
-          GDDEFS.VARIANT_TYPE_ENUMS =
-            { -- TODO: patches
-              ["NIL"] = 0,
-              ["BOOL"] = 1,
-              ["INT"] = 2,
-              ["FLOAT"] = 3,
-              ["STRING"] = 4,
-              ["VECTOR2"] = 5,
-              ["VECTOR2I"] = 6,
-              ["RECT2"] = 7,
-              ["RECT2I"] = 8,
-              ["VECTOR3"] = 9,
-              ["VECTOR3I"] = 10,
-              ["TRANSFORM2D"] = 11,
-              ["VECTOR4"] = 12,
-              ["VECTOR4I"] = 13,
-              ["PLANE"] = 14,
-              ["QUATERNION"] = 15,
-              ["AABB"] = 16,
-              ["BASIS"] = 17,
-              ["TRANSFORM3D"] = 18,
-              ["PROJECTION"] = 19,
-              ["COLOR"] = 20,
-              ["STRING_NAME"] = 21,
-              ["NODE_PATH"] = 22,
-              ["RID"] = 23,
-              ["OBJECT"] = 24,
-              ["CALLABLE"] = 25,
-              ["SIGNAL"] = 26,
-              ["DICTIONARY"] = 27,
-              ["ARRAY"] = 28,
-              ["PACKED_BYTE_ARRAY"] = 29,
-              ["PACKED_INT32_ARRAY"] = 30,
-              ["PACKED_INT64_ARRAY"] = 31,
-              ["PACKED_FLOAT32_ARRAY"] = 32,
-              ["PACKED_FLOAT64_ARRAY"] = 33,
-              ["PACKED_STRING_ARRAY"] = 34,
-              ["PACKED_VECTOR2_ARRAY"] = 35,
-              ["PACKED_VECTOR3_ARRAY"] = 36,
-              ["PACKED_COLOR_ARRAY"] = 37,
-              ["PACKED_VECTOR4_ARRAY"] = 38,
-              ["VARIANT_MAX"] = 39,
-            }
-        elseif GDDEFS.MAJOR_VER == 3 then
-          GDDEFS.VARIANT_TYPE_ENUMS =
-            {
-              ["NIL"] = 0,
-              ["BOOL"] = 1,
-              ["INT"] = 2,
-              ["FLOAT"] = 3,
-              ["STRING"] = 4,
-              ["VECTOR2"] = 5,
-              ["RECT2"] = 6,
-              ["VECTOR3"] = 7,
-              ["TRANSFORM2D"] = 8,
-              ["PLANE"] = 9,
-              ["QUATERNION"] = 10,
-              ["AABB"] = 11 ,
-              ["BASIS"] = 12,
-              ["TRANSFORM3D"] = 13,
-              ["COLOR"] = 14,
-              ["NODE_PATH"] = 15,
-              ["RID"] = 16,
-              ["OBJECT"] = 17,
-              ["DICTIONARY"] = 18,
-              ["ARRAY"] = 19,
-              ["PACKED_BYTE_ARRAY"] = 20,
-              ["PACKED_INT64_ARRAY"] = 21,
-              ["PACKED_FLOAT32_ARRAY"] = 22,
-              ["PACKED_STRING_ARRAY"] = 23,
-              ["PACKED_VECTOR2_ARRAY"] = 24,
-              ["PACKED_VECTOR3_ARRAY"] = 25,
-              ["PACKED_COLOR_ARRAY"] = 26,
-              ["VARIANT_MAX"] = 27,
-            }
-
-          else
-            error("unexpected version")
-          end
-      end
-
-      local enum = GDDEFS.VARIANT_TYPE_ENUMS[typeName]
-      if isNullOrNil(enum) then error("getGDTypeEnumFromName: invalid typename ".. typeName) end
+      local enum = GDDEFS.VARIANT_TYPE_PROFILE.enums[typeName]
+      if isNullOrNil(enum) then error("getGDTypeEnumFromName: invalid typename " .. typeName) end
       return enum
     end
 
@@ -11943,20 +11923,30 @@
 
     function GDAPI.initDumper(config)
       -- if not (targetIsGodot) then return; end
+      -- define version and offsets
       defineGDOffsets(config)
-
       gdOffsetsDefined = true
+
+      -- define type conversion helpers
+      defineVariantTypeProfile()
+
+      -- wait between thread runs in millis
       gd_nodeMonitorCD = 100
-      -- gd_nodeMonitorWatchDogCD = 45 * 1000
-      bDisasmFunc= true -- on by default
-      -- check if 4.x string type reged, otherwise define it
+      bDisasmFunc= true -- whether to disasm functions, on by default
+      
+      -- check if UTF32LE string type reged, otherwise define it
       checkGDStringType()
+
+      -- register symbols for pointer resolution
       registerGDSymbols()
 
-      -- build disassembler
+      -- build the correct disassembler profile
       defineGDFunctionEnums()
+
+      -- disable show on print
       fuckoffPrint()
 
+      -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
       NodeMonitorServiceThread = createThread(nodeMonitorService)
     end
     godotRegisterPreinit()
