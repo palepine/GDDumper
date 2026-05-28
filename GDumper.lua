@@ -20,55 +20,9 @@
   Var.Arr = {}
   Var.PArr = {}
 
-  local addMemRecTo
-  
-  local isValidPointer
-  local isInvalidPointer
-  local isPointerNotNull
-  local isMMVTable
-  local isInsideSectionRange
-  local isInsideRDataStatic
-
-  local fuckoffPrint
   local isNullOrNil
   local isNotNullOrNil
   
-  -- local numtohexstr
-  local getDebugPrefix
-  local sendDebugMessage
-
-  local createVPStructForm
-  local createVPStructure
-  local addStructureElem
-  local addLayoutStructElem
-  local createChildStructElem
-  local enableGDDissect
-  local disableGDDissect
-  local enableGDStructNameLookup
-  local disableGDStructNameLookup
-  local enableGDAddressLookup
-  local disableGDAddressLookup
-  local GDStructureDissect
-  local GDStructNameLookup
-  local GDAddressLookup
-
-  local GDDissectorSwitch
-  local GDStructNameLookupSwitch
-  local GDAddressLookupSwitch
-  local GDDebugSwitch
-  local GDDisasmFuncSwitch
-  local GDStoredOffsetsSwitch
-  local addGDMemrecToTable
-  local appendDumperScript
-  local appendDumperScriptAsMemrec
-  local loadDumperScript
-  local loadDumperScriptFromFile
-  local loadGDDumperForm
-
-  local getMainModuleInfo
-  local wrapBrackets
-  local readU32LE
-
   local getExportTableName
   local getIsCustomVer
   local getGodotVersionString
@@ -84,9 +38,7 @@
   local UTF8Codepoints
   local getStringNameStr
 
-  local defineGDOffsets
   local initGDDefs
-  local registerGDSymbols
 
   local tryRegSceneTree
   local setSTtoVPoffset
@@ -96,52 +48,6 @@
   local rootOffset
   local fieldOffset
   
-  local makeAddr
-  local makeSymAddr
-  
-  local emitStringNameStruct
-  local emitFunctionCodeStruct
-  local emitFunctionConstantsStruct
-  local emitFunctionGlobalsStruct
-  local emitFunctionStructEntry
-  local advanceFunctionMapElement
-  local createNextFunctionContainer
-  
-  local getNodeChildrenInfo
-  local getNextMapElement
-  local getDictElemPairNext
-  local getDictionarySizeFromVariantPtr
-  local isArrayEmptyFromVariantPtr
-  local resolveScriptVariantType
-  local getVariantNameFromMapElement
-  local prepareObjectParent
-  local getFunctionMapName
-  local findMapEntryByName
-  local getConstMapLookupResult
-  local getFunctionMapLookupResult
-  local createNextConstContainer
-  local createNextConstSymbol
-  local formatArrayEntry
-  local getArrayVectorInfo
-  local formatDictionaryEntry
-  local decodeDictionaryKeyName
-  local getDictionaryInfo
-  local createNextDictContainer
-  local createNextSymbol
-  local getPackedArrayInfo
-  local iteratePackedArrayCore
-  local getContainerFromEmitterAndContext
-  local cloneContextWithSymbol
-
-  local readNodeVariantEntry
-  local readFunctionConstantEntry
-  local readNodeConstEntry
-  local readVectorVariantEntry
-  local readArrayValueEntry
-  local readArrayContainerEntry
-  local readDictionaryContainerEntry
-  local readDictionaryValueEntry
-
   local processNodeForNodes
   local getNodeGDScript
   local checkForGDScript
@@ -211,471 +117,436 @@
   local nodeMonitorThread
   local NodeMonitorServiceSwitch
 
+-- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILITIES
+    -- ///---///--///---///--///---/// POINTER HANDLERS
 
--- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// CHEAT ENGINE UTILITIES
-  -- ///---///--///---///--///---/// POINTER HANDLERS
+      --- checks if the value is a valid pointer
+      ---@param addr number
+      ---@return boolean
+      local function isValidPointer(addr)
+        local success, result = pcall(readPointer, addr)
+        return success and result ~= nil
+      end
 
-    --- checks if the value is a valid pointer
-    ---@param addr number
-    ---@return boolean
-    function isValidPointer(addr)
-      local success, result = pcall(readPointer, addr)
-      return success and result ~= nil
-    end
+      local function isInvalidPointer(addr)
+        return isValidPointer(addr) == false
+      end
 
-    function isInvalidPointer(addr)
-      return isValidPointer(addr) == false
-    end
+      --- checks if the value is a valid pointer and not nullptr
+      ---@param addr number
+      ---@return boolean
+      local function isPointerNotNull(addr)
+        return isValidPointer(addr) and readPointer(addr) ~= 0
+      end
 
-    --- checks if the value is a valid pointer and not nullptr
-    ---@param addr number
-    ---@return boolean
-    function isPointerNotNull(addr)
-      return isValidPointer(addr) and readPointer(addr) ~= 0
-    end
+      --- gets some section info (bounds)
+      ---@param sectionName number
+      ---@return table
+      function GDAPI.getSectionBounds(sectionName)
+        local base = getAddress(process)
+        if base == 0 or base == nil then
+          base = enumModules()[1].Address
+        end -- for cases when getAddress fails
+        if not base then
+          return nil
+        end -- if it's still failing, quit
 
-    --- gets some section info (bounds)
-    ---@param sectionName number
-    ---@return table
-    function GDAPI.getSectionBounds(sectionName)
-      local base = getAddress(process)
-      if base == 0 or base == nil then
-        base = enumModules()[1].Address
-      end -- for cases when getAddress fails
-      if not base then
-        return nil
-      end -- if it's still failing, quit
+        -- DOS header -> e_lfanew
+        local peOffset = readInteger(base + 0x3C)
+        if not peOffset then
+          return nil
+        end
 
-      -- DOS header -> e_lfanew
-      local peOffset = readInteger(base + 0x3C)
-      if not peOffset then
+        local PE = base + peOffset
+
+        local signature = readInteger(PE)
+        if signature ~= 0x00004550 then
+          return nil
+        end
+
+        -- IMAGE_FILE_HEADER
+        local numberOfSections = readSmallInteger(PE + 0x6)
+        local sizeOfOptionalHdr = readSmallInteger(PE + 0x14)
+
+        if not numberOfSections or not sizeOfOptionalHdr then
+          return nil
+        end
+
+        -- Section table starts after:
+        -- 4 bytes PE signature + 20 bytes IMAGE_FILE_HEADER + optional header
+        local sectionTable = PE + 0x18 + sizeOfOptionalHdr
+
+        for i = 0, numberOfSections - 1 do
+          local sec = sectionTable + (i * 0x28) -- IMAGE_SECTION_HEADER = 40 bytes
+
+          local name = readString(sec, 8) or ""
+          name = name:gsub("%z.*", "") -- strip trailing nulls
+
+          if name == sectionName then
+            local virtualSize = readInteger(sec + 0x8)
+            local virtualAddress = readInteger(sec + 0xC)
+
+            if not virtualSize or not virtualAddress then
+              return nil
+            end
+
+            return
+            {
+              name = name,
+              base = base,
+              virtualAddress = virtualAddress, -- RVA
+              virtualSize = virtualSize,
+              startAddress = base + virtualAddress,
+              endAddress = base + virtualAddress + virtualSize - 1
+            }
+          end
+        end
+
         return nil
       end
 
-      local PE = base + peOffset
-
-      local signature = readInteger(PE)
-      if signature ~= 0x00004550 then
-        return nil
+      local function isInsideSectionRange(addr, sectionInfo)
+        if addr == nil or addr == 0 then
+          return false
+        end
+        if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
+          return true
+        end
       end
 
-      -- IMAGE_FILE_HEADER
-      local numberOfSections = readSmallInteger(PE + 0x6)
-      local sizeOfOptionalHdr = readSmallInteger(PE + 0x14)
+      -- check VTable validity for main module (MM)
+      ---@param VTAddr number
+      ---@return boolean
+      local function isMMVTable(VTAddr)
+        if VTAddr == 0 or VTAddr == nil then
+          return false
+        end
+        if isNullOrNil(GDDEFS.MAIN_MODULE_INFO) then
+          GDDEFS.MAIN_MODULE_INFO = getMainModuleInfo()
+          GDDEFS.TEXT_SECTIONINFO = getSectionBounds(".text")
+          if GDDEFS.TEXT_SECTIONINFO == nil then return false end
+        end
 
-      if not numberOfSections or not sizeOfOptionalHdr then
-        return nil
+        if GDDEFS.MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS.MAIN_MODULE_INFO.moduleEnd then
+          -- iterate a few pointers and confirm if they are executable
+          local ptrsize = targetIs64Bit() and 0x8 or 0x4
+
+          for i = 0, 5 do -- 5 pointers
+            local pmethod = readPointer(VTAddr + ptrsize * i)
+            if not isInsideSectionRange(pmethod, GDDEFS.TEXT_SECTIONINFO) then
+              return false
+            end
+          end
+        else -- outside the main module
+          return false
+        end
+
+        return true
       end
 
-      -- Section table starts after:
-      -- 4 bytes PE signature + 20 bytes IMAGE_FILE_HEADER + optional header
-      local sectionTable = PE + 0x18 + sizeOfOptionalHdr
+      local function isInsideRDataStatic(strAddr)
+        if strAddr == nil or strAddr == 0 then
+          return false
+        end
+        -- in pck range
+        local sectionInfo = getSectionBounds(".rdata")
+        if sectionInfo == nil then
+          return false
+        end
+        if isInsideSectionRange(strAddr, sectionInfo) then
+          return true
+        end
+        return false
+      end
 
-      for i = 0, numberOfSections - 1 do
-        local sec = sectionTable + (i * 0x28) -- IMAGE_SECTION_HEADER = 40 bytes
+    -- ///---///--///---///--///---/// MEMRECS
+      --- adds a memrec to parent
+      ---@param memRecName string
+      ---@param gdPtr number
+      ---@param CEType number
+      ---@param parent userdata -- to append to
+      ---@return userdata
+      local function addMemRecTo(memRecName, gdPtr, CEType, parent, contextTable)
+        local newMemRec = getAddressList().createMemoryRecord()
+        local useSymbol = bGDUseSymbols and contextTable
 
-        local name = readString(sec, 8) or ""
-        name = name:gsub("%z.*", "") -- strip trailing nulls
+        newMemRec.setType(CEType)
+        newMemRec.setDescription(memRecName)
 
-        if name == sectionName then
-          local virtualSize = readInteger(sec + 0x8)
-          local virtualAddress = readInteger(sec + 0xC)
-
-          if not virtualSize or not virtualAddress then
-            return nil
+        if CEType == vtString then
+          if GDDEFS.GD4_STRING_EXISTS then
+            newMemRec.setType(vtCustom)
+            newMemRec.CustomTypeName = "GD4 String"
+          else
+            newMemRec.String.Size = 100
+            newMemRec.String.Unicode = true
           end
 
+          if useSymbol then
+            newMemRec.setAddress(contextTable.symbol or "")
+          else
+            newMemRec.setAddress(readPointer(gdPtr))
+          end
+        else
+          if useSymbol then
+            newMemRec.setAddress(contextTable.symbol or "")
+          else
+            newMemRec.setAddress(gdPtr)
+          end
+        end
+
+        if CEType == vtQword then
+          newMemRec.ShowAsHex = true
+        end
+
+        if CEType == vtDword then
+          newMemRec.ShowAsSigned = true
+        end -- color and int
+
+        -- if bGDUseSymbols and contextTable then newMemRec.DropDownList.Text = contextTable.symbol end
+
+        -- newMemRec.DontSave = true
+        newMemRec.appendToEntry(parent)
+        return newMemRec
+      end
+
+
+
+    -- ///---///--///---///--///---/// MISC
+
+      --- turns off showOnPrint
+      local function fuckoffPrint()
+        GetLuaEngine().cbShowOnPrint.Checked = false
+      end
+
+      function isNullOrNil(toCheck)
+        return toCheck == nil or toCheck == 0
+      end
+
+      function isNotNullOrNil(toCheck)
+        return not isNullOrNil(toCheck)
+      end
+
+    -- ///---///--///---///--///---/// DEBUG
+
+      --- multiplies a string by a number for more neat debug
+      ---@param str string
+      ---@param times number
+      ---@return string
+      local function strMul(str, times)
+        return string.rep(str, times)
+      end
+
+      function numtohexstr(num)
+        return ("%X"):format(num or -1)
+      end
+
+      local function getStackDepth()
+        local level = 1
+        -- kind of expensive, but fair for debug mode
+        while debug.getinfo(level, "f") do
+          level = level + 1
+        end
+        return level - 1
+      end
+
+      local function getDebugPrefix()
+        local depth = getStackDepth()
+        return strMul('>', depth) .. ' '
+      end
+
+      local function sendDebugMessage(msg)
+        if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
+          local info = debug.getinfo(2, "nl") -- previous function, name and currentline
+          local name = info.name or " ??? "
+          local currLine = info.currentline or -1
+          print(getDebugPrefix() .. name .. ":" .. currLine .. " " .. tostring(msg))
+        end
+      end
+
+      function GDAPI.getGDSemver()
+        if GDDEFS and GDDEFS.FULL_GDVERSION_STRING then
+          print(GDDEFS.FULL_GDVERSION_STRING)
+          print(getExportTableName())
+        else
+          print((getExportTableName() or "exportnomatch") .. '\n' .. (getGodotVersionString() or "semver not hit"))
+        end
+      end
+
+      function GDAPI.printGDConfig()
+        print
+        (
+          ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
+          (GDDEFS.MAJOR_VER or 0x0),
+          (GDDEFS.MINOR_VER or 0x0),
+          (tostring(GDDEFS.CUSTOMVER)),
+          (tostring(GDDEFS.DEBUGVER)),
+          (tostring(GDDEFS.MONO)),
+          (tostring(true)),
+          (GDDEFS.CHILDREN or 0x0),
+          (GDDEFS.OBJ_STRING_NAME or 0x0),
+          (GDDEFS.GDSCRIPTINSTANCE or 0x0),
+          (GDDEFS.VAR_VECTOR or 0x0),
+          (GDDEFS.SIZE_VECTOR or 0x0),
+          (GDDEFS.GDSCRIPTNAME or 0x0),
+          (GDDEFS.FUNC_MAP or 0x0),
+          (GDDEFS.FUNC_CODE or 0x0),
+          (GDDEFS.FUNC_CONST or 0x0),
+          (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
+          (GDDEFS.CONST_MAP or 0x0),
+          (GDDEFS.VAR_NAMEINDEX_MAP or 0x0),
+          (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
+          (GDDEFS.VAR_NAMEINDEX_I or 0x0))
+          )
+      end
+
+      function GDAPI.gd_monitorProfile()
+        print( NodeMonitorServiceThread.name )
+      end
+
+    -- ///---///--///---///--///---/// STRUCTURES
+
+      --- deletes ALL structures, constructs a children structure of the viewport
+      local function createVPStructure()
+        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
+
+        -- remove all structures
+        -- structure.miClear if you want a confirmation
+        while getStructureCount() > 0 do -- getStructure(n).Name, getStructure(n).Destroy()
+          getStructure(0).Destroy()
+        end
+
+        -- Structure class related functions:
+        -- getStructureCount(): Returns the number of Global structures. (Global structures are the visible structures)
+        -- getStructure(index): Returns the Structure object at the given index
+        -- createStructure(name): Returns an empty structure object (Not yet added to the Global list. Call structure.addToGlobalStructureList manually)
+
+        local struct = createStructure('GDNODES')
+        local structElem, childElem;
+        local mainNodeTable = getMainNodeTable()
+
+        struct.beginUpdate()
+        for i = 0, #mainNodeTable - 1 do
+          structElem = struct.addElement()
+          structElem.BackgroundColor = 0x6C3157
+          structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
+          structElem.VarType = vtPointer
+          structElem.Name = getNodeName(mainNodeTable[i + 1])
+        end
+        struct.endUpdate()
+        struct.addToGlobalStructureList() -- so we can use it
+
+        return struct
+      end
+
+      --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
+      local function createVPStructForm()
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
           return
-          {
-            name = name,
-            base = base,
-            virtualAddress = virtualAddress, -- RVA
-            virtualSize = virtualSize,
-            startAddress = base + virtualAddress,
-            endAddress = base + virtualAddress + virtualSize - 1
-          }
         end
-      end
+        -- let's ensure VP is found, it will throw an error otherwise
+        getViewport()
 
-      return nil
-    end
+        local symbolToChildren = '[[ptVP]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[ptVP]+CHILDREN]'
+        local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
+        local childrenStruct = createVPStructure()
 
-    -- check VTable validity for main module (MM)
-    ---@param VTAddr number
-    ---@return boolean
-    function isMMVTable(VTAddr)
-      if VTAddr == 0 or VTAddr == nil then
-        return false
-      end
-      if isNullOrNil(GDDEFS.MAIN_MODULE_INFO) then
-        GDDEFS.MAIN_MODULE_INFO = getMainModuleInfo()
-        GDDEFS.TEXT_SECTIONINFO = getSectionBounds(".text")
-        if GDDEFS.TEXT_SECTIONINFO == nil then return false end
-      end
-
-      if GDDEFS.MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS.MAIN_MODULE_INFO.moduleEnd then
-        -- iterate a few pointers and confirm if they are executable
-        local ptrsize = targetIs64Bit() and 0x8 or 0x4
-
-        for i = 0, 5 do -- 5 pointers
-          local pmethod = readPointer(VTAddr + ptrsize * i)
-          if not isInsideSectionRange(pmethod, GDDEFS.TEXT_SECTIONINFO) then
-            return false
+        -- I couldn't find a better way to select a structure inside a StructDissect form
+        for i = 0, viewportStructForm.Structures1.Count - 1 do
+          local menuItem = viewportStructForm.Structures1.Item[i]
+          if menuItem.Caption == 'GDNODES' then
+            menuItem.doClick()
           end
         end
-      else -- outside the main module
-        return false
+
       end
 
-      return true
-    end
+      --- creates an element in a parent structure
+      local function addStructureElem(parentStructElement, elementName, offset, CEType)
+        local element = parentStructElement.ChildStruct.addElement()
+        element.Name = elementName
+        element.Offset = offset
+        element.Vartype = CEType
 
-    function isInsideSectionRange(addr, sectionInfo)
-      if addr == nil or addr == 0 then
-        return false
-      end
-      if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
-        return true
-      end
-    end
-
-    function isInsideRDataStatic(strAddr)
-      if strAddr == nil or strAddr == 0 then
-        return false
-      end
-      -- in pck range
-      local sectionInfo = getSectionBounds(".rdata")
-      if sectionInfo == nil then
-        return false
-      end
-      if isInsideSectionRange(strAddr, sectionInfo) then
-        return true
-      end
-      return false
-    end
-
-  -- ///---///--///---///--///---/// MEMRECS
-    --- adds a memrec to parent
-    ---@param memRecName string
-    ---@param gdPtr number
-    ---@param CEType number
-    ---@param parent userdata -- to append to
-    ---@return userdata
-    function addMemRecTo(memRecName, gdPtr, CEType, parent, contextTable)
-      local newMemRec = getAddressList().createMemoryRecord()
-      local useSymbol = bGDUseSymbols and contextTable
-
-      newMemRec.setType(CEType)
-      newMemRec.setDescription(memRecName)
-
-      if CEType == vtString then
-        if GDDEFS.GD4_STRING_EXISTS then
-          newMemRec.setType(vtCustom)
-          newMemRec.CustomTypeName = "GD4 String"
-        else
-          newMemRec.String.Size = 100
-          newMemRec.String.Unicode = true
+        if CEType == vtUnicodeString then
+          if GDDEFS.GD4_STRING_EXISTS then
+            element.Vartype = vtCustom;
+            element.CustomTypeName = "GD4 String"
+          else
+            element.Bytesize = 100;
+          end
+        elseif CEType == vtDword then
+          element.DisplayMethod = 'dtSignedInteger'
         end
 
-        if useSymbol then
-          newMemRec.setAddress(contextTable.symbol or "")
-        else
-          newMemRec.setAddress(readPointer(gdPtr))
+        return element
+      end
+
+      --- for node layout creation
+      local function addLayoutStructElem(parentStructElement, childName, backgroundColor, offset, CEType)
+        parentStructElement.ChildStruct = parentStructElement.ChildStruct and parentStructElement.ChildStruct or createStructure(parentStructElement.parent.Name or 'ChStructure')
+        local childStructElement = parentStructElement.ChildStruct.addElement()
+        childStructElement.Name = childName
+        if backgroundColor ~= nil then
+          childStructElement.BackgroundColor = backgroundColor
         end
-      else
-        if useSymbol then
-          newMemRec.setAddress(contextTable.symbol or "")
-        else
-          newMemRec.setAddress(gdPtr)
+        childStructElement.Offset = offset or 0x0
+        childStructElement.VarType = CEType
+        return childStructElement
+      end
+
+      local function createChildStructElem(parent, label, offset, ceType, structName)
+        local elem = addStructureElem(parent, label, offset, ceType)
+        elem.ChildStruct = createStructure(structName)
+        return elem
+      end
+
+      --- overriden structure dissector function
+      ---@param struct userdata @the newly created struct
+      ---@param baseaddr number  @the address form the parent pointer
+      function GDStructureDissect(struct, baseaddr)
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
+          return
         end
-      end
 
-      if CEType == vtQword then
-        newMemRec.ShowAsHex = true
-      end
-
-      if CEType == vtDword then
-        newMemRec.ShowAsSigned = true
-      end -- color and int
-
-      -- if bGDUseSymbols and contextTable then newMemRec.DropDownList.Text = contextTable.symbol end
-
-      -- newMemRec.DontSave = true
-      newMemRec.appendToEntry(parent)
-      return newMemRec
-    end
-
-
-
-  -- ///---///--///---///--///---/// MISC
-
-    --- turns off showOnPrint
-    function fuckoffPrint()
-      GetLuaEngine().cbShowOnPrint.Checked = false
-    end
-
-    function isNullOrNil(toCheck)
-      return toCheck == nil or toCheck == 0
-    end
-
-    function isNotNullOrNil(toCheck)
-      return not isNullOrNil(toCheck)
-    end
-
-  -- ///---///--///---///--///---/// DEBUG
-
-    --- multiplies a string by a number for more neat debug
-    ---@param str string
-    ---@param times number
-    ---@return string
-    local function strMul(str, times)
-      return string.rep(str, times)
-    end
-
-    function numtohexstr(num)
-      return ("%X"):format(num or -1)
-    end
-
-    local function getStackDepth()
-      local level = 1
-      -- kind of expensive, but fair for debug mode
-      while debug.getinfo(level, "f") do
-        level = level + 1
-      end
-      return level - 1
-    end
-
-    function getDebugPrefix()
-      local depth = getStackDepth()
-      return strMul('>', depth) .. ' '
-    end
-
-    function sendDebugMessage(msg)
-      if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
-        local info = debug.getinfo(2, "nl") -- previous function, name and currentline
-        local name = info.name or " ??? "
-        local currLine = info.currentline or -1
-        print(getDebugPrefix() .. name .. ":" .. currLine .. " " .. tostring(msg))
-      end
-    end
-
-    function GDAPI.getGDSemver()
-      if GDDEFS and GDDEFS.FULL_GDVERSION_STRING then
-        print(GDDEFS.FULL_GDVERSION_STRING)
-        print(getExportTableName())
-      else
-        print((getExportTableName() or "exportnomatch") .. '\n' .. (getGodotVersionString() or "semver not hit"))
-      end
-    end
-
-    function GDAPI.printGDConfig()
-      print
-      (
-        ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
-        (GDDEFS.MAJOR_VER or 0x0),
-        (GDDEFS.MINOR_VER or 0x0),
-        (tostring(GDDEFS.CUSTOMVER)),
-        (tostring(GDDEFS.DEBUGVER)),
-        (tostring(GDDEFS.MONO)),
-        (tostring(true)),
-        (GDDEFS.CHILDREN or 0x0),
-        (GDDEFS.OBJ_STRING_NAME or 0x0),
-        (GDDEFS.GDSCRIPTINSTANCE or 0x0),
-        (GDDEFS.VAR_VECTOR or 0x0),
-        (GDDEFS.SIZE_VECTOR or 0x0),
-        (GDDEFS.GDSCRIPTNAME or 0x0),
-        (GDDEFS.FUNC_MAP or 0x0),
-        (GDDEFS.FUNC_CODE or 0x0),
-        (GDDEFS.FUNC_CONST or 0x0),
-        (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
-        (GDDEFS.CONST_MAP or 0x0),
-        (GDDEFS.VAR_NAMEINDEX_MAP or 0x0),
-        (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
-        (GDDEFS.VAR_NAMEINDEX_I or 0x0))
-        )
-    end
-
-    function GDAPI.gd_monitorProfile()
-      print( NodeMonitorServiceThread.name )
-    end
-
-  -- ///---///--///---///--///---/// STRUCTURES
-
-    --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
-    function createVPStructForm()
-      if not (gdOffsetsDefined) then
-        print('define the offsets first, silly')
-        return
-      end
-      -- let's ensure VP is found, it will throw an error otherwise
-      getViewport()
-
-      local symbolToChildren = '[[ptVP]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[ptVP]+CHILDREN]'
-      local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
-      local childrenStruct = createVPStructure()
-
-      -- I couldn't find a better way to select a structure inside a StructDissect form
-      for i = 0, viewportStructForm.Structures1.Count - 1 do
-        local menuItem = viewportStructForm.Structures1.Item[i]
-        if menuItem.Caption == 'GDNODES' then
-          menuItem.doClick()
+        if isNullOrNil(baseaddr) then
+          return false
         end
-      end
+        struct = struct and struct or createStructure('') -- should not happen though?
+        struct.beginUpdate()
 
-    end
+        if checkForGDScript(baseaddr) and isMMVTable(readPointer(baseaddr)) then
+          dumpedDissectorNodes = {} -- redundant?
+          -- safe to assume, that's a starting point
+          local nodeName = getNodeName(baseaddr)
+          if nodeName == 'N??' then nodeName = getNodeNameFromGDScript(baseaddr) end
+          nodeName = nodeName and nodeName or 'Anon Node'
+          struct.Name = ' Node: ' .. nodeName
+          local scriptInstStructElem = struct.addElement()
+          scriptInstStructElem.Name = 'GDScriptInstance'
+          scriptInstStructElem.BackgroundColor = 0x400040
+          scriptInstStructElem.Offset = GDDEFS.GDSCRIPTINSTANCE
+          scriptInstStructElem.VarType = vtPointer
 
-    --- called by createVPStructForm, deletes ALL structures, constructs a children structure of the viewport
-    function createVPStructure()
-      -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
+          if checkIfObjectWithChildren(baseaddr) then
+            local childrenStructElem = struct.addElement()
+            childrenStructElem.Name = 'Children'
+            childrenStructElem.BackgroundColor = 0xFF0080
+            childrenStructElem.Offset = GDDEFS.CHILDREN
+            childrenStructElem.VarType = vtPointer
+            childrenStructElem.ChildStruct = createStructure('Children')
+            iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
+          end
 
-      -- remove all structures
-      -- structure.miClear if you want a confirmation
-      while getStructureCount() > 0 do -- getStructure(n).Name, getStructure(n).Destroy()
-        getStructure(0).Destroy()
-      end
+          iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-      -- Structure class related functions:
-      -- getStructureCount(): Returns the number of Global structures. (Global structures are the visible structures)
-      -- getStructure(index): Returns the Structure object at the given index
-      -- createStructure(name): Returns an empty structure object (Not yet added to the Global list. Call structure.addToGlobalStructureList manually)
+        elseif bDisasmFunc and checkIfGDFunction(baseaddr) then
+          disassembleGDFunctionCodeToStruct(baseaddr, struct)
 
-      local struct = createStructure('GDNODES')
-      local structElem, childElem;
-      local mainNodeTable = getMainNodeTable()
-
-      struct.beginUpdate()
-      for i = 0, #mainNodeTable - 1 do
-        structElem = struct.addElement()
-        structElem.BackgroundColor = 0x6C3157
-        structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
-        structElem.VarType = vtPointer
-        structElem.Name = getNodeName(mainNodeTable[i + 1])
-      end
-      struct.endUpdate()
-      struct.addToGlobalStructureList() -- so we can use it
-
-      return struct
-    end
-
-    --- creates an element in a parent structure
-    function addStructureElem(parentStructElement, elementName, offset, CEType)
-      local element = parentStructElement.ChildStruct.addElement()
-      element.Name = elementName
-      element.Offset = offset
-      element.Vartype = CEType
-
-      if CEType == vtUnicodeString then
-        if GDDEFS.GD4_STRING_EXISTS then
-          element.Vartype = vtCustom;
-          element.CustomTypeName = "GD4 String"
-        else
-          element.Bytesize = 100;
-        end
-      elseif CEType == vtDword then
-        element.DisplayMethod = 'dtSignedInteger'
-      end
-
-      return element
-    end
-
-    --- for node layout creation
-    function addLayoutStructElem(parentStructElement, childName, backgroundColor, offset, CEType)
-      parentStructElement.ChildStruct = parentStructElement.ChildStruct and parentStructElement.ChildStruct or createStructure(parentStructElement.parent.Name or 'ChStructure')
-      local childStructElement = parentStructElement.ChildStruct.addElement()
-      childStructElement.Name = childName
-      if backgroundColor ~= nil then
-        childStructElement.BackgroundColor = backgroundColor
-      end
-      childStructElement.Offset = offset or 0x0
-      childStructElement.VarType = CEType
-      return childStructElement
-    end
-
-    function createChildStructElem(parent, label, offset, ceType, structName)
-      local elem = addStructureElem(parent, label, offset, ceType)
-      elem.ChildStruct = createStructure(structName)
-      return elem
-    end
-
-    --- register our own structure dissector callback
-    function enableGDDissect()
-      -- override CE's callback
-      if GDstructDissectID ~= nil then
-        unregisterStructureDissectOverride(GDstructDissectID)
-      end
-      GDstructDissectID = registerStructureDissectOverride(GDStructureDissect)
-    end
-
-    --- unregister our structure dissector callback
-    function disableGDDissect()
-      -- restore CE's callback
-      if GDstructDissectID ~= nil then
-        unregisterStructureDissectOverride(GDstructDissectID)
-      end
-      GDstructDissectID = nil;
-    end
-
-    function enableGDStructNameLookup()
-      -- override CE's lookup
-      if GDStructNameLookupID ~= nil then
-        unregisterStructureNameLookup(GDStructNameLookupID)
-      end
-      GDStructNameLookupID = registerStructureNameLookup(GDStructNameLookup)
-    end
-
-    function disableGDStructNameLookup()
-      -- restore CE's lookup
-      if GDStructNameLookupID ~= nil then
-        unregisterStructureNameLookup(GDStructNameLookupID)
-      end
-      GDStructNameLookupID = nil;
-    end
-
-    function enableGDAddressLookup()
-      -- override CE's lookup
-      if GDAddressLookupID ~= nil then
-        unregisterAddressLookupCallback(GDAddressLookupID)
-      end
-      GDAddressLookupID = registerAddressLookupCallback(GDStructNameLookup)
-    end
-
-    function disableGDAddressLookup()
-      -- restore CE's lookup
-      if GDAddressLookupID ~= nil then
-        unregisterAddressLookupCallback(GDAddressLookupID)
-      end
-      GDAddressLookupID = nil;
-    end
-
-    --- overriden structure dissector function
-    ---@param struct userdata @the newly created struct
-    ---@param baseaddr number  @the address form the parent pointer
-    function GDStructureDissect(struct, baseaddr)
-      if not (gdOffsetsDefined) then
-        print('define the offsets first, silly')
-        return
-      end
-
-      if isNullOrNil(baseaddr) then
-        return false
-      end
-      struct = struct and struct or createStructure('') -- should not happen though?
-      struct.beginUpdate()
-
-      if checkForGDScript(baseaddr) and isMMVTable(readPointer(baseaddr)) then
-        dumpedDissectorNodes = {} -- redundant?
-        -- safe to assume, that's a starting point
-        local nodeName = getNodeName(baseaddr)
-        if nodeName == 'N??' then nodeName = getNodeNameFromGDScript(baseaddr) end
-        nodeName = nodeName and nodeName or 'Anon Node'
-        struct.Name = ' Node: ' .. nodeName
-        local scriptInstStructElem = struct.addElement()
-        scriptInstStructElem.Name = 'GDScriptInstance'
-        scriptInstStructElem.BackgroundColor = 0x400040
-        scriptInstStructElem.Offset = GDDEFS.GDSCRIPTINSTANCE
-        scriptInstStructElem.VarType = vtPointer
-
-        if checkIfObjectWithChildren(baseaddr) then
+        elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
           local childrenStructElem = struct.addElement()
           childrenStructElem.Name = 'Children'
           childrenStructElem.BackgroundColor = 0xFF0080
@@ -683,336 +554,903 @@
           childrenStructElem.VarType = vtPointer
           childrenStructElem.ChildStruct = createStructure('Children')
           iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
+        else
+          -- otherwise just let CE decide, btw the base address must be a fucking hex string?
+          struct.autoGuess(numtohexstr(baseaddr), 0x0, 0x500 ) -- 0x500 for researching
         end
 
-        iterateNodeToStruct(baseaddr, scriptInstStructElem)
-
-      elseif bDisasmFunc and checkIfGDFunction(baseaddr) then
-        disassembleGDFunctionCodeToStruct(baseaddr, struct)
-
-      elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
-        local childrenStructElem = struct.addElement()
-        childrenStructElem.Name = 'Children'
-        childrenStructElem.BackgroundColor = 0xFF0080
-        childrenStructElem.Offset = GDDEFS.CHILDREN
-        childrenStructElem.VarType = vtPointer
-        childrenStructElem.ChildStruct = createStructure('Children')
-        iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
-      else
-        -- otherwise just let CE decide, btw the base address must be a fucking hex string?
-        struct.autoGuess(numtohexstr(baseaddr), 0x0, 0x500 ) -- 0x500 for researching
+        struct.endUpdate()
+        return true
       end
 
-      struct.endUpdate()
-      return true
-    end
+      --- structname lookup that uses the virtual table to guess the type
+      ---@param addr integer @address to typeguess
+      ---@return string @name; base address isn't returned
+      local function GDStructNameLookup(addr)
+        if isInvalidPointer(addr) or not isMMVTable(readPointer(addr)) then
+          return nil
+        end
 
-    --- structname lookup that uses the virtual table to guess the type
-    ---@param addr integer @address to typeguess
-    ---@return string @name; base address isn't returned
-    function GDStructNameLookup(addr)
-      if isInvalidPointer(addr) or not isMMVTable(readPointer(addr)) then
+        local result = getGDObjectName(addr)
+        if result == nil or result == '??' then
+          return nil
+        end
+
+        return result
+      end
+
+      --- address lookup, not implemented
+      ---@param addr integer @address to typeguess
+      ---@return string @name;
+      local function GDAddressLookup(addr)
         return nil
+        -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then
+        --     return nil
+        -- end
+
+        -- local result = getGDObjectName(addr)
+        -- if result == nil or result == '??' then
+        --     return nil
+        -- end
+
+        -- return result
       end
 
-      local result = getGDObjectName(addr)
-      if result == nil or result == '??' then
-        return nil
+      function GDAPI.godotAA_GETNODESTRUCT(nodeName)
+        --[[
+          take type size into account
+          struct NODENAME
+          padding: resb 99 // decimal
+          fieldName: resb 4
+          end
+        ]]
+        -- local nodeAddr = getDumpedNode(nodeName)
+        -- local fields = godot_node_enumVariants(nodeAddr)
+        -- if fields == nil or next(fields) == nil then return nil end
+
       end
 
-      return result
-    end
+      function GDAPI.godot_node_enumVariants(nodeAddr)
+        return iterateVectorVariantsForFields(nodeAddr)
+      end
 
-    --- address lookup, not implemented
-    ---@param addr integer @address to typeguess
-    ---@return string @name;
-    function GDAddressLookup(addr)
-      return nil
-      -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then
-      --     return nil
-      -- end
 
-      -- local result = getGDObjectName(addr)
-      -- if result == nil or result == '??' then
-      --     return nil
-      -- end
-
-      -- return result
-    end
-
-    function GDAPI.godotAA_GETNODESTRUCT(nodeName)
-      --[[
-        take type size into account
-        struct NODENAME
-        padding: resb 99 // decimal
-        fieldName: resb 4
+      --- register our own structure dissector callback
+      local function enableGDDissect()
+        -- override CE's callback
+        if GDstructDissectID ~= nil then
+          unregisterStructureDissectOverride(GDstructDissectID)
         end
-      ]]
-      -- local nodeAddr = getDumpedNode(nodeName)
-      -- local fields = godot_node_enumVariants(nodeAddr)
-      -- if fields == nil or next(fields) == nil then return nil end
-
-    end
-
-    function GDAPI.godot_node_enumVariants(nodeAddr)
-      return iterateVectorVariantsForFields(nodeAddr)
-    end
-
-
-  -- ///---///--///---///--///---/// GUI
-
-    --- creates a menu button in the main menu
-    function GDAPI.buildGDGUI()
-      if GDGUIInit then
-        return
-      end
-      GDGUIInit = true
-
-      -- creates and adds button to parent with callback on click
-      local function addCustomMenuButtonTo(ownerParent, captionName, customCallback)
-        local newMenuItem = createMenuItem(ownerParent)
-        newMenuItem.Caption = captionName
-        ownerParent.add(newMenuItem)
-        newMenuItem.OnClick = customCallback
-        return newMenuItem
+        GDstructDissectID = registerStructureDissectOverride(GDStructureDissect)
       end
 
-      local menuItemCaption = 'GDDumper'
-      local mainMenu = getMainForm().Menu
-      local gdMenuItem = nil
+      --- unregister our structure dissector callback
+      local function disableGDDissect()
+        -- restore CE's callback
+        if GDstructDissectID ~= nil then
+          unregisterStructureDissectOverride(GDstructDissectID)
+        end
+        GDstructDissectID = nil;
+      end
 
-      for i = 0, mainMenu.Items.Count - 1 do
-        if mainMenu.Items.Item[i].Caption == menuItemCaption then
-          gdMenuItem = mainMenu.Items.Item[i]
-          break
+      local function enableGDStructNameLookup()
+        -- override CE's lookup
+        if GDStructNameLookupID ~= nil then
+          unregisterStructureNameLookup(GDStructNameLookupID)
+        end
+        GDStructNameLookupID = registerStructureNameLookup(GDStructNameLookup)
+      end
+
+      local function disableGDStructNameLookup()
+        -- restore CE's lookup
+        if GDStructNameLookupID ~= nil then
+          unregisterStructureNameLookup(GDStructNameLookupID)
+        end
+        GDStructNameLookupID = nil;
+      end
+
+      local function enableGDAddressLookup()
+        -- override CE's lookup
+        if GDAddressLookupID ~= nil then
+          unregisterAddressLookupCallback(GDAddressLookupID)
+        end
+        GDAddressLookupID = registerAddressLookupCallback(GDStructNameLookup)
+      end
+
+      local function disableGDAddressLookup()
+        -- restore CE's lookup
+        if GDAddressLookupID ~= nil then
+          unregisterAddressLookupCallback(GDAddressLookupID)
+        end
+        GDAddressLookupID = nil;
+      end
+
+    -- ///---///--///---///--///---/// GUI
+
+      --- toggling dissector override
+      local function GDDissectorSwitch(sender)
+        -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+        sender.Checked = not sender.Checked
+        if sender.Checked then
+          enableGDDissect()
+        else
+          disableGDDissect()
         end
       end
 
-      if not gdMenuItem then
-        gdMenuItem = createMenuItem(mainMenu)
-        gdMenuItem.Caption = menuItemCaption
-        mainMenu.Items.add(gdMenuItem)
-        addCustomMenuButtonTo(gdMenuItem, 'VP Struct', createVPStructForm)
-        addCustomMenuButtonTo(gdMenuItem, 'GD Dissector', GDDissectorSwitch)
-        addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
-        addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
-        -- addCustomMenuButtonTo(gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch)
-        addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
-        addCustomMenuButtonTo(gdMenuItem, 'GD StuctName Lookup', GDStructNameLookupSwitch)
-        -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
-        local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', appendDumperScript)
-        -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
+      local function GDStructNameLookupSwitch(sender)
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
+          return
+        end
+        sender.Checked = not sender.Checked
+        if sender.Checked then
+          enableGDStructNameLookup()
+        else
+          disableGDStructNameLookup()
+        end
+      end
+
+      local function GDAddressLookupSwitch(sender)
+        if not (gdOffsetsDefined) then
+          print('define the offsets first, silly')
+          return
+        end
+        sender.Checked = not sender.Checked
+        if sender.Checked then
+          enableGDAddressLookup()
+        else
+          disableGDAddressLookup()
+        end
+      end
+
+      local function GDDebugSwitch(sender)
+        sender.Checked = not sender.Checked
+        if sender.Checked then
+          bGDDebug = true
+        else
+          bGDDebug = false
+        end
+      end
+
+      local function GDDisasmFuncSwitch(sender)
+        sender.Checked = not sender.Checked
+        if sender.Checked then
+          bDisasmFunc = true
+        else
+          bDisasmFunc = false
+        end
+      end
+
+      local function GDStoredOffsetsSwitch(sender)
+        sender.Checked = not sender.Checked
+        if sender.Checked then
+          bHardOffsets = true
+        else
+          bHardOffsets = false
+        end
+      end
+
+      local function addGDMemrecToTable(sender)
+        local addrList = getAddressList()
+        local mainMemrec = addrList.createMemoryRecord()
+        mainMemrec.Description = "Dumper"
+        mainMemrec.Type = vtAutoAssembler
+        mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
+
+        local dumpMemrec = addrList.createMemoryRecord()
+        dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
+        dumpMemrec.Type = vtAutoAssembler
+        dumpMemrec.Async = true
+        dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+        dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
+        dumpMemrec.appendToEntry(mainMemrec)
+
+        local dumpMemrec = addrList.createMemoryRecord()
+        dumpMemrec.Description = 'Dump All Nodes (main)'
+        dumpMemrec.Type = vtAutoAssembler
+        dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
+        dumpMemrec.Async = true
+        dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpAllNodesToAddr()\n[DISABLE]'
+        dumpMemrec.appendToEntry(mainMemrec)
+
+        local supportPalique = addrList.createMemoryRecord()
+        supportPalique.Description = 'Support the development & author: ko-fi.com/vesperpallens'
+        supportPalique.Type = vtAutoAssembler
+        supportPalique.Color = 0x8F379F
+        supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
+      end
+
+      -- attaches the script to the table
+      local function appendDumperScript(sender)
+        local cedir = getCheatEngineDir()
+        local scriptPath = cedir .. [[autorun\GDumper.lua]]
+        createTableFile("GDumper", scriptPath)
+        sender.Enabled = false
+      end
+
+      -- appends the script as a memrec
+      local function appendDumperScriptAsMemrec(sender)
+        local cedir = getCheatEngineDir()
+        local scriptPath = cedir .. [[autorun\GDumper.lua]]
         
-        -- addCustomMenuButtonTo(gdMenuItem, 'Append as memrec', appendDumperScriptAsMemrec)
-        addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
-        addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
-        -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
+        sender.Enabled = false
       end
-    end
 
-    --- toggling dissector override
-    function GDDissectorSwitch(sender)
-      -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
-      sender.Checked = not sender.Checked
-      if sender.Checked then
-        enableGDDissect()
-      else
-        disableGDDissect()
-      end
-    end
-
-    function GDStructNameLookupSwitch(sender)
-      if not (gdOffsetsDefined) then
-        print('define the offsets first, silly')
-        return
-      end
-      sender.Checked = not sender.Checked
-      if sender.Checked then
-        enableGDStructNameLookup()
-      else
-        disableGDStructNameLookup()
-      end
-    end
-
-    function GDAddressLookupSwitch(sender)
-      if not (gdOffsetsDefined) then
-        print('define the offsets first, silly')
-        return
-      end
-      sender.Checked = not sender.Checked
-      if sender.Checked then
-        enableGDAddressLookup()
-      else
-        disableGDAddressLookup()
-      end
-    end
-
-    function GDDebugSwitch(sender)
-      sender.Checked = not sender.Checked
-      if sender.Checked then
-        bGDDebug = true
-      else
-        bGDDebug = false
-      end
-    end
-
-    function GDDisasmFuncSwitch(sender)
-      sender.Checked = not sender.Checked
-      if sender.Checked then
-        bDisasmFunc = true
-      else
-        bDisasmFunc = false
-      end
-    end
-
-    function GDStoredOffsetsSwitch(sender)
-      sender.Checked = not sender.Checked
-      if sender.Checked then
-        bHardOffsets = true
-      else
-        bHardOffsets = false
-      end
-    end
-
-    function addGDMemrecToTable(sender)
-      local addrList = getAddressList()
-      local mainMemrec = addrList.createMemoryRecord()
-      mainMemrec.Description = "Dumper"
-      mainMemrec.Type = vtAutoAssembler
-      mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
-
-      local dumpMemrec = addrList.createMemoryRecord()
-      dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
-      dumpMemrec.Type = vtAutoAssembler
-      dumpMemrec.Async = true
-      dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
-      dumpMemrec.appendToEntry(mainMemrec)
-
-      local dumpMemrec = addrList.createMemoryRecord()
-      dumpMemrec.Description = 'Dump All Nodes (main)'
-      dumpMemrec.Type = vtAutoAssembler
-      dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-      dumpMemrec.Async = true
-      dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpAllNodesToAddr()\n[DISABLE]'
-      dumpMemrec.appendToEntry(mainMemrec)
-
-      local supportPalique = addrList.createMemoryRecord()
-      supportPalique.Description = 'Support the development & author: ko-fi.com/vesperpallens'
-      supportPalique.Type = vtAutoAssembler
-      supportPalique.Color = 0x8F379F
-      supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
-    end
-
-    -- attaches the script to the table
-    function appendDumperScript(sender)
-      local cedir = getCheatEngineDir()
-      local scriptPath = cedir .. [[autorun\GDumper.lua]]
-      createTableFile("GDumper", scriptPath)
-      sender.Enabled = false
-    end
-
-    -- appends the script as a memrec
-    function appendDumperScriptAsMemrec(sender)
-      local cedir = getCheatEngineDir()
-      local scriptPath = cedir .. [[autorun\GDumper.lua]]
-      
-      sender.Enabled = false
-    end
-
-    -- load from attached script
-    function loadDumperScript(sender)
-      local tableFile = findTableFile("GDumper")
-      if tableFile == nil then
-        return
-      end
-      local fileStream = tableFile.getData()
-      local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
-      if scriptString ~= nil then
-        local doScript = loadstring(scriptString)
-        if type(doScript) == 'function' then
-          doScript()
-          sender.Checked = true
+      -- load from attached script
+      local function loadDumperScript(sender)
+        local tableFile = findTableFile("GDumper")
+        if tableFile == nil then
+          return
+        end
+        local fileStream = tableFile.getData()
+        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
+        if scriptString ~= nil then
+          local doScript = loadstring(scriptString)
+          if type(doScript) == 'function' then
+            doScript()
+            sender.Checked = true
+          end
         end
       end
+
+      local function loadDumperScriptFromFile(sender)
+        local cedir = getCheatEngineDir()
+        local scriptPath = cedir .. [[autorun\GDumper.lua]]
+        local scriptFile, err = io.open(scriptPath, "r")
+        if not scriptFile then
+          error("Could not open file: " .. scriptPath .. "\n" .. tostring(err))
+        end
+        local scriptCode = scriptFile:read("*a")
+        scriptFile:close()
+        if scriptCode and scriptCode ~= "" then
+          local doScript, loadErr = loadstring(scriptCode)
+          if not doScript then
+            error("Compile error in " .. scriptPath .. ":\n" .. tostring(loadErr))
+          end
+          local ok, runErr = pcall(doScript)
+          if not ok then
+            error("Runtime error in " .. scriptPath .. ":\n" .. tostring(runErr))
+          end
+        else
+          error("File is empty: " .. scriptPath)
+        end
+      end
+
+      local function loadGDDumperForm()
+        local gdform = createFormFromFile(getCheatEngineDir()..[[autorun\gdform\GDForm.FRM]])
+        gdform.setDoNotSaveInTable(true)
+        -- TODO: setup
+        local gdtreeview = gdform.ComponentByName["treeviewNodes"]
+
+        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNode
+        -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNodes
+        local rootNode = gdtreeview.getItems().add("root")
+        rootNode.getItem().Text = "NodeChild"
+      end
+
+      --- creates a menu button in the main menu
+      function GDAPI.buildGDGUI()
+        if GDGUIInit then
+          return
+        end
+        GDGUIInit = true
+
+        -- creates and adds button to parent with callback on click
+        local function addCustomMenuButtonTo(ownerParent, captionName, customCallback)
+          local newMenuItem = createMenuItem(ownerParent)
+          newMenuItem.Caption = captionName
+          ownerParent.add(newMenuItem)
+          newMenuItem.OnClick = customCallback
+          return newMenuItem
+        end
+
+        local menuItemCaption = 'GDDumper'
+        local mainMenu = getMainForm().Menu
+        local gdMenuItem = nil
+
+        for i = 0, mainMenu.Items.Count - 1 do
+          if mainMenu.Items.Item[i].Caption == menuItemCaption then
+            gdMenuItem = mainMenu.Items.Item[i]
+            break
+          end
+        end
+
+        if not gdMenuItem then
+          gdMenuItem = createMenuItem(mainMenu)
+          gdMenuItem.Caption = menuItemCaption
+          mainMenu.Items.add(gdMenuItem)
+          addCustomMenuButtonTo(gdMenuItem, 'VP Struct', createVPStructForm)
+          addCustomMenuButtonTo(gdMenuItem, 'GD Dissector', GDDissectorSwitch)
+          addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
+          addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
+          -- addCustomMenuButtonTo(gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch)
+          addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
+          addCustomMenuButtonTo(gdMenuItem, 'GD StuctName Lookup', GDStructNameLookupSwitch)
+          -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
+          local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', appendDumperScript)
+          -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
+          
+          -- addCustomMenuButtonTo(gdMenuItem, 'Append as memrec', appendDumperScriptAsMemrec)
+          addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
+          addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
+          -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
+        end
+      end
+
+    -- ///---///--///---///--///---/// MISC UTILS
+      function getMainModuleInfo()
+        -- the vtables are stored in some readonly data section, text included too
+        local moduleStart = getAddress(process) or 0
+        local moduleEnd;
+        local moduleSize = getModuleSize(process)
+
+        -- for cases when getAddress fails
+        if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
+          moduleStart = enumModules()[1].Address
+          moduleEnd = moduleStart + enumModules()[1].Size
+        else
+          moduleEnd = moduleStart + moduleSize
+        end
+
+        return
+        {
+          moduleStart = moduleStart,
+          moduleEnd = moduleEnd,
+          moduleSize = moduleSize
+        }
+      end
+
+      local function wrapBrackets(stringToWrap)
+        return '['.. (stringToWrap or "") .. "]"
+      end
+
+      local function readU32LE(f)
+        local b = f:read(4)
+
+        if not b or #b < 4 then return nil end
+
+        local b1, b2, b3, b4 = string.byte(b, 1, 4)
+
+        return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
+      end
+
+      GDTEAL_COLOR = 0x808040
+
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS
+
+    -- TODO: make magic dereferences more obvious
+
+    local function getNodeChildrenInfo(nodeAddr)
+      if isNullOrNil(nodeAddr) then
+        return nil, nil;
+      end
+
+      local childrenAddr = readPointer((nodeAddr or 0) + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
+      if isNullOrNil(childrenAddr) then
+        return nil, nil;
+      end
+
+      local childrenSize;
+      if GDDEFS.MAJOR_VER == 4 then
+        childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
+      else
+        childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
+      end
+
+      return childrenAddr, childrenSize
     end
 
-    function loadDumperScriptFromFile(sender)
-      local cedir = getCheatEngineDir()
-      local scriptPath = cedir .. [[autorun\GDumper.lua]]
-      local scriptFile, err = io.open(scriptPath, "r")
-      if not scriptFile then
-        error("Could not open file: " .. scriptPath .. "\n" .. tostring(err))
+    local function getNextMapElement(mapElement)
+      if GDDEFS.MAJOR_VER == 4 then
+        return readPointer(mapElement)
+      else
+        return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
       end
-      local scriptCode = scriptFile:read("*a")
-      scriptFile:close()
-      if scriptCode and scriptCode ~= "" then
-        local doScript, loadErr = loadstring(scriptCode)
-        if not doScript then
-          error("Compile error in " .. scriptPath .. ":\n" .. tostring(loadErr))
+    end
+
+    local function getDictElemPairNext(mapElement)
+      if GDDEFS.MAJOR_VER == 4 then
+        return readPointer(mapElement)
+      else
+        return readPointer( (mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
+      end
+    end
+
+    local function getDictionarySizeFromVariantPtr(variantPtr)
+      -- if GDDEFS.MAJOR_VER == 4 then
+      --     return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
+      -- else
+      --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
+      -- end
+      return readInteger( ( readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
+    end
+
+    local function isArrayEmptyFromVariantPtr(variantPtr)
+      return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR) == 0
+    end
+
+    local function resolveScriptVariantType(mapElement, runtimeVariantType)
+
+
+      if GDDEFS.MAJOR_VER < 4 then
+        return runtimeVariantType
+      end
+
+      local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
+
+      if scriptType > GDDEFS.MAXTYPE then
+        scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8)
+      end
+
+      if scriptType == runtimeVariantType then
+        return scriptType
+      elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDDEFS.MAXTYPE) then
+        -- sendDebugMessage('fallback1, cached type is used') -- if the source is incorrect
+        return scriptType
+      else
+        -- sendDebugMessage('fallback2, cached type is used') -- let's have cached if everything is wrong
+        return runtimeVariantType
+      end
+    end
+
+    local function getVariantNameFromMapElement(mapElement)
+      if GDDEFS.MAJOR_VER == 4 then
+        return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
+      else
+        return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
+      end
+    end
+
+    local function prepareObjectParent(entry, emitter, parent, contextTable)
+
+      local shifted
+      local ptr = entry.variantPtr
+      local offset = rootOffset(entry, emitter)
+      local currentParent = parent
+      local currentContext = contextTable
+
+      ptr, shifted = checkObjectOffset(ptr)
+
+      if shifted then
+        offset = offset - GDDEFS.PTRSIZE
+
+        if currentContext.symbol then
+          local symbolOffset = entry.offsetToValue or 0
+          if GDDEFS.MAJOR_VER == 3 then
+            symbolOffset = symbolOffset - GDDEFS.PTRSIZE
+          end
+          currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, symbolOffset ) )
+          currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, 0 ) )
         end
-        local ok, runErr = pcall(doScript)
-        if not ok then
-          error("Runtime error in " .. scriptPath .. ":\n" .. tostring(runErr))
+
+        currentContext =
+        {
+          nodeAddr = contextTable.nodeAddr,
+          nodeName = contextTable.nodeName,
+          baseAddress = ptr,
+          symbol = currentContext.symbol and currentContext.symbol or ''
+        }
+
+        currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer, "Wrapper")
+        offset = 0x0
+      end
+
+      sendDebugMessage(numtohexstr(ptr) .. " Object: " .. entry.name)
+      return currentParent, ptr, offset, currentContext, shifted
+    end
+
+    local function getFunctionMapName(mapElement)
+      if isNullOrNil(mapElement) then
+        return nil
+      end
+
+      if GDDEFS.MAJOR_VER == 4 then
+        return getGDFunctionName(mapElement)
+      end
+      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
+    end
+
+    local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
+      if isNullOrNil(mapHead) then return nil end
+
+      local mapElement = mapHead
+
+      repeat
+        local currentName = getNameFn(mapElement)
+        if currentName == targetName then
+          return getResultCallback(mapElement)
+        end
+
+        mapElement = goAdvanceCallback(mapElement)
+      until (mapElement == 0)
+
+      return nil
+    end
+
+    local function getConstMapLookupResult(mapElement)
+      if GDDEFS.MAJOR_VER == 4 then
+        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+        local offsetToValue = getVariantValueOffset(constType)
+        return getAddress(mapElement + GDDEFS.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
+      else
+        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+        return getAddress(mapElement + GDDEFS.CONSTELEM_VALVAL), getCETypeFromGD(constType)
+      end
+    end
+
+    local function getFunctionMapLookupResult(mapElement)
+      return readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
+    end
+
+    local function createNextConstContainer(currentContainer, index)
+      if GDDEFS.MAJOR_VER == 4 then
+        local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
+        nextElem.ChildStruct = createStructure('ConstNext')
+        return nextElem
+      end
+
+      local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
+      nextElem.ChildStruct = createStructure('ConstNext')
+      return nextElem
+    end
+
+    local function createNextConstSymbol(currentSymbol)
+      local nextSymbol
+      if GDDEFS.MAJOR_VER == 4 then
+        nextSymbol = wrapBrackets( currentSymbol .. "+0" )
+      else --if GDDEFS.MAJOR_VER == 3 then
+        nextSymbol = wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
+      end
+      return nextSymbol
+    end
+
+    local function formatArrayEntry(entry)
+      local cloned = {}
+      for k, v in pairs(entry) do
+          cloned[k] = v
+      end
+      cloned.name = "array[" .. tostring(entry.index) .. "]"
+      return cloned
+    end
+
+    local function getArrayVectorInfo(arrayAddr)
+
+      if isInvalidPointer(arrayAddr) then
+        sendDebugMessage('arrayAddr invalid')
+        return nil
+      end
+
+      local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
+      if isNullOrNil(arrVectorAddr) then
+        sendDebugMessage('arrVectorAddr uninitialized')
+        return nil
+      end
+
+      local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
+      if isNullOrNil(arrVectorSize) then
+        sendDebugMessage('vector size is invalid')
+        return nil
+      end
+
+      local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
+      if not ok then
+        return nil
+      end
+      return arrVectorAddr, arrVectorSize, variantArrSize
+    end
+
+    local function formatDictionaryEntry(entry)
+      local cloned = {}
+      for k, v in pairs(entry) do
+        cloned[k] = v
+      end
+      cloned.name = "[ " .. tostring(entry.name) .. " ]"
+      return cloned
+    end
+
+    local function decodeDictionaryKeyName(mapElement)
+      local keyType, keyValueAddr
+
+      if GDDEFS.MAJOR_VER == 3 then
+        local keyPtr = readPointer(mapElement) -- key is a ptr
+        keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEYTYPE)
+        keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEYVAL)
+      else
+        keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEYTYPE) -- those can be a key , NodePath, Callable, StringName, etc
+        keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEYVAL)
+      end
+
+      local keyTypeName = getGDTypeName(keyType)
+      local keyName = "UNKNOWN"
+
+      if keyTypeName == 'STRING' then
+        -- immediate String
+        keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
+      elseif keyTypeName == 'STRING_NAME' then
+        keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
+      elseif keyTypeName == 'FLOAT' then
+        keyName = tostring(readDouble(keyValueAddr) or "_couldnt_read") -- in godot 3.x real is 4 byte float or not?
+      elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' then
+        keyName = tostring(readPointer(keyValueAddr) or "_couldnt_read")
+      elseif keyTypeName == 'INT' then
+        keyName = tostring(readInteger(keyValueAddr, true) or "_couldnt_read")
+      else -- bool | might need separate for Vector2, Vector3, Color, etc
+        keyName = tostring(readInteger(keyValueAddr) or "_couldnt_read")
+      end
+
+      return keyType, keyValueAddr, keyName
+    end
+
+    local function getDictionaryInfo(dictAddr)
+      if isInvalidPointer(dictAddr) then
+        sendDebugMessage('dictAddr isnt pointer')
+        return nil
+      end
+
+      local dictRoot = dictAddr
+      if GDDEFS.MAJOR_VER == 3 then
+        dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
+        if isNullOrNil(dictRoot) then
+          sendDebugMessage('dictRoot isnt valid')
+          return nil
+        end
+      end
+
+      -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
+      local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
+      if isNullOrNil(dictSize) then
+        sendDebugMessage('dictSize isnt valid')
+        return nil
+      end
+
+      local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
+      if isNullOrNil(dictHead) then
+        sendDebugMessage('dictHead isnt valid')
+        return nil
+      end
+
+      local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
+
+      return dictRoot, dictSize, dictHead, dictTail
+    end
+
+    local function createNextDictContainer(currentContainer, index)
+      if GDDEFS.MAJOR_VER == 4 then
+        return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
+      end
+
+      return createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+    end
+
+    local function createNextSymbol(currentSymbol)
+      if GDDEFS.MAJOR_VER == 4 then
+        return wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
+      else--if GDDEFS.MAJOR_VER == 3 then
+        return wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
+      end
+    end
+
+    local function getPackedArrayInfo(packedArrayAddr)
+
+      if isInvalidPointer(packedArrayAddr) then
+        sendDebugMessage('packedArrayAddr isnt pointer')
+        return nil
+      end
+
+      local packedDataArrAddr = readPointer(packedArrayAddr + GDDEFS.P_ARRAY_TOARR)
+      if isNullOrNil(packedDataArrAddr) then
+        sendDebugMessage('packedDataArrAddr isnt pointer')
+        return nil
+      end
+
+      local packedVectorSize
+      if GDDEFS.MAJOR_VER == 4 then
+        packedVectorSize = readInteger(packedDataArrAddr - GDDEFS.SIZE_VECTOR)
+        if isNullOrNil(packedVectorSize) or packedVectorSize > 150 then
+          packedVectorSize = 150
         end
       else
-        error("File is empty: " .. scriptPath)
+        packedVectorSize = 150 -- no size to rely :(
+      end
+      if isNullOrNil(packedVectorSize) then
+        sendDebugMessage('packedVectorSize isnt valid')
+        return nil
+      end
+
+      return packedDataArrAddr, packedVectorSize
+    end
+
+    local function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter, contextTable)
+
+      sendDebugMessage("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
+      local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
+      handler(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
+    end
+
+    local function getContainerFromEmitterAndContext(emitter, nodeContext)
+      if emitter == GDEmitters.StructEmitter then
+        return nodeContext.struct
+      elseif emitter == GDEmitters.AddrEmitter then
+        return nodeContext.memrec
       end
     end
 
-    function loadGDDumperForm()
-      local gdform = createFormFromFile(getCheatEngineDir()..[[autorun\gdform\GDForm.FRM]])
-      gdform.setDoNotSaveInTable(true)
-      -- TODO: setup
-      local gdtreeview = gdform.ComponentByName["treeviewNodes"]
-
-      -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNode
-      -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#TreeNodes
-      local rootNode = gdtreeview.getItems().add("root")
-      rootNode.getItem().Text = "NodeChild"
-    end
-
-  -- ///---///--///---///--///---/// MISC UTILS
-    function getMainModuleInfo()
-      -- the vtables are stored in some readonly data section, text included too
-      local moduleStart = getAddress(process) or 0
-      local moduleEnd;
-      local moduleSize = getModuleSize(process)
-
-      -- for cases when getAddress fails
-      if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
-        moduleStart = enumModules()[1].Address
-        moduleEnd = moduleStart + enumModules()[1].Size
-      else
-        moduleEnd = moduleStart + moduleSize
-      end
-
+    local function cloneContextWithSymbol(contextTable, newSymbol)
       return
       {
-        moduleStart = moduleStart,
-        moduleEnd = moduleEnd,
-        moduleSize = moduleSize
+        nodeAddr = contextTable.nodeAddr,
+        nodeName = contextTable.nodeName,
+        baseAddress = contextTable.baseAddress,
+        symbol = newSymbol
       }
     end
 
-    function wrapBrackets(stringToWrap)
-      return '['.. (stringToWrap or "") .. "]"
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
+
+    local function readNodeVariantEntry(mapElement, variantVector, variantSize)
+      -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
+      local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
+      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize)
+
+      local name = getVariantNameFromMapElement(mapElement);
+      local finalType = resolveScriptVariantType(mapElement, runtimeType);
+
+      local entry =
+      {
+        index = variantIndex,
+        name = name or "UNKNOWN",
+        runtimeType = runtimeType,
+        typeId = finalType,
+        typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
+        variantPtr = variantPtr,
+        offsetToValue = offsetToValue or 0,
+        offset = offsetToValue or 0,
+        ceType = getCETypeFromGD(finalType)
+      }
+
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+
+      return entry
     end
 
-    function readU32LE(f)
-      local b = f:read(4)
+    local function readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
+      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(funcConstantVect, variantIndex, variantSize, true)
 
-      if not b or #b < 4 then return nil end
+      local finalType = runtimeType
+      local typeName = getGDTypeName(finalType) or "UNKNOWNTYPE"
 
-      local b1, b2, b3, b4 = string.byte(b, 1, 4)
+      local entry =
+      {
+        index = variantIndex,
+        name = "Const[" .. tostring(variantIndex) .. "]",
+        runtimeType = runtimeType,
+        typeId = finalType,
+        typeName = typeName,
+        variantPtr = variantPtr,
+        offsetToValue = offsetToValue,
+        offset = offsetToValue,
+        ceType = getCETypeFromGD(finalType)
+      }
 
-      return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+
+      return entry
     end
 
-    GDTEAL_COLOR = 0x808040
+    local function readNodeConstEntry(mapElement)
+      local constName = getNodeConstName(mapElement)
+      local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+      local offsetToValue = GDDEFS.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
+      local constPtr = getAddress(mapElement + offsetToValue)
 
--- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
+      local entry =
+      {
+        index = 0,
+        name = constName or "UNKNOWN_CONST",
+        runtimeType = constType,
+        typeId = constType,
+        typeName = getGDTypeName(constType) or "UNKNOWNTYPE",
+        variantPtr = constPtr,
+        offsetToValue = offsetToValue,
+        offset = offsetToValue,
+        ceType = getCETypeFromGD(constType)
+      }
+
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+
+      return entry
+    end
+
+    -- for node search
+    local function readVectorVariantEntry(variantVector, variantIndex, variantSize)
+      local variantPtr, variantType = getVariantByIndex(variantVector, variantIndex, variantSize)
+
+      return
+      {
+        index = variantIndex,
+        typeId = variantType,
+        typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
+        variantPtr = variantPtr
+      }
+    end
+
+    -- for node search
+    local function readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
+      local variantPtr, variantType = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize)
+
+      return
+      {
+        index = varIndex,
+        typeId = variantType,
+        typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
+        variantPtr = variantPtr
+      }
+    end
+
+    local function readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
+      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
+
+      local entry =
+      {
+        index = varIndex,
+        name = "array[" .. tostring(varIndex) .. "]",
+        runtimeType = runtimeType,
+        typeId = runtimeType,
+        typeName = getGDTypeName(runtimeType) or "UNKNOWNTYPE",
+        variantPtr = variantPtr,
+        offsetToValue = offsetToValue or 0,
+        offset = offsetToValue,
+        ceType = getCETypeFromGD(runtimeType)
+      }
+
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+
+      return entry
+    end
+
+    local function readDictionaryContainerEntry(mapElement)
+
+      local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
+      local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
+      local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+      local valueValuePtr = getAddress(mapElement + offsetToValue)
+
+      local entry =
+        {
+          index = 0,
+          name = keyName or ("key@" .. numtohexstr(mapElement)),
+          runtimeType = valueType,
+          typeId = valueType,
+          typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
+          variantPtr = valueValuePtr,
+          offsetToValue = offsetToValue,
+          offset = offsetToValue,
+          ceType = getCETypeFromGD(valueType),
+          keyType = keyType,
+          keyValueAddr = keyValueAddr
+        }
+
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+
+      return entry
+    end
+
+    -- for node search
+    local function readDictionaryValueEntry(mapElement)
+        local valueType = readInteger( (mapElement or 0) + GDDEFS.DICTELEM_VALTYPE)
+        local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+        return
+        {
+          typeId = valueType,
+          typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
+          variantPtr = getAddress( (mapElement or 0) + offsetToValue)
+        }
+    end
+
+
+
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// GD preinit
 
     function getExportTableName()
@@ -2453,7 +2891,7 @@
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// DEFINE
 
     --- initializes and assigns offsets
-    function defineGDOffsets(config)
+    local function defineGDOffsets(config)
       if config == nil then config = {} end
       initGDDefs()
 
@@ -2615,7 +3053,7 @@
       end -- for auto offsetdef and ptr arithmetics
     end
 
-    function registerGDSymbols()
+    local function registerGDSymbols()
       registerSymbol('CHILDREN', GDDEFS.CHILDREN, true)
       registerSymbol('OBJ_STRING_NAME', GDDEFS.OBJ_STRING_NAME, true)
       registerSymbol('GDSCRIPTINSTANCE', GDDEFS.GDSCRIPTINSTANCE, true)
@@ -2890,11 +3328,11 @@
 
       GDEmitters.AddrEmitter = {}
 
-        function makeAddr(base, offset)
+        local function makeAddr(base, offset)
           return (base or 0) + (offset or 0)
         end
 
-        function makeSymAddr(base, offset)
+        local function makeSymAddr(base, offset)
           return (tostring(base) or '') .. '+' .. (numtohexstr(offset) or '')
         end
 
@@ -2941,7 +3379,7 @@
 
       ---------------------------------------------------------------------------------
 
-      function emitStringNameStruct(parent, label, offset, stringFieldLabel, bUniShift)
+      local function emitStringNameStruct(parent, label, offset, stringFieldLabel, bUniShift)
         local outer = addStructureElem(parent, label, offset, vtPointer)
         outer.ChildStruct = createStructure("StringName")
 
@@ -2958,25 +3396,25 @@
         return outer, inner, stringElem
       end
 
-      function emitFunctionCodeStruct(funcParent, funcName)
+      local function emitFunctionCodeStruct(funcParent, funcName)
         return addStructureElem(funcParent, 'Code: ' .. funcName, GDDEFS.FUNC_CODE, vtPointer)
       end
 
-      function emitFunctionConstantsStruct(funcParent, funcName, funcValueAddr)
+      local function emitFunctionConstantsStruct(funcParent, funcName, funcValueAddr)
         local constantsElem = createChildStructElem(funcParent, "Constants: " .. funcName, GDDEFS.FUNC_CONST, vtPointer, "GDFConst")
         local funcConstAddr = readPointer(funcValueAddr + GDDEFS.FUNC_CONST)
         iterateFuncConstantsToStruct(funcConstAddr, constantsElem)
         return constantsElem
       end
 
-      function emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
+      local function emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
         local globalsElem = createChildStructElem(funcParent, "Globals: " .. funcName, GDDEFS.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals")
         local funcGlobalAddr = readPointer(funcValueAddr + GDDEFS.FUNC_GLOBNAMEPTR)
         iterateFuncGlobalsToStruct(funcGlobalAddr, globalsElem)
         return globalsElem
       end
 
-      function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
+      local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
         local funcRoot
         if not bDisasmFunc then -- let's 
           funcRoot = createChildStructElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer, "GDFunction")
@@ -2991,14 +3429,14 @@
         return funcRoot
       end
 
-      function advanceFunctionMapElement(mapElement)
+      local function advanceFunctionMapElement(mapElement)
         if GDDEFS.MAJOR_VER == 4 then
           return readPointer(mapElement)
         end
         return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
       end
 
-      function createNextFunctionContainer(currentContainer, index)
+      local function createNextFunctionContainer(currentContainer, index)
         if GDDEFS.MAJOR_VER == 4 then
           local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
           nextElem.ChildStruct = createStructure("FuncNext")
@@ -3086,536 +3524,6 @@
           end, prefixStr, elemIndex, arrElement, parent, contextTable)
         end
 
-  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS / SHARED HELPERS
-
-    -- TODO: make magic dereferences more obvious
-
-    function getNodeChildrenInfo(nodeAddr)
-      if isNullOrNil(nodeAddr) then
-        return nil, nil;
-      end
-
-      local childrenAddr = readPointer((nodeAddr or 0) + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
-      if isNullOrNil(childrenAddr) then
-        return nil, nil;
-      end
-
-      local childrenSize;
-      if GDDEFS.MAJOR_VER == 4 then
-        childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-      else
-        childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
-      end
-
-      return childrenAddr, childrenSize
-    end
-
-    function getNextMapElement(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
-        return readPointer(mapElement)
-      else
-        return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
-      end
-    end
-
-    function getDictElemPairNext(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
-        return readPointer(mapElement)
-      else
-        return readPointer( (mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
-      end
-    end
-
-    function getDictionarySizeFromVariantPtr(variantPtr)
-      -- if GDDEFS.MAJOR_VER == 4 then
-      --     return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
-      -- else
-      --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
-      -- end
-      return readInteger( ( readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
-    end
-
-    function isArrayEmptyFromVariantPtr(variantPtr)
-      return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR) == 0
-    end
-
-    function resolveScriptVariantType(mapElement, runtimeVariantType)
-
-
-      if GDDEFS.MAJOR_VER < 4 then
-        return runtimeVariantType
-      end
-
-      local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
-
-      if scriptType > GDDEFS.MAXTYPE then
-        scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8)
-      end
-
-      if scriptType == runtimeVariantType then
-        return scriptType
-      elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDDEFS.MAXTYPE) then
-        -- sendDebugMessage('fallback1, cached type is used') -- if the source is incorrect
-        return scriptType
-      else
-        -- sendDebugMessage('fallback2, cached type is used') -- let's have cached if everything is wrong
-        return runtimeVariantType
-      end
-    end
-
-    function getVariantNameFromMapElement(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
-        return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
-      else
-        return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
-      end
-    end
-
-    function prepareObjectParent(entry, emitter, parent, contextTable)
-
-      local shifted
-      local ptr = entry.variantPtr
-      local offset = rootOffset(entry, emitter)
-      local currentParent = parent
-      local currentContext = contextTable
-
-      ptr, shifted = checkObjectOffset(ptr)
-
-      if shifted then
-        offset = offset - GDDEFS.PTRSIZE
-
-        if currentContext.symbol then
-          local symbolOffset = entry.offsetToValue or 0
-          if GDDEFS.MAJOR_VER == 3 then
-            symbolOffset = symbolOffset - GDDEFS.PTRSIZE
-          end
-          currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, symbolOffset ) )
-          currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, 0 ) )
-        end
-
-        currentContext =
-        {
-          nodeAddr = contextTable.nodeAddr,
-          nodeName = contextTable.nodeName,
-          baseAddress = ptr,
-          symbol = currentContext.symbol and currentContext.symbol or ''
-        }
-
-        currentParent = emitter.branch(currentContext, parent, "Wrapper: " .. entry.name, offset, vtPointer, "Wrapper")
-        offset = 0x0
-      end
-
-      sendDebugMessage(numtohexstr(ptr) .. " Object: " .. entry.name)
-      return currentParent, ptr, offset, currentContext, shifted
-    end
-
-    function getFunctionMapName(mapElement)
-      if isNullOrNil(mapElement) then
-        return nil
-      end
-
-      if GDDEFS.MAJOR_VER == 4 then
-        return getGDFunctionName(mapElement)
-      end
-      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
-    end
-
-    function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
-      if isNullOrNil(mapHead) then return nil end
-
-      local mapElement = mapHead
-
-      repeat
-        local currentName = getNameFn(mapElement)
-        if currentName == targetName then
-          return getResultCallback(mapElement)
-        end
-
-        mapElement = goAdvanceCallback(mapElement)
-      until (mapElement == 0)
-
-      return nil
-    end
-
-    function getConstMapLookupResult(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
-        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-        local offsetToValue = getVariantValueOffset(constType)
-        return getAddress(mapElement + GDDEFS.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
-      else
-        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-        return getAddress(mapElement + GDDEFS.CONSTELEM_VALVAL), getCETypeFromGD(constType)
-      end
-    end
-
-    function getFunctionMapLookupResult(mapElement)
-      return readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
-    end
-
-    function createNextConstContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER == 4 then
-        local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
-        nextElem.ChildStruct = createStructure('ConstNext')
-        return nextElem
-      end
-
-      local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
-      nextElem.ChildStruct = createStructure('ConstNext')
-      return nextElem
-    end
-
-    function createNextConstSymbol(currentSymbol)
-      local nextSymbol
-      if GDDEFS.MAJOR_VER == 4 then
-        nextSymbol = wrapBrackets( currentSymbol .. "+0" )
-      else --if GDDEFS.MAJOR_VER == 3 then
-        nextSymbol = wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
-      end
-      return nextSymbol
-    end
-
-    function formatArrayEntry(entry)
-      local cloned = {}
-      for k, v in pairs(entry) do
-          cloned[k] = v
-      end
-      cloned.name = "array[" .. tostring(entry.index) .. "]"
-      return cloned
-    end
-
-    function getArrayVectorInfo(arrayAddr)
-
-      if isInvalidPointer(arrayAddr) then
-        sendDebugMessage('arrayAddr invalid')
-        return nil
-      end
-
-      local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
-      if isNullOrNil(arrVectorAddr) then
-        sendDebugMessage('arrVectorAddr uninitialized')
-        return nil
-      end
-
-      local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
-      if isNullOrNil(arrVectorSize) then
-        sendDebugMessage('vector size is invalid')
-        return nil
-      end
-
-      local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
-      if not ok then
-        return nil
-      end
-      return arrVectorAddr, arrVectorSize, variantArrSize
-    end
-
-    function formatDictionaryEntry(entry)
-      local cloned = {}
-      for k, v in pairs(entry) do
-        cloned[k] = v
-      end
-      cloned.name = "[ " .. tostring(entry.name) .. " ]"
-      return cloned
-    end
-
-    function decodeDictionaryKeyName(mapElement)
-      local keyType, keyValueAddr
-
-      if GDDEFS.MAJOR_VER == 3 then
-        local keyPtr = readPointer(mapElement) -- key is a ptr
-        keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEYTYPE)
-        keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEYVAL)
-      else
-        keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEYTYPE) -- those can be a key , NodePath, Callable, StringName, etc
-        keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEYVAL)
-      end
-
-      local keyTypeName = getGDTypeName(keyType)
-      local keyName = "UNKNOWN"
-
-      if keyTypeName == 'STRING' then
-        -- immediate String
-        keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
-      elseif keyTypeName == 'STRING_NAME' then
-        keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
-      elseif keyTypeName == 'FLOAT' then
-        keyName = tostring(readDouble(keyValueAddr) or "_couldnt_read") -- in godot 3.x real is 4 byte float or not?
-      elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' then
-        keyName = tostring(readPointer(keyValueAddr) or "_couldnt_read")
-      elseif keyTypeName == 'INT' then
-        keyName = tostring(readInteger(keyValueAddr, true) or "_couldnt_read")
-      else -- bool | might need separate for Vector2, Vector3, Color, etc
-        keyName = tostring(readInteger(keyValueAddr) or "_couldnt_read")
-      end
-
-      return keyType, keyValueAddr, keyName
-    end
-
-    function getDictionaryInfo(dictAddr)
-      if isInvalidPointer(dictAddr) then
-        sendDebugMessage('dictAddr isnt pointer')
-        return nil
-      end
-
-      local dictRoot = dictAddr
-      if GDDEFS.MAJOR_VER == 3 then
-        dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
-        if isNullOrNil(dictRoot) then
-          sendDebugMessage('dictRoot isnt valid')
-          return nil
-        end
-      end
-
-      -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
-      local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
-      if isNullOrNil(dictSize) then
-        sendDebugMessage('dictSize isnt valid')
-        return nil
-      end
-
-      local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
-      if isNullOrNil(dictHead) then
-        sendDebugMessage('dictHead isnt valid')
-        return nil
-      end
-
-      local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
-
-      return dictRoot, dictSize, dictHead, dictTail
-    end
-
-    function createNextDictContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER == 4 then
-        return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
-      end
-
-      return createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
-    end
-
-    function createNextSymbol(currentSymbol)
-      if GDDEFS.MAJOR_VER == 4 then
-        return wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
-      else--if GDDEFS.MAJOR_VER == 3 then
-        return wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
-      end
-    end
-
-    function getPackedArrayInfo(packedArrayAddr)
-
-      if isInvalidPointer(packedArrayAddr) then
-        sendDebugMessage('packedArrayAddr isnt pointer')
-        return nil
-      end
-
-      local packedDataArrAddr = readPointer(packedArrayAddr + GDDEFS.P_ARRAY_TOARR)
-      if isNullOrNil(packedDataArrAddr) then
-        sendDebugMessage('packedDataArrAddr isnt pointer')
-        return nil
-      end
-
-      local packedVectorSize
-      if GDDEFS.MAJOR_VER == 4 then
-        packedVectorSize = readInteger(packedDataArrAddr - GDDEFS.SIZE_VECTOR)
-        if isNullOrNil(packedVectorSize) or packedVectorSize > 150 then
-          packedVectorSize = 150
-        end
-      else
-        packedVectorSize = 150 -- no size to rely :(
-      end
-      if isNullOrNil(packedVectorSize) then
-        sendDebugMessage('packedVectorSize isnt valid')
-        return nil
-      end
-
-      return packedDataArrAddr, packedVectorSize
-    end
-
-    function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter, contextTable)
-
-      sendDebugMessage("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
-      local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
-      handler(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
-    end
-
-    function getContainerFromEmitterAndContext(emitter, nodeContext)
-      if emitter == GDEmitters.StructEmitter then
-        return nodeContext.struct
-      elseif emitter == GDEmitters.AddrEmitter then
-        return nodeContext.memrec
-      end
-    end
-
-    function cloneContextWithSymbol(contextTable, newSymbol)
-      return
-      {
-        nodeAddr = contextTable.nodeAddr,
-        nodeName = contextTable.nodeName,
-        baseAddress = contextTable.baseAddress,
-        symbol = newSymbol
-      }
-    end
-
-  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
-
-    function readNodeVariantEntry(mapElement, variantVector, variantSize)
-      -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
-      local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
-      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize)
-
-      local name = getVariantNameFromMapElement(mapElement);
-      local finalType = resolveScriptVariantType(mapElement, runtimeType);
-
-      local entry =
-      {
-        index = variantIndex,
-        name = name or "UNKNOWN",
-        runtimeType = runtimeType,
-        typeId = finalType,
-        typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
-        variantPtr = variantPtr,
-        offsetToValue = offsetToValue or 0,
-        offset = offsetToValue or 0,
-        ceType = getCETypeFromGD(finalType)
-      }
-
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
-
-      return entry
-    end
-
-    function readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
-      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(funcConstantVect, variantIndex, variantSize, true)
-
-      local finalType = runtimeType
-      local typeName = getGDTypeName(finalType) or "UNKNOWNTYPE"
-
-      local entry =
-      {
-        index = variantIndex,
-        name = "Const[" .. tostring(variantIndex) .. "]",
-        runtimeType = runtimeType,
-        typeId = finalType,
-        typeName = typeName,
-        variantPtr = variantPtr,
-        offsetToValue = offsetToValue,
-        offset = offsetToValue,
-        ceType = getCETypeFromGD(finalType)
-      }
-
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
-
-      return entry
-    end
-
-    function readNodeConstEntry(mapElement)
-      local constName = getNodeConstName(mapElement)
-      local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-      local offsetToValue = GDDEFS.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
-      local constPtr = getAddress(mapElement + offsetToValue)
-
-      local entry =
-      {
-        index = 0,
-        name = constName or "UNKNOWN_CONST",
-        runtimeType = constType,
-        typeId = constType,
-        typeName = getGDTypeName(constType) or "UNKNOWNTYPE",
-        variantPtr = constPtr,
-        offsetToValue = offsetToValue,
-        offset = offsetToValue,
-        ceType = getCETypeFromGD(constType)
-      }
-
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
-
-      return entry
-    end
-
-    -- for node search
-    function readVectorVariantEntry(variantVector, variantIndex, variantSize)
-      local variantPtr, variantType = getVariantByIndex(variantVector, variantIndex, variantSize)
-
-      return
-      {
-        index = variantIndex,
-        typeId = variantType,
-        typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
-        variantPtr = variantPtr
-      }
-    end
-
-    -- for node search
-    function readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
-      local variantPtr, variantType = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize)
-
-      return
-      {
-        index = varIndex,
-        typeId = variantType,
-        typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
-        variantPtr = variantPtr
-      }
-    end
-
-    function readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
-      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
-
-      local entry =
-      {
-        index = varIndex,
-        name = "array[" .. tostring(varIndex) .. "]",
-        runtimeType = runtimeType,
-        typeId = runtimeType,
-        typeName = getGDTypeName(runtimeType) or "UNKNOWNTYPE",
-        variantPtr = variantPtr,
-        offsetToValue = offsetToValue or 0,
-        offset = offsetToValue,
-        ceType = getCETypeFromGD(runtimeType)
-      }
-
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
-
-      return entry
-    end
-
-    function readDictionaryContainerEntry(mapElement)
-
-      local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
-      local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
-      local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
-      local valueValuePtr = getAddress(mapElement + offsetToValue)
-
-      local entry =
-        {
-          index = 0,
-          name = keyName or ("key@" .. numtohexstr(mapElement)),
-          runtimeType = valueType,
-          typeId = valueType,
-          typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
-          variantPtr = valueValuePtr,
-          offsetToValue = offsetToValue,
-          offset = offsetToValue,
-          ceType = getCETypeFromGD(valueType),
-          keyType = keyType,
-          keyValueAddr = keyValueAddr
-        }
-
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
-
-      return entry
-    end
-
-    -- for node search
-    function readDictionaryValueEntry(mapElement)
-        local valueType = readInteger( (mapElement or 0) + GDDEFS.DICTELEM_VALTYPE)
-        local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
-        return
-        {
-          typeId = valueType,
-          typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
-          variantPtr = getAddress( (mapElement or 0) + offsetToValue)
-        }
-    end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TYPE HANDLERS
 
