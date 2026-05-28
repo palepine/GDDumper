@@ -10,6 +10,7 @@
   -- TODO: explore what can be extracted from GDNative script endpoints
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DECLARATIONS
+  local GDAPI = {}
 
   local isNullOrNil
   local isNotNullOrNil
@@ -3119,6 +3120,7 @@
       table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B", toRel = 3 } )
       table.insert(sigs, { sig = "A1 ? ? ? ? 85 C0 74 ? 8B 35 ? ? ? ? 8B", toRel = 1 } ) -- 3.5 32
       table.insert(sigs, { sig = "C7 05 ? ? ? ? 00 00 00 00 85 C0 0F 84 ? ? ? ? B9", toRel = 2 } ) -- 3.5 32
+      table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 85 C9 74 ? 48 8D 55 ? E8", toRel = 3 } ) -- 3.2
       table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 83 C4 ?   5?", toRel = 3 } ) -- 3.0
 
       for i, sig in ipairs(sigs) do
