@@ -4919,7 +4919,7 @@
     ---@param nodeAddr number
     ---@param funcStructElement userdata
     function iterateNodeFuncMapToStruct(nodeContext)
-      assert(type(nodeContext.addr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeContext.addr))
+      assert(type(nodeContext.addr) == 'number', 'nodeAddr has to be a number, instead got: ' .. type(nodeContext.addr))
 
       local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
       local headElement, tailElement, mapSize, nodeMapContext = getNodeFuncMap(nodeMapContext)
@@ -9384,7 +9384,7 @@
     end
 
     function disassembleGDFunctionCodeToStruct(funcAddr, funcStruct)
-      assert((type(funcAddr) == 'number') and (funcAddr ~= 0), 'disassembleGDFunctionCode: funcAddr has to be a valid pointer, instead got: ' .. type(funcAddr))
+      assert((type(funcAddr) == 'number') and (funcAddr ~= 0), 'funcAddr has to be a valid pointer, instead got: ' .. type(funcAddr))
 
       if GDF == nil then
         defineGDFunctionEnums()
@@ -9734,7 +9734,7 @@
 
     --- returns a head element, tail element and (hash)Map size
     function getNodeConstMap(nodeContext)
-      assert(type(nodeContext.addr) == 'number', "getNodeConstMap: NodePtr should be a number, instead got: " .. type(nodeContext.addr))
+      assert(type(nodeContext.addr) == 'number', "NodePtr should be a number, instead got: " .. type(nodeContext.addr))
 
       local scriptInstanceAddr = readPointer(nodeContext.addr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstanceAddr) then
@@ -9835,8 +9835,7 @@
     ---@param nodeAddr number
     ---@param constStructElement userdata
     function iterateNodeConstToStruct(nodeContext)
-      assert(type(nodeContext.addr) == 'number',
-      "iterateNodeConstToStruct Node addr has to be a number, instead got: " .. type(nodeContext.addr))
+      assert(type(nodeContext.addr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeContext.addr))
       if GDDEFS.MONO and (checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
       
       local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
@@ -9920,7 +9919,7 @@
     ---@param dictAddr number
     ---@param parent userdata
     function iterateDictionaryToAddr(dictAddr, parent, contextTable)
-      assert(type(dictAddr) == 'number', 'iterateDictionaryToAddr: dictAddr has to be a number, instead got: ' .. type(dictAddr))
+      assert(type(dictAddr) == 'number', 'dictAddr has to be a number, instead got: ' .. type(dictAddr))
 
       local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
       if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then return end
@@ -9989,7 +9988,7 @@
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Array
 
     function iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, emitter, options, contextSeed)
-      assert(type(arrVectorAddr) == 'number', "iterateArray: arrayAddr has to be a number, instead got: " .. type(arrVectorAddr))
+      assert(type(arrVectorAddr) == 'number', "arrayAddr has to be a number, instead got: " .. type(arrVectorAddr))
 
       options = options or {}
       for varIndex = 0, arrVectorSize - 1 do
@@ -10030,7 +10029,7 @@
     ---@param arrayAddr number
     ---@param parent userdata
     function iterateArrayToStruct(arrayAddr, arrayStructElement, contextTable)
-      assert(type(arrayAddr) == 'number', "iterateArrayToStruct: Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
+      assert(type(arrayAddr) == 'number', "Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
       local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
       if isNullOrNil(arrVectorAddr) then return; end
