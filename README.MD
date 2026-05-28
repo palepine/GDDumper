@@ -14,24 +14,25 @@ THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY
 - Basic API functions
 - GDScriptFunction disassembler (structure-based)
 - Arbitrary GDFunction calling (experimental)
+- Arbitrary GDScript reloading (experimental)
 
 ## Making it work
-The script works only with godot apps with `GDScript` used (C# applications aren't supported).
-The script works only more consistent with `x64`, `x32` should work properly too.
+The script works only with godot apps with `GDScript` used (C# applications are supported to a limited extent).
+The script is primarily developed for `x64`, `x32` shuold generally work if provided with offsets.
 
-Despite my efforts, it's not a complete out of the box solution. For it to work, the script needs 1) a CE symbol registered for a root viewport, 2) godot engine version definition and 3) internal godot structure offsets. You can learn how to find them in this [guide](GUIDE.MD)
+Despite my efforts, it's not an ultimate out-of-the-box solution, but it pretty much is for most cases. For it to work, the script needs 1) a CE symbol registered for a root viewport, 2) godot engine version definition and 3) internal godot structure offsets. You can learn how to find them in this [guide](GUIDE.MD)
 
-By enabling this [CE regex plugin](https://github.com/palepine/CERegEx) along with the script, you can test your luck avoiding the steps above letting the script do that: tick `GDDumper->Use stored offsets`, do `Add tempalte`, activate the `Dumper script` and try using it.
+You can test your luck avoiding the steps above letting the script do that: tick `GDDumper->Use stored offsets`, do `Add tempalte`, activate the `Dumper script` and try using it.
 
 ## Usage
 1. Install [Cheat Engine](https://github.com/cheat-engine/cheat-engine).
 2. Place `GDumper.lua` inside `Cheat Engine\autorun`
 3. Run Cheat Engine and attach to a godot app.
 4. A `GDumper` menu item will appear, click `Add Template`
-5. Hook any routine that handles the root viewport address / find a static pointer to it in the target process; assocoate it with a symbol called `ptVP`
-6. Open `Dumper` script and configure the config object following the instructions or letting the script try it.
+5. Open `Dumper` script and configure the config object following the instructions or letting the script try it.
+6. Upon initialization, the engine will try to find the root viewport/window address, if it can't - find and register the Viewport/Window address with a symbol called `ptVP`
 
-To build a CE address tree, call `DumpAllNodesToAddr()` (dumps all viewport nodes, might become heavy on GUI) or `DumpNodeToAddr(memrec, getDumpedNode( "NodeName" ), false)` for a specific node (both can be called asynchronically).
+Call `DumpAllNodesToAddr()`or `DumpNodeToAddr(memrec, getDumpedNode( "NodeName" ), false)` to dump to the address list.
 For struct building, enable `GD Dissector` inside `GDumper` menu, then click `VP Struct` to build a viewport children struct.
 
 ## Support
