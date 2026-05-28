@@ -33,13 +33,9 @@
   local isNullOrNil
   local isNotNullOrNil
   
-  local strMul
   -- local numtohexstr
-  local debugStepIn
-  local debugStepOut
   local getDebugPrefix
   local sendDebugMessage
-  local sendDebugMessageAndStepOut
 
   local createVPStructForm
   local createVPStructure
@@ -432,7 +428,7 @@
     ---@param str string
     ---@param times number
     ---@return string
-    function strMul(str, times)
+    local function strMul(str, times)
       return string.rep(str, times)
     end
 
@@ -440,32 +436,26 @@
       return ("%X"):format(num or -1)
     end
 
-    function debugStepIn()
-      if bGDDebug and inMainThread() then
-        debugPrefix = debugPrefix + 1
+    local function getStackDepth()
+      local level = 1
+      -- kind of expensive, but fair for debug mode
+      while debug.getinfo(level, "f") do
+        level = level + 1
       end
-    end
-
-    function debugStepOut()
-      if bGDDebug and inMainThread() then
-        debugPrefix = debugPrefix - 1
-      end
+      return level - 1
     end
 
     function getDebugPrefix()
-      return strMul('>', debugPrefix) .. '\t'
+      local depth = getStackDepth()
+      return strMul('>', depth) .. ' '
     end
 
     function sendDebugMessage(msg)
       if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
-        print(getDebugPrefix() .. " " .. tostring(msg))
-      end
-    end
-
-    function sendDebugMessageAndStepOut(msg)
-      if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
-        print(getDebugPrefix() .. " " .. tostring(msg))
-        debugStepOut()
+        local info = debug.getinfo(2, "nl") -- previous function, name and currentline
+        local name = info.name or " ??? "
+        local currLine = info.currentline or -1
+        print(getDebugPrefix() .. name .. ":" .. currLine .. " " .. tostring(msg))
       end
     end
 
@@ -2280,21 +2270,17 @@
     function readUTFString(strAddress, strSize)
       assert(type(strAddress) == 'number', "string address should be a number, instead got: " .. type(strAddress));
 
-      -- debugStepIn()
       local MAX_CHARS_TO_READ = 1500 * 2
 
       if strSize and (strSize > MAX_CHARS_TO_READ) then
-        -- sendDebugMessageAndStepOut('readUTFString: chars to read is bigger than MAX_CHARS_TO_READ')
         return "??" -- "ain\'t reading this"  -- we aren't gonna read novels
       end
 
       if GDDEFS.MAJOR_VER == 4 then
         if readInteger(strAddress) == 0 then
-          -- sendDebugMessageAndStepOut('readUTFString: empty string');
           return "??" -- "empt str"
         end
       elseif readSmallInteger(strAddress) == 0 then
-        -- sendDebugMessageAndStepOut(' readUTFString: empty string')
         return "??" -- "empt str"
       end
 
@@ -2302,18 +2288,15 @@
       local buff = 0
 
       if GDDEFS.MAJOR_VER == 3 and (strSize and strSize > 0) then
-        -- debugStepOut()
         return readString(strAddress, strSize * 2, true) or "??" -- '???_INVALID_MEM_CAUGHT_WSIZE'
 
       elseif GDDEFS.MAJOR_VER == 3 then
-        -- debugStepOut()
         local retString = readString(strAddress, MAX_CHARS_TO_READ, true)
 
         while MAX_CHARS_TO_READ > 0 and retString == nil do -- https://github.com/cheat-engine/cheat-engine/issues/2602
           MAX_CHARS_TO_READ = MAX_CHARS_TO_READ - 100 -- quite a stride
           retString = readString(strAddress, MAX_CHARS_TO_READ, true)
         end
-        -- debugStepOut()
         return retString or "??" -- '???_INVALID_MEM_CAUGHT'
       end
 
@@ -2338,7 +2321,6 @@
         end
       end
 
-      -- debugStepOut()
       return table.concat(charTable) or "??" -- '???_UNKNSTR'
     end
 
@@ -2449,27 +2431,22 @@
       if isNullOrNil(stringNameAddr) then
         return 'NaN_strname'
       end
-      -- debugStepIn()
       local retStringAddr = readPointer(stringNameAddr + GDDEFS.STRING)
 
       if isNullOrNil(retStringAddr) or isInvalidPointer(retStringAddr) then
         retStringAddr = readPointer(stringNameAddr + 0x8) -- for cases when StringName holds data at 0x8
         if isNullOrNil(retStringAddr) then
-          -- sendDebugMessageAndStepOut('getStringNameStr: string address invalid, not ASCII either')
           return '??' -- return an empty string if no string was found
         end
 
-        -- sendDebugMessage('getStringNameStr: string address invalid, trying shifting/ASCII')
         -- Try ASCII if it's static & in pck
         if isInsideRDataStatic(retStringAddr) then
-          -- debugStepOut()
           -- a static ASCII string's last resort
           return readString(retStringAddr, 100)
         end
 
         return readUTFString(retStringAddr) or '??'
       end
-      -- debugStepOut()
       return readUTFString(retStringAddr)
     end
 
@@ -2679,7 +2656,7 @@
         else
           resolvedAddr = relativeAddr -- absolute on 32
         end
-        sendDebugMessage("tryRegSceneTree: calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
+        sendDebugMessage("calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
         local className = getGDObjectName(readPointer(resolvedAddr))
         if className == "SceneTree" then
           registerSymbol('pSceneTree', resolvedAddr, false)
@@ -2717,7 +2694,7 @@
 
       for i, sig in ipairs(sigs) do
         if resolveRelAddr(sig.sig, sig.toRel) then
-          sendDebugMessage('tryRegSceneTree: hit at: ' .. tostring(i) .. "\t" .. sig.sig)
+          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig.sig)
           return true
         end
       end
@@ -2742,17 +2719,17 @@
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
         if isNotNullOrNil(candidateAddr) and isMMVTable(readPointer(candidateAddr)) then
 
-          sendDebugMessage("setSTtoVPoffset: calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
+          sendDebugMessage("calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
           local className = getGDObjectName(candidateAddr)
           if className == "Viewport" or className == "Window" then
             registerSymbol('oSTtoVP', i * ptrsize, false)
-            sendDebugMessage('setSTtoVPoffset: loop: ' .. numtohexstr(i * ptrsize))
+            sendDebugMessage('loop: ' .. numtohexstr(i * ptrsize))
             return true
           end
           -- for j=13, steps do
           --     if readPointer(candidateAddr + j*ptrsize) == sceneTree then
           --         registerSymbol('oSTtoVP', i*ptrsize, false)
-          --         sendDebugMessage('setSTtoVPoffset: nested loop: '..numtohexstr(i*ptrsize))
+          --         sendDebugMessage('nested loop: '..numtohexstr(i*ptrsize))
           --         return true
           --     end
           -- end
@@ -2799,7 +2776,7 @@
       table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
       for i, sig in ipairs(sigs) do
         if setVPRVA(sig) then
-          sendDebugMessage('setSTtoVPoffset: hit at: ' .. tostring(i) .. "\t" .. sig .. "\t value: " .. numtohexstr(getAddress('oSTtoVP')))
+          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig .. "\t value: " .. numtohexstr(getAddress('oSTtoVP')))
           return true
         end
       end
@@ -2826,16 +2803,13 @@
     function getVPChildren()
       local viewport = getViewport()
 
-      debugStepIn()
-
       local childrenAddr, childrenSize = getNodeChildrenInfo(viewport)
 
       if isNullOrNil(childrenSize) then
-        sendDebugMessageAndStepOut('getVPChildren: ChildSize is invalid')
+        sendDebugMessage('ChildSize is invalid')
         return;
       end
 
-      debugStepOut();
       return childrenAddr, childrenSize
     end
 
@@ -3118,13 +3092,11 @@
 
     function getNodeChildrenInfo(nodeAddr)
       if isNullOrNil(nodeAddr) then
-        -- sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
         return nil, nil;
       end
 
       local childrenAddr = readPointer((nodeAddr or 0) + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
       if isNullOrNil(childrenAddr) then
-        -- sendDebugMessageAndStepOut('getNodeChildrenInfo: failed to get VP children')
         return nil, nil;
       end
 
@@ -3169,10 +3141,8 @@
 
     function resolveScriptVariantType(mapElement, runtimeVariantType)
 
-      -- debugStepIn()
 
       if GDDEFS.MAJOR_VER < 4 then
-        -- debugStepOut()
         return runtimeVariantType
       end
 
@@ -3183,13 +3153,12 @@
       end
 
       if scriptType == runtimeVariantType then
-        -- debugStepOut()
         return scriptType
       elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDDEFS.MAXTYPE) then
-        -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback1, cached type is used') -- if the source is incorrect
+        -- sendDebugMessage('fallback1, cached type is used') -- if the source is incorrect
         return scriptType
       else
-        -- sendDebugMessageAndStepOut('resolveScriptVariantType: fallback2, cached type is used') -- let's have cached if everything is wrong
+        -- sendDebugMessage('fallback2, cached type is used') -- let's have cached if everything is wrong
         return runtimeVariantType
       end
     end
@@ -3203,7 +3172,6 @@
     end
 
     function prepareObjectParent(entry, emitter, parent, contextTable)
-      debugStepIn()
 
       local shifted
       local ptr = entry.variantPtr
@@ -3237,7 +3205,7 @@
         offset = 0x0
       end
 
-      sendDebugMessageAndStepOut("prepareObjectParent: " .. numtohexstr(ptr) .. " Object: " .. entry.name)
+      sendDebugMessage(numtohexstr(ptr) .. " Object: " .. entry.name)
       return currentParent, ptr, offset, currentContext, shifted
     end
 
@@ -3316,31 +3284,28 @@
     end
 
     function getArrayVectorInfo(arrayAddr)
-      debugStepIn()
 
       if isInvalidPointer(arrayAddr) then
-        sendDebugMessageAndStepOut('getArrayVectorInfo: arrayAddr invalid')
+        sendDebugMessage('arrayAddr invalid')
         return nil
       end
 
       local arrVectorAddr = readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR)
       if isNullOrNil(arrVectorAddr) then
-        sendDebugMessageAndStepOut('getArrayVectorInfo: arrVectorAddr uninitialized')
+        sendDebugMessage('arrVectorAddr uninitialized')
         return nil
       end
 
       local arrVectorSize = readInteger(arrVectorAddr - GDDEFS.SIZE_VECTOR)
       if isNullOrNil(arrVectorSize) then
-        sendDebugMessageAndStepOut('getArrayVectorInfo: vector size is invalid')
+        sendDebugMessage('vector size is invalid')
         return nil
       end
 
       local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
       if not ok then
-        debugStepOut()
         return nil
       end
-      debugStepOut()
       return arrVectorAddr, arrVectorSize, variantArrSize
     end
 
@@ -3387,10 +3352,8 @@
     end
 
     function getDictionaryInfo(dictAddr)
-      debugStepIn()
-
       if isInvalidPointer(dictAddr) then
-        sendDebugMessageAndStepOut('getDictionaryInfo: dictAddr isnt pointer')
+        sendDebugMessage('dictAddr isnt pointer')
         return nil
       end
 
@@ -3398,7 +3361,7 @@
       if GDDEFS.MAJOR_VER == 3 then
         dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
         if isNullOrNil(dictRoot) then
-          sendDebugMessageAndStepOut('getDictionaryInfo: dictRoot isnt valid')
+          sendDebugMessage('dictRoot isnt valid')
           return nil
         end
       end
@@ -3406,19 +3369,18 @@
       -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
       local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
       if isNullOrNil(dictSize) then
-        sendDebugMessageAndStepOut('getDictionaryInfo: dictSize isnt valid')
+        sendDebugMessage('dictSize isnt valid')
         return nil
       end
 
       local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
       if isNullOrNil(dictHead) then
-        sendDebugMessageAndStepOut('getDictionaryInfo: dictHead isnt valid')
+        sendDebugMessage('dictHead isnt valid')
         return nil
       end
 
       local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
 
-      debugStepOut()
       return dictRoot, dictSize, dictHead, dictTail
     end
 
@@ -3439,16 +3401,15 @@
     end
 
     function getPackedArrayInfo(packedArrayAddr)
-      debugStepIn()
 
       if isInvalidPointer(packedArrayAddr) then
-        sendDebugMessageAndStepOut('getPackedArrayInfo: packedArrayAddr isnt pointer')
+        sendDebugMessage('packedArrayAddr isnt pointer')
         return nil
       end
 
       local packedDataArrAddr = readPointer(packedArrayAddr + GDDEFS.P_ARRAY_TOARR)
       if isNullOrNil(packedDataArrAddr) then
-        sendDebugMessageAndStepOut('getPackedArrayInfo: packedDataArrAddr isnt pointer')
+        sendDebugMessage('packedDataArrAddr isnt pointer')
         return nil
       end
 
@@ -3462,18 +3423,16 @@
         packedVectorSize = 150 -- no size to rely :(
       end
       if isNullOrNil(packedVectorSize) then
-        sendDebugMessageAndStepOut('getPackedArrayInfo: packedVectorSize isnt valid')
+        sendDebugMessage('packedVectorSize isnt valid')
         return nil
       end
 
-      debugStepOut()
       return packedDataArrAddr, packedVectorSize
     end
 
     function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter, contextTable)
 
-      debugStepIn()
-      sendDebugMessageAndStepOut("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
+      sendDebugMessage("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
       local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
       handler(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
     end
@@ -3519,8 +3478,7 @@
         ceType = getCETypeFromGD(finalType)
       }
 
-      debugStepIn()
-      sendDebugMessageAndStepOut("readNodeVariantEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
       return entry
     end
@@ -3544,8 +3502,7 @@
         ceType = getCETypeFromGD(finalType)
       }
 
-      debugStepIn()
-      sendDebugMessageAndStepOut("readFunctionConstantEntry: name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
       return entry
     end
@@ -3569,8 +3526,7 @@
         ceType = getCETypeFromGD(constType)
       }
 
-      debugStepIn()
-      sendDebugMessageAndStepOut("readNodeConstEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
       return entry
     end
@@ -3617,8 +3573,7 @@
         ceType = getCETypeFromGD(runtimeType)
       }
 
-      debugStepIn()
-      sendDebugMessageAndStepOut("readArrayContainerEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
       return entry
     end
@@ -3645,8 +3600,7 @@
           keyValueAddr = keyValueAddr
         }
 
-      debugStepIn()
-      sendDebugMessageAndStepOut( "readDictionaryContainerEntry:\tname:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
 
       return entry
     end
@@ -3770,7 +3724,7 @@
       end
 
       GDHandlers.VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
-        sendDebugMessage("handlePackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
+        sendDebugMessage("PackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
         if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
         
         local arrayAddr = readPointer(entry.variantPtr)
@@ -4088,15 +4042,12 @@
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
     function GDAPI.getNodeGDScriptInstance(nodeAddr)
-      -- debugStepIn()
       if isNullOrNil(nodeAddr) then
-        -- sendDebugMessageAndStepOut('getNodeGDScriptInstance: nodeAddr invalid')
         return nil
       end
 
       local gdScriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(gdScriptInstance) then
-        -- sendDebugMessageAndStepOut('getNodeGDScriptInstance: ScriptInstance is 0/nil')
         return nil
       end
       return gdScriptInstance
@@ -4125,53 +4076,47 @@
     function GDAPI.getNodeName(nodeAddr)
       if isNullOrNil(nodeAddr) then return nil end
 
-      debugStepIn()
-
       local nodeNamePtr = readPointer(nodeAddr + GDDEFS.OBJ_STRING_NAME)
       if isNullOrNil(nodeNamePtr) or isInvalidPointer(nodeNamePtr) then
-        sendDebugMessageAndStepOut('getNodeName: nodeName invalid or not a pointer (?)')
+        -- sendDebugMessage('nodeName invalid or not a pointer (?)')
         return 'N??'
       end
 
-      debugStepOut()
       return getStringNameStr(nodeNamePtr)
     end
 
     function GDAPI.getNodeNameFromGDScript(nodeAddr)
-      assert(type(nodeAddr) == 'number', "getNodeNameFromGDScript: Node Addr has to be a number, instead got: " .. type(nodeAddr))
-
-      -- debugStepIn()
+      assert(type(nodeAddr) == 'number', "Node Addr has to be a number, instead got: " .. type(nodeAddr))
 
       local GDScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(GDScriptInstanceAddr) then
-        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: ScriptInstance is 0/nil')
+        -- sendDebugMessage('ScriptInstance is 0/nil')
         return 'N??'
       end
       local GDScriptAddr = readPointer(GDScriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(GDScriptAddr) then
-        -- sendDebugMessageAndStepOut(' getNodeNameFromGDScript: GDScript is 0/nil')
+        -- sendDebugMessage(' GDScript is 0/nil')
         return 'N??'
       end
       local GDScriptNameAddr = readPointer(GDScriptAddr + GDDEFS.GDSCRIPTNAME)
 
       if isNullOrNil(GDScriptNameAddr) then
-        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: nodeName invalid or not a pointer (?)')
+        -- sendDebugMessage('nodeName invalid or not a pointer (?)')
         return 'N??'
       end
 
       -- immediate String
       local GDScriptName = readUTFString(GDScriptNameAddr)
       if GDScriptName == nil or GDScriptName == '' then
-        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+        -- sendDebugMessage('GDScriptName is nil/empty')
         return 'N??'
       end
       local scriptMatch = GDScriptName:match("([^/]+)%.[^.]+$") --"([^/]+)%.gd$"
       if scriptMatch == nil then
-        -- sendDebugMessageAndStepOut('getNodeNameFromGDScript: GDScriptName is nil/empty')
+        -- sendDebugMessage('GDScriptName is nil/empty')
         return 'N??'
       end
 
-      -- debugStepOut()
 
       return scriptMatch
     end
@@ -4182,28 +4127,26 @@
     ---@return number @ script type enum
     function checkForGDScript(nodeAddr)
 
-      -- debugStepIn()
-
       if isNullOrNil(nodeAddr) or not isMMVTable( readPointer(nodeAddr) ) then
-        -- sendDebugMessageAndStepOut('checkForGDScript: nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
+        -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return false
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstance) or not isMMVTable( readPointer(scriptInstance) ) then
-        -- sendDebugMessageAndStepOut('checkForGDScript: ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+        -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return false
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdscript) or not isMMVTable( readPointer(gdscript) ) then
-        -- sendDebugMessageAndStepOut('checkForGDScript: GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+        -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return false
       end
       
       local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
       if isNullOrNil(gdScriptName) then
-        -- sendDebugMessageAndStepOut('checkForGDScript: gdScriptName invalid')
+        -- sendDebugMessage('gdScriptName invalid')
         return false
       end
       local gdScriptName = readUTFString(gdScriptName)
@@ -4218,27 +4161,26 @@
 
     function checkScriptType(nodeAddr)
       if GDDEFS.MONO == false then return 0 end;
-      -- debugStepIn()
       if isNullOrNil(nodeAddr) or not isMMVTable( readPointer(nodeAddr) ) then
-      --   -- sendDebugMessageAndStepOut('checkScriptType: nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
+      --   -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstance) or not isMMVTable( readPointer(scriptInstance) ) then
-      --   -- sendDebugMessageAndStepOut('checkScriptType: ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+      --   -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdscript) or not isMMVTable( readPointer(gdscript) ) then
-      --   -- sendDebugMessageAndStepOut('checkScriptType: GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+      --   -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
       
       local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
       if isNullOrNil(gdScriptName) then
-        -- sendDebugMessageAndStepOut('checkScriptType: gdScriptName invalid')
+        -- sendDebugMessage('gdScriptName invalid')
         return 0
       end
 
@@ -4313,18 +4255,17 @@
     ---@param nodeAddr number
     ---@param parent userdata
     function iterateMNodeToAddr(nodeAddr, parent, contextTable)
-      assert(type(nodeAddr) == 'number', "iterateMNodeToAddr: node addr has to be a number, instead got: " .. type(nodeAddr))
-      assert(type(parent) == "userdata", "iterateMNodeToAddr: parent has to exist")
+      assert(type(nodeAddr) == 'number', "node addr has to be a number, instead got: " .. type(nodeAddr))
+      assert(type(parent) == "userdata", "parent has to exist")
 
-      debugStepIn()
 
       local nodeName = getNodeName(nodeAddr)
       local gdscriptName = getNodeNameFromGDScript(nodeAddr)
-      sendDebugMessage(' iterateMNodeToAddr: MemberNode: ' .. tostring(nodeName))
+      sendDebugMessage('MemberNode: ' .. tostring(nodeName))
 
       for i, storedNode in ipairs(dumpedNodes) do -- check if a node was already dumped
         if storedNode == nodeAddr then
-          sendDebugMessageAndStepOut('iterateMNodeToAddr: NODE ' .. tostring(nodeName) .. ' ALREADY DUMPED')
+          sendDebugMessage('NODE ' .. tostring(nodeName) .. ' ALREADY DUMPED')
 
           synchronize(function(parent)
             parent.setDescription(parent.Description .. ' /D/') -- let's note what nodes are copies
@@ -4348,7 +4289,7 @@
       GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
       GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )
 
-      sendDebugMessage('iterateMNodeToAddr: STEP: Constants for: ' .. tostring(nodeName))
+      sendDebugMessage('STEP: Constants for: ' .. tostring(nodeName))
 
       if GDDEFS.CONST_MAP ~= 0 then
         local newConstRec = synchronize(function(parent)
@@ -4367,12 +4308,11 @@
         iterateNodeConstToAddr(nodeContext)
       end
 
-      sendDebugMessage('iterateMNodeToAddr: STEP: VARIANTS for: ' .. tostring(nodeName))
+      sendDebugMessage('STEP: VARIANTS for: ' .. tostring(nodeName))
 
       nodeContext = { addr = nodeAddr, name = nodeName, gdname = gdscriptName, memrec = parent, struct = nil, symbol = variantVectorSym }
       iterateVecVarToAddr(nodeContext)
 
-      debugStepOut()
       return
     end
 
@@ -4380,12 +4320,11 @@
     ---@param nodeAddr number
     ---@param scriptInstStructElement userdata
     function iterateNodeToStruct(nodeAddr, scriptInstStructElement)
-      debugStepIn()
 
       local nodeName = getNodeName(nodeAddr) or 'NIL';
       local scriptName = getNodeNameFromGDScript(nodeAddr)
 
-      sendDebugMessage('iterateNodeToStruct: Node: ' .. tostring(nodeName))
+      sendDebugMessage('Node: ' .. tostring(nodeName))
       
       local varVectorStructElem, scriptStructElem, constMapStructElem, functMapStructElem
       local gdScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE) or 0x0
@@ -4407,38 +4346,38 @@
       -- we check if consts, funcs, veriants exist
       if isNotNullOrNil( varVectorAddr ) and isValidPointer( varVectorAddr ) then
         varVectorStructElem = addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer)
-        sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS for: ' .. tostring(nodeName))
+        sendDebugMessage('STEP: VARIANTS for: ' .. tostring(nodeName))
         varVectorStructElem.ChildStruct = createStructure('Vars')
 
         local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = varVectorStructElem, symbol = variantVectorSym }
         iterateVecVarToStruct(nodeContext)
       else
-        sendDebugMessage('iterateNodeToStruct: STEP: VARIANTS skipped: nothing to process: ' .. tostring(nodeName))
+        sendDebugMessage('STEP: VARIANTS skipped: nothing to process: ' .. tostring(nodeName))
       end
 
       if isNotNullOrNil(GDDEFS.CONST_MAP) and isNotNullOrNil( constMapAddr ) and isValidPointer( constMapAddr ) then
         constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
-        sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS for: ' .. tostring(nodeName))
+        sendDebugMessage('STEP: CONSTANTS for: ' .. tostring(nodeName))
         constMapStructElem.ChildStruct = createStructure('Consts')
         local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = constMapStructElem, symbol = GDScriptConstMapSym }
         iterateNodeConstToStruct(nodeContext)
       else
-        sendDebugMessage('iterateNodeToStruct: STEP: CONSTANTS skipped: nothing to process: ' .. tostring(nodeName))
+        sendDebugMessage('STEP: CONSTANTS skipped: nothing to process: ' .. tostring(nodeName))
       end
 
       if isNotNullOrNil(GDDEFS.FUNC_MAP) and isNotNullOrNil( funcMapAddr ) and isValidPointer( funcMapAddr ) then
         functMapStructElem = addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer)
-        sendDebugMessage('iterateNodeToStruct: STEP: Functions for: ' .. tostring(nodeName))
+        sendDebugMessage('STEP: Functions for: ' .. tostring(nodeName))
         functMapStructElem.ChildStruct = createStructure('Funcs')
         local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = functMapStructElem, symbol = GDScriptFuncMapSym }
         iterateNodeFuncMapToStruct(nodeContext)
       else
-        sendDebugMessage('iterateNodeToStruct: STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
+        sendDebugMessage('STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
       end
 
       if GDDEFS.MONO then -- TODO: temp
         if checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
-          sendDebugMessage("iterateNodeToStruct: Node " .. nodeName .. " has csharp script type")
+          sendDebugMessage("Node " .. nodeName .. " has csharp script type")
           local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
           -- addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
           local clrDataElem = createChildStructElem(clrPtrElem, "CLRData", 0x0, vtPointer, "CLRData")
@@ -4450,7 +4389,6 @@
         end
       end
 
-      debugStepOut()
       return
     end
 
@@ -4458,29 +4396,25 @@
     ---@param nodeAddr number
     ---@param strSize number
     function getGDResName(nodeAddr, strSize)
-      assert(type(nodeAddr) == 'number', "getGDResName: nodeAddr should be a number, instead got: " .. type(nodeAddr))
-
-      debugStepIn()
+      assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
       local gdScriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(gdScriptInstance) then
-        -- sendDebugMessageAndStepOut(' getGDResName: gdScriptInstance invalid')
+        -- sendDebugMessage('gdScriptInstance invalid')
         return
       end
 
       local gdScript = readPointer(gdScriptInstance + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdScript) then
-        -- sendDebugMessageAndStepOut('getGDResName: gdScript invalid')
+        -- sendDebugMessage('gdScript invalid')
         return
       end
 
       local gdScriptName = readPointer(gdScript + GDDEFS.GDSCRIPTNAME)
       if isNullOrNil(gdScriptName) then
-        -- sendDebugMessageAndStepOut('getGDResName: gdScriptName invalid')
+        -- sendDebugMessage('gdScriptName invalid')
         return
       end
-
-      debugStepOut()
 
       -- it's immediate String
       return readUTFString(gdScriptName, strSize)
@@ -4494,25 +4428,23 @@
       local objectAddr = readPointer(objectPtr) -- it's either an obj ptr or zero
       local vtable = readPointer(objectAddr)
       if not isMMVTable(vtable) then -- check for vtable
-        -- debugStepIn()
-
-        -- sendDebugMessage('checkObjectOffset: OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
+        -- sendDebugMessage('OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
         local adjustedObjectPtr = (objectPtr or 0) - GDDEFS.PTRSIZE; -- shift back to get a ptr
         local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
         objectAddr = readPointer(wrapperAddr)
 
         if isNullOrNil(wrapperAddr) or isInvalidPointer(wrapperAddr) then -- check the wrapper
-          -- sendDebugMessageAndStepOut('checkObjectOffset: OBJ addr still not an obj  ptr, leave it be')
+          -- sendDebugMessage('OBJ addr still not an obj  ptr, leave it be')
           return objectPtr, false; -- revert the value, whatever
         end
 
         local vtable = readPointer(objectAddr)
         if isMMVTable(vtable) then -- check for vtable to be safe
-          -- sendDebugMessageAndStepOut('checkObjectOffset: shifted OBJ addr is a ptr, returning it')
+          -- sendDebugMessage('shifted OBJ addr is a ptr, returning it')
           return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
 
         else
-          -- sendDebugMessageAndStepOut('checkObjectOffset: OBJ addr still not a ptr, leave it be')
+          -- sendDebugMessage('OBJ addr still not a ptr, leave it be')
           return objectPtr, false; -- revert the value, whatever
         end
       else -- vtable valid
@@ -4581,7 +4513,7 @@
 
       for i, sig in ipairs(sigs) do
         if findFuncPointer(sig) then
-          sendDebugMessage('findGDExtensionInterfacePtr: hit at: ' .. tostring(i) .. "\t" .. sig)
+          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig)
           return true
         end
       end
@@ -4865,15 +4797,12 @@
     --- returns a lua string for a map element
     ---@param mapElement number
     function getGDFunctionName(mapElement)
-      debugStepIn()
-
       local mapElementValue = readPointer(mapElement + GDDEFS.PTRSIZE * 2) -- it's after next and prev
       if isNullOrNil(mapElementValue) then
-        sendDebugMessageAndStepOut('getGDFunctionName: (hash)mapElementKey invalid');
+        sendDebugMessage('(hash)mapElementKey invalid');
         return 'F??'
       end
 
-      debugStepOut()
       return getStringNameStr(mapElementValue)
     end
 
@@ -4890,18 +4819,17 @@
     --- returns a head element, tail element and (hash)Map size
     ---@param nodeAddr number
     function getNodeFuncMap(nodeContext)
-      assert(type(nodeContext.addr) == 'number', "getNodeFuncMap: NodePtr should be a number, instead got: " .. type(nodeContext.addr))
-      debugStepIn()
+      assert(type(nodeContext.addr) == 'number', "NodePtr should be a number, instead got: " .. type(nodeContext.addr))
 
       local scriptInstanceAddr = readPointer(nodeContext.addr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstanceAddr) then
-        sendDebugMessageAndStepOut('getNodeFuncMap: scriptInstance is invalid')
+        sendDebugMessage('scriptInstance is invalid')
         return
       end
 
       local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdScriptAddr) then
-        sendDebugMessageAndStepOut(' getNodeFuncMap: GDScript is invalid');
+        sendDebugMessage('GDScript is invalid');
         return;
       end
 
@@ -4909,10 +4837,9 @@
       local lastElement = readPointer(gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.PTRSIZE) -- tail or end
       local mapSize = readInteger(gdScriptAddr + GDDEFS.FUNC_MAP + GDDEFS.MAP_SIZE) -- hashmap or map
       if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
-        sendDebugMessageAndStepOut('getNodeFuncMap: Const: (hash)map is not found')
+        sendDebugMessage('Const: (hash)map is not found')
         return; -- return to skip if the const map is absent
       end
-      debugStepOut()
       if GDDEFS.MAJOR_VER == 4 then
         return mainElement, lastElement, mapSize, nodeContext
       else
@@ -4994,18 +4921,17 @@
     function iterateNodeFuncMapToStruct(nodeContext)
       assert(type(nodeContext.addr) == 'number', 'iterateNodeFuncMapToStruct: nodeAddr has to be a number, instead got: ' .. type(nodeContext.addr))
 
-      debugStepIn()
       local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
       local headElement, tailElement, mapSize, nodeMapContext = getNodeFuncMap(nodeMapContext)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-        sendDebugMessageAndStepOut('iterateNodeFuncMapToStruct (hash)map empty?: ' .. " Address " .. numtohexstr(nodeContext.addr))
+        sendDebugMessage('(hash)map empty?: ' .. " Address " .. numtohexstr(nodeContext.addr))
         return;
       end
       local mapElement = headElement
       local index = 0;
 
       repeat
-        -- sendDebugMessage('iterateNodeFuncMapToStruct: Looping '.." mapElemAddr: "..numtohexstr(mapElement))
+        -- sendDebugMessage('Looping '.." mapElemAddr: "..numtohexstr(mapElement))
 
         local funcName = getFunctionMapName(mapElement) or "UNKNOWN" -- the layout is similar to constant map's
 
@@ -5018,28 +4944,26 @@
         end
       until (mapElement == 0)
 
-      debugStepOut()
       return
     end
 
     function iterateFuncConstantsToStruct(funcConstantVect, funcConstantStructElem)
-      debugStepIn()
 
       if isNullOrNil(funcConstantVect) then
-        sendDebugMessageAndStepOut('iterateFuncConstantsToStruct func vector invalid')
+        sendDebugMessage('func vector invalid')
         return
       end
 
       local vectorSize = readInteger(funcConstantVect - GDDEFS.SIZE_VECTOR)
       if isNullOrNil(vectorSize) then
-        sendDebugMessageAndStepOut('iterateFuncConstantsToStruct vector size invalid')
+        sendDebugMessage('vector size invalid')
         return;
       end
 
       local variantSize, ok = redefineVariantSizeByVector(funcConstantVect, vectorSize)
 
       if not ok then
-        sendDebugMessageAndStepOut("iterateFuncConstantsToStruct: Variant resize failed")
+        sendDebugMessage("Variant resize failed")
         return
       end
       local emitter = GDEmitters.StructEmitter
@@ -5057,21 +4981,18 @@
         handler(entry, emitter, funcConstantStructElem, contextTable)
       end
 
-      debugStepOut()
       return;
     end
 
     function iterateFuncGlobalsToStruct(funcGlobalVect, funcGlobalNameStructElem)
-      debugStepIn()
-
       if isNullOrNil(funcGlobalVect) then
-        sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct funcGlobalVect invalid')
+        sendDebugMessage('funcGlobalVect invalid')
         return;
       end
 
       local vectorSize = readInteger(funcGlobalVect - GDDEFS.SIZE_VECTOR)
       if isNullOrNil(vectorSize) then
-        sendDebugMessageAndStepOut('iterateFuncGlobalsToStruct vector size invalid')
+        sendDebugMessage('vector size invalid')
         return;
       end
 
@@ -5086,12 +5007,11 @@
           bUniShift = isPointerNotNull(stringNamePtr + GDDEFS.STRING)
         end
 
-        -- sendDebugMessage('iterateFuncGlobalsToStruct: Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
+        -- sendDebugMessage('Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
 
         emitStringNameStruct(funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, bUniShift)
       end
 
-      debugStepOut()
       return;
     end
 
@@ -5264,7 +5184,7 @@
 
             local opcodeHandlerDef = self.profile.decoder.resolveOPHandlerDefFromProfile(self.profile, disasmContext.opcodeEnumRaw)
               if not opcodeHandlerDef then
-                sendDebugMessage('disassembleBytecode: handler not retrieved opcode: ' .. (disasmContext.opcodeEnumRaw or -1) .. (" | hex: %x"):format(disasmContext.opcodeEnumRaw or -1))
+                sendDebugMessage('handler not retrieved opcode: ' .. (disasmContext.opcodeEnumRaw or -1) .. (" | hex: %x"):format(disasmContext.opcodeEnumRaw or -1))
               end
               sendDebugMessage(("DB:\topcode: %-4d\thex: %-4x\tname: %s"):format( (disasmContext.opcodeEnumRaw or -1), (disasmContext.opcodeEnumRaw or -1), (opcodeHandlerDef.name or "??")))
               disasmContext.opcodeName = opcodeHandlerDef.name
@@ -9470,8 +9390,6 @@
         defineGDFunctionEnums()
       end
 
-      debugStepIn()
-
       local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE) -- TODO: resolve that with a a helper
       funcStruct.Name = 'ScriptFunc'
       local codeStructElement = funcStruct.addElement()
@@ -9508,11 +9426,10 @@
         end
         currIndx = currIndx + 1
       end
-      sendDebugMessage('disassembleGDFunctionCode: codeSize: ' .. tostring(codeSize))
+      sendDebugMessage('codeSize: ' .. tostring(codeSize))
 
       GDF.CurrentDisassembler:disassembleBytecode(codeInts, codeStructElement)
 
-      debugStepOut()
       return
     end
 
@@ -9535,8 +9452,6 @@
     end
 
     function checkIfGDFunction(funcAddr)
-      debugStepIn()
-
       local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
       local OPCODEMAX = 250
       if GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1" then
@@ -9612,7 +9527,7 @@
 
           for i, sign in ipairs(sigs) do
             if resolveVM_RELA(sign.sig, sign.sigsize) then
-              sendDebugMessage('getGDVMCallPtr::querySignatures: hit at: ' .. tostring(i) .. "\t" .. sign.sig)
+              sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sign.sig)
               if sign.isheavy then GDDEFS.VM_CALL_HEAVY = true end
               return true
             end
@@ -9820,17 +9735,16 @@
     --- returns a head element, tail element and (hash)Map size
     function getNodeConstMap(nodeContext)
       assert(type(nodeContext.addr) == 'number', "getNodeConstMap: NodePtr should be a number, instead got: " .. type(nodeContext.addr))
-      debugStepIn()
 
       local scriptInstanceAddr = readPointer(nodeContext.addr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstanceAddr) then
-        sendDebugMessageAndStepOut('getNodeConstMap: scriptInstance is invalid');
+        sendDebugMessage('scriptInstance is invalid');
         return;
       end
 
       local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdScriptAddr) then
-        sendDebugMessageAndStepOut('getNodeConstMap: GDScript is invalid')
+        sendDebugMessage('GDScript is invalid')
         return;
       end
 
@@ -9838,10 +9752,9 @@
       local lastElement = readPointer(gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.PTRSIZE) -- tail or end
       local mapSize = readInteger(gdScriptAddr + GDDEFS.CONST_MAP + GDDEFS.MAP_SIZE) -- hashmap or map
       if isNullOrNil(mainElement) or isNullOrNil(lastElement) or isNullOrNil(mapSize) then
-        sendDebugMessageAndStepOut('getNodeConstMap: Const: (hash)map is not found')
+        sendDebugMessage('Const: (hash)map is not found')
         return;
       end
-      debugStepOut()
 
       if GDDEFS.MAJOR_VER == 4 then
         return mainElement, lastElement, mapSize, nodeContext
@@ -9856,26 +9769,22 @@
     --- returns a lua string for const name
     ---@param mapElement number
     function getNodeConstName(mapElement)
-      debugStepIn()
 
       local mapElementKey = readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL)
       if isNullOrNil(mapElementKey) then
-        sendDebugMessageAndStepOut('getNodeConstName: (hash)mapElementKey invalid');
+        sendDebugMessage('(hash)mapElementKey invalid');
         return 'C??'
       end
 
-      debugStepOut()
       return getStringNameStr(mapElementKey)
     end
 
     -- iterates over const (hash)map of a node and creates addresses for it
     function iterateNodeConstToAddr(nodeContext)
-      assert(type(nodeContext.addr) == 'number', "iterateNodeConstToAddr Node addr has to be a number, instead got: " .. type(nodeContext.addr))
-
-      debugStepIn()
+      assert(type(nodeContext.addr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeContext.addr))
 
       if not checkForGDScript(nodeContext.addr) then
-        sendDebugMessageAndStepOut("iterateNodeConstToAddr: Node " .. nodeContext.name .. " with NO GDScript")
+        sendDebugMessage("Node " .. nodeContext.name .. " with NO GDScript")
         synchronize(function(parent)
           parent.Destroy()
         end, nodeContext.memrec)
@@ -9886,7 +9795,7 @@
 
       local headElement, tailElement, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-        sendDebugMessageAndStepOut('iterateNodeConstToAddr (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr))
+        sendDebugMessage('(hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr))
         synchronize(function(parent)
           parent.Destroy()
         end, nodeContext.memrec)
@@ -9919,7 +9828,6 @@
         end
 
       until (mapElement == 0)
-      debugStepOut()
       return
     end
 
@@ -9931,13 +9839,11 @@
       "iterateNodeConstToStruct Node addr has to be a number, instead got: " .. type(nodeContext.addr))
       if GDDEFS.MONO and (checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
       
-      debugStepIn()
-
       local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
 
       local headElement, _, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-        sendDebugMessageAndStepOut('iterateNodeConstToStruct (hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr)) return;
+        sendDebugMessage('(hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr)) return;
       end
 
       local mapElement = headElement
@@ -9971,7 +9877,6 @@
         end
 
       until (mapElement == 0)
-      debugStepOut()
       return
     end
 
@@ -10207,13 +10112,11 @@
     function iterateVectorVariants(nodeContext, emitter, options)
       assert(type(nodeContext.addr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeContext.addr));
 
-      debugStepIn()
-
       options = options or {}
 
       if options.requireGDScript and not checkForGDScript(nodeContext.addr) then
         
-        sendDebugMessageAndStepOut("iterateVectorVariants: Node has NO GDScript: " .. nodeContext.name)
+        sendDebugMessage("Node has NO GDScript: " .. nodeContext.name)
         if emitter == GDEmitters.AddrEmitter then
           synchronize(function(parent) parent.Destroy() end, nodeContext.memrec )
         end
@@ -10224,14 +10127,14 @@
 
       local headElement, tailElement, mapSize = getNodeVariantMap(nodeContext.addr)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
-        sendDebugMessageAndStepOut('iterateVectorVariants (hash)Map empty?: ' .. nodeContext.name)
+        sendDebugMessage('(hash)Map empty?: ' .. nodeContext.name)
         return;
       end
 
       local variantVector, vectorSize = getNodeVariantVector(nodeContext.addr)
       local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
       if not ok then
-        sendDebugMessageAndStepOut("iterateVectorVariants: Variant resize strangely failed")
+        sendDebugMessage("Variant resize strangely failed")
         return;
       end
 
@@ -10253,7 +10156,6 @@
         mapElement = getNextMapElement(mapElement)
       until (mapElement == 0)
 
-      debugStepOut()
       return
     end
 
@@ -10341,11 +10243,9 @@
     function getNodeVariantVector(nodeAddr)
       if isNullOrNil(nodeAddr) then return; end -- assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
-      -- debugStepIn()
-
       local scriptInstance = readPointer( (nodeAddr or 0) + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstance) then
-        -- sendDebugMessageAndStepOut('getNodeVariantVector: scriptInstance is absent for ' .. string.format(' %x', nodeAddr))
+        -- sendDebugMessage('scriptInstance is absent for ' .. string.format(' %x', nodeAddr))
         return;
       end
 
@@ -10353,15 +10253,13 @@
       local vectorSize = readInteger( (vectorPtr or 0) - GDDEFS.SIZE_VECTOR)
 
       if isNullOrNil(vectorPtr) then
-        -- sendDebugMessageAndStepOut('getNodeVariantVector: vector is absent for ' .. string.format(' %x', nodeAddr))
+        -- sendDebugMessage('vector is absent for ' .. string.format(' %x', nodeAddr))
         return;
       end
       if isNullOrNil(vectorSize) then
-        -- sendDebugMessageAndStepOut('getNodeVariantVector: vector size is 0/nil, node ' .. string.format(' %x', nodeAddr))
+        -- sendDebugMessage('vector size is 0/nil, node ' .. string.format(' %x', nodeAddr))
         return;
       end
-
-      -- debugStepOut()
 
       return vectorPtr, vectorSize
     end
@@ -10371,17 +10269,15 @@
     function getNodeVariantMap(nodeAddr)
       assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
-      debugStepIn()
-
       local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstanceAddr) then
-        sendDebugMessageAndStepOut('getNodeVariantMap: scriptInstance is absent for ' .. string.format(' %x', nodeAddr));
+        sendDebugMessage('scriptInstance is absent for ' .. string.format(' %x', nodeAddr));
         return;
       end
 
       local gdScriptAddr = readPointer(scriptInstanceAddr + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdScriptAddr) then
-        sendDebugMessageAndStepOut('getNodeVariantMap: GDScript is absent for ' .. string.format(' %x', nodeAddr));
+        sendDebugMessage('GDScript is absent for ' .. string.format(' %x', nodeAddr));
         return;
       end
 
@@ -10390,11 +10286,10 @@
       local mapSize = readInteger(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.MAP_SIZE)
 
       if isNullOrNil(mainElement) or isNullOrNil(endElement) or isNullOrNil(mapSize) then
-        sendDebugMessage('getNodeVariantMap: Variant: (hash)map is not found')
+        sendDebugMessage('Variant: (hash)map is not found')
         return;
       end
 
-      debugStepOut()
       if GDDEFS.MAJOR_VER == 4 then
         return mainElement, endElement, mapSize
       else
@@ -10408,13 +10303,11 @@
     ---@param varSize number
     ---@param bOffsetret boolean
     function getVariantByIndex(vectorAddr, index, varSize--[[, bPushOffset]])
-      assert(type(vectorAddr) == 'number', "getVariantByIndex: vector addr should be a number, instead got: " .. type(vectorAddr))
-      assert((type(index) == 'number') and (index >= 0), "getVariantByIndex: index should be a valid number, instead got: " .. type(index))
-
-      debugStepIn()
+      assert(type(vectorAddr) == 'number', "vector addr should be a number, instead got: " .. type(vectorAddr))
+      assert((type(index) == 'number') and (index >= 0), "index should be a valid number, instead got: " .. type(index))
 
       -- if index > readInteger( ( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) ) or 0 - 1 then
-      --   sendDebugMessage("getVariantByIndex: index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring( (index > (readInteger( ( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) or 0 ) - 1)) ))
+      --   sendDebugMessage("index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring( (index > (readInteger( ( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) or 0 ) - 1)) ))
       -- end
 
       local variantType = readInteger(vectorAddr + varSize * index)
@@ -10424,12 +10317,11 @@
       local variantAddr = getAddress(vectorAddr + offset)
 
       if (variantType == nil) or (variantAddr == nil) then -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or
-        sendDebugMessage('getVariantByIndex: variant ptr or type invalid');
-        -- if inMainThread() then error('getVariantByIndex: variant ptr or type invalid') else return 0,0,0 end
+        sendDebugMessage('variant ptr or type invalid');
+        -- if inMainThread() then error('variant ptr or type invalid') else return 0,0,0 end
         return 0,0,0
       end
 
-      debugStepOut()
       -- if bPushOffset then
         return variantAddr, variantType, offset
       -- else
@@ -10807,13 +10699,12 @@
     ---@param mapSize number
     ---@param contextTable table
     function getLeftmostMapElem(rootElement, endElement, mapSize, nodeContext, options)
-      debugStepIn()
       options = options or {}
 
       local mapElement = readPointer(rootElement + GDDEFS.MAP_LELEM)
 
       if isNullOrNil(mapElement) then
-        sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
+        sendDebugMessage('mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
         return 0, endElement, mapSize -- return 0 as for failure
       end
 
@@ -10828,7 +10719,6 @@
       end
 
       -- if mapElement == endElement then
-      --   debugStepOut()
       --   return mapElement, endElement, mapSize, nodeContext
       -- end
 
@@ -10849,11 +10739,10 @@
       end
 
       if isNullOrNil(mapElement) then
-        sendDebugMessageAndStepOut('getLeftmostMapElem: mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
+        sendDebugMessage('mapElement is likely non-existent: root : ' .. numtohexstr(rootElement) .. ' last ' .. numtohexstr(endElement) .. ' size ' .. numtohexstr(mapSize));
         return 0, endElement, mapSize -- return 0 as a head element
       end
 
-      debugStepOut();
       return mapElement, endElement, mapSize, nodeContext
     end
 
@@ -10866,79 +10755,74 @@
       if isNullOrNil(vectorPtr) or isNullOrNil(vectorSize) then return 0, false; end
       -- assert((type(vectorPtr) == 'number'), "vectorPtr has to be a number, instead got: " .. type(vectorPtr))
       -- assert((type(vectorSize) == 'number') and (vectorSize > 0), "VectorSize is empty or not a number, type: " .. type(vectorSize))
-      -- debugStepIn()
 
       if isNullOrNil(vectorSize) then
-        -- sendDebugMessageAndStepOut('redefineVariantSizeByVector: Bad vector size for '..numtohexstr(vectorPtr));
+        -- sendDebugMessage('Bad vector size for '..numtohexstr(vectorPtr));
         return 0x18, true;
       end
 
       if GDDEFS.MAJOR_VER == 4 then
         if (vectorSize == 1) and (getGDTypeName( readInteger(vectorPtr) ) == "DICTIONARY") then -- TODO: BRITTLE, investigate how consistent dictionaries do that
-          -- sendDebugMessageAndStepOut(" 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
+          -- sendDebugMessage("1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
           return 0x30, true;
         elseif (vectorSize == 1) then
-          -- sendDebugMessageAndStepOut("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
+          -- sendDebugMessage("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
           return 0x18, true;
         end
 
         if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
-          -- debugStepOut()
           return 0x18, true;
         elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) then -- if it's 0x30
-          -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x30, true;
         elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) then -- if it's 0x40
-          -- sendDebugMessageAndStepOut(" Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x40, true;
         end
 
         if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
-          -- debugStepOut()
           return 0x18, true;
         elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
-          -- sendDebugMessageAndStepOut("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x30, true;
         elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) and getGDTypeName(readInteger(vectorPtr + 0x40 * 2)) then
-          -- sendDebugMessageAndStepOut("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x40, true;
         end
 
       elseif GDDEFS.MAJOR_VER == 3 then
         if (vectorSize == 1) and (getGDTypeName(vectorPtr) == 'DICTIONARY') then -- for some reasons single-sized vectors with dict were 0x30
-          -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
+          -- sendDebugMessage("1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
           return 0x20, true;
         elseif (vectorSize == 1) then
-          -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
+          -- sendDebugMessage("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
           return 0x18, true; -- Usual size is 0x18 in 3.x
         end
 
         if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
-          -- debugStepOut()
           return 0x18, true; -- Usual size is 0x18 in 3.x
         elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) then
-          -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("2s Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x20, true;
         elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) then
-          -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: 2s Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("2s Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x30, true; -- what's the longest for 3.x?
         end
 
         if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
-          -- debugStepOut()
           return 0x18, true; -- Usual size is 0x18 in 3.x
         elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) and getGDTypeName(readInteger(vectorPtr + 0x20 * 2)) then
-          -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x20, true;
         elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
-          -- sendDebugMessageAndStepOut(" redefineVariantSizeByVector: Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
+          -- sendDebugMessage("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
           return 0x30, true; -- what's the longest for 3.x?
         end
       else
         -- TODO
       end
 
-      -- sendDebugMessageAndStepOut("redefineVariantSizeByVector: Variant resize failed past 4 cases (vector: "..numtohexstr(vectorPtr)..")")
+      -- sendDebugMessage("Variant resize failed past 4 cases (vector: "..numtohexstr(vectorPtr)..")")
       -- // Variant takes 24 bytes when real_t is float, and 40 bytes if double.
       -- // It only allocates extra memory for AABB/Transform2D (24, 48 if double),
       -- // Basis/Transform3D (48, 96 if double), Projection (64, 128 if double),
@@ -11536,7 +11420,6 @@
     end
 
     function GDAPI.getGDObjectName(objAddr)
-      -- debugStepIn()
       -- up until 4.6, the method was StringName* Object::_get_class_namev()
       -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object class name
       local metaAddr = getObjectMeta(objAddr)
@@ -11555,7 +11438,6 @@
         className = getStringNameStr(stringNameAddr or 0) or '??'
       end
 
-      -- debugStepOut()
       return className
     end
 
@@ -11800,10 +11682,10 @@
       local gdscriptName = getNodeNameFromGDScript(nodeAddr)
 
       if not checkForGDScript(nodeAddr) then
-        -- sendDebugMessage('DumpNodeToAddr: node '..nodeNameStr..' doesnt have GDScript/Inst')
+        -- sendDebugMessage('node '..nodeNameStr..' doesnt have GDScript/Inst')
         return
       end
-      -- sendDebugMessage('DumpNodeToAddr: node '..tostring(nodeNameStr)..'addr: '..numtohexstr(nodeAddr) )
+      -- sendDebugMessage('node '..tostring(nodeNameStr)..'addr: '..numtohexstr(nodeAddr) )
 
       synchronize(function(parentMemrec)
         if parentMemrec.Count ~= 0 then -- let's clear all children
@@ -11823,7 +11705,7 @@
       GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
 
       if bDoConstants and (GDDEFS.CONST_MAP ~= 0) then
-        -- sendDebugMessage('DumpNodeToAddr: constants for node: '..tostring(nodeNameStr) )
+        -- sendDebugMessage('constants for node: '..tostring(nodeNameStr) )
 
         local newConstRec = synchronize(function(parentMemrec)
           local newConstRec = getAddressList().createMemoryRecord()
@@ -11839,7 +11721,7 @@
         iterateNodeConstToAddr(nodeContext)
 
       end
-      -- sendDebugMessage('DumpNodeToAddr: variants for node: '..tostring(nodeNameStr) )
+      -- sendDebugMessage('variants for node: '..tostring(nodeNameStr) )
 
       nodeContext = { addr = nodeAddr, name = nodeNameStr, gdname = gdscriptName, memrec = parentMemrec, struct = nil, symbol = variantVectorSym }
       iterateVecVarToAddr(nodeContext)
