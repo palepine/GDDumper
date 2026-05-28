@@ -10,15 +10,6 @@
   -- TODO: explore what can be extracted from GDNative script endpoints
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DECLARATIONS
-  local GDAPI = {}
-  local Node = {}
-  local Func = {}
-  local Const = {}
-  local Var = {}
-  local Map = {}
-  Var.Dict = {}
-  Var.Arr = {}
-  Var.PArr = {}
 
   local isNullOrNil
   local isNotNullOrNil
@@ -4646,7 +4637,7 @@
         local extra, opcode, bytes, address = splitDisassembledString( disassemble(instrPointer) )
 
         -- ~lea rcx,[rcx+XXX]
-        local offsetStr = opcode:match("lea r.x,%[rcx%+([%x]+)%]")
+        local offsetStr = opcode:match("lea r.[xi],%[rcx%+([%x]+)%]")
         if isNotNullOrNil(offsetStr) then
           sourceOffset = tonumber(offsetStr, 16)
           GDDEFS.GDSCRIPT_SRC = sourceOffset
