@@ -101,11 +101,7 @@
   local checkGDStringType
   local getObjectMeta
 
-  local getMainNodeDict
   local getMainNodeTable
-  local registerDumpedNodes
-  local unregisterNodes
-  local nodeMonitorService
   local nodeMonitorThread
   local NodeMonitorServiceSwitch
 
@@ -1698,7 +1694,6 @@
     function getStoredOffsetsFromVersion(majminVersionStr)
 
       majminVersionStr = majminVersionStr or GDDEFS.VERSION_STRING
-      -- TODO: GDDEFS.MAXTYPE
       -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
 
       local offsets = {}
@@ -3244,8 +3239,6 @@
       return childrenAddr, childrenSize
     end
 
-    -- TODO: split to specific engine internals
-
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// VISITORS
 
     local NodeVisitor = {}
@@ -3927,6 +3920,56 @@
     GDHandlers.ConstVectorHandlers = {}
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
 
+
+    --- returns a node dictionary
+    local function getMainNodeDict()
+      local childrenAddr, childrenSize = getVPChildren()
+      local nodeDict = {}
+
+      if isNullOrNil(childrenAddr) then return end
+
+      for i = 0, ( (childrenSize or 0) - 1) do
+
+        local nodePtr = readPointer( (childrenAddr or 0) + i * GDDEFS.PTRSIZE)
+        if isNullOrNil(nodePtr) then if inMainThread() then error('getMainNodeDict: NO MAIN NODES') else getCurrentThreadObject().terminate() end end
+
+        local nodeNameStr = getNodeName(nodePtr)
+        local gdscriptName = getNodeNameFromGDScript(nodePtr)
+        registerSymbol(gdscriptName, nodePtr, true)
+
+          nodeDict[nodeNameStr] =
+          {
+            index = i,
+            NAME = nodeNameStr,
+            SCRIPTNAME = gdscriptName,
+            PTR = nodePtr,
+            TYPE = getGDTypeEnumFromName("OBJECT"), -- node
+            MEMREC = 0
+          }
+      end
+      return nodeDict
+    end
+
+    --- returns a node table
+    function getMainNodeTable()
+      local childrenAddr, childrenSize = getVPChildren()
+      if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('getMainNodeDict: VP Children not valid') end
+
+      local nodeTable = {}
+
+      for i = 0, (childrenSize - 1) do
+        local nodeAddr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
+        if isNullOrNil(nodeAddr) then
+          error('getMainNodeDict: NO MAIN NODES')
+        end
+        local nodeNameStr = getNodeNameFromGDScript(nodeAddr)
+        if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
+        registerSymbol(nodeNameStr, nodeAddr, true)
+        table.insert(nodeTable, nodeAddr)
+      end
+      return nodeTable
+    end
+
     function processNodeForNodes(nodeAddr, dumpContext)
       if not dumpContext:tryVisitNode(nodeAddr) then return end
 
@@ -4276,7 +4319,7 @@
         sendDebugMessage('STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
       end
 
-      if GDDEFS.MONO then -- TODO: temp
+      if GDDEFS.MONO then
         if checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
           sendDebugMessage("Node " .. nodeName .. " has csharp script type")
           local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
@@ -4675,7 +4718,7 @@
 
       -- get reload method
       local reloadMethodPtr = readPointer(gdscriptVtable + GDDEFS.GDSCRIPT_RELOAD_INDX*GDDEFS.PTRSIZE)
-      if isNullOrNil(reloadMethodPtr) then error('method not founds') end
+      if isNullOrNil(reloadMethodPtr) then error('method not found') end
 
       -- construct a managed string from the streamed script file
       local newScriptAddr = GDXI.string_new_with_latin1_chars(newScript)
@@ -4690,9 +4733,30 @@
       -- void GDScript::set_source_code(const String &p_code)
       -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
       -- Object::set_script isn't virtual in non-debug
-      return executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
+      local eError = executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
+      
+      -- so we can revert later?
+      writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, binaryTockensAddr)
+      return eError
     end
 
+    --- reloads from the binary tokens
+    ---@param nodeAddr number
+    function GDAPI.revertGDScript(nodeAddr)
+      assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
+      assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
+      assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
+
+      -- get gdscript and its vtable
+      local gdscript = getNodeGDScript(nodeAddr) or 0
+      local gdscriptVtable = readPointer(gdscript)
+
+      -- get reload method
+      local reloadMethodPtr = readPointer(gdscriptVtable + GDDEFS.GDSCRIPT_RELOAD_INDX*GDDEFS.PTRSIZE)
+      if isNullOrNil(reloadMethodPtr) then error('method not found') end
+
+      return executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
+    end
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Func
 
     --- returns a lua string for a map element
@@ -9091,7 +9155,7 @@
           GDF.Decoders.BytecodeV1 =
             {
               name = "BytecodeV1",
-              resolveOPHandlerDefFromProfile = function(profile, opcodeEnum) -- TODO: version specific overriding
+              resolveOPHandlerDefFromProfile = function(profile, opcodeEnum)
                 -- for other versions redefine the handler on the fly
                 return profile.OPHandlerDefFromOPEnum[opcodeEnum]
               end
@@ -9299,7 +9363,7 @@
       codeStructElement.VarType = vtPointer
       codeStructElement.ChildStruct = createStructure('FuncCode')
 
-      local funcConstantStructElem = funcStruct.addElement()  -- TODO: make GLOBALS and CONSTANTS dumped when building Node Struct, use bool to disassemble functions?
+      local funcConstantStructElem = funcStruct.addElement()
       funcConstantStructElem.Name = 'Constants'
       funcConstantStructElem.Offset = GDDEFS.FUNC_CONST
       funcConstantStructElem.VarType = vtPointer
@@ -9524,97 +9588,20 @@
 
       local argPtrs = {}
 
-      for i, arg in ipairs(args) do -- TODO: make a cleaner version with table retrieval
-        -- unreffed primitived
-        if arg.type == "BOOL" then
-          argPtrs[i] = handler.BOOL(arena, arg.value, arg.copy)
-        elseif arg.type == "INT" then
-          argPtrs[i] = handler.INT(arena, arg.value, arg.copy)
-        elseif arg.type == "FLOAT" then
-          argPtrs[i] = handler.FLOAT(arena, arg.value, arg.copy)
-        elseif arg.type == "VECTOR2" then
-          argPtrs[i] = handler.VECTOR2(arena, arg.value, arg.copy)
-        elseif arg.type == "VECTOR2I" then
-          argPtrs[i] = handler.VECTOR2I(arena, arg.value, arg.copy)
-        elseif arg.type == "RECT2" then
-          argPtrs[i] = handler.RECT2(arena, arg.value, arg.copy)
-        elseif arg.type == "RECT2I" then
-          argPtrs[i] = handler.RECT2I(arena, arg.value, arg.copy)
-        elseif arg.type == "VECTOR3" then
-          argPtrs[i] = handler.VECTOR3(arena, arg.value, arg.copy)
-        elseif arg.type == "VECTOR3I" then
-          argPtrs[i] = handler.VECTOR3I(arena, arg.value, arg.copy)
-        elseif arg.type == "VECTOR4" then
-          argPtrs[i] = handler.VECTOR4(arena, arg.value, arg.copy)
-        elseif arg.type == "VECTOR4I" then
-          argPtrs[i] = handler.VECTOR4I(arena, arg.value, arg.copy)
-        elseif arg.type == "PLANE" then
-          argPtrs[i] = handler.PLANE(arena, arg.value, arg.copy)
-        elseif arg.type == "QUATERNION" then
-          argPtrs[i] = handler.QUATERNION(arena, arg.value, arg.copy)
-        elseif arg.type == "COLOR" then
-          argPtrs[i] = handler.COLOR(arena, arg.value, arg.copy)
-        elseif arg.type == "RID" then
-          argPtrs[i] = handler.RID(arena, arg.value, arg.copy)
-
-        elseif arg.type == "OBJECT" then
-          argPtrs[i] = handler.OBJECT(arena, arg.value, arg.copy)
-
-        -- internally-coupled management
-        elseif arg.type == "STRING" then
-          argPtrs[i] = handler.STRING(arena, arg.value, arg.copy)
-        elseif arg.type == "STRING_NAME" then
-          argPtrs[i] = handler.STRING_NAME(arena, arg.value, arg.copy)
-        elseif arg.type == "NODE_PATH" then
-          argPtrs[i] = handler.NODE_PATH(arena, arg.value, arg.copy)
-        elseif arg.type == "CALLABLE" then
-          argPtrs[i] = handler.CALLABLE(arena, arg.value, arg.copy)
-        elseif arg.type == "SIGNAL" then
-          argPtrs[i] = handler.SIGNAL(arena, arg.value, arg.copy)
-        elseif arg.type == "DICTIONARY" then
-          argPtrs[i] = handler.DICTIONARY(arena, arg.value, arg.copy)
-        elseif arg.type == "ARRAY" then
-          argPtrs[i] = handler.ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_BYTE_ARRAY" then
-          argPtrs[i] = handler.PACKED_BYTE_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_INT32_ARRAY" then
-          argPtrs[i] = handler.PACKED_INT32_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_INT64_ARRAY" then
-          argPtrs[i] = handler.PACKED_INT64_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_FLOAT32_ARRAY" then
-          argPtrs[i] = handler.PACKED_FLOAT32_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_FLOAT64_ARRAY" then
-          argPtrs[i] = handler.PACKED_FLOAT64_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_STRING_ARRAY" then
-          argPtrs[i] = handler.PACKED_STRING_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_VECTOR2_ARRAY" then
-          argPtrs[i] = handler.PACKED_VECTOR2_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_VECTOR3_ARRAY" then
-          argPtrs[i] = handler.PACKED_VECTOR3_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_COLOR_ARRAY" then
-          argPtrs[i] = handler.PACKED_COLOR_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "PACKED_VECTOR4_ARRAY" then
-          argPtrs[i] = handler.PACKED_VECTOR4_ARRAY(arena, arg.value, arg.copy)
-        elseif arg.type == "TRANSFORM2D" then
-          argPtrs[i] = handler.TRANSFORM2D(arena, arg.value, arg.copy)
-        elseif arg.type == "AABB" then
-          argPtrs[i] = handler.AABB(arena, arg.value, arg.copy)
-        elseif arg.type == "BASIS" then
-          argPtrs[i] = handler.BASIS(arena, arg.value, arg.copy)
-        elseif arg.type == "TRANSFORM3D" then
-          argPtrs[i] = handler.TRANSFORM3D(arena, arg.value, arg.copy)
-        elseif arg.type == "PROJECTION" then
-          argPtrs[i] = handler.PROJECTION(arena, arg.value, arg.copy)
+      for i, arg in ipairs(args) do
+        local typehandler = handler[ arg.type ]
+        if typehandler then
+          argPtrs[i] = typehandler( arena, arg.value, arg.copy )
         else
-          error("unsupported custom Variant arg type: " .. tostring(arg.type))
+          error("unsupported Variant arg type: " .. tostring(arg.type))
         end
       end
 
-      -- this is an array of ptrs we fill, Variant **p_args, we have at least 35 pts
+      -- this is an array of ptrs we fill, Variant **p_args
       local argArray = arena.base + arena.argListOffset
 
       for i, ptr in ipairs(argPtrs) do
-        writePointer( argArray + ((i - 1) * GDDEFS.PTRSIZE) , ptr) -- fill the array with arg ptrs
+        writePointer( argArray + ((i - 1) * GDDEFS.PTRSIZE) , ptr)
       end
     end
 
@@ -9831,7 +9818,7 @@
 
       contextTable.symbol = wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+DICT_HEAD' )
       
-      iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false, nextContainerFactory = nil, nextSymbolFactory = createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol }) -- TODO: bNeedStructOffset
+      iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false, nextContainerFactory = nil, nextSymbolFactory = createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
       return
     end
 
@@ -9922,7 +9909,7 @@
       if isNullOrNil(arrVectorAddr) then return; end
 
       contextTable.symbol = wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
-      iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })  -- TODO: bNeedStructOffset
+      iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })
       return
     end
 
@@ -9938,7 +9925,7 @@
       arrayStructElement = addStructureElem(arrayStructElement, 'VectorArray', GDDEFS.ARRAY_TOVECTOR, vtPointer)
       arrayStructElement.ChildStruct = createStructure('ArrayData')
       contextTable.symbol = wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
-      iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol }) -- TODO: nodename and addr?
+      iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })
       return
     end
 
@@ -10097,7 +10084,7 @@
     function iterateVecVarToAddr(nodeContext)
       local options =
       {
-        bNeedStructOffset = false, -- TODO: bNeedStructOffset
+        bNeedStructOffset = false,
         requireGDScript = true
       };
       iterateVectorVariants(nodeContext, GDEmitters.AddrEmitter, options);
@@ -11372,67 +11359,6 @@
       end
     end
 
-    --- returns a node dictionary
-    function getMainNodeDict()
-      local childrenAddr, childrenSize = getVPChildren()
-      local nodeDict = {}
-
-      if isNullOrNil(childrenAddr) then return end
-
-      for i = 0, ( (childrenSize or 0) - 1) do
-
-        local nodePtr = readPointer( (childrenAddr or 0) + i * GDDEFS.PTRSIZE)
-        if isNullOrNil(nodePtr) then if inMainThread() then error('getMainNodeDict: NO MAIN NODES') else getCurrentThreadObject().terminate() end end
-
-        local nodeNameStr = getNodeName(nodePtr)
-        local gdscriptName = getNodeNameFromGDScript(nodePtr)
-        registerSymbol(gdscriptName, nodePtr, true)
-
-        if GDDEFS.MAJOR_VER == 4 then
-          nodeDict[nodeNameStr] =
-          {
-            index = i,
-            NAME = nodeNameStr,
-            SCRIPTNAME = gdscriptName,
-            PTR = nodePtr,
-            TYPE = 24, -- node
-            MEMREC = 0
-          }
-        else
-          nodeDict[nodeNameStr] =
-          {
-            index = i,
-            NAME = nodeNameStr,
-            SCRIPTNAME = gdscriptName,
-            PTR = nodePtr,
-            TYPE = 17, -- node
-            MEMREC = 0
-          }
-        end
-      end
-      return nodeDict
-    end
-
-    --- returns a node table
-    function getMainNodeTable()
-      local childrenAddr, childrenSize = getVPChildren()
-      if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('getMainNodeDict: VP Children not valid') end
-
-      local nodeTable = {}
-
-      for i = 0, (childrenSize - 1) do
-        local nodeAddr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
-        if isNullOrNil(nodeAddr) then
-          error('getMainNodeDict: NO MAIN NODES')
-        end
-        local nodeNameStr = getNodeNameFromGDScript(nodeAddr)
-        if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
-        registerSymbol(nodeNameStr, nodeAddr, true)
-        table.insert(nodeTable, nodeAddr)
-      end
-      return nodeTable
-    end
-
     --- gets a dumped Node by name
     ---@param nodeName string
     function GDAPI.getDumpedNode(nodeName)
@@ -11457,7 +11383,15 @@
       end
     end
 
-    function registerDumpedNodes()
+    local function unregisterNodes()
+      if (not gd_registeredNodes) or next(gd_registeredNodes) == nil then return; end
+      for i, k in ipairs(gd_registeredNodes) do
+        unregisterSymbol(k)
+      end
+      gd_registeredNodes = {}
+    end
+
+    local function registerDumpedNodes()
       if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
       unregisterNodes() -- unregister the current & freed nodes
       for k, nodeAddr in pairs(gd_dumpedMonitorNodes) do
@@ -11466,15 +11400,8 @@
       end
     end
 
-    function unregisterNodes()
-      if (not gd_registeredNodes) or next(gd_registeredNodes) == nil then return; end
-      for i, k in ipairs(gd_registeredNodes) do
-        unregisterSymbol(k)
-      end
-      gd_registeredNodes = {}
-    end
 
-    function nodeMonitorService(thr)
+    local function nodeMonitorService(thr)
       thr.Name = "GD Node Monitor Service"
       thr.freeOnTerminate(false) -- we do it ourselves
       -- bMonitorNodes = true
@@ -11763,3 +11690,4 @@
 
   getGDExtensionFunc = GDAPI.getGDExtensionFunc
   recompileGDScript = GDAPI.recompileGDScript
+  revertGDScript = GDAPI.revertGDScript
