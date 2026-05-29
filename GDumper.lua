@@ -5049,7 +5049,7 @@
         local extra, opcode, bytes, address = splitDisassembledString( disassemble(instrPointer) )
 
         -- ~lea rcx,[rcx+XXX]
-        local offsetStr = opcode:match("lea r.[xi],%[rcx%+([%x]+)%]")
+        local offsetStr = opcode:match("lea r..,%[rcx%+([%x]+)%]")
         if isNotNullOrNil(offsetStr) then
           sourceOffset = tonumber(offsetStr, 16)
           GDDEFS.GDSCRIPT_SRC = sourceOffset
@@ -11994,6 +11994,7 @@
         GDI.Extension = GDExtendedInterface
       end
       if GDDEFS.MAJOR_VER == 3 then
+        if findGDNativeAPIStruct() then sendDebugMessage('API struct found!') end
         GDI.GDNative = GDNativeInterface
       end
 
