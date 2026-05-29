@@ -2293,6 +2293,7 @@
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
         offsets.GDScriptFunctionCodeArg = 0xA0
+        offsets.GDScriptRealoadIndex = 42
         
         if GDDEFS.DEBUGVER then
           -- godot.windows.opt.debug.64.exe
@@ -2339,6 +2340,7 @@
           offsets.GDScriptFunctionCodeConsts = 0x20
           offsets.GDScriptFunctionCodeGlobals = 0x30
           offsets.GDScriptFunctionCodeArg = 0xA0
+          offsets.GDScriptRealoadIndex = 42
         
           if GDDEFS.DEBUGVER then
             -- godot.windows.opt.debug.64.exe
@@ -2448,6 +2450,7 @@
         offsets.GDScriptFunctionCodeGlobals = 0x30
         -- timer 1E0 (float) waittime 1E8 time_left 1F0 paused?
         offsets.GDScriptFunctionCodeArg = 0xA0
+        offsets.GDScriptRealoadIndex = 42
         
         if GDDEFS.DEBUGVER then
           -- error("Not defined yet")
