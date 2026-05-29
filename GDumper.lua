@@ -106,6 +106,8 @@
 
   local stdcall = 0
   local timeout = nil
+  local makeAddr
+  local makeSymAddr
 
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
@@ -2491,6 +2493,7 @@
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
         offsets.GDScriptFunctionCodeArg = 0xA0
+        offsets.GDScriptRealoadIndex = 41
         
         if GDDEFS.DEBUGVER then
           -- error("Not defined yet")
@@ -3317,11 +3320,11 @@
 
       GDEmitters.AddrEmitter = {}
 
-        local function makeAddr(base, offset)
+        function makeAddr(base, offset)
           return (base or 0) + (offset or 0)
         end
 
-        local function makeSymAddr(base, offset)
+        function makeSymAddr(base, offset)
           return (tostring(base) or '') .. '+' .. (numtohexstr(offset) or '')
         end
 
@@ -5083,21 +5086,24 @@
 
       -- construct a managed string from the streamed script file
       local newScriptAddr = GDI.construct_string(newScript)
-      local binaryTockensAddr = readPointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS)
-      if isNullOrNil(binaryTockensAddr) then error('tokens invalid') end
-       
-      -- making it nullptr is seemingly less messier to avoid !binary_tokens.is_empty()
-      writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, 0)
+      local binaryTockensAddr
+      if GDDEFS.MAJOR_VER >= 4 then
+        binaryTockensAddr = readPointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS)
+        if isNullOrNil(binaryTockensAddr) then error('tokens invalid') end
+        -- making it nullptr is seemingly less messier to avoid !binary_tokens.is_empty()
+        writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, 0)
+      end
+
       writePointer(gdscript + GDDEFS.GDSCRIPT_SRC , newScriptAddr )
 
-      -- 0 OK, 22 ERR_ALREADY_IN_USE, 43 ERR_PARSE_ERROR
+      -- 0 OK, 22 ERR_ALREADY_IN_USE, 43 ERR_PARSE_ERROR, 2 ERR_HANDLER_SCRIPT, 36 ERR_COMPILATION_FAILED, 1 ERR_HANDLER_WARNING
       -- void GDScript::set_source_code(const String &p_code)
       -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
       -- Object::set_script isn't virtual in non-debug
       local eError = executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
-      
-      -- so we can revert later?
-      writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, binaryTockensAddr)
+      if GDDEFS.MAJOR_VER >= 4 then
+        writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, binaryTockensAddr) -- so we can revert later?
+      end
       return eError
     end
 
