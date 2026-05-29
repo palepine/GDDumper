@@ -7,6 +7,7 @@
   -- TODO more offsets for non-GDI objects
   -- TODO doxygen comments
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
+  -- TODO: full object path as a separate symbol?
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DECLARATIONS
   local GDAPI = {}
@@ -29,8 +30,6 @@
   local UTF8Codepoints
   local getStringNameStr
 
-  local tryRegSceneTree
-  local setSTtoVPoffset
   local getViewport
   local getVPChildren
   
@@ -60,7 +59,7 @@
   local disassembleGDFunctionCodeToStruct
   local formatDisassembledAddress
   local checkIfGDFunction
-  local getGDVMCallPtr
+  -- local findGDVMCallPtr
   local setupCallArgs
 
   local getNodeConstMap
@@ -2905,6 +2904,9 @@
         GDDEFS.PTRSIZE = 0x4
         GDDEFS._x64bit = false
       end -- for auto offsetdef and ptr arithmetics
+
+      local scriptErrors = { [22] = "in use error", [43] = "parse error", [2] = "handler script error", [36] = "compilation error", [1] = "handler warning", }
+      GDDEFS.SCRIPT_ERRORS = scriptErrors
     end
 
     local function initGDVersion(config)
@@ -3067,7 +3069,7 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Viewport / Window / SceneTree
 
-    function tryRegSceneTree()
+    local function tryRegSceneTree()
       local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
         local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
         if addr == 0 or addr == nil then
@@ -3083,9 +3085,10 @@
         else
           resolvedAddr = relativeAddr -- absolute on 32
         end
-        sendDebugMessage("calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
+        -- sendDebugMessage("[SceneTree] calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
         local className = getGDObjectName(readPointer(resolvedAddr))
         if className == "SceneTree" then
+          sendDebugMessage("[SceneTree] via vtable - success: " .. numtohexstr(resolvedAddr) .. " sig: " .. aobSignature )
           registerSymbol('pSceneTree', resolvedAddr, false)
           return true
         else
@@ -3115,6 +3118,7 @@
       table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 3D 48 8B 36", toRel = 3 } )
       table.insert(sigs, { sig = "4C 8B 0D ? ? ? ? 4C 89 B4 24", toRel = 3 } )
       table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 2B", toRel = 3 } )
+      table.insert(sigs, { sig = "48 83 3D ? ? ? ? 00  49 C7 85 ? ? ? ? 00 00 00 00 49 89 9D", toRel = 3 } )
       table.insert(sigs, { sig = "A1 ? ? ? ? 85 C0 74 ? 8B 35 ? ? ? ? 8B", toRel = 1 } ) -- 3.5 32
       table.insert(sigs, { sig = "C7 05 ? ? ? ? 00 00 00 00 85 C0 0F 84 ? ? ? ? B9", toRel = 2 } ) -- 3.5 32
       table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 85 C9 74 ? 48 8D 55 ? E8", toRel = 3 } ) -- 3.2
@@ -3122,14 +3126,14 @@
 
       for i, sig in ipairs(sigs) do
         if resolveRelAddr(sig.sig, sig.toRel) then
-          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig.sig)
           return true
         end
       end
+      sendDebugMessage("[SceneTree] lookup failed, you are on your own")
       return false
     end
 
-    function setSTtoVPoffset()
+    local function setSTtoVPoffset()
 
       local sceneTree = readPointer('pSceneTree')
       local ptrsize, steps
@@ -3147,11 +3151,11 @@
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
         if isNotNullOrNil(candidateAddr) and isMMVTable(readPointer(candidateAddr)) then
 
-          sendDebugMessage("calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
+          -- sendDebugMessage("[VP/WIND] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
           local className = getGDObjectName(candidateAddr)
           if className == "Viewport" or className == "Window" then
+            sendDebugMessage("[VP/WIND] via vtable - success!")
             registerSymbol('oSTtoVP', i * ptrsize, false)
-            sendDebugMessage('loop: ' .. numtohexstr(i * ptrsize))
             return true
           end
           -- for j=13, steps do
@@ -3171,6 +3175,7 @@
           return false
         end
         local relativeAddr = readInteger(addr + 3)
+        sendDebugMessage("[VP/WIND] via sigs - success!")
         registerSymbol('oSTtoVP', relativeAddr, false)
         return true
       end
@@ -3202,12 +3207,15 @@
       table.insert(sigs, "48 39 86 ? ? ? ? 74 ? C7 44 24")
       table.insert(sigs, "48 8B 8B ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 66 2E 0F 1F 84 00")
       table.insert(sigs, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
+
+      
       for i, sig in ipairs(sigs) do
         if setVPRVA(sig) then
           sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig .. "\t value: " .. numtohexstr(getAddress('oSTtoVP')))
           return true
         end
       end
+      sendDebugMessage("[VP/WIND] lookup failed, you are on your own")
       return false
     end
 
@@ -4443,9 +4451,7 @@
     local function findGDExtensionInterfacePtr()
       local function findFuncPointer(aobSignature)
         local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
-        if addr == 0 or addr == nil then
-          return false
-        end
+        if addr == 0 or addr == nil then return false end
         GDDEFS.GDXTENSION_GETPROC = addr
         return true
       end
@@ -4459,10 +4465,11 @@
 
       for i, sig in ipairs(sigs) do
         if findFuncPointer(sig) then
-          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig)
+          sendDebugMessage('[GDExtAPI] via sig - success:' .. "\t" .. sig)
           return true
         end
       end
+      sendDebugMessage('[GDExtAPI] lookup failed.')
       return false
     end
 
@@ -4494,7 +4501,7 @@
 
       -- first via rdata
       if findViaRDATA(structSignature) then
-        sendDebugMessage('hit rdata')
+        sendDebugMessage('[NATIVE_API] via rdata success!')
         return true
       end
 
@@ -4686,7 +4693,7 @@
 
         -- get func ptr
         if isNullOrNil(GDDEFS.GDXTENSION_GETPROC) then 
-          findGDExtensionInterfacePtr()
+          if not findGDExtensionInterfacePtr() then error('getproc func ptr not found') end
         end
         local getProcAddr = GDDEFS.GDXTENSION_GETPROC
 
@@ -9815,62 +9822,49 @@
       return false
     end
 
-    function getGDVMCallPtr()
-
+    local function findGDVMCallPtr()
       local function resolveVM_RELA(aobSignature, sigByteLength, offsetToNextIntr)
         local function resolveAddress(instructionAddr, sigByteLength, offsetToNextIntr)
           local callInstr = instructionAddr + sigByteLength - 1
           local relativeAddr = readInteger(callInstr + 1)
           local nextAddr = getAddress(callInstr + offsetToNextIntr)
           local relativeAddr = readInteger(instructionAddr + sigByteLength)
+          GDDEFS.VM_CALL = (nextAddr + relativeAddr)
           registerSymbol('GDFunctionCall', (nextAddr + relativeAddr), false)
         end
         local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
-        if addr == 0 or addr == nil then
-          return false
-        end
+        if addr == 0 or addr == nil then return false end
         resolveAddress(addr, sigByteLength, 5)
         return true
       end
 
-      local function querySignatures()
-          local sigs = {}
-          table.insert(sigs, { isheavy = true,  sig = "4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize = 24 }) -- 4.6 ret 64<
-          table.insert(sigs, { isheavy = false, sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize = 28 }) -- 4.6 ret 64>
-          table.insert(sigs, { isheavy = false, sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 34 }) -- 4.5
-          table.insert(sigs, { isheavy = true,  sig = "4C 89 7C 24 28 89 44 24 20 48 89 ? >48 89 ? >48 89 ? E8", sigsize = 19 }) -- 4.5 ret 64<
-          table.insert(sigs, { isheavy = false, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
-          table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
-          table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 25 }) -- 4.3 ret 64<
-          table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4-4.3
-          table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize = 16 }) -- 4.2
-          table.insert(sigs, { isheavy = true,  sig = "4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8", sigsize = 16 }) -- 4.2 Godot Engine v4.2.2.stable.official.15073afe3
+      local sigs = {}
+      table.insert(sigs, { isheavy = true,  sig = "4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize = 24 }) -- 4.6 ret 64<
+      table.insert(sigs, { isheavy = false, sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize = 28 }) -- 4.6 ret 64>
+      table.insert(sigs, { isheavy = false, sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 34 }) -- 4.5
+      table.insert(sigs, { isheavy = true,  sig = "4C 89 7C 24 28 89 44 24 20 48 89 ? >48 89 ? >48 89 ? E8", sigsize = 19 }) -- 4.5 ret 64<
+      table.insert(sigs, { isheavy = false, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
+      table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
+      table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 25 }) -- 4.3 ret 64<
+      table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4-4.3
+      table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize = 16 }) -- 4.2
+      table.insert(sigs, { isheavy = true,  sig = "4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8", sigsize = 16 }) -- 4.2 Godot Engine v4.2.2.stable.official.15073afe3
 
-          table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize = 24 }) -- 4.1
-          table.insert(sigs, { isheavy = false, sig = "48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize = 30 }) -- 4.1
-          table.insert(sigs, { isheavy = false, sig = "48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize = 32 }) -- 3.6
-          table.insert(sigs, { isheavy = false, sig = "4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize = 36 }) -- 3.5
-          table.insert(sigs, { isheavy = true, sig = "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize = 23 }) -- 3.3 - 3.4 - 3.5
-          table.insert(sigs, { isheavy = true,  sig = "4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8", sigsize = 17 }) -- 3.0 prefixed by 48 C7 44 24 30 ? 000000
+      table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 44 89 6C 24 20 4D 8B CC 4C 8B C5 48 8B D6 48 8B 49 ? E8", sigsize = 24 }) -- 4.1
+      table.insert(sigs, { isheavy = false, sig = "48 89 44 24 28 8B 84 24 ? ? ? ? 48 8B 8C 24 ? ? ? ? 89 44 24 20 E8 ? ? ? ? EB", sigsize = 30 }) -- 4.1
+      table.insert(sigs, { isheavy = false, sig = "48 89 7C 24 28 49 89 F0 48 89 D9 48 C7 44 24 30 ? 00 00 00 8B 84 24 ? ? 00 00 89 44 24 20 E8", sigsize = 32 }) -- 3.6
+      table.insert(sigs, { isheavy = false, sig = "4C 89 7C 24 30 48 8D 44 24 ?     48 89 44 24 28 44 89 74 24 20 4C 8B CD 4C 8B C6 48 8D 54 24 ? 48 8B 49 ? E8", sigsize = 36 }) -- 3.5
+      table.insert(sigs, { isheavy = true, sig = "48 C7 44 24 30 ? 00 00 00   48 89 44 24 28 8B 44 24 ? 89 44 24 20 E8", sigsize = 23 }) -- 3.3 - 3.4 - 3.5
+      table.insert(sigs, { isheavy = true,  sig = "4C 89 6C 24 28 44 89 64 24 20 49 89 F0 48 89 F9 E8", sigsize = 17 }) -- 3.0 prefixed by 48 C7 44 24 30 ? 000000
 
-          for i, sign in ipairs(sigs) do
-            if resolveVM_RELA(sign.sig, sign.sigsize) then
-              sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sign.sig)
-              if sign.isheavy then GDDEFS.VM_CALL_HEAVY = true end
-              return true
-            end
-          end
-          return false
+      for i, sign in ipairs(sigs) do
+        if resolveVM_RELA(sign.sig, sign.sigsize) then
+          sendDebugMessage('[VM_CALL] via sig - success: ' .. "\t" .. sign.sig)
+          if sign.isheavy then GDDEFS.VM_CALL_HEAVY = true end
+          return true
+        end
       end
-
-      local funcPrologueAddr = getAddress('GDFunctionCall') or nil
-
-      if isNotNullOrNil(funcPrologueAddr) then
-        return funcPrologueAddr
-      elseif querySignatures() then
-        return getAddress('GDFunctionCall') or nil
-      end
-      return nil
+      return false
     end
 
     function GDAPI.executeGDFunction(func_this, GDScriptInstanceAddr, argTable)
@@ -9881,7 +9875,14 @@
       -- we need the dummy stack even when no arguments
       if not VariantArena:init() then error("'stack' space isn't alloced") end
 
-      local vmCallAddr = getGDVMCallPtr()
+      local vmCallAddr
+      if isNullOrNil(GDDEFS.VM_CALL) then
+        findGDVMCallPtr()
+        vmCallAddr = GDDEFS.VM_CALL
+      else
+        vmCallAddr = GDDEFS.VM_CALL
+      end
+      
       if isNullOrNil(vmCallAddr) then error("::call() isn't found") end
 
       -- setup arguments & space
@@ -11971,8 +11972,6 @@
       -- try finding SceneTree and Viewport/Window
       if tryRegSceneTree() and setSTtoVPoffset() then
         registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false)
-      else
-        sendDebugMessage("Couldn't find SceneTree & toVP offset")
       end
 
       -- define type conversion helpers
@@ -11994,16 +11993,19 @@
       -- exposing relevant API
       if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1 then
         -- find the gd extension interface getter
-        -- findGDExtensionInterfacePtr()
-        GDI.Extension = GDExtendedInterface
+        if findGDExtensionInterfacePtr() then
+          GDI.Extension = GDExtendedInterface
+        end
       end
       if GDDEFS.MAJOR_VER == 3 then
-        if findGDNativeAPIStruct() then sendDebugMessage('API struct found!') end
-        GDI.GDNative = GDNativeInterface
+        if findGDNativeAPIStruct() then
+          GDI.GDNative = GDNativeInterface
+        end
+        
       end
 
       -- find GDScriptFunctions::call()
-      -- getGDVMCallPtr()
+      if not findGDVMCallPtr() then sendDebugMessage('GDFunction::call() lookup failed.') end
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
       NodeMonitorServiceThread = createThread(nodeMonitorService)
@@ -12012,7 +12014,8 @@
 
   
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// API
-  buildGDGUI = GDAPI.buildGDGUI
+  
+  buildGDGUI = GDAPI.buildGDGUI  
   printDumpedNodes = GDAPI.printDumpedNodes
   getDumpedNode = GDAPI.getDumpedNode
   registerNodeOffsets = GDAPI.registerNodeOffsets
