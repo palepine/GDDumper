@@ -29,8 +29,6 @@
   local UTF8Codepoints
   local getStringNameStr
 
-  local initGDDefs
-
   local tryRegSceneTree
   local setSTtoVPoffset
   local getViewport
@@ -101,7 +99,6 @@
   local getObjectMeta
 
   local getMainNodeTable
-  local nodeMonitorThread
   local NodeMonitorServiceSwitch
 
   local stdcall = 0
@@ -730,7 +727,7 @@
         mainMemrec.Description = "Dumper"
         mainMemrec.Type = vtAutoAssembler
         mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              nil, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
+        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
 
         local dumpMemrec = addrList.createMemoryRecord()
         dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -2886,10 +2883,32 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// DEFINE
 
-    --- initializes and assigns offsets
-    local function defineGDOffsets(config)
+    --- inits the GDDEFS object
+    local function initGDDefs()
+      GDDEFS = {} -- for now let it be reinitialized here
+
+      GDDEFS.SCRIPT_TYPES =
+        {
+          ["UNDEFINED"] = 0,
+          ["GD"] = 1,
+          ["CS"] = 2
+        }
+
+      GDDEFS.STRING = 0x10
+      
+      gd_dumpedMonitorNodes = {};
+      debugPrefix = 1;
+      if targetIs64Bit() then
+        GDDEFS.PTRSIZE = 0x8
+        GDDEFS._x64bit = true
+      else
+        GDDEFS.PTRSIZE = 0x4
+        GDDEFS._x64bit = false
+      end -- for auto offsetdef and ptr arithmetics
+    end
+
+    local function initGDVersion(config)
       if config == nil then config = {} end
-      initGDDefs()
 
       if isNotNullOrNil(config.majorVersion) and isNotNullOrNil(config.minorVersion) and
           isNotNullOrNil(config.GDCustomver) and isNotNullOrNil(config.GDDebugVer) then
@@ -2903,6 +2922,11 @@
         defineGDVersion()
         if isNotNullOrNil(config.GDCustomver) then GDDEFS.CUSTOMVER = config.GDCustomver end
       end
+    end
+
+    --- initializes and assigns offsets
+    local function defineGDOffsets(config)
+      if config == nil then config = {} end
 
       -- AUTOMATIC START
       if bHardOffsets or config.useHardcoded then
@@ -3014,39 +3038,8 @@
       end
       -- COMMON END
 
-      -- try finding SceneTree and Viewport/Window
-      if tryRegSceneTree() and setSTtoVPoffset() then
-        registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false)
-      else
-        sendDebugMessage("Couldn't find SceneTree & toVP offset")
-      end
-
       -- GDDEFS.GDSCRIPT_INSTANTIATE_INDX = 40
       -- GDDEFS.GDSCRIPT_SETSRC_INDX = 45
-    end
-
-    --- inits the GDDEFS object
-    function initGDDefs()
-      GDDEFS = {} -- for now let it be reinitialized here
-
-      GDDEFS.SCRIPT_TYPES =
-        {
-          ["UNDEFINED"] = 0,
-          ["GD"] = 1,
-          ["CS"] = 2
-        }
-
-      GDDEFS.STRING = 0x10
-      
-      gd_dumpedMonitorNodes = {};
-      debugPrefix = 1;
-      if targetIs64Bit() then
-        GDDEFS.PTRSIZE = 0x8
-        GDDEFS._x64bit = true
-      else
-        GDDEFS.PTRSIZE = 0x4
-        GDDEFS._x64bit = false
-      end -- for auto offsetdef and ptr arithmetics
     end
 
     local function registerGDSymbols()
@@ -9877,10 +9870,6 @@
       elseif querySignatures() then
         return getAddress('GDFunctionCall') or nil
       end
-      -- if querySignatures() then
-      --   return getAddress('GDFunctionCall') or nil
-      -- end
-
       return nil
     end
 
@@ -11734,34 +11723,7 @@
       end
     end
 
-
-    local function nodeMonitorService(thr)
-      thr.Name = "GD Node Monitor Service"
-      thr.freeOnTerminate(false) -- we do it ourselves
-      -- bMonitorNodes = true
-      gd_dumpedMonitorNodes = {};
-      gd_registeredNodes = {};
-      local counter = 0
-
-      while not thr.Terminated do
-        local startedAt = getTickCount()
-        local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
-        gd_currNodeMonitorThread.waitfor()
-        gd_currNodeMonitorThread.terminate()
-        sleep( gd_nodeMonitorCD )
-        counter = counter+1
-        local timeDelta = getTickCount() - startedAt or 0
-
-        if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
-          if not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
-          thr.terminate()
-          return
-        end
-        thr.Name = "GD Node Monitor Service | lastDiff " .. timeDelta .. " ms " .. " | iter " .. counter
-      end
-    end
-
-    function nodeMonitorThread(thr)
+    local function nodeMonitorThread(thr)
       thr.Name = "GD Monitor Thread"
       thr.freeOnTerminate(false) -- we do it ourselves
       local dumpContext =
@@ -11807,6 +11769,32 @@
 
       gd_dumpedMonitorNodes = cloneArrayAsMap(dumpContext.dumped)
       registerDumpedNodes()
+    end
+
+    local function nodeMonitorService(thr)
+      thr.Name = "GD Node Monitor Service"
+      thr.freeOnTerminate(false) -- we do it ourselves
+      -- bMonitorNodes = true
+      gd_dumpedMonitorNodes = {};
+      gd_registeredNodes = {};
+      local counter = 0
+
+      while not thr.Terminated do
+        local startedAt = getTickCount()
+        local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
+        gd_currNodeMonitorThread.waitfor()
+        gd_currNodeMonitorThread.terminate()
+        sleep( gd_nodeMonitorCD )
+        counter = counter+1
+        local timeDelta = getTickCount() - startedAt or 0
+
+        if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
+          if not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
+          thr.terminate()
+          return
+        end
+        thr.Name = "GD Node Monitor Service | lastDiff " .. timeDelta .. " ms " .. " | iter " .. counter
+      end
     end
 
     -- toggles the node monitor thread
@@ -11966,9 +11954,26 @@
 
     function GDAPI.initDumper(config)
       -- if not (targetIsGodot) then return; end
+
+      -- init global
+      initGDDefs()
+
+      -- essential version definition
+      initGDVersion(config)
+
       -- define version and offsets
       defineGDOffsets(config)
       gdOffsetsDefined = true
+
+      -- register symbols for pointer resolution
+      registerGDSymbols()
+
+      -- try finding SceneTree and Viewport/Window
+      if tryRegSceneTree() and setSTtoVPoffset() then
+        registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false)
+      else
+        sendDebugMessage("Couldn't find SceneTree & toVP offset")
+      end
 
       -- define type conversion helpers
       defineVariantTypeProfile()
@@ -11976,12 +11981,9 @@
       -- wait between thread runs in millis
       gd_nodeMonitorCD = 100
       bDisasmFunc= true -- whether to disasm functions, on by default
-      
+
       -- check if UTF32LE string type reged, otherwise define it
       checkGDStringType()
-
-      -- register symbols for pointer resolution
-      registerGDSymbols()
 
       -- build the correct disassembler profile
       defineGDFunctionEnums()
@@ -11991,12 +11993,17 @@
 
       -- exposing relevant API
       if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1 then
+        -- find the gd extension interface getter
+        -- findGDExtensionInterfacePtr()
         GDI.Extension = GDExtendedInterface
       end
       if GDDEFS.MAJOR_VER == 3 then
         if findGDNativeAPIStruct() then sendDebugMessage('API struct found!') end
         GDI.GDNative = GDNativeInterface
       end
+
+      -- find GDScriptFunctions::call()
+      -- getGDVMCallPtr()
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
       NodeMonitorServiceThread = createThread(nodeMonitorService)
