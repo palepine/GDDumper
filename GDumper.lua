@@ -4464,6 +4464,48 @@
       return false
     end
 
+    local function findGDNativeAPIStruct()
+      local function findViaRDATA(rdataSignature)
+        local addr = AOBScanModuleUnique(process, rdataSignature, '-X-W-C', 1, 4)
+        if addr == 0 or addr == nil then
+          return false
+        end
+        GDDEFS.GDNATIVE_STRUCT = addr
+        return true
+      end
+
+      local function findFuncPointer(aobSignature)
+        local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+        if addr == 0 or addr == nil then
+          return false
+        end
+        GDDEFS.GDNATIVE_STRUCT = addr
+        return true
+      end
+
+      -- type, major, minor, 4padd, *next, num_extensions, 4padd, *extensions, funcNum*PTRSIZE
+      local structSignature = "00 00 00 00   01 00 00 00   00 00 00 00   00 00 00 00   ? ? ? ? ? ? ? ?   06 00 00 00   00 00 00 00"
+
+      local sigs = {}
+      table.insert(sigs, "48 8D 3D ? ? ? ? 66 48 0F 6E C0 66 48 0F 6E C9" )
+      table.insert(sigs, "4C 8D 15 ? ? ? ? 48 89 84 24 ? ? ? ? 48 8D 05" )
+
+      -- first via rdata
+      if findViaRDATA(structSignature) then
+        sendDebugMessage('hit rdata')
+        return true
+      end
+
+      -- fallback
+      for i, sig in ipairs(sigs) do
+        if findFuncPointer(sig) then
+          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig)
+          return true
+        end
+      end
+      return false
+    end
+
     function GDAPI.getGDExtensionFunc(funcName)
       assert(type(funcName) == "string", 'function name has to be a string, instead got: ' .. type(funcName))
       assert(GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1, "GDExtension Interface is for 4.1+ only")
@@ -4494,13 +4536,90 @@
       return retFuncPtr
     end
 
-    -- global Godot Engine Extension Interface
-    GDXI = {}
-      -- for 3.x investigate native api void GDAPI godot_string_new(godot_string *r_dest);
-      -- godot_gdnative_init \ gdnative_init
-      -- godot_gdnative_terminate \ gdnative_terminate
-      -- godot_nativescript_init \ nativescript_init
+    -- 3.x
+    -- extensive gdnative api /docs/api_info/gdnative_api.json
+    GDNative =
+      {
+        name = "CORE",
+        base = nil,
+        major = nil,
+        minor = nil,
+        extensions = nil,
+        funcStart = nil,
+        inited = false,
+      }
 
+      function GDNative:init()
+        if self.inited then return end
+        self.base = GDDEFS.GDNATIVE_STRUCT
+        if self.base == nil then error('API struct not found') end
+        self.major, self.minor = self:getSemver( self.base )
+        self:initExtensions()
+        local offsetToFunc = 0x28
+        self.funcStart = self.base + offsetToFunc
+        self.inited = true
+      end
+
+      function GDNative:initExtensions()
+        if self.base == nil then error('Core struct not initialized') end
+        local extOffset = 0x20 -- x64
+        local toFuncOffset = 0x18
+        local numExtensions = 6
+
+        local extArray = readPointer( self.base + extOffset )
+        if extArray == nil or extArray == 0 then error('Extension array invalid') end
+
+        local names = { "NATIVESCRIPT", "PLUGINSCRIPT", "ANDROID", "ARVR", "VIDEODECODER", "NET"}
+        self.extensions = {}
+        for i=0, numExtensions-1 do
+          local extension = {}
+          extension.name = names[i+1]
+          extension.base = readPointer( extArray + GDDEFS.PTRSIZE*i )
+          extension.major, extension.minor = self:getSemver( extension.base )
+          extension.funcStart = extension.base + toFuncOffset
+          table.insert(self.extensions, extension)
+        end
+      end
+
+      function GDNative:getSemver(struct)
+        assert(struct ~= nil and struct ~= 0, 'struct addr has to be valid')
+        local major = readInteger(struct + 0x4)
+        local minor = readInteger(struct + 0x8)
+        return major, minor
+      end
+
+      function GDNative:getNextVer(base)
+        if not self.inited then error('gdnative not initialized') end
+        assert(base ~= nil and base ~= 0, 'struct addr has to be valid')
+
+        local nextOffset = 0x10
+        return readPointer(base + nextOffset)
+      end
+
+      function GDNative:findStructVer( struct, major, minor)
+        if not self.inited then error('gdnative not initialized') end
+        assert(struct ~= nil and struct.base ~= nil and struct.base ~= 0, 'struct invalid')
+        assert(major ~= nil and minor ~= nil, 'version has to be valid')
+
+        local currBase = struct.base
+        repeat
+          local currMajor, currMinor = self:getSemver(currBase)
+          if currMajor == major and currMinor == minor then return currBase end
+          currBase = self:getNextVer(currBase)
+        until currBase == nil or currBase == 0
+        return nil
+      end
+
+      function GDNative:getFuncFromIndex(struct, index)
+        if not self.inited then error('gdnative not initialized') end
+        assert(struct ~= nil and struct ~= 0, 'struct addr has to be valid')
+        assert(index ~= nil and index >= 0, 'index invalid')
+        return readPointer( struct.funcStart + index*GDDEFS.PTRSIZE )
+      end
+
+    -- 4.x
+    -- global Godot Engine Extension Interface, /docs/api_info/gdextension_interface.json
+    GDXI = {}
       --- constructs a variant from other variants whenever that's needed
       ---@param gdtypeStr string
       ---@param argTable table @ should fill copy ptr
