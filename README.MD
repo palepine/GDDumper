@@ -18,7 +18,7 @@ THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY
 
 ## Making it work
 The script works only with godot apps with `GDScript` used (C# applications are supported to a limited extent).
-The script is primarily developed for `x64`, `x32` shuold generally work if provided with offsets.
+The script is primarily developed for `x64`, `x32` should generally work if provided with offsets.
 
 Despite my efforts, it's not an ultimate out-of-the-box solution, but it pretty much is for most cases. For it to work, the script needs 1) a CE symbol registered for a root viewport, 2) godot engine version definition and 3) internal godot structure offsets. You can learn how to find them in this [guide](/docs/GUIDE.MD)
 
