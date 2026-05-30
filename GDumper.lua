@@ -51,7 +51,6 @@
   local checkIfGDFunction
   local setupCallArgs
 
-  local getNodeConstMap
   local getNodeConstName
   local iterateNodeConstToAddr
   local iterateNodeConstToStruct
@@ -80,7 +79,6 @@
   local getGDTypeName
 
   local getMainNodeTable
-  local NodeMonitorServiceSwitch
 
   local stdcall = 0
   local timeout = nil
@@ -759,7 +757,7 @@
           local doScript = loadstring(scriptString)
           if type(doScript) == 'function' then
             doScript()
-            sender.Checked = true
+            if sender then sender.Checked = true end
           else
             error('script not parsed')
           end
