@@ -5741,6 +5741,7 @@
         else
           GDExtendedInterface.string_name_destroy( ptr )
         end
+        if ptr then GDI.constructed[ptr] = nil end
       end
 
       function GDI.destroy_string_name( ptr )
@@ -5749,6 +5750,7 @@
         else
           GDExtendedInterface.string_destroy( ptr )
         end
+        if ptr then GDI.constructed[ptr] = nil end
       end
 
       function GDI.destroy_variant( ptr )
@@ -5757,6 +5759,7 @@
         else
           error('not implemented')
         end
+        if ptr then GDI.constructed[ptr] = nil end
       end
 
       function GDI.destroy_stored( ptr )
@@ -5764,6 +5767,7 @@
       end
 
     local function resolveGDTokenOffset(gdscriptVtable)
+      if isNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX) then sendDebugMessage('[GDReload] reload index not defined - failed') return false end
       -- by having a vtable method, we can assume the source and binary token offset
       local setScriptMethodAddr = readPointer(gdscriptVtable + (GDDEFS.GDSCRIPT_RELOAD_INDX*GDDEFS.PTRSIZE) - GDDEFS.PTRSIZE) -- previous method
       local instrSteps = 14 -- how many instructions we check
@@ -5781,11 +5785,13 @@
           sourceOffset = tonumber(offsetStr, 16)
           GDDEFS.GDSCRIPT_SRC = sourceOffset
           GDDEFS.GDSCRIPT_BINARYTOKENS = sourceOffset + 2*GDDEFS.PTRSIZE -- not sure about alignment on x32
-          return
+          sendDebugMessage('[GDReload] vtable heuristic success.')
+          return true
         end
         instrPointer = instrPointer+instrSize -- next instruction
       end
-      error('essential reload script offsets not found')
+      sendDebugMessage('[GDReload] failed to find the source offset')
+      return false
     end
 
     function GDAPI.recompileGDScript(nodeAddr, fileName)
@@ -5808,21 +5814,32 @@
       local gdscriptVtable = readPointer(gdscript)
 
       -- figure out the obj offsets
-      if isNullOrNil(GDDEFS.GDSCRIPT_SRC) then resolveGDTokenOffset(gdscriptVtable) end
+      if isNullOrNil(GDDEFS.GDSCRIPT_SRC) then
+        if not resolveGDTokenOffset(gdscriptVtable) then error('offset hunt heuristic failed') end
+      end
 
       -- get reload method
       local reloadMethodPtr = readPointer(gdscriptVtable + GDDEFS.GDSCRIPT_RELOAD_INDX*GDDEFS.PTRSIZE)
       if isNullOrNil(reloadMethodPtr) then error('method not found') end
 
-      -- construct a managed string from the streamed script file
-      local newScriptAddr = GDI.construct_string(newScript)
+      -- first check if source is present
+      local hasSource, hasTokens = false, false
+      local sourceAddr = readPointer(gdscript + GDDEFS.GDSCRIPT_SRC)
+      if isValidPointer(sourceAddr) then hasSource = true end
+
       local binaryTockensAddr
       if GDDEFS.MAJOR_VER >= 4 then
         binaryTockensAddr = readPointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS)
         if isNullOrNil(binaryTockensAddr) then error('tokens invalid') end
-        -- making it nullptr is seemingly less messier to avoid !binary_tokens.is_empty()
-        writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, 0)
+        if isValidPointer(binaryTockensAddr) then
+          hasTokens = true
+          -- making it nullptr is seemingly less messier to avoid !binary_tokens.is_empty()
+          writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, 0)
+        end
       end
+
+      -- construct a managed string from the streamed script file
+      local newScriptAddr = GDI.construct_string(newScript)
 
       writePointer(gdscript + GDDEFS.GDSCRIPT_SRC , newScriptAddr )
 
@@ -5831,9 +5848,18 @@
       -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
       -- Object::set_script isn't virtual in non-debug
       local eError = executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
+
+      -- to revert later
       if GDDEFS.MAJOR_VER >= 4 then
-        writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, binaryTockensAddr) -- so we can revert later?
+        if hasTokens then writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, binaryTockensAddr) end
       end
+      if hasSource then
+        writePointer(gdscript + GDDEFS.GDSCRIPT_SRC, sourceAddr)
+      else
+        writePointer(gdscript + GDDEFS.GDSCRIPT_SRC, 0 )
+      end
+
+      GDI.destroy_string(newScriptAddr) -- shouldn't crash
       return eError
     end
 
@@ -7538,7 +7564,7 @@
                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
                 operand1 = operand1 .. '.'
-                operand1 = operand1 .. operand3 .. '->get_name()' -- TODO
+                operand1 = operand1 .. operand3 .. '->get_name' -- TODO
                 local operandArg = '';
 
                 for i = 0, argc - 1 do
@@ -7617,7 +7643,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7646,7 +7672,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7676,7 +7702,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7711,7 +7737,7 @@
                 local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand3 .. '->get_name' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7743,7 +7769,7 @@
                 local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 .. '->get_name' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
