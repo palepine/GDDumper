@@ -4757,7 +4757,7 @@
     --- get a Node name by addr
     ---@param nodeAddr number
     function GDAPI.getNodeName(nodeAddr)
-      if isNullOrNil(nodeAddr) then return nil end
+      if isNullOrNil(nodeAddr) then return 'N??' end
 
       local nodeNamePtr = readPointer(nodeAddr + GDDEFS.OBJ_STRING_NAME)
       if isNullOrNil(nodeNamePtr) or isInvalidPointer(nodeNamePtr) then
@@ -4769,7 +4769,7 @@
     end
 
     function GDAPI.getNodeNameFromGDScript(nodeAddr)
-      assert(type(nodeAddr) == 'number', "Node Addr has to be a number, instead got: " .. type(nodeAddr))
+     if isNullOrNil(nodeAddr) then return 'N??' end
 
       local GDScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(GDScriptInstanceAddr) then
