@@ -3786,6 +3786,7 @@
             offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
             offsets.oVariantVector = offsets.oVariantVector + 0x18
+            -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex
           end
           if GDDEFS.CUSTOMVER then
             -- godot.windows.opt.64.exe
@@ -3797,6 +3798,7 @@
             -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap
             -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM
             --  offsets.oVariantVector = offsets.oVariantVector
+            offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
           end
         else
           -- GDDEFS.STRING = 0x8 -- ascii
