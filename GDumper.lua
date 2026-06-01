@@ -355,7 +355,7 @@
       end
 
       local function getObjectVMethodByIndex(addr, index)
-        index = index or 0
+        if index == nil or index < 0 then return nil end
         local vtable = getVtableValidated(addr)
         if isNullOrNil(vtable) then return nil end
         local offsetToMethod = GDDEFS.PTRSIZE * index
@@ -3148,6 +3148,7 @@
         GDDEFS.DICT_SIZE = 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5
 
         offsets.VPChildren = 0x140
         offsets.VPObjStringName = 0x190
@@ -3207,6 +3208,7 @@
         GDDEFS.DICT_SIZE = 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5
         -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
         offsets.VPChildren = 0x140
@@ -3268,6 +3270,7 @@
           GDDEFS.DICT_TAIL = 0x28
           GDDEFS.DICT_SIZE = 0x34 --0x3C
           GDDEFS.GET_TYPE_INDX = 10
+          GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5
           -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
           -- godot.windows.template_release.x86_64.exe
@@ -3408,6 +3411,7 @@
         GDDEFS.DICT_SIZE = 0x34 -- 0x3C
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 9
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- A0 Vector<GDScriptDataType> argument_types; including parameter names
         -- f4 argcount
 
@@ -3460,6 +3464,7 @@
 
       elseif majminVersionStr == "4.4" then
         GDDEFS.GET_TYPE_INDX = 8
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- godot.windows.template_release.x86_64.exe
         -- Godot Engine v4.4.stable.official.4c311cbee
         offsets.VPChildren = 0x188
@@ -3514,6 +3519,7 @@
 
       elseif majminVersionStr == "4.3" then
         GDDEFS.GET_TYPE_INDX = 8
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- godot.windows.template_release.x86_64.exe
         -- Godot Engine v4.3.stable.official
         -- 48 8B 03 C7 84 24 ? ? ? ? ? ? ? ? 48 89 DA
@@ -3566,6 +3572,7 @@
 
       elseif majminVersionStr == "4.2" then
         GDDEFS.GET_TYPE_INDX = 8
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- godot.windows.template_release.x86_64.exe
         -- Godot Engine v4.2.1.stable.official.b09f793f5
         offsets.VPChildren = 0x178
@@ -3620,6 +3627,7 @@
 
       elseif majminVersionStr == "4.1" then
         GDDEFS.GET_TYPE_INDX = 8
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- 4.1.2 has some wild offsets however
         -- godot.windows.template_release.x86_64.exe
         -- Godot Engine v4.2.1.stable.official.b09f793f5
@@ -3673,6 +3681,7 @@
 
       elseif majminVersionStr == "4.0" then
         GDDEFS.GET_TYPE_INDX = 8
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         offsets.VPChildren = 0x168
         offsets.VPObjStringName = 0x1C0
         offsets.NodeGDScriptInstance = 0x68
@@ -3760,6 +3769,7 @@
 
       elseif majminVersionStr == "3.5" then
         GDDEFS.GET_TYPE_INDX = 6
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         if GDDEFS._x64bit then
           -- godot.windows.opt.64.exe
           -- Godot Engine v3.5.1.stable.official
@@ -3872,6 +3882,7 @@
 
       elseif majminVersionStr == "3.4" then
         GDDEFS.GET_TYPE_INDX = 6
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- godot.windows.opt.64.exe
         -- Godot Engine v3.4.4.stable.official.419e713a2
         offsets.VPChildren = 0x108
@@ -3919,6 +3930,7 @@
 
       elseif majminVersionStr == "3.3" then
         GDDEFS.GET_TYPE_INDX = 6
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- godot.windows.opt.64.exe
         -- Godot Engine v3.3.2.stable.official
         offsets.VPChildren = 0x100
@@ -3965,6 +3977,7 @@
 
       elseif majminVersionStr == "3.2" then
         GDDEFS.GET_TYPE_INDX = 6
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- error("Not defined yet")
         offsets.VPChildren = 0x108
         offsets.VPObjStringName = 0x120
@@ -4013,6 +4026,7 @@
       elseif majminVersionStr == "3.0" then
         -- 3.0.6.stable.official
         GDDEFS.GET_TYPE_INDX = 6
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         offsets.VPChildren = 0x100
         offsets.VPObjStringName = 0x118
         offsets.NodeGDScriptInstance = 0x50
@@ -5966,6 +5980,7 @@
 
       -- get Node's callp virtual
       local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX) -- TODO: define offset for gd versions, ideally relative to the get_class_name one
+      if isNullOrNil(callpMethod) then error('callp not found') end
 
       -- construct bound method StringName and an object variant
       local methodSName = GDI.construct_string( 'set_script' )
@@ -5979,9 +5994,15 @@
       local int_t = 0
       local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset }
       local error = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
-      
+
+      local callSpace = allocateMemory(GDDEFS.PTRSIZE)
+      writePointer(callSpace, methodSName)
+
       -- hotreload the SI of a node
-      executeCodeEx(stdcall, timeout, callpMethod, nodeAddr, args, argCount, error) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
+      -- executeCodeEx(stdcall, timeout, callpMethod, callSpace+0x50, nodeAddr, methodSName, args, argCount, error) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
+      executeCodeEx(stdcall, timeout, callpMethod, VariantArena.base+VariantArena.returnBufOffset, nodeAddr, callSpace, VariantArena.base+VariantArena.argListOffset, argCount, VariantArena.base+VariantArena.callErrorOffset)
+      
+      deAlloc(callSpace)
 
       GDI.destroy_string_name(methodSName)
       GDI.destroy_object_variant(objectVariant)
