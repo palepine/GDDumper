@@ -5455,7 +5455,7 @@
             if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
             writePointer(objAlloc, ptr)
 
-            -- destroy SName
+            -- destroy
             executeCodeEx(stdcall, timeout, objDestor, objAlloc)
             deAlloc(objAlloc)
           end
@@ -5664,12 +5664,12 @@
           if isNullOrNil(variantDtor) then error('variant dtor func ptr not found') end
 
           -- allocating target memory
-          local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
-          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-          writePointer(objAlloc, ptr)
+          -- local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+          -- if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+          -- writePointer(objAlloc, ptr)
           -- destroy SName
-          executeCodeEx(stdcall, timeout, variantDtor, objAlloc)
-          deAlloc(objAlloc)
+          executeCodeEx(stdcall, timeout, variantDtor, ptr)
+          -- deAlloc(objAlloc)
         end
 
         function GDExtendedInterface.mem_alloc(size)
@@ -5848,6 +5848,7 @@
 
       function GDI.destroy_object_variant( ptr )
         if GDDEFS.MAJOR_VER <= 3 then
+          -- needs testing
           GDNativeInterface.godot_variant_destroy( ptr )
         else
           GDExtendedInterface.destroy_object_variant( ptr )
@@ -5983,7 +5984,7 @@
       executeCodeEx(stdcall, timeout, callpMethod, nodeAddr, args, argCount, error) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
 
       GDI.destroy_string_name(methodSName)
-      -- GDI.destroy_object_variant(objectVariant)
+      GDI.destroy_object_variant(objectVariant)
 
       return readPointer( error.value )
     end
