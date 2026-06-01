@@ -11645,7 +11645,7 @@
       -- managed
       function GDVariant.OBJECT(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        if isNotNullOrNil(value) then error("object value invalid") end
+        -- if isNotNullOrNil(value) then error("object value invalid") end
         -- local v = arena:allocVariant()
         -- writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
         -- writeInteger(v + 0x8, value.id)
