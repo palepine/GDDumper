@@ -184,10 +184,10 @@
         end
       end
 
-      -- check VTable validity for main module (MM)
+      -- check VTable validity for main module
       ---@param VTAddr number
       ---@return boolean
-      local function isMMVTable(VTAddr)
+      local function isVtable(VTAddr)
         if VTAddr == 0 or VTAddr == nil then
           return false
         end
@@ -348,7 +348,7 @@
       local function getVtable(addr)
         -- if isInvalidPointer(addr) then return nil end
         local vtable = readPointer(addr)
-        if not isMMVTable(vtable) then return nil end
+        if not isVtable(vtable) then return nil end
         return vtable
       end
 
@@ -552,7 +552,7 @@
         struct = struct and struct or createStructure('') -- should not happen though?
         struct.beginUpdate()
 
-        if checkForGDScript(baseaddr) and isMMVTable(readPointer(baseaddr)) then
+        if checkForGDScript(baseaddr) and isVtable(readPointer(baseaddr)) then
           dumpedDissectorNodes = {} -- redundant?
           -- safe to assume, that's a starting point
           local nodeName = getNodeName(baseaddr)
@@ -601,7 +601,7 @@
       ---@param addr integer @address to typeguess
       ---@return string @name; base address isn't returned
       local function GDStructNameLookup(addr)
-        if isInvalidPointer(addr) or not isMMVTable(readPointer(addr)) then
+        if isInvalidPointer(addr) or not isVtable(readPointer(addr)) then
           return nil
         end
 
@@ -618,7 +618,7 @@
       ---@return string @name;
       local function GDAddressLookup(addr)
         return nil
-        -- if isInvalidPointer(addr) or not isMMVTable( readPointer( addr ) ) then
+        -- if isInvalidPointer(addr) or not isVtable( readPointer( addr ) ) then
         --     return nil
         -- end
 
@@ -1582,7 +1582,7 @@
 
     local function getObjectMeta(objAddr)
       local vtable = readPointer(objAddr)
-      if not isMMVTable(vtable) then
+      if not isVtable(vtable) then
         return;
       end
       local offsetToMethod = GDDEFS.PTRSIZE * GDDEFS.GET_TYPE_INDX
@@ -4585,7 +4585,7 @@
       -- isn't elegant either
       for i = 23, steps do
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
-        if isNotNullOrNil(candidateAddr) and isMMVTable(readPointer(candidateAddr)) then
+        if isNotNullOrNil(candidateAddr) and isVtable(readPointer(candidateAddr)) then
 
           -- sendDebugMessage("[VP/WIND] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
           local className = getGDObjectName(candidateAddr)
@@ -4838,19 +4838,19 @@
     ---@return number @ script type enum
     function checkForGDScript(nodeAddr)
 
-      if isNullOrNil(nodeAddr) or not isMMVTable( readPointer(nodeAddr) ) then
+      if isNullOrNil(nodeAddr) or not isVtable( readPointer(nodeAddr) ) then
         -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return false
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) or not isMMVTable( readPointer(scriptInstance) ) then
+      if isNullOrNil(scriptInstance) or not isVtable( readPointer(scriptInstance) ) then
         -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return false
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-      if isNullOrNil(gdscript) or not isMMVTable( readPointer(gdscript) ) then
+      if isNullOrNil(gdscript) or not isVtable( readPointer(gdscript) ) then
         -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return false
       end
@@ -4872,19 +4872,19 @@
 
     function checkScriptType(nodeAddr)
       if GDDEFS.MONO == false then return 0 end;
-      if isNullOrNil(nodeAddr) or not isMMVTable( readPointer(nodeAddr) ) then
+      if isNullOrNil(nodeAddr) or not isVtable( readPointer(nodeAddr) ) then
       --   -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) or not isMMVTable( readPointer(scriptInstance) ) then
+      if isNullOrNil(scriptInstance) or not isVtable( readPointer(scriptInstance) ) then
       --   -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-      if isNullOrNil(gdscript) or not isMMVTable( readPointer(gdscript) ) then
+      if isNullOrNil(gdscript) or not isVtable( readPointer(gdscript) ) then
       --   -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
@@ -4909,11 +4909,11 @@
 
     function checkIfObjectWithChildren(objAddr)
       
-      if isNullOrNil(objAddr) or not isMMVTable( readPointer(objAddr) ) then return false end -- if object itself is valid & has a vtable
+      if isNullOrNil(objAddr) or not isVtable( readPointer(objAddr) ) then return false end -- if object itself is valid & has a vtable
       local objectChildren, childrenSize = getNodeChildrenInfo(objAddr) -- check children & if it's a valid pointer
       if isNullOrNil(childrenSize) then return false end -- if no children, we don't need it
       local childAddr = readPointer(objectChildren)
-      if isNullOrNil(childAddr) or not isMMVTable( readPointer(childAddr) ) then return false end  -- let's check the 0th object for vtable
+      if isNullOrNil(childAddr) or not isVtable( readPointer(childAddr) ) then return false end  -- let's check the 0th object for vtable
       return true
       
     end
@@ -5138,7 +5138,7 @@
     function checkObjectOffset(objectPtr)
       local objectAddr = readPointer(objectPtr) -- it's either an obj ptr or zero
       local vtable = readPointer(objectAddr)
-      if not isMMVTable(vtable) then -- check for vtable
+      if not isVtable(vtable) then -- check for vtable
         -- sendDebugMessage('OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
         local adjustedObjectPtr = (objectPtr or 0) - GDDEFS.PTRSIZE; -- shift back to get a ptr
         local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
@@ -5150,7 +5150,7 @@
         end
 
         local vtable = readPointer(objectAddr)
-        if isMMVTable(vtable) then -- check for vtable to be safe
+        if isVtable(vtable) then -- check for vtable to be safe
           -- sendDebugMessage('shifted OBJ addr is a ptr, returning it')
           return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
 
