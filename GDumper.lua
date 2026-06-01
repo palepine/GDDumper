@@ -346,7 +346,18 @@
       end
 
       local function getVtable(addr)
+        -- if isInvalidPointer(addr) then return nil end
+        local vtable = readPointer(addr)
+        if not isMMVTable(vtable) then return nil end
+        return vtable
+      end
 
+      local function getObjectVMethodByIndex(addr, index)
+        index = index or 0
+        local vtable = getVtable(addr)
+        if isNullOrNil(vtable) then return nil end
+        local offsetToMethod = GDDEFS.PTRSIZE * index
+        return readPointer(vtable + offsetToMethod)
       end
 
       GDTEAL_COLOR = 0x808040
