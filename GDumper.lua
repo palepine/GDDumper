@@ -3142,7 +3142,6 @@
 
       local offsets = {}
 
-      -- VPChildren, VPObjStringName, NodeGDScriptInstance, NodeGDScriptName, GDScriptFunctionMap, GDScriptConstantMap, GDScriptVariantNameHM, oVariantVector, _4x_MoreStableGDScriptVariantNameType, NodeVariantVectorSizeOffset, _3x_GDScriptVariantNamesIndex, GDScriptFunctionCode, GDScriptFunctionCodeConsts, GDScriptFunctionCodeGlobals
       if majminVersionStr == "4.8" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
@@ -4241,6 +4240,7 @@
       elseif GDDEFS.MAJOR_VER == 3 then
         GDDEFS.MAXTYPE = 27
         GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
+        if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
         GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
         GDDEFS.CHILDREN_SIZE = 0x4
         GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
@@ -4852,25 +4852,25 @@
     function checkScriptType(nodeAddr)
       if GDDEFS.MONO == false then return 0 end;
       if isNullOrNil(nodeAddr) or not isVtable( getVtable(nodeAddr) ) then
-      --   -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
+        sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(scriptInstance) or not isVtable( getVtable(scriptInstance) ) then
-      --   -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+        sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdscript) or not isVtable( getVtable(gdscript) ) then
-      --   -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+        sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
       
       local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
       if isNullOrNil(gdScriptName) then
-        -- sendDebugMessage('gdScriptName invalid')
+        sendDebugMessage('gdScriptName invalid')
         return 0
       end
 
@@ -5188,11 +5188,9 @@
         return readPointer( clrDataPtr )
       end
 
-      error('not implemented yet')
       -- 3.x
-      if not GDDEFS.MONO_GETOBJ then error('getmonoobject isnt found') end
-      -- local gdhandle = getGDHandle(nodeAddr)
-      -- return executeCodeEx(stdcall, timeout, GDDEFS.MONO_GETOBJ, gdhandle)
+      if isNullOrNil(GDDEFS.MONO_GETOBJ) then error('getmonoobject or gdchandle offset not defined') end
+      return executeCodeEx(stdcall, timeout, GDDEFS.MONO_GETOBJ, nodeAddr)
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Script
@@ -5273,8 +5271,8 @@
         return true
       end
       local sigs = {}
-      table.insert(sigs, "41 55 41 54   56 53 48 83 EC ? 48< 89 CB< 48 85 C9 0F 84 ? ? ? ? 48 8B 49 ? 48 85 C9 74" )
-      table.insert(sigs, "55 57   56 53 48 83 EC ? 48< 89 CB< 48 85 C9 0F 84 ? ? ? ? 48 8B 49 ? 48 85 C9 74" )
+      table.insert(sigs, "41 55 41 54 56 53 48 83 EC ? 49 89 CD 48 85 C9 0F 84 ? ? ? ? 48 8B 49 ? 48 85 C9 74" ) -- 3.5
+      table.insert(sigs, "55 57 56 53 48 83 EC ? 48 89 CB 48 85 C9 0F 84 ? ? ? ? 48 8B 49 ? 48 85 C9 74 ?" )  -- 3.6
 
       for i, sig in ipairs(sigs) do
         if findFuncPointer(sig) then
@@ -12111,4 +12109,4 @@
   recompileGDScript = GDAPI.recompileGDScript
   revertGDScript = GDAPI.revertGDScript
   -- reloadGDSInstance = GDAPI.reloadGDSInstance
-  -- getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
+  getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
