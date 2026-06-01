@@ -5947,7 +5947,6 @@
     function GDAPI.reloadGDSInstance(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
-      error('not implemented')
 
       -- get Node's callp virtual
       local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX) -- TODO: define offset for gd versions, ideally relative to the get_class_name one
@@ -12156,5 +12155,5 @@
 
   recompileGDScript = GDAPI.recompileGDScript
   revertGDScript = GDAPI.revertGDScript
-  -- reloadGDSInstance = GDAPI.reloadGDSInstance
+  reloadGDSInstance = GDAPI.reloadGDSInstance
   getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
