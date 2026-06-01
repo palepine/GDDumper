@@ -280,8 +280,6 @@
         return newMemRec
       end
 
-
-
     -- ///---///--///---///--///---/// MISC UTILS
 
       --- turns off showOnPrint
@@ -5888,6 +5886,8 @@
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
       -- get Node's callp virtual
+      -- TODO: define offset for gd versions, ideally relative to the get_class_name one
+      -- local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX)
       
       -- construct bound method StringName
       -- local methodSName = GDI.construct_string( 'set_script' )
@@ -5895,12 +5895,21 @@
       -- setup Script OBJECT Variant (via mocking or constructor, which is potentially less painful)
 
       -- hotreload the SI of a node
-      -- node->callp("set_script", args, 1, err) // Object::set_script(const Variant &p_script)
-      -- local ret = executeCodeEx(stdcall, timeout, nodeAddr, args, error)
+      -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
+      --[[
+      
+      local argCount = 1
+      local argTable = { { type = "OBJECT", value = nodeAddr, copy = nil } }
+      setupCallArgs(VariantArena, GDVariant, argTable)
 
-      -- GDI.destroy_string_name(methodSName)
+      local int_t = 0
+      local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset }
+      local error = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
+      
+      executeCodeEx(stdcall, timeout, callpMethod, nodeAddr, args, argCount, error)
+      GDI.destroy_string_name(methodSName)
 
-      -- return error
+      ]]
     end
 
     --- reloads from the binary tokens
@@ -12084,3 +12093,4 @@
 
   recompileGDScript = GDAPI.recompileGDScript
   revertGDScript = GDAPI.revertGDScript
+  -- reloadScriptInstance = GDAPI.reloadScriptInstance
