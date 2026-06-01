@@ -5284,173 +5284,189 @@
     end
 
     -- 3.x extensive gdnative api /docs/api_info/gdnative_api.json
-      local GDNative =
-        {
-          name = "CORE",
-          base = nil,
-          major = nil,
-          minor = nil,
-          extensions = nil,
-          funcStart = nil,
-          inited = false,
-        }
+        local GDNative =
+          {
+            name = "CORE",
+            base = nil,
+            major = nil,
+            minor = nil,
+            extensions = nil,
+            funcStart = nil,
+            inited = false,
+          }
 
-        function GDNative:init()
-          if self.inited then return end
-          self.base = GDDEFS.GDNATIVE_STRUCT
-          if self.base == nil then error('API struct not found') end
-          self.major, self.minor = self:getSemver( self.base )
-          self:initExtensions()
-          local offsetToFunc = 0x28
-          self.funcStart = self.base + offsetToFunc
-          self.inited = true
-        end
-
-        function GDNative:initExtensions()
-          if self.base == nil then error('Core struct not initialized') end
-          local extOffset = 0x20 -- x64
-          local toFuncOffset = 0x18
-          local numExtensions = 6
-
-          local extArray = readPointer( self.base + extOffset )
-          if extArray == nil or extArray == 0 then error('Extension array invalid') end
-
-          local names = { "NATIVESCRIPT", "PLUGINSCRIPT", "ANDROID", "ARVR", "VIDEODECODER", "NET"}
-          self.extensions = {}
-          for i=0, numExtensions-1 do
-            local extension = {}
-            extension.name = names[i+1]
-            extension.base = readPointer( extArray + GDDEFS.PTRSIZE*i )
-            extension.major, extension.minor = self:getSemver( extension.base )
-            extension.funcStart = extension.base + toFuncOffset
-            table.insert(self.extensions, extension)
+          function GDNative:init()
+            if self.inited then return end
+            self.base = GDDEFS.GDNATIVE_STRUCT
+            if self.base == nil then error('API struct not found') end
+            self.major, self.minor = self:getSemver( self.base )
+            self:initExtensions()
+            local offsetToFunc = 0x28
+            self.funcStart = self.base + offsetToFunc
+            self.inited = true
           end
-        end
 
-        function GDNative:getSemver(struct)
-          assert(struct ~= nil and struct ~= 0, 'struct addr has to be valid')
-          local major = readInteger(struct + 0x4)
-          local minor = readInteger(struct + 0x8)
-          return major, minor
-        end
+          function GDNative:initExtensions()
+            if self.base == nil then error('Core struct not initialized') end
+            local extOffset = 0x20 -- x64
+            local toFuncOffset = 0x18
+            local numExtensions = 6
 
-        function GDNative:getNextVer(base)
-          if not self.inited then error('gdnative not initialized') end
-          assert(base ~= nil and base ~= 0, 'struct addr has to be valid')
+            local extArray = readPointer( self.base + extOffset )
+            if extArray == nil or extArray == 0 then error('Extension array invalid') end
 
-          local nextOffset = 0x10
-          return readPointer(base + nextOffset)
-        end
+            local names = { "NATIVESCRIPT", "PLUGINSCRIPT", "ANDROID", "ARVR", "VIDEODECODER", "NET"}
+            self.extensions = {}
+            for i=0, numExtensions-1 do
+              local extension = {}
+              extension.name = names[i+1]
+              extension.base = readPointer( extArray + GDDEFS.PTRSIZE*i )
+              extension.major, extension.minor = self:getSemver( extension.base )
+              extension.funcStart = extension.base + toFuncOffset
+              table.insert(self.extensions, extension)
+            end
+          end
 
-        function GDNative:findStructVer( struct, major, minor)
-          if not self.inited then error('gdnative not initialized') end
-          assert(struct ~= nil and struct.base ~= nil and struct.base ~= 0, 'struct invalid')
-          assert(major ~= nil and minor ~= nil, 'version has to be valid')
+          function GDNative:getSemver(struct)
+            assert(struct ~= nil and struct ~= 0, 'struct addr has to be valid')
+            local major = readInteger(struct + 0x4)
+            local minor = readInteger(struct + 0x8)
+            return major, minor
+          end
 
-          local currBase = struct.base
-          repeat
-            local currMajor, currMinor = self:getSemver(currBase)
-            if currMajor == major and currMinor == minor then return currBase end
-            currBase = self:getNextVer(currBase)
-          until currBase == nil or currBase == 0
-          return nil
-        end
+          function GDNative:getNextVer(base)
+            if not self.inited then error('gdnative not initialized') end
+            assert(base ~= nil and base ~= 0, 'struct addr has to be valid')
 
-        function GDNative:getFuncFromIndex(struct, index)
-          if not self.inited then self:init() end
-          assert(struct ~= nil and struct ~= 0, 'struct addr has to be valid')
-          assert(index ~= nil and index >= 0, 'index invalid')
-          return readPointer( struct.funcStart + index*GDDEFS.PTRSIZE )
-        end
+            local nextOffset = 0x10
+            return readPointer(base + nextOffset)
+          end
 
-      local GDNativeInterface = {}
+          function GDNative:findStructVer( struct, major, minor)
+            if not self.inited then error('gdnative not initialized') end
+            assert(struct ~= nil and struct.base ~= nil and struct.base ~= 0, 'struct invalid')
+            assert(major ~= nil and minor ~= nil, 'version has to be valid')
 
-        function GDNativeInterface.godot_string_chars_to_utf8( str )
-          assert(type(str) == 'string', 'string must be a string, instead got: ' .. type(str))
-          assert(#str > 0, 'string must be of valid size')
+            local currBase = struct.base
+            repeat
+              local currMajor, currMinor = self:getSemver(currBase)
+              if currMajor == major and currMinor == minor then return currBase end
+              currBase = self:getNextVer(currBase)
+            until currBase == nil or currBase == 0
+            return nil
+          end
 
-          local strlen = str:len()
-          local stringCtor = GDNative:getFuncFromIndex(GDNative, 681)
-          if isNullOrNil(stringCtor) then error('godot_string_chars_to_utf8 func ptr not found') end
+          function GDNative:getFuncFromIndex(struct, index)
+            if not self.inited then self:init() end
+            assert(struct ~= nil and struct ~= 0, 'struct addr has to be valid')
+            assert(index ~= nil and index >= 0, 'index invalid')
+            return readPointer( struct.funcStart + index*GDDEFS.PTRSIZE )
+          end
 
-          -- setup cstring content param in the target via CE API
-          local strlen = str:len()
-          local allocStrSpace = allocateMemory(strlen + 1)
-          local ok = writeString(allocStrSpace,str)
-          if not ok then deAlloc(allocStrSpace) error('string mapping failed') end
-          
-          -- local stringSpace = 0x8 -- storage for the dest object
+        local GDNativeInterface = {}
 
-          local objPtr = executeCodeEx(stdcall, timeout, stringCtor, allocStrSpace)
-          deAlloc(allocStrSpace)
-          return objPtr
-        end
+          function GDNativeInterface.godot_string_chars_to_utf8( str )
+            assert(type(str) == 'string', 'string must be a string, instead got: ' .. type(str))
+            assert(#str > 0, 'string must be of valid size')
 
-        function GDNativeInterface.godot_string_name_new_data( str )
-          assert(type(str) == 'string', 'string must be a string, instead got: ' .. type(str))
-          assert(#str > 0, 'string must be of valid size')
+            local strlen = str:len()
+            local stringCtor = GDNative:getFuncFromIndex(GDNative, 681)
+            if isNullOrNil(stringCtor) then error('godot_string_chars_to_utf8 func ptr not found') end
 
-          local strlen = str:len()
-          local stringNameCtor = GDNative:getFuncFromIndex(GDNative, 723)
-          if isNullOrNil(stringNameCtor) then error('godot_string_name_new_data func ptr not found') end
+            -- setup cstring content param in the target via CE API
+            local strlen = str:len()
+            local allocStrSpace = allocateMemory(strlen + 1)
+            local ok = writeString(allocStrSpace,str)
+            if not ok then deAlloc(allocStrSpace) error('string mapping failed') end
+            
+            -- local stringSpace = 0x8 -- storage for the dest object
 
-          -- setup cstring content param in the target via CE API
-          local strlen = str:len()
-          local allocStrSpace = allocateMemory(strlen + 1)
-          local ok = writeString(allocStrSpace,str)
-          if not ok then deAlloc(allocStrSpace) error('string mapping failed') end
-          
-          -- allocating target memory via GD API
-          local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
-          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+            local objPtr = executeCodeEx(stdcall, timeout, stringCtor, allocStrSpace)
+            deAlloc(allocStrSpace)
+            return objPtr
+          end
 
-          -- construct SName
-          executeCodeEx(stdcall, timeout, stringNameCtor, objAlloc, allocStrSpace)
-          local objPtr = readPointer(objAlloc)
-          deAlloc(allocStrSpace) -- free the string content
-          deAlloc(objAlloc)
-          return objPtr
-        end
+          function GDNativeInterface.godot_string_name_new_data( str )
+            assert(type(str) == 'string', 'string must be a string, instead got: ' .. type(str))
+            assert(#str > 0, 'string must be of valid size')
 
-        function GDNativeInterface.godot_string_destroy( ptr )
-          assert(type(ptr) == 'number', 'stringName ptr must be a number, instead got: ' .. type(ptr))
+            local strlen = str:len()
+            local stringNameCtor = GDNative:getFuncFromIndex(GDNative, 723)
+            if isNullOrNil(stringNameCtor) then error('godot_string_name_new_data func ptr not found') end
 
-          local stringDestor = GDNative:getFuncFromIndex(GDNative, 721)
-          if isNullOrNil(stringDestor) then error('godot_string_destroy func ptr not found') end
+            -- setup cstring content param in the target via CE API
+            local strlen = str:len()
+            local allocStrSpace = allocateMemory(strlen + 1)
+            local ok = writeString(allocStrSpace,str)
+            if not ok then deAlloc(allocStrSpace) error('string mapping failed') end
+            
+            -- allocating target memory via GD API
+            local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+            if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
 
-          -- allocating target memory
-          local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
-          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-          writePointer(objAlloc, ptr)
+            -- construct SName
+            executeCodeEx(stdcall, timeout, stringNameCtor, objAlloc, allocStrSpace)
+            local objPtr = readPointer(objAlloc)
+            deAlloc(allocStrSpace) -- free the string content
+            deAlloc(objAlloc)
+            return objPtr
+          end
 
-          -- destroy SName
-          executeCodeEx(stdcall, timeout, stringDestor, objAlloc)
-          deAlloc(objAlloc)
-        end
+          function GDNativeInterface.godot_string_destroy( ptr )
+            assert(type(ptr) == 'number', 'stringName ptr must be a number, instead got: ' .. type(ptr))
 
-        function GDNativeInterface.godot_string_name_destroy( ptr )
-          assert(type(ptr) == 'number', 'stringName ptr must be a number, instead got: ' .. type(ptr))
+            local stringDestor = GDNative:getFuncFromIndex(GDNative, 721)
+            if isNullOrNil(stringDestor) then error('godot_string_destroy func ptr not found') end
 
-          local stringNameDestor = GDNative:getFuncFromIndex(GDNative, 729)
-          if isNullOrNil(stringNameDestor) then error('godot_string_name_destroy func ptr not found') end
+            -- allocating target memory
+            local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+            if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+            writePointer(objAlloc, ptr)
 
-          -- allocating target memory
-          local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
-          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-          writePointer(objAlloc, ptr)
+            -- destroy SName
+            executeCodeEx(stdcall, timeout, stringDestor, objAlloc)
+            deAlloc(objAlloc)
+          end
 
-          -- destroy SName
-          executeCodeEx(stdcall, timeout, stringNameDestor, objAlloc)
-          deAlloc(objAlloc)
-        end
+          function GDNativeInterface.godot_string_name_destroy( ptr )
+            assert(type(ptr) == 'number', 'stringName ptr must be a number, instead got: ' .. type(ptr))
 
-        function GDNativeInterface.godot_alloc( bytes )
-          error('not implemented')
-        end
+            local stringNameDestor = GDNative:getFuncFromIndex(GDNative, 729)
+            if isNullOrNil(stringNameDestor) then error('godot_string_name_destroy func ptr not found') end
 
-        function GDNativeInterface.godot_free( ptr )
-          error('not implemented')
-        end
+            -- allocating target memory
+            local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+            if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+            writePointer(objAlloc, ptr)
+
+            -- destroy SName
+            executeCodeEx(stdcall, timeout, stringNameDestor, objAlloc)
+            deAlloc(objAlloc)
+          end
+
+          function GDNativeInterface.godot_variant_destroy( ptr )
+            assert(type(ptr) == 'number', 'ptr must be a number, instead got: ' .. type(ptr))
+
+            local objDestor = GDNative:getFuncFromIndex(GDNative, 570)
+            if isNullOrNil(objDestor) then error('godot_variant_destroy func ptr not found') end
+
+            -- allocating target memory
+            local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+            if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+            writePointer(objAlloc, ptr)
+
+            -- destroy SName
+            executeCodeEx(stdcall, timeout, objDestor, objAlloc)
+            deAlloc(objAlloc)
+          end
+
+          function GDNativeInterface.godot_alloc( bytes )
+            error('not implemented')
+          end
+
+          function GDNativeInterface.godot_free( ptr )
+            error('not implemented')
+          end
 
     -- 4.x global Godot Engine Extension Interface, /docs/api_info/gdextension_interface.json
       local GDExtendedInterface = {}
@@ -5672,7 +5688,7 @@
 
       function GDI.construct_string( str )
         local retObj
-        if GDDEFS.MAJOR_VER == 3 then
+        if GDDEFS.MAJOR_VER <= 3 then
           retObj = GDNativeInterface.godot_string_chars_to_utf8( str )
         else
           retObj = GDExtendedInterface.string_new_with_latin1_chars( str )
@@ -5683,7 +5699,7 @@
 
       function GDI.construct_string_name( str )
         local retObj
-        if GDDEFS.MAJOR_VER == 3 then
+        if GDDEFS.MAJOR_VER <= 3 then
           retObj = GDNativeInterface.godot_string_name_new_data( str )
         else
           retObj = GDExtendedInterface.string_name_new_with_latin1_chars( str )
@@ -5695,67 +5711,88 @@
       function GDI.construct_string_name_variant( str )
         local objAlloc
 
-        if GDDEFS.MAJOR_VER == 3 then
-          error('doesnt exist')
-        else
-          local stringPtr = GDI.construct_string_name(str)
-          local varCtorPtr = GDExtendedInterface.get_variant_from_type_constructor('STRING_NAME')
-          local mallocPtr = GDExtendedInterface.getGDExtensionFunc('mem_alloc')
-          if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
-          if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
+        if GDDEFS.MAJOR_VER <= 3 then error('doesnt exist') end
+
+        local stringPtr = GDI.construct_string_name(str)
+        local varCtorPtr = GDExtendedInterface.get_variant_from_type_constructor('STRING_NAME')
+        local mallocPtr = GDExtendedInterface.getGDExtensionFunc('mem_alloc')
+        if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+        if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
+      
+        -- malloc
+        local variantSpaceAlloc = 0x40 -- uninit dest store
+        objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- where the object will be stored
+        if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
         
-          -- malloc
-          local variantSpaceAlloc = 0x40 -- uninit dest store
-          objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc) -- where the object will be stored
-          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-          
-          -- constructing variant string name
-          local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
-          writePointer(ptrContainer, stringPtr)
-          executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
-          deAlloc(ptrContainer)
-        end
+        -- constructing variant string name
+        local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
+        writePointer(ptrContainer, stringPtr)
+        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
+        deAlloc(ptrContainer)
         if objAlloc then GDI.constructed[objAlloc] = 'STRING_NAME' end
         return objAlloc
       end
 
       function GDI.construct_string_variant( str )
-        local objAlloc
-        local stringPtr = GDI.construct_string(str)
-        
-        if GDDEFS.MAJOR_VER == 3 then
+        local mallocPtr
+        local varCtorPtr
+        if GDDEFS.MAJOR_VER <= 3 then
           local varCtorPtr = GDNative:getFuncFromIndex(GDNative, 514)
-          local mallocPtr = GDNative:getFuncFromIndex(GDNative, 738)
+          mallocPtr = GDNative:getFuncFromIndex(GDNative, 738)
           if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
-          if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
-        
-          -- malloc
-          local variantSpaceAlloc = 0x18 -- uninit dest store
-          objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc)
-          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-
-          -- constructing variant string name
-          local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
-          writePointer(ptrContainer, stringPtr)
-          executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
-          deAlloc(ptrContainer)
+          if isNullOrNil(varCtorPtr) then error('variant ctor func ptr not found') end
         else
-          local varCtorPtr = GDExtendedInterface.get_variant_from_type_constructor('STRING')
+          varCtorPtr = GDExtendedInterface.get_variant_from_type_constructor('STRING')
           local mallocPtr = GDExtendedInterface.getGDExtensionFunc('mem_alloc')
           if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
           if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
-        
-          -- malloc
-          local variantSpaceAlloc = 0x40 -- uninit dest store
-          objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc)
-          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-
-          -- constructing variant string name
-          local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
-          writePointer(ptrContainer, stringPtr)
-          executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
-          deAlloc(ptrContainer)
         end
+
+        -- malloc
+        local variantSpaceAlloc = 0x40 -- uninit dest store
+        local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc)
+        if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+
+        -- constructing variant string name
+        local stringPtr = GDI.construct_string(str)
+
+        -- storing in a pointer
+        local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
+        writePointer(ptrContainer, stringPtr)
+        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
+        deAlloc(ptrContainer)
+        
+        if objAlloc then GDI.constructed[objAlloc] = 'STRING' end
+        return objAlloc
+      end
+
+      function GDI.construct_object_variant( ptr )
+        assert(isNotNullOrNil(ptr), 'ptr must be a valid number')
+        local mallocPtr
+        local varCtorPtr
+        if GDDEFS.MAJOR_VER <= 3 then
+          varCtorPtr = GDNative:getFuncFromIndex(GDNative, 527)
+          mallocPtr = GDNative:getFuncFromIndex(GDNative, 738)
+          if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+          if isNullOrNil(varCtorPtr) then error('variant ctor func ptr not found') end
+        else
+          varCtorPtr = GDExtendedInterface.get_variant_from_type_constructor('OBJECT')
+          mallocPtr = GDExtendedInterface.getGDExtensionFunc('mem_alloc')
+          if isNullOrNil(mallocPtr) then error('mem_alloc func ptr not found') end
+          if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
+        end
+
+        -- malloc
+        local variantSpaceAlloc = 0x40 -- uninit dest store
+        local objAlloc = executeCodeEx(stdcall, timeout, mallocPtr, variantSpaceAlloc)
+        if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+
+        -- constructing variant string name
+        local ptrContainer = allocateMemory(GDDEFS.PTRSIZE)
+        writePointer(ptrContainer, ptr)
+        executeCodeEx(stdcall, timeout, varCtorPtr, objAlloc, ptrContainer)
+        deAlloc(ptrContainer)
+
         if objAlloc then GDI.constructed[objAlloc] = 'STRING' end
         return objAlloc
       end
@@ -5763,7 +5800,7 @@
       function GDI.get_variant_from_type_constructor( gdTypeName )
         local constructor
 
-        if GDDEFS.MAJOR_VER == 3 then
+        if GDDEFS.MAJOR_VER <= 3 then
           error('not implemented')
         else
           constructor = GDExtendedInterface.get_variant_from_type_constructor( gdTypeName )
@@ -5777,7 +5814,7 @@
 
 
       function GDI.destroy_string( ptr )
-        if GDDEFS.MAJOR_VER == 3 then
+        if GDDEFS.MAJOR_VER <= 3 then
           GDNativeInterface.godot_string_name_destroy( ptr )
         else
           GDExtendedInterface.string_name_destroy( ptr )
@@ -5786,7 +5823,7 @@
       end
 
       function GDI.destroy_string_name( ptr )
-        if GDDEFS.MAJOR_VER == 3 then
+        if GDDEFS.MAJOR_VER <= 3 then
           GDNativeInterface.godot_string_name_destroy( ptr )
         else
           GDExtendedInterface.string_destroy( ptr )
@@ -5794,8 +5831,17 @@
         if ptr then GDI.constructed[ptr] = nil end
       end
 
+      function GDI.destroy_object_variant( ptr )
+        if GDDEFS.MAJOR_VER <= 3 then
+          GDNativeInterface.godot_variant_destroy( ptr )
+        else
+          GDExtendedInterface.variant_destroy( ptr )
+        end
+        if ptr then GDI.constructed[ptr] = nil end
+      end
+
       function GDI.destroy_variant( ptr )
-        if GDDEFS.MAJOR_VER == 3 then
+        if GDDEFS.MAJOR_VER <= 3 then
           error('not implemented')
         else
           error('not implemented')
@@ -11600,11 +11646,11 @@
       function GDVariant.OBJECT(arena, value, copy)
         if isValidPointer(copy) then return copy end
         if isNotNullOrNil(value) then error("object value invalid") end
-        local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
-        writeInteger(v + 0x8, value.id)
-        writePointer(v + 0x10, value.obj)
-        return v
+        -- local v = arena:allocVariant()
+        -- writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
+        -- writeInteger(v + 0x8, value.id)
+        -- writePointer(v + 0x10, value.obj)
+        return GDI.construct_object_variant( value )
       end
 
       function GDVariant.STRING(arena, value, copy)
