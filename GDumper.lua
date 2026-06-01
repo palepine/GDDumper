@@ -5947,29 +5947,31 @@
     function GDAPI.reloadGDSInstance(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
-      --[[
+      error('not implemented')
+
       -- get Node's callp virtual
       local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX) -- TODO: define offset for gd versions, ideally relative to the get_class_name one
-      
-      -- construct bound method StringName
+
+      -- construct bound method StringName and an object variant
       local methodSName = GDI.construct_string( 'set_script' )
+      local objectVariant = GDI.construct_object_variant(nodeAddr)
 
-      -- setup Script OBJECT Variant (via mocking or constructor, which is potentially less painful)
-      -- hotreload the SI of a node
-      -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
-
+      -- setting up the arg
       local argCount = 1
-      local argTable = { { type = "OBJECT", value = nodeAddr, copy = nil } }
+      local argTable = { { type = "OBJECT", value = nil, copy = objectVariant } }
       setupCallArgs(VariantArena, GDVariant, argTable)
 
       local int_t = 0
       local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset }
       local error = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
       
-      executeCodeEx(stdcall, timeout, callpMethod, nodeAddr, args, argCount, error)
-      GDI.destroy_string_name(methodSName)
+      -- hotreload the SI of a node
+      executeCodeEx(stdcall, timeout, callpMethod, nodeAddr, args, argCount, error) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
 
-      ]]
+      GDI.destroy_string_name(methodSName)
+      GDI.destroy_object_variant(objectVariant)
+
+      return error
     end
 
     --- reloads from the binary tokens
