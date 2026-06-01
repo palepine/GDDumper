@@ -5872,6 +5872,26 @@
       return eError
     end
 
+    function GDAPI.reloadScriptInstance(nodeAddr)
+      assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
+      assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
+
+      -- get Node's callp virtual
+      
+      -- construct bound method StringName
+      -- local methodSName = GDI.construct_string( 'set_script' )
+
+      -- setup Script OBJECT Variant (via mocking or constructor, which is potentially less painful)
+
+      -- hotreload the SI of a node
+      -- node->callp("set_script", args, 1, err) // Object::set_script(const Variant &p_script)
+      -- local ret = executeCodeEx(stdcall, timeout, nodeAddr, args, error)
+
+      -- GDI.destroy_string_name(methodSName)
+
+      -- return error
+    end
+
     --- reloads from the binary tokens
     ---@param nodeAddr number
     function GDAPI.revertGDScript(nodeAddr)
