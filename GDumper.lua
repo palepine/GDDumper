@@ -2927,6 +2927,7 @@
     end
 
     local function getIsCustomVer()
+      -- the best I can do as of now for TOOLS_ENABLED
       local customVerStrAddr = AOBScanModuleUnique(process, "63 75 73 74 6F 6D 5F 62 75 69 6C 64", "-W-X-C") -- custom_build - in most cases it does the trick
       if isNotNullOrNil(customVerStrAddr) then
         return true
@@ -3115,33 +3116,15 @@
       if lregexScan and type(lregexScan) == "function" then
         godotVersionString = getGodotVersionString()
         GDDEFS.FULL_GDVERSION_STRING = godotVersionString
-        -- major, minor, patch, tag = (godotVersionString):match("v?(%d+)%.(%d+)%.?(%d*)%-?(%a*)")
-        -- if isNullOrNil(major) or isNullOrNil(minor) then major, minor, patch = (godotVersionString):match("Godot Engine v?(%d+)%.(%d+)%.?(%a*)") end
       end
 
       local exportTableStr = getExportTableName() or ""
-
-      if (exportTableStr):match("debug") then
-        GDDEFS.DEBUGVER = true
-      else
-        GDDEFS.DEBUGVER = false
-      end
-
-      if (exportTableStr):match("mono") then
-        GDDEFS.MONO = true
-      else
-        GDDEFS.MONO = false
-      end
-
+      GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
+      GDDEFS.MONO = (exportTableStr):match("mono") and true or false
+      GDDEFS.CUSTOMVER = getIsCustomVer()
+      -- GDDEFS.CUSTOMVER = (godotVersionString):match("custom") and true or false
+      
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
-
-      if isNullOrNil(godotVersionString) then
-        GDDEFS.CUSTOMVER = getIsCustomVer()
-      elseif (godotVersionString):match("custom") then
-        GDDEFS.CUSTOMVER = true
-      else
-        GDDEFS.CUSTOMVER = false
-      end
 
       if isNotNullOrNil(major) and isNotNullOrNil(minor) then
         GDDEFS.MAJOR_VER = tonumber(major)
@@ -4681,7 +4664,7 @@
       return childrenAddr, childrenSize
     end
 
-  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Node
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Object
 
 
     --- returns a node dictionary
@@ -5082,18 +5065,17 @@
         sendDebugMessage('STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
       end
 
-      if GDDEFS.MONO then
-        if checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
-          sendDebugMessage("Node " .. nodeName .. " has csharp script type")
-          local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
-          -- addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
-          local clrDataElem = createChildStructElem(clrPtrElem, "CLRData", 0x0, vtPointer, "CLRData")
+      if not GDDEFS.MONO then return end
+      if checkScriptType(nodeAddr) ~= GDDEFS.SCRIPT_TYPES["CS"] or GDDEFS.MAJOR_VER < 4 then return end
 
-          local clrDataAddr = readPointer( readPointer( gdScriptInstanceAddr + GDDEFS.CLR_PTR ) ) or 0x0
-          if isNotNullOrNil(clrDataAddr) then
-            clrDataElem.ChildStruct.fillFromDotNetAddress(clrDataAddr , true)
-          end
-        end
+      sendDebugMessage("Node " .. nodeName .. " has csharp script type")
+      local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
+      -- addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
+      local clrDataElem = createChildStructElem(clrPtrElem, "CLRData", 0x0, vtPointer, "CLRData")
+
+      local clrDataAddr = readPointer( readPointer( gdScriptInstanceAddr + GDDEFS.CLR_PTR ) ) or 0x0
+      if isNotNullOrNil(clrDataAddr) then
+        clrDataElem.ChildStruct.fillFromDotNetAddress(clrDataAddr , true)
       end
 
       return
@@ -5884,20 +5866,17 @@
     function GDAPI.reloadScriptInstance(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
-
+      --[[
       -- get Node's callp virtual
-      -- TODO: define offset for gd versions, ideally relative to the get_class_name one
-      -- local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX)
+      local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX) -- TODO: define offset for gd versions, ideally relative to the get_class_name one
       
       -- construct bound method StringName
-      -- local methodSName = GDI.construct_string( 'set_script' )
+      local methodSName = GDI.construct_string( 'set_script' )
 
       -- setup Script OBJECT Variant (via mocking or constructor, which is potentially less painful)
-
       -- hotreload the SI of a node
       -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
-      --[[
-      
+
       local argCount = 1
       local argTable = { { type = "OBJECT", value = nodeAddr, copy = nil } }
       setupCallArgs(VariantArena, GDVariant, argTable)
