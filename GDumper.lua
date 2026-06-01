@@ -5134,30 +5134,28 @@
     ---@return number -- returns a more valid pointer to an object
     ---@return boolean -- true if the returned pointer was shifted back to get a valid ptr
     function checkObjectOffset(objectPtr)
+
       local objectAddr = readPointer(objectPtr) -- it's either an obj ptr or zero
-      local vtable = readPointer(objectAddr)
-      if not isVtable(vtable) then -- check for vtable
-        -- sendDebugMessage('OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
-        local adjustedObjectPtr = (objectPtr or 0) - GDDEFS.PTRSIZE; -- shift back to get a ptr
-        local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
-        objectAddr = readPointer(wrapperAddr)
 
-        if isNullOrNil(wrapperAddr) or isInvalidPointer(wrapperAddr) then -- check the wrapper
-          -- sendDebugMessage('OBJ addr still not an obj  ptr, leave it be')
-          return objectPtr, false; -- revert the value, whatever
-        end
+      -- it's the right object
+      if isVtable( getVtable(objectAddr) ) then return objectPtr, false end
 
-        local vtable = readPointer(objectAddr)
-        if isVtable(vtable) then -- check for vtable to be safe
-          -- sendDebugMessage('shifted OBJ addr is a ptr, returning it')
-          return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
+      -- sendDebugMessage('OBJ addr likely not a ptr, shifting back 0x8: ptr: '..string.format( '%x', tonumber(objectPtr) ) )
+      local adjustedObjectPtr = (objectPtr or 0) - GDDEFS.PTRSIZE; -- shift back to get a ptr
+      local wrapperAddr = readPointer(adjustedObjectPtr) -- this will be a wrapped obj ptr
 
-        else
-          -- sendDebugMessage('OBJ addr still not a ptr, leave it be')
-          return objectPtr, false; -- revert the value, whatever
-        end
-      else -- vtable valid
-        return objectPtr, false
+      if isNullOrNil(wrapperAddr) or isInvalidPointer(wrapperAddr) then -- check the wrapper
+        -- sendDebugMessage('OBJ addr still not an obj  ptr, leave it be')
+        return objectPtr, false; -- revert the value, whatever
+      end
+
+      objectAddr = readPointer(wrapperAddr)
+      if isVtable(getVtable(objectAddr)) then -- check for vtable to be safe
+        -- sendDebugMessage('shifted OBJ addr is a ptr, returning it')
+        return wrapperAddr, true -- objects at 0x8 offsetToValue are wrapped ptrs, so we return the ptr
+      else
+        -- sendDebugMessage('OBJ addr still not a ptr, leave it be')
+        return objectPtr, false; -- revert the value, whatever
       end
     end
 
