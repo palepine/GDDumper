@@ -282,7 +282,7 @@
 
 
 
-    -- ///---///--///---///--///---/// MISC
+    -- ///---///--///---///--///---/// MISC UTILS
 
       --- turns off showOnPrint
       local function fuckoffPrint()
@@ -904,57 +904,7 @@
         end
       end
 
-    -- ///---///--///---///--///---/// MISC UTILS
 
-      function getMainModuleInfo()
-        -- the vtables are stored in some readonly data section, text included too
-        local moduleStart = getAddress(process) or 0
-        local moduleEnd;
-        local moduleSize = getModuleSize(process)
-
-        -- for cases when getAddress fails
-        if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
-          moduleStart = enumModules()[1].Address
-          moduleEnd = moduleStart + enumModules()[1].Size
-        else
-          moduleEnd = moduleStart + moduleSize
-        end
-
-        return
-        {
-          moduleStart = moduleStart,
-          moduleEnd = moduleEnd,
-          moduleSize = moduleSize
-        }
-      end
-
-      local function wrapBrackets(stringToWrap)
-        return '['.. (stringToWrap or "") .. "]"
-      end
-
-      local function readU32LE(f)
-        local b = f:read(4)
-
-        if not b or #b < 4 then return nil end
-
-        local b1, b2, b3, b4 = string.byte(b, 1, 4)
-
-        return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
-      end
-
-      local function streamFileToString(fileName)
-        local tableFile = findTableFile(fileName)
-        if tableFile == nil then return nil end -- error('attached file not found')
-        local stringStream = createStringStream()
-        stringStream.Position = 0
-        stringStream.copyFrom(tableFile.Stream, tableFile.Stream.Size)
-        local newScript = stringStream.DataString
-        stringStream.destroy()
-
-        return newScript
-      end
-
-      GDTEAL_COLOR = 0x808040
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TYPES/SIZE
 
@@ -5863,7 +5813,7 @@
       return false
     end
 
-    function GDAPI.recompileGDScript(nodeAddr, fileName, instantiate)
+    function GDAPI.recompileGDScript(nodeAddr, fileName)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(type(fileName)=='string', 'Script file name has to be a string, instead got: '..type(fileName))
       assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
@@ -5902,27 +5852,27 @@
         end
       end
 
-      -- construct a managed string from the streamed script file
+      -- construct a managed string from the streamed script file and set it to the script
       local newScriptAddr = GDI.construct_string(newScript)
-
       writePointer(gdscript + GDDEFS.GDSCRIPT_SRC , newScriptAddr )
 
-      -- 0 OK, 22 ERR_ALREADY_IN_USE, 43 ERR_PARSE_ERROR, 2 ERR_HANDLER_SCRIPT, 36 ERR_COMPILATION_FAILED, 1 ERR_HANDLER_WARNING
-      local eError = executeCodeEx(0,nil,reloadMethodPtr,gdscript,1) -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
+      -- hotreload the new script, it doesn't create Script Instances, introducing new members leads to UB without instance swapping
+      local eError = executeCodeEx(stdcall, timeout, reloadMethodPtr, gdscript, 1) -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
 
       -- to revert later
       if GDDEFS.MAJOR_VER >= 4 then
         if hasTokens then writePointer(gdscript + GDDEFS.GDSCRIPT_BINARYTOKENS, binaryTockensAddr) end
       end
+
       if hasSource then
         writePointer(gdscript + GDDEFS.GDSCRIPT_SRC, sourceAddr)
       else
         writePointer(gdscript + GDDEFS.GDSCRIPT_SRC, 0 )
       end
 
-      GDI.destroy_string(newScriptAddr) -- shouldn't crash
+      GDI.destroy_string(newScriptAddr)
 
-      -- Object::set_script isn't virtual in non-debug
+      -- 0 OK, 22 ERR_ALREADY_IN_USE, 43 ERR_PARSE_ERROR, 2 ERR_HANDLER_SCRIPT, 36 ERR_COMPILATION_FAILED, 1 ERR_HANDLER_WARNING
       return eError
     end
 
