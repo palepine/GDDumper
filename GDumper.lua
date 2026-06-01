@@ -5655,7 +5655,22 @@
           -- destroy SName
           executeCodeEx(stdcall, timeout, stringDestor, objAlloc)
           deAlloc(objAlloc)
-        end 
+        end
+
+        function GDExtendedInterface.destroy_object_variant( ptr )
+          assert(type(ptr) == 'number', 'string ptr must be a number, instead got: ' .. type(ptr))
+
+          local variantDtor = GDExtendedInterface.getGDExtensionFunc('variant_destroy')
+          if isNullOrNil(variantDtor) then error('variant dtor func ptr not found') end
+
+          -- allocating target memory
+          local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
+          if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
+          writePointer(objAlloc, ptr)
+          -- destroy SName
+          executeCodeEx(stdcall, timeout, variantDtor, objAlloc)
+          deAlloc(objAlloc)
+        end
 
         function GDExtendedInterface.mem_alloc(size)
           assert(type(size) == 'number', 'size must be a number, instead got: ' .. type(size))
@@ -5835,7 +5850,7 @@
         if GDDEFS.MAJOR_VER <= 3 then
           GDNativeInterface.godot_variant_destroy( ptr )
         else
-          GDExtendedInterface.variant_destroy( ptr )
+          GDExtendedInterface.destroy_object_variant( ptr )
         end
         if ptr then GDI.constructed[ptr] = nil end
       end
@@ -5968,9 +5983,9 @@
       executeCodeEx(stdcall, timeout, callpMethod, nodeAddr, args, argCount, error) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
 
       GDI.destroy_string_name(methodSName)
-      GDI.destroy_object_variant(objectVariant)
+      -- GDI.destroy_object_variant(objectVariant)
 
-      return error
+      return readPointer( error.value )
     end
 
     --- reloads from the binary tokens
