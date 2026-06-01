@@ -556,7 +556,7 @@
         struct = struct and struct or createStructure('') -- should not happen though?
         struct.beginUpdate()
 
-        if checkForGDScript(baseaddr) and isVtable(readPointer(baseaddr)) then
+        if checkForGDScript(baseaddr) and isVtable( getVtable(baseaddr) ) then
           dumpedDissectorNodes = {} -- redundant?
           -- safe to assume, that's a starting point
           local nodeName = getNodeName(baseaddr)
@@ -605,7 +605,7 @@
       ---@param addr integer @address to typeguess
       ---@return string @name; base address isn't returned
       local function GDStructNameLookup(addr)
-        if isInvalidPointer(addr) or not isVtable(readPointer(addr)) then
+        if isInvalidPointer(addr) or not isVtable(getVtable(addr)) then
           return nil
         end
 
@@ -622,7 +622,7 @@
       ---@return string @name;
       local function GDAddressLookup(addr)
         return nil
-        -- if isInvalidPointer(addr) or not isVtable( readPointer( addr ) ) then
+        -- if isInvalidPointer(addr) or not isVtable( getVtable( addr ) ) then
         --     return nil
         -- end
 
@@ -4583,7 +4583,7 @@
       -- isn't elegant either
       for i = 23, steps do
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
-        if isNotNullOrNil(candidateAddr) and isVtable(readPointer(candidateAddr)) then
+        if isNotNullOrNil(candidateAddr) and isVtable(getVtable(candidateAddr)) then
 
           -- sendDebugMessage("[VP/WIND] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
           local className = getGDObjectName(candidateAddr)
@@ -4836,19 +4836,19 @@
     ---@return number @ script type enum
     function checkForGDScript(nodeAddr)
 
-      if isNullOrNil(nodeAddr) or not isVtable( readPointer(nodeAddr) ) then
+      if isNullOrNil(nodeAddr) or not isVtable( getVtable(nodeAddr) ) then
         -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return false
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) or not isVtable( readPointer(scriptInstance) ) then
+      if isNullOrNil(scriptInstance) or not isVtable( getVtable(scriptInstance) ) then
         -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return false
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-      if isNullOrNil(gdscript) or not isVtable( readPointer(gdscript) ) then
+      if isNullOrNil(gdscript) or not isVtable( getVtable(gdscript) ) then
         -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return false
       end
@@ -4870,19 +4870,19 @@
 
     function checkScriptType(nodeAddr)
       if GDDEFS.MONO == false then return 0 end;
-      if isNullOrNil(nodeAddr) or not isVtable( readPointer(nodeAddr) ) then
+      if isNullOrNil(nodeAddr) or not isVtable( getVtable(nodeAddr) ) then
       --   -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) or not isVtable( readPointer(scriptInstance) ) then
+      if isNullOrNil(scriptInstance) or not isVtable( getVtable(scriptInstance) ) then
       --   -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-      if isNullOrNil(gdscript) or not isVtable( readPointer(gdscript) ) then
+      if isNullOrNil(gdscript) or not isVtable( getVtable(gdscript) ) then
       --   -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
@@ -4907,11 +4907,11 @@
 
     function checkIfObjectWithChildren(objAddr)
       
-      if isNullOrNil(objAddr) or not isVtable( readPointer(objAddr) ) then return false end -- if object itself is valid & has a vtable
+      if isNullOrNil(objAddr) or not isVtable( getVtable(objAddr) ) then return false end -- if object itself is valid & has a vtable
       local objectChildren, childrenSize = getNodeChildrenInfo(objAddr) -- check children & if it's a valid pointer
       if isNullOrNil(childrenSize) then return false end -- if no children, we don't need it
       local childAddr = readPointer(objectChildren)
-      if isNullOrNil(childAddr) or not isVtable( readPointer(childAddr) ) then return false end  -- let's check the 0th object for vtable
+      if isNullOrNil(childAddr) or not isVtable( getVtable(childAddr) ) then return false end  -- let's check the 0th object for vtable
       return true
       
     end
