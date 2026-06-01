@@ -1,7 +1,7 @@
 -- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens
 -- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code initially.
 -- Source code on github: https://github.com/palepine/GDDumper
--- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Feat
+-- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TODOS
   -- TODO addresslist should include node's children of children
   -- TODO tree view form with polling
   -- TODO more offsets for non-GDI objects
@@ -9,7 +9,7 @@
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
   -- TODO: full object path as a separate symbol?
 
--- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DECLARATIONS
+-- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// FORWARD DECLARATIONS
   local GDAPI = {}
 
   local isNullOrNil
@@ -80,14 +80,14 @@
 
   local getMainNodeTable
 
-  local stdcall = 0
-  local timeout = nil
   local makeAddr
   local makeSymAddr
 
 
+  local stdcall = 0
+  local timeout = nil
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
-  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILITIES
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILS
     -- ///---///--///---///--///---/// POINTER HANDLERS
 
       --- checks if the value is a valid pointer
@@ -851,6 +851,7 @@
       end
 
     -- ///---///--///---///--///---/// MISC UTILS
+
       function getMainModuleInfo()
         -- the vtables are stored in some readonly data section, text included too
         local moduleStart = getAddress(process) or 0
@@ -887,9 +888,21 @@
         return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
       end
 
+      local function streamFileToString(fileName)
+        local tableFile = findTableFile(fileName)
+        if tableFile == nil then return nil end -- error('attached file not found')
+        local stringStream = createStringStream()
+        stringStream.Position = 0
+        stringStream.copyFrom(tableFile.Stream, tableFile.Stream.Size)
+        local newScript = stringStream.DataString
+        stringStream.destroy()
+
+        return newScript
+      end
+
       GDTEAL_COLOR = 0x808040
 
-  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Enums, types & size
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TYPES/SIZE
 
     --- @unreliable takes in a vector + its size. Returns an inferred variant size and successBool
     ---@param vectorPtr number
@@ -5796,20 +5809,15 @@
       return false
     end
 
-    function GDAPI.recompileGDScript(nodeAddr, fileName)
+    function GDAPI.recompileGDScript(nodeAddr, fileName, instantiate)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(type(fileName)=='string', 'Script file name has to be a string, instead got: '..type(fileName))
       assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
       -- passing strings won't work, gotta stream the attached files
-      local tableFile = findTableFile(fileName)
-      if tableFile == nil then error('attached file not found') end
-      local stringStream = createStringStream()
-      stringStream.Position = 0
-      stringStream.copyFrom(tableFile.Stream, tableFile.Stream.Size)
-      local newScript = stringStream.DataString
-      stringStream.destroy()
+      local newScript = streamFileToString(fileName)
+      if isNullOrNil(newScript) then error('attached file wasnt found') end
 
       -- get gdscript and its vtable
       local gdscript = getNodeGDScript(nodeAddr) or 0
@@ -5846,10 +5854,7 @@
       writePointer(gdscript + GDDEFS.GDSCRIPT_SRC , newScriptAddr )
 
       -- 0 OK, 22 ERR_ALREADY_IN_USE, 43 ERR_PARSE_ERROR, 2 ERR_HANDLER_SCRIPT, 36 ERR_COMPILATION_FAILED, 1 ERR_HANDLER_WARNING
-      -- void GDScript::set_source_code(const String &p_code)
-      -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
-      -- Object::set_script isn't virtual in non-debug
-      local eError = executeCodeEx(0,nil,reloadMethodPtr,gdscript,1)
+      local eError = executeCodeEx(0,nil,reloadMethodPtr,gdscript,1) -- Error GDScript::reload(bool p_keep_state) -- p_keep_state = true allows existing instances
 
       -- to revert later
       if GDDEFS.MAJOR_VER >= 4 then
@@ -5862,6 +5867,8 @@
       end
 
       GDI.destroy_string(newScriptAddr) -- shouldn't crash
+
+      -- Object::set_script isn't virtual in non-debug
       return eError
     end
 
