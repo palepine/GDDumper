@@ -297,6 +297,60 @@
         return not isNullOrNil(toCheck)
       end
 
+      function getMainModuleInfo()
+        -- the vtables are stored in some readonly data section, text included too
+        local moduleStart = getAddress(process) or 0
+        local moduleEnd;
+        local moduleSize = getModuleSize(process)
+
+        -- for cases when getAddress fails
+        if moduleStart == 0 or moduleStart == nil or moduleSize == nil or moduleSize == 0 then
+          moduleStart = enumModules()[1].Address
+          moduleEnd = moduleStart + enumModules()[1].Size
+        else
+          moduleEnd = moduleStart + moduleSize
+        end
+
+        return
+        {
+          moduleStart = moduleStart,
+          moduleEnd = moduleEnd,
+          moduleSize = moduleSize
+        }
+      end
+
+      local function wrapBrackets(stringToWrap)
+        return '['.. (stringToWrap or "") .. "]"
+      end
+
+      local function readU32LE(f)
+        local b = f:read(4)
+
+        if not b or #b < 4 then return nil end
+
+        local b1, b2, b3, b4 = string.byte(b, 1, 4)
+
+        return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
+      end
+
+      local function streamFileToString(fileName)
+        local tableFile = findTableFile(fileName)
+        if tableFile == nil then return nil end -- error('attached file not found')
+        local stringStream = createStringStream()
+        stringStream.Position = 0
+        stringStream.copyFrom(tableFile.Stream, tableFile.Stream.Size)
+        local newScript = stringStream.DataString
+        stringStream.destroy()
+
+        return newScript
+      end
+
+      local function getVtable(addr)
+
+      end
+
+      GDTEAL_COLOR = 0x808040
+
     -- ///---///--///---///--///---/// DEBUG
 
       --- multiplies a string by a number for more neat debug
