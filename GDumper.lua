@@ -3123,7 +3123,7 @@
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.CUSTOMVER = getIsCustomVer()
       -- GDDEFS.CUSTOMVER = (godotVersionString):match("custom") and true or false
-      
+
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
 
       if isNotNullOrNil(major) and isNotNullOrNil(minor) then
@@ -5178,7 +5178,24 @@
       return nil
     end
 
-  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// GDScript
+    function GDAPI.getMonoObjectFromNode(nodeAddr)
+      assert(GDDEFS.MONO, 'Target has to be mono')
+      assert(checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"], 'Node has to use C#')
+
+      if GDDEFS.MAJOR_VER >= 4 then
+        local GDSI = getNodeGDScriptInstance(nodeAddr) or 0x0
+        local clrDataPtr = readPointer( GDSI + GDDEFS.CLR_PTR )
+        return readPointer( clrDataPtr )
+      end
+
+      error('not implemented yet')
+      -- 3.x
+      if not GDDEFS.MONO_GETOBJ then error('getmonoobject isnt found') end
+      -- local gdhandle = getGDHandle(nodeAddr)
+      -- return executeCodeEx(stdcall, timeout, GDDEFS.MONO_GETOBJ, gdhandle)
+    end
+
+  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Script
 
 
     local function findGDExtensionInterfacePtr()
@@ -5242,6 +5259,26 @@
       for i, sig in ipairs(sigs) do
         if findFuncPointer(sig) then
           sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig)
+          return true
+        end
+      end
+      return false
+    end
+
+    local function findMonoGetObject()
+      local function findFuncPointer(aobSignature)
+        local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
+        if addr == 0 or addr == nil then return false end
+        GDDEFS.MONO_GETOBJ = addr
+        return true
+      end
+      local sigs = {}
+      table.insert(sigs, "41 55 41 54   56 53 48 83 EC ? 48< 89 CB< 48 85 C9 0F 84 ? ? ? ? 48 8B 49 ? 48 85 C9 74" )
+      table.insert(sigs, "55 57   56 53 48 83 EC ? 48< 89 CB< 48 85 C9 0F 84 ? ? ? ? 48 8B 49 ? 48 85 C9 74" )
+
+      for i, sig in ipairs(sigs) do
+        if findFuncPointer(sig) then
+          sendDebugMessage('[MONO_GETOBJ] via sig - success:' .. "\t" .. sig)
           return true
         end
       end
@@ -5863,7 +5900,7 @@
       return eError
     end
 
-    function GDAPI.reloadScriptInstance(nodeAddr)
+    function GDAPI.reloadGDSInstance(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
       --[[
@@ -12003,21 +12040,17 @@
       registerGDSymbols()
 
       -- try finding SceneTree and Viewport/Window
-      if tryRegSceneTree() and setSTtoVPoffset() then
-        registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false)
-      end
+      if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) end
 
       -- define type conversion helpers
       defineVariantTypeProfile()
 
-
-
-      -- check if UTF32LE string type reged, otherwise define it
-      checkGDStringType()
-
       -- build the correct disassembler profile
       defineGDFunctionEnums()
       bDisasmFunc= true -- whether to disasm functions, on by default
+
+      -- check if UTF32LE string type reged, otherwise define it
+      checkGDStringType()
 
       -- disable show on print
       fuckoffPrint()
@@ -12032,6 +12065,11 @@
 
       -- find GDScriptFunctions::call()
       if not findGDVMCallPtr() then sendDebugMessage('[VM_CALL] lookup failed.') end
+
+      -- find GDScriptFunctions::call()
+      if GDDEFS.MONO and GDDEFS.MAJOR_VER < 4 then 
+        if not findMonoGetObject() then sendDebugMessage('[MONO_GETOBJ] lookup failed.') end
+      end
 
       -- wait between thread runs in millis
       gd_nodeMonitorCD = 100
@@ -12072,4 +12110,5 @@
 
   recompileGDScript = GDAPI.recompileGDScript
   revertGDScript = GDAPI.revertGDScript
-  -- reloadScriptInstance = GDAPI.reloadScriptInstance
+  -- reloadGDSInstance = GDAPI.reloadGDSInstance
+  -- getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
