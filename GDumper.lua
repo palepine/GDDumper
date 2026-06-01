@@ -346,6 +346,10 @@
       end
 
       local function getVtable(addr)
+        return readPointer(addr)
+      end
+
+      local function getVtableValidated(addr)
         -- if isInvalidPointer(addr) then return nil end
         local vtable = readPointer(addr)
         if not isVtable(vtable) then return nil end
@@ -354,7 +358,7 @@
 
       local function getObjectVMethodByIndex(addr, index)
         index = index or 0
-        local vtable = getVtable(addr)
+        local vtable = getVtableValidated(addr)
         if isNullOrNil(vtable) then return nil end
         local offsetToMethod = GDDEFS.PTRSIZE * index
         return readPointer(vtable + offsetToMethod)
@@ -1581,12 +1585,8 @@
     end
 
     local function getObjectMeta(objAddr)
-      local vtable = readPointer(objAddr)
-      if not isVtable(vtable) then
-        return;
-      end
-      local offsetToMethod = GDDEFS.PTRSIZE * GDDEFS.GET_TYPE_INDX
-      local method = readPointer(vtable + offsetToMethod)
+      local method = getObjectVMethodByIndex( objAddr, GDDEFS.GET_TYPE_INDX)
+      if isNullOrNil(method) then return nil end
       return executeMethod(0, nil, method, objAddr)
     end
 
@@ -1596,9 +1596,7 @@
       local metaAddr = getObjectMeta(objAddr)
       local className = ''
 
-      if isNullOrNil(metaAddr) then
-        return '??'
-      end
+      if isNullOrNil(metaAddr) then return '??' end
 
       if GDDEFS.MAJOR_VER == 3 or (GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER < 6) then
         className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
