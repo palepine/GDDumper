@@ -1,6 +1,6 @@
 # Cheat Engine Runtime Godot Dumper
 
-Cheat Engine Godot Dumper is a [Cheat Engine](https://github.com/cheat-engine/cheat-engine) script that extracts data from running Godot apps via Cheat Engine API. The script dumps node data of a root viewport, helping with reverse engineering or debugging.
+Cheat Engine Godot Dumper is a [Cheat Engine](https://github.com/cheat-engine/cheat-engine) script that let's you inspect & extract runtime Godot apps via Cheat Engine API. The script features dumping SceneTree data, helping with reverse engineering, modding or debugging.
 
 THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY.
 
