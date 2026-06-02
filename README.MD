@@ -28,18 +28,16 @@ You can test your luck avoiding the steps above letting the script do that: tick
 1. Install [Cheat Engine](https://github.com/cheat-engine/cheat-engine).
 2. Place `GDumper.lua` inside `Cheat Engine\autorun`
 3. Run Cheat Engine and attach to a godot app.
-4. A `GDumper` menu item will appear, click `Add Template`
-5. Open `Dumper` script and configure the config object following the instructions or letting the script try it.
-6. Upon initialization, the engine will try to find the root viewport/window address, if it can't - find and register the Viewport/Window address with a symbol called `ptVP`
-
-Call `DumpAllNodesToAddr()`or `DumpNodeToAddr(memrec, getDumpedNode( "NodeName" ), false)` to dump to the address list.
-For struct building, enable `GD Dissector` inside `GDumper` menu, then click `VP Struct` to build a viewport children struct.
+4. A `GDumper` menu item will appear
+5. e.g. click `Add Template` and/or follow instructions in the [API doc](/docs/GDUMPER_API.MD).
 
 ## Support
 If you find the script useful, [consider supporting me here](https://ko-fi.com/vesperpallens)
 
 ## Contributing
 I'd appreciate any help/ideas with features I haven't implemented or that can be implemented more efficiently.
+
+Feel free to open new issues if the script doesn't support some engine versions
 
 ## License
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
