@@ -11981,7 +11981,7 @@
 
       function dumpContext:tryVisitNode(addr)
         if isNullOrNil(addr) then return false end
-        GDDEFS.Monitor.nodeCountInc() -- how many nodes we have seen
+        GDDEFS.Monitor:nodeCountInc() -- how many nodes we have seen
         if self.visited[addr] then return false end
         self.visited[addr] = true
         if checkForGDScript(addr) then
@@ -12024,7 +12024,7 @@
 
       while not thr.Terminated do
         
-        GDDEFS.Monitor.startRun()
+        GDDEFS.Monitor:startRun()
 
         local startedAt = getTickCount()
         local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
@@ -12032,8 +12032,8 @@
         gd_currNodeMonitorThread.terminate()
         gd_currNodeMonitorThread.destroy() -- free the thread...?
 
-        sleep( GDDEFS.Monitor.getCD() )
-        GDDEFS.Monitor.endRun( getTickCount()-startedAt or 0 )
+        sleep( GDDEFS.Monitor:getCD() )
+        GDDEFS.Monitor:endRun( getTickCount()-startedAt or 0 )
 
         if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
           if gd_currNodeMonitorThread and not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
