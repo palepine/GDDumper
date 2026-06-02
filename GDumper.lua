@@ -3135,14 +3135,14 @@
       MainForm.setCaption( (GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN") .. (GDDEFS.CUSTOMVER and " C" or '') .. (GDDEFS.DEBUGVER and " D" or '') .. (GDDEFS.MONO and " M" or '') )
     end
 
-    local function getStoredOffsetsFromVersion(majminVersionStr)
+    local function getStoredOffsetsFromVersion(verStr)
 
-      majminVersionStr = majminVersionStr or GDDEFS.VERSION_STRING
+      majminVverStrersionStr = verStr or GDDEFS.VERSION_STRING
       -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
 
       local offsets = {}
 
-      if majminVersionStr == "4.8" then
+      if verStr == "4.8" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
         GDDEFS.DICT_SIZE = 0x34
@@ -3202,7 +3202,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "4.7" then
+      elseif verStr == "4.7" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
         GDDEFS.DICT_SIZE = 0x34
@@ -3262,7 +3262,7 @@
         end
 
         return offsets
-      elseif majminVersionStr == "4.6" then
+      elseif verStr == "4.6" then
         
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         if GDDEFS._x64bit then
@@ -3405,7 +3405,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "4.5" then
+      elseif verStr == "4.5" then
         GDDEFS.DICT_HEAD = 0x20
         GDDEFS.DICT_TAIL = 0x28
         GDDEFS.DICT_SIZE = 0x34 -- 0x3C
@@ -3462,7 +3462,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "4.4" then
+      elseif verStr == "4.4" then
         GDDEFS.GET_TYPE_INDX = 8
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- godot.windows.template_release.x86_64.exe
@@ -3517,7 +3517,7 @@
         end
         return offsets
 
-      elseif majminVersionStr == "4.3" then
+      elseif verStr == "4.3" then
         GDDEFS.GET_TYPE_INDX = 8
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- godot.windows.template_release.x86_64.exe
@@ -3570,7 +3570,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "4.2" then
+      elseif verStr == "4.2" then
         GDDEFS.GET_TYPE_INDX = 8
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- godot.windows.template_release.x86_64.exe
@@ -3625,7 +3625,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "4.1" then
+      elseif verStr == "4.1" then
         GDDEFS.GET_TYPE_INDX = 8
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         -- 4.1.2 has some wild offsets however
@@ -3679,7 +3679,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "4.0" then
+      elseif verStr == "4.0" then
         GDDEFS.GET_TYPE_INDX = 8
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
         offsets.VPChildren = 0x168
@@ -3721,7 +3721,7 @@
 
           return offsets
 
-      elseif majminVersionStr == "3.6" then
+      elseif verStr == "3.6" then
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- godot.windows.opt.64.exe
@@ -3768,7 +3768,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "3.5" then
+      elseif verStr == "3.5" then
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         if GDDEFS._x64bit then
@@ -3881,7 +3881,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "3.4" then
+      elseif verStr == "3.4" then
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- godot.windows.opt.64.exe
@@ -3929,7 +3929,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "3.3" then
+      elseif verStr == "3.3" then
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- godot.windows.opt.64.exe
@@ -3976,7 +3976,7 @@
 
         return offsets
 
-      elseif majminVersionStr == "3.2" then
+      elseif verStr == "3.2" then
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- error("Not defined yet")
@@ -4021,10 +4021,10 @@
 
         return offsets
 
-      elseif majminVersionStr == "3.1" then
+      elseif verStr == "3.1" then
         print("No recorded version found")
         error("Not defined yet")
-      elseif majminVersionStr == "3.0" then
+      elseif verStr == "3.0" then
         -- 3.0.6.stable.official
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
@@ -4065,7 +4065,7 @@
         end
 
         return offsets
-      elseif majminVersionStr == "2.1" then
+      elseif verStr == "2.1" then
         -- Godot Engine v2.1.7.rc.custom_build
         -- godot.windows.opt.64.exe
         error("Not defined yet")
