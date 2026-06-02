@@ -12039,7 +12039,7 @@
         GDDEFS.Monitor:endRun( getTickCount()-startedAt or 0 )
 
         if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
-          if gd_currNodeMonitorThread and not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
+          -- if gd_currNodeMonitorThread and not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
           thr.terminate()
           return
         end
