@@ -6007,7 +6007,7 @@
       local err = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
       writeInteger(err.value, -1)
 
-      -- We cheat here with node->set_script( Variant(TYPE::NIL) ); to avoid if (get_script() == p_script) return;
+      -- We cheat here with    node->set_script( Variant(TYPE::NIL) );     to avoid   if (get_script() == p_script) return;   but we lose the state
       executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err)
 
       -- error checking, the object state should allegedly be fine
