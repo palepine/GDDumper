@@ -3148,7 +3148,7 @@
         GDDEFS.DICT_SIZE = 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
-        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
 
         offsets.VPChildren = 0x140
         offsets.VPObjStringName = 0x190
@@ -3208,7 +3208,7 @@
         GDDEFS.DICT_SIZE = 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
-        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
         -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
         offsets.VPChildren = 0x140
@@ -3270,7 +3270,7 @@
           GDDEFS.DICT_TAIL = 0x28
           GDDEFS.DICT_SIZE = 0x34 --0x3C
           GDDEFS.GET_TYPE_INDX = 10
-          GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5
+          GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
           -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
           -- godot.windows.template_release.x86_64.exe
@@ -3411,7 +3411,7 @@
         GDDEFS.DICT_SIZE = 0x34 -- 0x3C
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 9
-        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 13
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 14
         -- A0 Vector<GDScriptDataType> argument_types; including parameter names
         -- f4 argcount
 
@@ -4146,7 +4146,10 @@
       end -- for auto offsetdef and ptr arithmetics
 
       local scriptErrors = { [22] = "in use error", [43] = "parse error", [2] = "handler script error", [36] = "compilation error", [1] = "handler warning", }
+      local callErrors = { [1] = "invalid method", [2] = "invalid argument", [3] = "too many args", [4] = "too few args", [5] = "instance is null", [6] = "method not const", }
       GDDEFS.SCRIPT_ERRORS = scriptErrors
+      GDDEFS.CALL_ERRORS = callErrors
+
     end
 
     local function initGDVersion(config)
@@ -4760,9 +4763,7 @@
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
     local function getNodeGDScript(nodeAddr)
-      if isNullOrNil(nodeAddr) then
-        return nil
-      end
+      if isNullOrNil(nodeAddr) then return nil end
 
       local gdScriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
       if isNullOrNil(gdScriptInstance) then
@@ -5971,7 +5972,11 @@
       GDI.destroy_string(newScriptAddr)
 
       -- 0 OK, 22 ERR_ALREADY_IN_USE, 43 ERR_PARSE_ERROR, 2 ERR_HANDLER_SCRIPT, 36 ERR_COMPILATION_FAILED, 1 ERR_HANDLER_WARNING
-      return eError
+      -- success
+      if eError == 0 then return eError end
+      
+      -- fail
+      error('hotreloading GDScript failed, err: ' .. tostring(GDDEFS.SCRIPT_ERRORS[eError]) )
     end
 
     function GDAPI.reloadGDSInstance(nodeAddr)
@@ -5979,35 +5984,62 @@
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
       -- get Node's callp virtual
-      local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX) -- TODO: define offset for gd versions, ideally relative to the get_class_name one
+      local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX )
       if isNullOrNil(callpMethod) then error('callp not found') end
 
-      -- construct bound method StringName and an object variant
-      local methodSName = GDI.construct_string( 'set_script' )
-      local objectVariant = GDI.construct_object_variant(nodeAddr)
+      local gdScript = getNodeGDScript(nodeAddr)
+      if isNullOrNil(gdScript) then error('gdscript invalid') end -- check it before any allocations
 
-      -- setting up the arg
-      local argCount = 1
-      local argTable = { { type = "OBJECT", value = nil, copy = objectVariant } }
-      setupCallArgs(VariantArena, GDVariant, argTable)
+      -- construct bound method StringName and an object variant
+      local methodSName = GDI.construct_string_name( 'set_script' )
+      if isNullOrNil(methodSName) then error('string name not constructed') end
+      local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
+      writePointer(stringNamePtr, methodSName) -- we need the stringName to be stored in a pointer passed to callp
 
       local int_t = 0
-      local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset }
-      local error = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
+      local argTable = { { type = "NIL", value = nil } }
+      setupCallArgs(VariantArena, GDVariant, argTable)
 
-      local callSpace = allocateMemory(GDDEFS.PTRSIZE)
-      writePointer(callSpace, methodSName)
+      local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- rcx
+      local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset } -- r9
+      local argCount = 1
+      local err = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
+      writeInteger(err.value, -1)
+
+      -- We cheat here with node->set_script( Variant(TYPE::NIL) ); to avoid if (get_script() == p_script) return;
+      executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err)
+
+      -- error checking, the object state should allegedly be fine
+      local errVal = readPointer( err.value )
+      if errVal ~= 0 then
+        GDI.destroy_string_name( methodSName )
+        deAlloc(stringNamePtr)
+        error('resetting the script failed, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
+      end
+
+      -- Object::set_script(const Variant &p_script)
+      local objectVariant = GDI.construct_object_variant(gdScript)
+
+      -- setting up the arg
+      local argTable = { { type = "OBJECT", value = nil, copy = objectVariant } } -- for we manage it
+      setupCallArgs(VariantArena, GDVariant, argTable)
+
+      writeInteger(err.value, -1)
 
       -- hotreload the SI of a node
-      -- executeCodeEx(stdcall, timeout, callpMethod, callSpace+0x50, nodeAddr, methodSName, args, argCount, error) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
-      executeCodeEx(stdcall, timeout, callpMethod, VariantArena.base+VariantArena.returnBufOffset, nodeAddr, callSpace, VariantArena.base+VariantArena.argListOffset, argCount, VariantArena.base+VariantArena.callErrorOffset)
+      executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
       
-      deAlloc(callSpace)
-
+      deAlloc(stringNamePtr)
       GDI.destroy_string_name(methodSName)
       GDI.destroy_object_variant(objectVariant)
 
-      return readPointer( error.value )
+      local errVal = readPointer( err.value )
+
+      -- success
+      if errVal == 0 then return readPointer( err.value ) end
+      
+      -- fail
+      error('hotreloading GDSI failed, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
     end
 
     --- reloads from the binary tokens
@@ -10777,6 +10809,7 @@
       if not VariantArena:init() then error("'stack' space isn't alloced") end
 
       local vmCallAddr
+      -- node->callp("methodStringName", args, argc, err) would be an alternative to the direct call, but that requires stringName constructor.
       if isNullOrNil(GDDEFS.VM_CALL) then
         findGDVMCallPtr()
         vmCallAddr = GDDEFS.VM_CALL
@@ -11539,6 +11572,14 @@
     GDVariant = {}
 
       -- non-managed
+      function GDVariant.NIL(arena, value, copy)
+        if isValidPointer(copy) then return copy end
+        local v = arena:allocVariant()
+        writeInteger(v + 0x0, getGDTypeEnumFromName('NIL') )
+        writeQword(v + 0x8, 0x0)
+        return v
+      end
+
       function GDVariant.BOOL(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
