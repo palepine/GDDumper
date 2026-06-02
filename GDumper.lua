@@ -83,6 +83,8 @@
   local makeAddr
   local makeSymAddr
 
+  local nodeMonitorService
+
 
   local stdcall = 0
   local timeout = nil
@@ -437,10 +439,6 @@
           )
       end
 
-      function GDAPI.gd_monitorProfile()
-        print( NodeMonitorServiceThread.name )
-      end
-
     -- ///---///--///---///--///---/// STRUCTURES
 
       --- deletes ALL structures, constructs a children structure of the viewport
@@ -579,7 +577,7 @@
 
           iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-        elseif bDisasmFunc and checkIfGDFunction(baseaddr) then
+        elseif GDDEFS.bDisasmFunc and checkIfGDFunction(baseaddr) then
           disassembleGDFunctionCodeToStruct(baseaddr, struct)
 
         elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
@@ -749,14 +747,6 @@
         end
       end
 
-      local function GDDisasmFuncSwitch(sender)
-        sender.Checked = not sender.Checked
-        if sender.Checked then
-          bDisasmFunc = true
-        else
-          bDisasmFunc = false
-        end
-      end
 
       local function GDStoredOffsetsSwitch(sender)
         sender.Checked = not sender.Checked
@@ -903,7 +893,6 @@
           addCustomMenuButtonTo(gdMenuItem, 'GD Dissector', GDDissectorSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
           addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
-          -- addCustomMenuButtonTo(gdMenuItem, 'Disasm Funcs', GDDisasmFuncSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'GD StuctName Lookup', GDStructNameLookupSwitch)
           -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
@@ -3265,7 +3254,7 @@
       elseif verStr == "4.6" then
         
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
-        if GDDEFS._x64bit then
+        if GDDEFS._x64 then
           GDDEFS.DICT_HEAD = 0x20
           GDDEFS.DICT_TAIL = 0x28
           GDDEFS.DICT_SIZE = 0x34 --0x3C
@@ -3771,7 +3760,7 @@
       elseif verStr == "3.5" then
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
-        if GDDEFS._x64bit then
+        if GDDEFS._x64 then
           -- godot.windows.opt.64.exe
           -- Godot Engine v3.5.1.stable.official
           offsets.VPChildren = 0x108
@@ -4140,10 +4129,10 @@
       debugPrefix = 1;
       if targetIs64Bit() then
         GDDEFS.PTRSIZE = 0x8
-        GDDEFS._x64bit = true
+        GDDEFS._x64 = true
       else
         GDDEFS.PTRSIZE = 0x4
-        GDDEFS._x64bit = false
+        GDDEFS._x64 = false
       end -- for auto offsetdef and ptr arithmetics
 
       local scriptErrors = { [22] = "in use error", [43] = "parse error", [2] = "handler script error", [36] = "compilation error", [1] = "handler warning", }
@@ -4151,6 +4140,69 @@
       GDDEFS.SCRIPT_ERRORS = scriptErrors
       GDDEFS.CALL_ERRORS = callErrors
 
+      local monitor =
+        {
+          MonitorThread = nil,
+          CD = nil,
+          runCounter = nil,
+          lastRunDelta = nil,
+          lastNodeCount = nil,
+          currNodeCount = nil,
+        }
+
+        function monitor:init()
+          self.CD = 100
+          self.runCounter = -1
+          self.lastRunDelta = 0
+          self.lastNodeCount = 0
+          self.currNodeCount = 0
+          self.runBudget = 45*1000
+          if self.MonitorThread then return end
+          self.MonitorThread = createThread(nodeMonitorService)
+        end
+
+        function monitor:setCD(newMS)
+          if isNullOrNil(newMS) or type(newMS) ~= "number" or number < 0 then error('cooldown must be valid') end
+          self.CD = newMS
+        end
+        function monitor:getCD()
+          return self.CD
+        end
+
+        function monitor:profile()
+          print
+          (
+            "Runs: " .. (self.runCounter or -1)
+            ..' Delta: ' .. (self.lastRunDelta - self.CD or -1)
+            .. ' ms (raw ' .. (self.lastRunDelta or -1) .. ')'
+            .. ' Nodes met: ' .. (self.lastNodeCount or -1)
+          )
+        end
+
+        function monitor:startRun()
+          self.runCounter = self.runCounter+1
+          self.currNodeCount = 0
+        end
+
+        function monitor:endRun(runDelta)
+          self.lastRunDelta = runDelta
+          self.lastNodeCount = self.currNodeCount
+        end
+
+        function monitor:nodeCountInc()
+          self.currNodeCount = self.currNodeCount+1
+        end
+
+        function monitor:suspend()
+          self.MonitorThread.suspend()
+        end
+
+        function monitor:resume()
+          self.MonitorThread.resume()
+        end
+
+        GDDEFS.Monitor = monitor
+        GDDEFS.bDisasmFunc = true
     end
 
     local function initGDVersion(config)
@@ -4513,7 +4565,7 @@
         local relativeAddr = readInteger(addr + offsetToValue)
         local nextAddr = getAddress(addr + offsetToNextIntr)
         local resolvedAddr
-        if GDDEFS._x64bit then
+        if GDDEFS._x64 then
           resolvedAddr = nextAddr + relativeAddr
         else
           resolvedAddr = relativeAddr -- absolute on 32
@@ -11926,12 +11978,13 @@
           startedAt = getTickCount(),
           dumped = {}, -- only nodes with GDScript
           visited = {}, -- every encountered node
-          budgetMs = GD_MONITOR_BUDGET_MS or 45*1000,
+          budgetMs = GDDEFS.Monitor.runBudget,
           thread = thr,
         }
 
       function dumpContext:tryVisitNode(addr)
         if isNullOrNil(addr) then return false end
+        GDDEFS.Monitor:nodeCountInc() -- how many nodes we have seen
         if self.visited[addr] then return false end
         self.visited[addr] = true
         if checkForGDScript(addr) then
@@ -11966,43 +12019,31 @@
       registerDumpedNodes()
     end
 
-    local function nodeMonitorService(thr)
+    function nodeMonitorService(thr)
       thr.Name = "GD Node Monitor Service"
-      thr.freeOnTerminate(false) -- we do it ourselves
-      -- bMonitorNodes = true
+      --thr.freeOnTerminate(false)
       gd_dumpedMonitorNodes = {};
       gd_registeredNodes = {};
-      local counter = 0
 
       while not thr.Terminated do
+        
+        GDDEFS.Monitor:startRun()
+
         local startedAt = getTickCount()
         local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
         gd_currNodeMonitorThread.waitfor()
         gd_currNodeMonitorThread.terminate()
-        sleep( gd_nodeMonitorCD )
-        counter = counter+1
-        local timeDelta = getTickCount() - startedAt or 0
+        gd_currNodeMonitorThread.destroy() -- free the thread...?
+
+        sleep( GDDEFS.Monitor:getCD() )
+        GDDEFS.Monitor:endRun( getTickCount()-startedAt or 0 )
 
         if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
-          if not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
+          -- if gd_currNodeMonitorThread and not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
           thr.terminate()
           return
         end
-        thr.Name = "GD Node Monitor Service | lastDiff " .. timeDelta .. " ms " .. " | iter " .. counter
-      end
-    end
 
-    -- toggles the node monitor thread
-    function NodeMonitorServiceSwitch()
-      if not (gdOffsetsDefined) or isNullOrNil(NodeMonitorServiceThread) then
-        error("can't switch, uninitialized")
-      end
-
-      bMonitorNodes = not bMonitorNodes
-      if bMonitorNodes then
-        NodeMonitorServiceThread.suspend()
-      else
-        NodeMonitorServiceThread.resume()
       end
     end
 
@@ -12196,10 +12237,11 @@
       end
 
       -- wait between thread runs in millis
-      gd_nodeMonitorCD = 100
+      -- GDDEFS.Monitor = 100 -- gd_nodeMonitorCD
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
-      NodeMonitorServiceThread = createThread(nodeMonitorService)
+      GDDEFS.Monitor:init()
+
     end
     godotRegisterPreinit()
 
@@ -12222,7 +12264,6 @@
   getNodeGDScriptInstance = GDAPI.getNodeGDScriptInstance
   godot_node_enumVariants = GDAPI.godot_node_enumVariants
   godotAA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
-  gd_monitorProfile = GDAPI.gd_monitorProfile
   printGDConfig = GDAPI.printGDConfig
   getGDSemver = GDAPI.getGDSemver
   DumpNodeToAddr = GDAPI.DumpNodeToAddr
