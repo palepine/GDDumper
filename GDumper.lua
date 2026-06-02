@@ -4170,10 +4170,13 @@
         end
 
         function monitor:profile()
-          return "Runs: " .. (self.runCounter or -1)
-                  ..' Delta: ' .. (self.lastRunDelta - self.CD or -1)
-                  .. ' ms (raw ' .. (self.lastRunDelta or -1) .. ')'
-                  .. ' Nodes met: ' .. (self.lastNodeCount or -1)
+          print
+          (
+            "Runs: " .. (self.runCounter or -1)
+            ..' Delta: ' .. (self.lastRunDelta - self.CD or -1)
+            .. ' ms (raw ' .. (self.lastRunDelta or -1) .. ')'
+            .. ' Nodes met: ' .. (self.lastNodeCount or -1)
+          )
         end
 
         function monitor:startRun()
