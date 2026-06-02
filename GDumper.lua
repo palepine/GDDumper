@@ -1293,7 +1293,7 @@
     local function getGDTypeEnumFromName(typeName)
       if type(typeName) ~= "string" then error("invalid typename") end
       local enum = GDDEFS.VARIANT_TYPE_PROFILE.enums[typeName]
-      if isNullOrNil(enum) then error("getGDTypeEnumFromName: invalid typename " .. typeName) end
+      if enum == nil then error("getGDTypeEnumFromName: invalid typename " .. typeName) end
       return enum
     end
 
