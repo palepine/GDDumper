@@ -4517,7 +4517,7 @@
         -- sendDebugMessage("[SceneTree] calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
         local className = getGDObjectName(readPointer(resolvedAddr))
         if className == "SceneTree" then
-          sendDebugMessage("[SceneTree] via vtable - success: " .. numtohexstr(resolvedAddr) .. " sig: " .. aobSignature )
+          sendDebugMessage("[SceneTree] via vtable - success!") --  .. numtohexstr(resolvedAddr) .. " sig: " .. aobSignature 
           registerSymbol('pSceneTree', resolvedAddr, false)
           return true
         else
@@ -5227,7 +5227,7 @@
 
       for i, sig in ipairs(sigs) do
         if findFuncPointer(sig) then
-          sendDebugMessage('[GDExtAPI] via sig - success:' .. "\t" .. sig)
+          sendDebugMessage('[GDExtAPI] via sig - success!') --  .. "\t" .. sig
           return true
         end
       end
@@ -5290,7 +5290,7 @@
 
       for i, sig in ipairs(sigs) do
         if findFuncPointer(sig) then
-          sendDebugMessage('[MONO_GETOBJ] via sig - success:' .. "\t" .. sig)
+          sendDebugMessage('[MONO_GETOBJ] via sig - success!') --  .. "\t" .. sig
           return true
         end
       end
@@ -7711,7 +7711,7 @@
                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
                 operand1 = operand1 .. '.'
-                operand1 = operand1 .. operand3 .. '->get_name' -- TODO
+                operand1 = operand1 .. operand3 .. '->get_name()' -- TODO
                 local operandArg = '';
 
                 for i = 0, argc - 1 do
@@ -7790,7 +7790,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7819,7 +7819,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7849,7 +7849,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7884,7 +7884,7 @@
                 local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand3 .. '->get_name' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -7916,7 +7916,7 @@
                 local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 .. '->get_name' .. '(' .. operandArg .. ')'
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -10744,7 +10744,7 @@
       table.insert(sigs, { isheavy = false, sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize = 28 }) -- 4.6 ret 64>
       table.insert(sigs, { isheavy = false, sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 34 }) -- 4.5
       table.insert(sigs, { isheavy = true,  sig = "4C 89 7C 24 28 89 44 24 20 48 89 ? >48 89 ? >48 89 ? E8", sigsize = 19 }) -- 4.5 ret 64<
-      table.insert(sigs, { isheavy = false, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
+      table.insert(sigs, { isheavy = true, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
       table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
       table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 25 }) -- 4.3 ret 64<
       table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4-4.3
@@ -10760,7 +10760,7 @@
 
       for i, sign in ipairs(sigs) do
         if resolveVM_RELA(sign.sig, sign.sigsize) then
-          sendDebugMessage('[VM_CALL] via sig - success: ' .. "\t" .. sign.sig)
+          sendDebugMessage('[VM_CALL] via sig - success!') --  .. "\t" .. sign.sig
           if sign.isheavy then GDDEFS.VM_CALL_HEAVY = true end
           return true
         end
