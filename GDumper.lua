@@ -3723,6 +3723,7 @@
 
       elseif majminVersionStr == "3.6" then
         GDDEFS.GET_TYPE_INDX = 6
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
         -- godot.windows.opt.64.exe
         --  Godot Engine v3.6.stable.custom_build.de2f0f147
         offsets.VPChildren = 0x108
