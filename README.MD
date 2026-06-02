@@ -14,7 +14,7 @@ THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY
 - Basic API functions
 - GDScriptFunction disassembler (structure-based)
 - Arbitrary GDFunction calling (experimental)
-- Arbitrary GDScript reloading (experimental)
+- Arbitrary GDScript and ScriptInstance hot-reloading (experimental)
 
 ## Making it work
 The script works only with godot apps with `GDScript` used (C# applications are supported to a limited extent).
