@@ -193,19 +193,19 @@
         if VTAddr == 0 or VTAddr == nil then
           return false
         end
-        if isNullOrNil(GDDEFS.MAIN_MODULE_INFO) then
-          GDDEFS.MAIN_MODULE_INFO = getMainModuleInfo()
-          GDDEFS.TEXT_SECTIONINFO = getSectionBounds(".text")
-          if GDDEFS.TEXT_SECTIONINFO == nil then return false end
+        if isNullOrNil(GDDEFS._MAIN_MODULE_INFO) then
+          GDDEFS._MAIN_MODULE_INFO = getMainModuleInfo()
+          GDDEFS._TEXT_SECTIONINFO = getSectionBounds(".text")
+          if GDDEFS._TEXT_SECTIONINFO == nil then return false end
         end
 
-        if GDDEFS.MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS.MAIN_MODULE_INFO.moduleEnd then
+        if GDDEFS._MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS._MAIN_MODULE_INFO.moduleEnd then
           -- iterate a few pointers and confirm if they are executable
           local ptrsize = targetIs64Bit() and 0x8 or 0x4
 
           for i = 0, 5 do -- 5 pointers
             local pmethod = readPointer(VTAddr + ptrsize * i)
-            if not isInsideSectionRange(pmethod, GDDEFS.TEXT_SECTIONINFO) then
+            if not isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
               return false
             end
           end
@@ -12033,7 +12033,7 @@
         local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
         gd_currNodeMonitorThread.waitfor()
         gd_currNodeMonitorThread.terminate()
-        gd_currNodeMonitorThread.destroy() -- free the thread...?
+        gd_currNodeMonitorThread.destroy() -- free the thread...
 
         sleep( GDDEFS.Monitor:getCD() )
         GDDEFS.Monitor:endRun( getTickCount()-startedAt or 0 )
@@ -12235,9 +12235,6 @@
       if GDDEFS.MONO and GDDEFS.MAJOR_VER < 4 then 
         if not findMonoGetObject() then sendDebugMessage('[MONO_GETOBJ] lookup failed.') end
       end
-
-      -- wait between thread runs in millis
-      -- GDDEFS.Monitor = 100 -- gd_nodeMonitorCD
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
       GDDEFS.Monitor:init()
