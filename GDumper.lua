@@ -12245,32 +12245,37 @@
   
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// API
   
-  buildGDGUI = GDAPI.buildGDGUI  
-  printDumpedNodes = GDAPI.printDumpedNodes
+  DumpNodeToAddr = GDAPI.DumpNodeToAddr
+  DumpAllNodesToAddr = GDAPI.DumpAllNodesToAddr
+  initDumper = GDAPI.initDumper
+
+  -- objects
+  getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
   getDumpedNode = GDAPI.getDumpedNode
   registerNodeOffsets = GDAPI.registerNodeOffsets
   getGDObjectName = GDAPI.getGDObjectName
+  getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
+  getNodeName = GDAPI.getNodeName
+  godot_node_enumVariants = GDAPI.godot_node_enumVariants
+  godotAA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
+  getNodeChildByGDName = GDAPI.getNodeChildByGDName
+  getNodeChildByName = GDAPI.getNodeChildByName
+
+  -- scripts
+  recompileGDScript = GDAPI.recompileGDScript
+  revertGDScript = GDAPI.revertGDScript
+  reloadGDSInstance = GDAPI.reloadGDSInstance
   executeGDFunction = GDAPI.executeGDFunction
   callGDFunctionFromNode = GDAPI.callGDFunctionFromNode
   patchGDFunctionConst = GDAPI.patchGDFunctionConst
   patchGDFunction = GDAPI.patchGDFunction
   getGDFunctionFromNode = GDAPI.getGDFunctionFromNode
   getNodeConstPtr = GDAPI.getNodeConstPtr
-  getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
-  getNodeName = GDAPI.getNodeName
   getNodeGDScriptInstance = GDAPI.getNodeGDScriptInstance
-  godot_node_enumVariants = GDAPI.godot_node_enumVariants
-  godotAA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
+
+  -- misc
+  buildGDGUI = GDAPI.buildGDGUI  
+  printDumpedNodes = GDAPI.printDumpedNodes
   printGDConfig = GDAPI.printGDConfig
   getGDSemver = GDAPI.getGDSemver
-  DumpNodeToAddr = GDAPI.DumpNodeToAddr
-  DumpAllNodesToAddr = GDAPI.DumpAllNodesToAddr
-  initDumper = GDAPI.initDumper
-  getNodeChildByGDName = GDAPI.getNodeChildByGDName
-  getNodeChildByName = GDAPI.getNodeChildByName
   getSectionBounds = GDAPI.getSectionBounds
-
-  recompileGDScript = GDAPI.recompileGDScript
-  revertGDScript = GDAPI.revertGDScript
-  reloadGDSInstance = GDAPI.reloadGDSInstance
-  getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
