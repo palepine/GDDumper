@@ -1,7 +1,8 @@
-<h1 align="center">
-  <img src="docs/logo.svg" alt="Logo" width="60" valign="middle">
-  Cheat Engine Runtime Godot Dumper
-</h1>
+<p align="center">
+  <img src="docs/logo.svg" alt="Logo" width="100">
+</p>
+
+<h1 align="center">Cheat Engine Runtime Godot Dumper</h1>
 
 Cheat Engine Godot Dumper is a [Cheat Engine](https://github.com/cheat-engine/cheat-engine) script that let's you inspect & extract runtime Godot apps via Cheat Engine API. The script features dumping SceneTree data, helping with reverse engineering, modding or debugging.
 
