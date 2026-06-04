@@ -364,7 +364,7 @@
         return readPointer(vtable + offsetToMethod)
       end
 
-      GDTEAL_COLOR = 0x808040
+      local GD_FUNC_DISASM_COLOR = 0x451630 --0x808040
 
     -- ///---///--///---///--///---/// DEBUG
 
@@ -6743,7 +6743,7 @@
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 7 + _pointer_size -- incr += 5; in 4.0
               end
@@ -6764,7 +6764,7 @@
                 local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -6780,7 +6780,7 @@
                 local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 3])
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 4
               end
             }
@@ -6813,7 +6813,7 @@
                 addStructureElem(contextTable.codeStructElement, 'native_type', (contextTable.instrPointer - 1 + 5) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is Dictionary[' .. operand3 .. ']'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 6
               end
@@ -6864,7 +6864,7 @@
                 addStructureElem(contextTable.codeStructElement, 'value_native_type', (contextTable.instrPointer - 1 + 8) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is Dictionary[' .. operand5 .. ']' .. ', ' .. operand7 .. ']'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 9
 
               end
@@ -6883,7 +6883,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 4
               end
             }
@@ -6898,7 +6898,7 @@
                 local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. ' is ' .. operand3
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 4
 
               end
@@ -6914,7 +6914,7 @@
                 local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3])
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' .. operand3
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 4
               end
             }
@@ -6931,7 +6931,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 5
               end
             }
@@ -6948,7 +6948,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 5
               end
             }
@@ -6965,7 +6965,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -6983,7 +6983,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -7001,7 +7001,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. '[' .. operand1 .. '] = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -7019,7 +7019,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '["' .. operand3 .. '"] = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7038,7 +7038,7 @@
                 contextTable.opcodeName =
                     contextTable.opcodeName .. ' ' .. operand1 .. '["' .. operand3 .. '"] = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7056,7 +7056,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' .. operand3 .. '"]'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7074,7 +7074,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '["' .. operand3 .. '"]'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7090,7 +7090,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. '["' .. operand2 .. '"] = ' .. operand1
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -7106,7 +7106,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ["' .. operand2 .. '"]'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -7124,7 +7124,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' script(scriptname)[' .. operand3 .. '] = ' .. operand1
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7142,7 +7142,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = script(scriptname)[' .. operand3 .. ']'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7158,7 +7158,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -7172,7 +7172,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = NULL'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -7186,7 +7186,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = TRUE'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -7200,7 +7200,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = FALSE'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -7218,7 +7218,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ') ' .. operand1 .. ' = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7234,7 +7234,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 6
               end
@@ -7250,7 +7250,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 9
               end
@@ -7268,7 +7268,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ')' .. operand1 .. ' = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7286,7 +7286,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ') ' .. operand1 .. ' = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7303,7 +7303,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand1_n
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7321,7 +7321,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7339,7 +7339,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. ' as ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -7371,7 +7371,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3 + instr_var_args
 
@@ -7403,7 +7403,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3 + instr_var_args
 
@@ -7433,7 +7433,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. '[' .. operandArg .. ']'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3 + argc
               end
@@ -7469,7 +7469,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand4 .. ') ' .. operand1 .. ' = ' .. '[' .. operandArg .. ']'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 6 + argc
               end
@@ -7501,7 +7501,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' =  {' .. operandArg .. '  }'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3 + argc * 2
 
@@ -7548,7 +7548,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2_5 .. ', ' .. operand2_7 .. ') ' .. operand2 .. ' =  {' .. operandArg .. '  }'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 9 + argc * 2
               end
@@ -7593,7 +7593,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. operand3 .. ']' .. '(' .. operandArg .. ')' -- original representation 'GlobalNames[FuncCode['..(contextTable.instrPointer-1 + instr_var_args+2)..']]'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
               end
@@ -7636,7 +7636,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2 .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
 
@@ -7670,7 +7670,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
               end
@@ -7701,7 +7701,7 @@
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3 + argc) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
               end
@@ -7736,7 +7736,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand4 .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
               end
@@ -7767,7 +7767,7 @@
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand3 .. '(' .. operandArg .. ')'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
               end
@@ -7808,7 +7808,7 @@
                 end
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. '(' .. operandArg .. ')' -- TODO retrieve the funciton name
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
               end
@@ -7848,7 +7848,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. typeName .. '.' .. operand2 .. '.operator String()' .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
               end
@@ -7877,7 +7877,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
               end
@@ -7906,7 +7906,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
 
@@ -7936,7 +7936,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. 'method->get_instance_class()' .. '.' .. 'method->get_name()' .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
               end
@@ -7971,7 +7971,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
               end
@@ -8003,7 +8003,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
               end
@@ -8016,7 +8016,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 2
               end
             }
@@ -8051,7 +8051,7 @@
                 end
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' .. operand2 .. '->name.operator String()' .. ' function, captures (' .. operandArg .. ')'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + captures_count
               end
@@ -8081,7 +8081,7 @@
                 end
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' create lambda from ' .. operand2 .. '->name.operator String()' .. ' function, captures (' .. operandArg .. ')'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + captures_count
 
@@ -8097,7 +8097,7 @@
                 elem.ShowAsHex = true
                 contextTable.opcodeName = contextTable.opcodeName .. ' -> ' .. operand1
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -8115,7 +8115,7 @@
                 elem.ShowAsHex = true
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' -> ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -8129,7 +8129,7 @@
             {
               name = "OPCODE_JUMP_TO_DEF_ARGUMENT",
               handler = function(contextTable)
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 1
               end
             }
@@ -8145,7 +8145,7 @@
                 local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -8160,7 +8160,7 @@
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2 .. ')' .. ' ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -8173,7 +8173,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -8186,7 +8186,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 8
               end
@@ -8201,7 +8201,7 @@
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand2 .. ') ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
 
@@ -8218,7 +8218,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. 'GDScript::debug_get_script_name(' .. operand2 .. ')' .. ') ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -8236,7 +8236,7 @@
                 addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-init ' .. operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -8255,7 +8255,7 @@
 
                 local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_BEGIN_', '')
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' .. operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -8377,7 +8377,7 @@
                 addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-init ' .. operand5 .. ' in range from ' .. operand2 .. ' to ' .. operand3 .. ' step ' .. operand4 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 7
 
@@ -8396,7 +8396,7 @@
                 addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-loop ' .. operand2 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -8415,7 +8415,7 @@
 
                 local opcodeType = contextTable.opcodeName:gsub('OPCODE_ITERATE_', '')
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-init (typed ' .. opcodeType .. ') ' .. operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -8534,7 +8534,7 @@
                 addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-loop ' .. operand4 .. ' in range to ' .. operand2 .. ' step ' .. operand3 .. ' counter ' .. operand1 .. ' end ' .. tostring(contextTable.codeInts[contextTable.instrPointer + 4])
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 6
               end
@@ -8549,7 +8549,7 @@
                 local operand2 = (contextTable.codeInts[contextTable.instrPointer + 2])
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
 
@@ -8564,7 +8564,7 @@
                 local operand2 = 'Globals[' .. contextTable.codeInts[contextTable.instrPointer + 2] .. ']'
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 3
               end
             }
@@ -8576,7 +8576,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
                 local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. opcodeType .. ') ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 2
 
               end
@@ -8777,7 +8777,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand1 .. ', ' .. operand2 .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 3
               end
             }
@@ -8785,7 +8785,7 @@
             {
               name = "OPCODE_BREAKPOINT",
               handler = function(contextTable)
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 1
               end
             }
@@ -8800,7 +8800,7 @@
                   contextTable.opcodeName = ''
                 end
                 addStructureElem(contextTable.codeStructElement, 'line: ', (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 2
               end
             }
@@ -8808,7 +8808,7 @@
             {
               name = "OPCODE_END",
               handler = function(contextTable)
-                addLayoutStructElem(contextTable.codeStructElement, '>>>END.', GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, '>>>END.', GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 1
               end
             }
@@ -8842,7 +8842,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg .. ')' -- TODO: retrieve the funciton name
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
 
@@ -8882,7 +8882,7 @@
 
                 local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
                 contextTable.opcodeName = contextTable.opcodeName .. '(return ' .. opcodeType .. ') ' .. operand2 .. ' = ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg .. ')'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
               end
@@ -9091,7 +9091,7 @@
                       local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
                       addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                       return contextTable.instrPointer + 5
                     end
                   }
@@ -9120,7 +9120,7 @@
                       local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- where to store
                       addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                       contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
-                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                      addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                       return contextTable.instrPointer + 7 + _pointer_size
                     end
                   }
@@ -9768,7 +9768,7 @@
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' ' .. operationName .. ' ' .. operand2
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -9788,7 +9788,7 @@
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' extends' .. ' ' .. operand2 .. ' ?'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -9808,7 +9808,7 @@
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. ' is built-in type ' .. ' ' .. operand2 .. ' ?'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -9825,7 +9825,7 @@
                 local operand3 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 3]) -- value
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '[' .. operand2 .. '] = ' .. operand3
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 4
               end
             }
@@ -9844,7 +9844,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. '[' .. operand2 .. ']'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -9863,7 +9863,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '= ["' .. operand2 .. '"] = ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -9882,7 +9882,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. '["' .. operand2 .. '"]'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -9900,7 +9900,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. '["' .. operand1 .. '"] = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -9917,7 +9917,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ["' .. operand1 .. '"]'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -9934,7 +9934,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -9948,7 +9948,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = TRUE'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 2
               end
             }
@@ -9962,7 +9962,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' = FALSE'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -9981,7 +9981,7 @@
 
                   contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand1 .. ') ' .. operand2 .. ' = ' .. operand3
 
-                  addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                  addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                   return contextTable.instrPointer + 4
                 end
@@ -10000,7 +10000,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand1 .. ')' .. operand2 .. ' = ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -10019,7 +10019,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand1 .. ') ' .. operand2 .. ' = ' .. operand3
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -10040,7 +10040,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand2 .. ' as ' .. operand1_n
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -10059,7 +10059,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand2 .. ' as GDScriptNativeClass ' .. operand1
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -10078,7 +10078,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand2 .. ' as Script ' .. operand1
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4
               end
@@ -10109,7 +10109,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. typeName .. '(' .. operandArg .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
               end
@@ -10138,7 +10138,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. '[' .. operandArg .. ']'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3 + argc
               end
@@ -10170,7 +10170,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' =  {' .. operandArg .. '  }'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3 + argc * 2
 
@@ -10213,7 +10213,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand_arg .. operand2 .. '.' .. '[' .. operand3 .. ']' .. '(' .. operandArg .. ')' -- base->call_ptr(*methodname, (const Variant **)argptrs, argc, nullptr, err);
                 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 4) * 0x4, vtDword) -- decrementing to get the original instruction
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 4) * 0x4, vtDword) -- decrementing to get the original instruction
                 
                 return contextTable.instrPointer + argc + 1
               end
@@ -10252,7 +10252,7 @@
                 end
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand_argc .. ' = ' .. "builtin_methods_names[" .. operand1 .. "]" .. '(' .. operandArg .. ')' -- GDScriptFunctions::call(func, (const Variant **)argptrs, argc, *dst, err);
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1 - 3) * 0x4, vtDword) -- decrement what's been incremented
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 3) * 0x4, vtDword) -- decrement what's been incremented
 
                 return contextTable.instrPointer + argc + 1
               end
@@ -10291,7 +10291,7 @@
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + argc + 3) * 0x4, vtDword) -- dest
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand3 .. ' = ' .. operand1 .. '(' .. operandArg .. ')'
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 4 + argc
               end
@@ -10320,7 +10320,7 @@
                 -- 2 + 2 if signal; 2 otherwise
         
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' ' .. operand2
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 1 + ipofs -- opcode + whatever offset, though it's yielded
               end
@@ -10341,7 +10341,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword) -- self_fun then *methodname which is then used to look up member_functions or MethodBind *mb = ClassDB::get_method(gds->native->get_name(), *methodname);
         
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. 'result' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -10357,7 +10357,7 @@
                 elem.ShowAsHex = true
                 contextTable.opcodeName = contextTable.opcodeName .. ' -> ' .. operand1
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -10376,7 +10376,7 @@
                 elem.ShowAsHex = true
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. ' -> ' .. operand2
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 3
               end
@@ -10392,7 +10392,7 @@
             {
               name = "OPCODE_JUMP_TO_DEF_ARGUMENT",
               handler = function(contextTable)
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 1
               end
             }
@@ -10404,7 +10404,7 @@
                 local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword) -- retvalue
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 2
               end
@@ -10424,7 +10424,7 @@
                 addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword) -- iterator
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-init ' .. operand3 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end: ' .. operand4
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -10444,7 +10444,7 @@
                 addStructureElem(contextTable.codeStructElement, 'end: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' for-loop ' .. operand2 .. ' in ' .. operand2 .. ' counter ' .. operand1 .. ' end: ' .. operand4
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5
               end
@@ -10461,7 +10461,7 @@
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand1 .. ', ' .. operand2 .. ')'
 
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 3
               end
             }
@@ -10470,7 +10470,7 @@
             {
               name = "OPCODE_BREAKPOINT",
               handler = function(contextTable)
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 1
               end
             }
@@ -10486,7 +10486,7 @@
                   contextTable.opcodeName = ''
                 end
                 addStructureElem(contextTable.codeStructElement, 'line: ', (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 2
               end
             }
@@ -10495,7 +10495,7 @@
             {
               name = "OPCODE_END",
               handler = function(contextTable)
-                addLayoutStructElem(contextTable.codeStructElement, '>>>END.', GDTEAL_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
+                addLayoutStructElem(contextTable.codeStructElement, '>>>END.', GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1) * 0x4, vtDword)
                 return contextTable.instrPointer + 1
               end
             }
