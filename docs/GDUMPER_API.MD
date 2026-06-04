@@ -57,6 +57,9 @@ For the moment being, the doc isn't complete and features only most useful funct
 - `getGDFunctionFromNode( nodeAddr, funcName )`
 > gets the func from the respective node via its name (example above)
 
+- `getMonoObjectFromNode(nodeAddr)`
+>returns a mono object address for the respective node address. A script must be attached to the node. Do whatever DotNet Collector API allows you to with it.
+
 ## Script
 
 - `callGDFunctionFromNode( nodeAddr, funcName, argTable )`
@@ -93,9 +96,6 @@ For the moment being, the doc isn't complete and features only most useful funct
   recompileGDScript( nodeAddr , 'new_silly_node.gd' ) -- hotreload the script from the attached file, new silly has a new member variable so I ...
   reloadGDSInstance( nodeAddr ) -- hot-reload this node's ScriptInstance for members to be constructed
   ```
-
-- `getMonoObjectFromNode(nodeAddr)`
->returns a mono object address for the respective node address. A script must be attached to the node. Do whatever DotNet Collector API allows you to with it.
 
 ## Misc
 
