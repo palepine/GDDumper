@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="docs/logo.svg" alt="Logo" width="50" valign="middle">
+  <img src="docs/logo.svg" alt="Logo" width="60" valign="middle">
   Cheat Engine Runtime Godot Dumper
 </h1>
 
