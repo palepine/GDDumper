@@ -4090,20 +4090,19 @@
           -- offsets.oVariantVector = offsets.oVariantVector + 0x18
         end
         if GDDEFS.CUSTOMVER then
-          error("Not defined yet")
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.VPChildren = offsets.VPChildren - 0x10
+          offsets.VPObjStringName = offsets.VPObjStringName - 0x10
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName - 0x10
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap - 0x20
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap - 0x20
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM - 0x20
         end
 
         return offsets
 
       else
-        print("No recorded version found, report here: https://github.com/palepine/GDDumper/issues")
-        error("No recorded version found, report here: https://github.com/palepine/GDDumper/issues")
+        print( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
+        error( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
         return offsets
       end
         --[[
@@ -4613,6 +4612,7 @@
       table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 83 C4 ?   5?", toRel = 3 } ) -- 3.0
       
       table.insert(sigs, { sig = "48 89 35 ? ? ? ? 66 44 89 A6 ? ? ? ? 66 44 89 A6", toRel = 3 } ) -- 2.1
+      table.insert(sigs, { sig = "48 89 35 ? ? ? ? 0F 11 45 ? 66 44 89 BE C6 86 ? ? 00 00 01 E8", toRel = 3 } ) -- 2.1
 
       for i, sig in ipairs(sigs) do
         if resolveRelAddr(sig.sig, sig.toRel) then
