@@ -3093,12 +3093,10 @@
     local function defineGDVersion()
 
       local major, minor, patch = 0, 0, 0
-      local godotVersionString = nil
       if isNullOrNil(GDDEFS) then GDDEFS = {} end
 
       if lregexScan and type(lregexScan) == "function" then
-        godotVersionString = getGodotVersionString()
-        GDDEFS.FULL_GDVERSION_STRING = godotVersionString
+        GDDEFS.FULL_GDVERSION_STRING = getGodotVersionString()
       end
 
       local ver = getGodotVersionFromMagic()
@@ -3120,7 +3118,7 @@
       GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.CUSTOMVER = getIsCustomVer()
-      -- GDDEFS.CUSTOMVER = (godotVersionString):match("custom") and true or false
+      -- GDDEFS.CUSTOMVER = (GDDEFS.FULL_GDVERSION_STRING):match("custom") and true or false
 
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
 
@@ -4616,7 +4614,7 @@
       table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 83 C4 ?   5?", toRel = 3 } ) -- 3.0
       
       table.insert(sigs, { sig = "48 89 35 ? ? ? ? 66 44 89 A6 ? ? ? ? 66 44 89 A6", toRel = 3 } ) -- 2.1
-      table.insert(sigs, { sig = "48 89 35 ? ? ? ? 0F 11 45 ? 66 44 89 BE C6 86 ? ? 00 00 01 E8", toRel = 3 } ) -- 2.1
+      table.insert(sigs, { sig = "48 89 35 ? ? ? ? 0F 11 45 ? 66 44 89 BE ? ? ? ? C6 86 ? ? 00 00 01 E8", toRel = 3 } ) -- 2.1
 
       for i, sig in ipairs(sigs) do
         if resolveRelAddr(sig.sig, sig.toRel) then
