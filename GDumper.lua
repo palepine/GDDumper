@@ -3096,6 +3096,11 @@
       local godotVersionString = nil
       if isNullOrNil(GDDEFS) then GDDEFS = {} end
 
+      if lregexScan and type(lregexScan) == "function" then
+        godotVersionString = getGodotVersionString()
+        GDDEFS.FULL_GDVERSION_STRING = godotVersionString
+      end
+
       local ver = getGodotVersionFromMagic()
       if isNotNullOrNil(ver) and next(ver) then
         GDDEFS.VERSION_STRING = tostring(ver.major) .. '.' .. tostring(ver.minor)
@@ -3105,11 +3110,10 @@
         GDDEFS.FULL_GDVERSION_STRING = "Godot Engine ".. ver.major .. '.' .. ver.minor .. '.' .. ver.patch
       else
         print("getGodotVersionFromMagic: failed to find magic")
-      end
-
-      if lregexScan and type(lregexScan) == "function" then
-        godotVersionString = getGodotVersionString()
-        GDDEFS.FULL_GDVERSION_STRING = godotVersionString
+        if isNotNullOrNil(GDDEFS.FULL_GDVERSION_STRING) then
+        major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("v(%d+)%.(%d+)")
+        if isNullOrNil(major) or isNullOrNil(minor) then major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("Godot Engine v?(%d+)%.(%d+)") end
+        end
       end
 
       local exportTableStr = getExportTableName() or ""
