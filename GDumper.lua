@@ -923,7 +923,7 @@
         return 0x18, true;
       end
 
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         if (vectorSize == 1) and (getGDTypeName( readInteger(vectorPtr) ) == "DICTIONARY") then -- TODO: BRITTLE, investigate how consistent dictionaries do that
           -- sendDebugMessage("1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
           return 0x30, true;
@@ -952,7 +952,7 @@
           return 0x40, true;
         end
 
-      elseif GDDEFS.MAJOR_VER == 3 then
+      elseif GDDEFS.MAJOR_VER <= 3 then
         if (vectorSize == 1) and (getGDTypeName(vectorPtr) == 'DICTIONARY') then -- for some reasons single-sized vectors with dict were 0x30
           -- sendDebugMessage("1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
           return 0x20, true;
@@ -1118,6 +1118,7 @@
           NODE_PATH = vtPointer,
           RID = vtPointer,
           OBJECT = vtPointer,
+          INPUT_EVENT = vtPointer,
           CALLABLE = vtPointer,
           SIGNAL = vtPointer,
           DICTIONARY = vtPointer,
@@ -1137,8 +1138,7 @@
 
       local specs =
         {
-          -- no changes on major-minor
-          ["3.0"] =
+          ["2.0"] =
             {
               orderedTypes =
               {
@@ -1150,16 +1150,18 @@
                 "VECTOR2",
                 "RECT2",
                 "VECTOR3",
-                "TRANSFORM2D",
+                "TRANSFORM2D", -- MATRIX32
                 "PLANE",
                 "QUATERNION", -- QUAT
                 "AABB",
-                "BASIS",
+                "BASIS", -- MATRIX3
                 "TRANSFORM3D",
                 "COLOR",
+                "IMAGE",
                 "NODE_PATH",
                 "RID", -- _RID
                 "OBJECT",
+                "INPUT_EVENT",
                 "DICTIONARY",
                 "ARRAY",
                 "PACKED_BYTE_ARRAY",
@@ -1171,6 +1173,18 @@
                 "PACKED_COLOR_ARRAY",
                 "VARIANT_MAX"
               }
+            },
+          ["2.1"] = { base = "2.0", patches = {} },
+
+          -- no changes on major-minor
+          ["3.0"] =
+            {
+              base = "2.1",
+              patches =
+                { 
+                  { kind = "removeValue", value = "IMAGE" },
+                  { kind = "removeValue", value = "INPUT_EVENT" }
+                }
             },
           ["3.1"] = { base = "3.0", patches = {} },
           ["3.2"] = { base = "3.1", patches = {} },
@@ -1228,7 +1242,7 @@
           ["4.1"] = { base = "4.0", patches = {} },
           ["4.2"] = { base = "4.1", patches = {} },
           ["4.3"] = { base = "4.2", patches = {} },
-          ["4.4"] = { base = "4.3", patches = { kind = "insertValueAfter", anchor = "PACKED_COLOR_ARRAY", value = "PACKED_VECTOR4_ARRAY" } },
+          ["4.4"] = { base = "4.3", patches = { { kind = "insertValueAfter", anchor = "PACKED_COLOR_ARRAY", value = "PACKED_VECTOR4_ARRAY" } } },
           ["4.5"] = { base = "4.4", patches = {} },
           ["4.6"] = { base = "4.5", patches = {} },
           ["4.7"] = { base = "4.6", patches = {} },
@@ -1552,7 +1566,7 @@
         {$asm}
       ]]
 
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         if getCustomType("GD4 String") then
           GDDEFS.GD4_STRING_EXISTS = true
         else
@@ -1585,10 +1599,10 @@
 
       if isNullOrNil(metaAddr) then return '??' end
 
-      if GDDEFS.MAJOR_VER == 3 or (GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER < 6) then
+      if GDDEFS.MAJOR_VER <= 3 or (GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER < 6) then
         className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
 
-      else --[[if GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER >= 6 then]]
+      else --[[if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 6 then]]
         metaAddr = getObjectMeta(objAddr)
         local stringNameAddr = readPointer(metaAddr + GDDEFS.PTRSIZE)
         className = getStringNameStr(stringNameAddr or 0) or '??'
@@ -1612,7 +1626,7 @@
       end
 
       local childrenSize;
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
       else
         childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
@@ -1622,7 +1636,7 @@
     end
 
     local function getNextMapElement(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return readPointer(mapElement)
       else
         return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
@@ -1630,7 +1644,7 @@
     end
 
     local function getDictElemPairNext(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return readPointer(mapElement)
       else
         return readPointer( (mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
@@ -1638,7 +1652,7 @@
     end
 
     local function getDictionarySizeFromVariantPtr(variantPtr)
-      -- if GDDEFS.MAJOR_VER == 4 then
+      -- if GDDEFS.MAJOR_VER >= 4 then
       --     return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
       -- else
       --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
@@ -1675,7 +1689,7 @@
     end
 
     local function getVariantNameFromMapElement(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
       else
         return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
@@ -1697,7 +1711,7 @@
 
         if currentContext.symbol then
           local symbolOffset = entry.offsetToValue or 0
-          if GDDEFS.MAJOR_VER == 3 then
+          if GDDEFS.MAJOR_VER <= 3 then
             symbolOffset = symbolOffset - GDDEFS.PTRSIZE
           end
           currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, symbolOffset ) )
@@ -1725,7 +1739,7 @@
         return nil
       end
 
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return getGDFunctionName(mapElement)
       end
       return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
@@ -1749,7 +1763,7 @@
     end
 
     local function getConstMapLookupResult(mapElement)
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
         local offsetToValue = getVariantValueOffset(constType)
         return getAddress(mapElement + GDDEFS.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
@@ -1764,7 +1778,7 @@
     end
 
     local function createNextConstContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
         nextElem.ChildStruct = createStructure('ConstNext')
         return nextElem
@@ -1777,9 +1791,9 @@
 
     local function createNextConstSymbol(currentSymbol)
       local nextSymbol
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         nextSymbol = wrapBrackets( currentSymbol .. "+0" )
-      else --if GDDEFS.MAJOR_VER == 3 then
+      else --if GDDEFS.MAJOR_VER <= 3 then
         nextSymbol = wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
       end
       return nextSymbol
@@ -1832,7 +1846,7 @@
     local function decodeDictionaryKeyName(mapElement)
       local keyType, keyValueAddr
 
-      if GDDEFS.MAJOR_VER == 3 then
+      if GDDEFS.MAJOR_VER <= 3 then
         local keyPtr = readPointer(mapElement) -- key is a ptr
         keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEYTYPE)
         keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEYVAL)
@@ -1869,7 +1883,7 @@
       end
 
       local dictRoot = dictAddr
-      if GDDEFS.MAJOR_VER == 3 then
+      if GDDEFS.MAJOR_VER <= 3 then
         dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
         if isNullOrNil(dictRoot) then
           sendDebugMessage('dictRoot isnt valid')
@@ -1896,7 +1910,7 @@
     end
 
     local function createNextDictContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
       end
 
@@ -1904,9 +1918,9 @@
     end
 
     local function createNextSymbol(currentSymbol)
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
-      else--if GDDEFS.MAJOR_VER == 3 then
+      else--if GDDEFS.MAJOR_VER <= 3 then
         return wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
       end
     end
@@ -1925,7 +1939,7 @@
       end
 
       local packedVectorSize
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         packedVectorSize = readInteger(packedDataArrAddr - GDDEFS.SIZE_VECTOR)
         if isNullOrNil(packedVectorSize) or packedVectorSize > 150 then
           packedVectorSize = 150
@@ -2358,14 +2372,14 @@
         end
 
         local function advanceFunctionMapElement(mapElement)
-          if GDDEFS.MAJOR_VER == 4 then
+          if GDDEFS.MAJOR_VER >= 4 then
             return readPointer(mapElement)
           end
           return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
         end
 
         local function createNextFunctionContainer(currentContainer, index)
-          if GDDEFS.MAJOR_VER == 4 then
+          if GDDEFS.MAJOR_VER >= 4 then
             local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
             nextElem.ChildStruct = createStructure("FuncNext")
             return nextElem
@@ -3088,8 +3102,11 @@
     local function defineGDVersion()
 
       local major, minor, patch = 0, 0, 0
-      local godotVersionString = nil
       if isNullOrNil(GDDEFS) then GDDEFS = {} end
+
+      if lregexScan and type(lregexScan) == "function" then
+        GDDEFS.FULL_GDVERSION_STRING = getGodotVersionString()
+      end
 
       local ver = getGodotVersionFromMagic()
       if isNotNullOrNil(ver) and next(ver) then
@@ -3100,18 +3117,17 @@
         GDDEFS.FULL_GDVERSION_STRING = "Godot Engine ".. ver.major .. '.' .. ver.minor .. '.' .. ver.patch
       else
         print("getGodotVersionFromMagic: failed to find magic")
-      end
-
-      if lregexScan and type(lregexScan) == "function" then
-        godotVersionString = getGodotVersionString()
-        GDDEFS.FULL_GDVERSION_STRING = godotVersionString
+        if isNotNullOrNil(GDDEFS.FULL_GDVERSION_STRING) then
+        major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("v(%d+)%.(%d+)")
+        if isNullOrNil(major) or isNullOrNil(minor) then major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("Godot Engine v?(%d+)%.(%d+)") end
+        end
       end
 
       local exportTableStr = getExportTableName() or ""
       GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.CUSTOMVER = getIsCustomVer()
-      -- GDDEFS.CUSTOMVER = (godotVersionString):match("custom") and true or false
+      -- GDDEFS.CUSTOMVER = (GDDEFS.FULL_GDVERSION_STRING):match("custom") and true or false
 
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
 
@@ -3597,19 +3613,23 @@
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 17
 
-        end
+        end 
         if GDDEFS.CUSTOMVER then
-          error("Not defined yet")
           -- GDDEFS.STRING = 0x8
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- Godot Engine 4.2.3 
+          -- godot.windows.template_release.double.x86_64.exe 
+          offsets.VPChildren = offsets.VPChildren + 0x48 + 0x10
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48 + 0x10
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48 + 0x10
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48 + 0x10
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48 + 0x10
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48 + 0x10
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
-
+          offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode + 0x20
+          offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts + 0x20
+          offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals + 0x20
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
         end
 
         return offsets
@@ -4057,17 +4077,16 @@
       elseif verStr == "2.1" then
         -- Godot Engine v2.1.7.rc.custom_build
         -- godot.windows.opt.64.exe
-        error("Not defined yet")
 
         GDDEFS.GET_TYPE_INDX = 7
-        offsets.VPChildren = 0x100
-        offsets.VPObjStringName = 0x118
-        offsets.NodeGDScriptInstance = 0x50
-        offsets.NodeGDScriptName = 0xF8
-        offsets.GDScriptFunctionMap = 0x1B0
-        offsets.GDScriptConstantMap = 0x198
-        offsets.GDScriptVariantNameHM = 0x1C8
-        offsets.oVariantVector = 0x18
+        offsets.VPChildren = 0xC8
+        offsets.VPObjStringName = 0xE0
+        offsets.NodeGDScriptInstance = 0x58
+        offsets.NodeGDScriptName = 0xC0
+        offsets.GDScriptFunctionMap = 0x160
+        offsets.GDScriptConstantMap = 0x148
+        offsets.GDScriptVariantNameHM = 0x178
+        offsets.oVariantVector = 0x30
         offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
@@ -4076,31 +4095,31 @@
         offsets.GDScriptFunctionCodeGlobals = 0x30
 
         if GDDEFS.DEBUGVER then
-          error("Not defined yet")
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-          offsets.oVariantVector = offsets.oVariantVector + 0x18
+          -- offsets.VPChildren = offsets.VPChildren + 0x8
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          -- offsets.oVariantVector = offsets.oVariantVector + 0x18
         end
         if GDDEFS.CUSTOMVER then
-          error("Not defined yet")
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.VPChildren = offsets.VPChildren - 0x10
+          offsets.VPObjStringName = offsets.VPObjStringName - 0x10
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance - 0x10
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName - 0x10
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap - 0x20
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap - 0x20
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM - 0x20
+          offsets.oVariantVector = offsets.oVariantVector - 0x18
         end
 
         return offsets
 
       else
-        print("No recorded version found, report here: https://github.com/palepine/GDDumper/issues")
-        error("No recorded version found, report here: https://github.com/palepine/GDDumper/issues")
+        print( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
+        error( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
         return offsets
       end
         --[[
@@ -4151,7 +4170,7 @@
         }
 
         function monitor:init()
-          self.CD = 100
+          self.CD = 550
           self.runCounter = -1
           self.lastRunDelta = 0
           self.lastNodeCount = 0
@@ -4257,7 +4276,7 @@
         GDDEFS.GDSCRIPT_RELOAD_INDX = config.GDScriptRealoadIndex
         GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
 
-        if GDDEFS.MAJOR_VER == 4 then
+        if GDDEFS.MAJOR_VER >= 4 then
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
           GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
@@ -4271,7 +4290,7 @@
             elseif GDDEFS.MINOR_VER >= 6 then
               GDDEFS.GET_TYPE_INDX = 10
             end
-        elseif GDDEFS.MAJOR_VER == 3 then
+        elseif GDDEFS.MAJOR_VER <= 3 then
           GDDEFS.MAJOR_VER = 3
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
@@ -4287,7 +4306,7 @@
       -- MANUAL END
 
       -- COMMON START
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         GDDEFS.GDSCRIPT_REF = 0x18
         GDDEFS.MAXTYPE = 39
         GDDEFS.FUNC_MAPVAL = 0x18
@@ -4332,6 +4351,31 @@
         GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
         GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
         -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+      elseif GDDEFS.MAJOR_VER == 2 then
+        GDDEFS.MAXTYPE = 27
+        GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
+        if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
+        GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
+        GDDEFS.CHILDREN_SIZE = 0x4
+        GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
+        GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
+        GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
+        GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
+        GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
+        GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
+        GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
+        GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
+        GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
+        GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
+        GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
+        GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
+        GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
+        GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x8 -- changed
+        GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
+        GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
+        GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
+        GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
+
       else
         error("Unexpected version")
       end
@@ -4378,7 +4422,7 @@
         return "??" -- "ain\'t reading this"  -- we aren't gonna read novels
       end
 
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         if readInteger(strAddress) == 0 then
           return "??" -- "empt str"
         end
@@ -4389,10 +4433,10 @@
       local charTable = {}
       local buff = 0
 
-      if GDDEFS.MAJOR_VER == 3 and (strSize and strSize > 0) then
+      if GDDEFS.MAJOR_VER <= 3 and (strSize and strSize > 0) then
         return readString(strAddress, strSize * 2, true) or "??" -- '???_INVALID_MEM_CAUGHT_WSIZE'
 
-      elseif GDDEFS.MAJOR_VER == 3 then
+      elseif GDDEFS.MAJOR_VER <= 3 then
         local retString = readString(strAddress, MAX_CHARS_TO_READ, true)
 
         while MAX_CHARS_TO_READ > 0 and retString == nil do -- https://github.com/cheat-engine/cheat-engine/issues/2602
@@ -4594,6 +4638,7 @@
       table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 85 C0 0F 11 85 ? ? ? ? 49 0F ? ? 48 89 05", toRel = 3 } ) -- 4.3
       table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 8D 8F ? ? ? ? 48 3B C7 49 0F 44 C7 48 8B 05", toRel = 3 } )
       table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 85 C0 74 0D 80 B8 ? ? ? ? 00 0F", toRel = 3 } )
+      table.insert(sigs, { sig = "48 89 05 ? ? ? ? 0F 11 85 ? ? 00 00 E8 ? ? ? ? 48 8D", toRel = 3 } ) -- 4.1
 
       table.insert(sigs, { sig = "39 0D ? ? ? ? 75 06 89 35 ? ? ? ? 0F 28 05", toRel = 2 } ) -- 32 4.6
       table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24", toRel = 3 } )
@@ -4608,6 +4653,9 @@
       table.insert(sigs, { sig = "C7 05 ? ? ? ? 00 00 00 00 85 C0 0F 84 ? ? ? ? B9", toRel = 2 } ) -- 3.5 32
       table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 85 C9 74 ? 48 8D 55 ? E8", toRel = 3 } ) -- 3.2
       table.insert(sigs, { sig = "48 8B 0D ? ? ? ? 48 83 C4 ?   5?", toRel = 3 } ) -- 3.0
+      
+      table.insert(sigs, { sig = "48 89 35 ? ? ? ? 66 44 89 A6 ? ? ? ? 66 44 89 A6", toRel = 3 } ) -- 2.1
+      table.insert(sigs, { sig = "48 89 35 ? ? ? ? 0F 11 45 ? 66 44 89 BE ? ? ? ? C6 86 ? ? 00 00 01 E8", toRel = 3 } ) -- 2.1
 
       for i, sig in ipairs(sigs) do
         if resolveRelAddr(sig.sig, sig.toRel) then
@@ -4632,7 +4680,7 @@
       end
 
       -- isn't elegant either
-      for i = 23, steps do
+      for i = 13, steps do
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
         if isNotNullOrNil(candidateAddr) and isVtable(getVtable(candidateAddr)) then
 
@@ -6161,7 +6209,7 @@
         sendDebugMessage('Const: (hash)map is not found')
         return; -- return to skip if the const map is absent
       end
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return mainElement, lastElement, mapSize, nodeContext
       else
         if funcStructElement then
@@ -6522,7 +6570,7 @@
         return newDisassembler
       end
 
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         GDF.OP =
           {
             OPCODE_OPERATOR = "OPCODE_OPERATOR",
@@ -9681,7 +9729,7 @@
           GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion(GDDEFS.VERSION_STRING)
         end
 
-      else--if GDDEFS.MAJOR_VER == 3 then
+      else--if GDDEFS.MAJOR_VER <= 3 then
 
         function formatDisassembledAddress(addrInt) -- redefined for 3.x
           local addrIndex = addrInt & (GDF.EADDRESS['ADDR_MASK']) -- address, lower 24 bits are indices
@@ -10520,7 +10568,7 @@
         
         GDF.ProfileSpecs =
           {
-            ["3.0"] =
+            ["2.0"] =
               {
                 decoderName = "BytecodeV0",
                 orderedOpcodes =
@@ -10531,8 +10579,8 @@
                     GDF.OP.OPCODE_GET,
                     GDF.OP.OPCODE_SET_NAMED,
                     GDF.OP.OPCODE_GET_NAMED,
-                    GDF.OP.OPCODE_SET_MEMBER,
-                    GDF.OP.OPCODE_GET_MEMBER,
+                    -- GDF.OP.OPCODE_SET_MEMBER,
+                    -- GDF.OP.OPCODE_GET_MEMBER,
                     GDF.OP.OPCODE_ASSIGN,
                     GDF.OP.OPCODE_ASSIGN_TRUE,
                     GDF.OP.OPCODE_ASSIGN_FALSE,
@@ -10561,11 +10609,37 @@
                   }
               },
 
+            ["2.1"] =
+              {
+                base = "2.0",
+                decoderName = "BytecodeV0",
+                patches =  { }
+              },
+
+            ["3.0"] =
+              {
+                base = "2.1",
+                decoderName = "BytecodeV0",
+                patches = 
+                {
+                  {
+                    kind = "insertValueAfter",
+                    anchor = GDF.OP.OPCODE_GET_NAMED,
+                    value = GDF.OP.OPCODE_SET_MEMBER
+                  },
+                  {
+                    kind = "insertValueAfter",
+                    anchor = GDF.OP.OPCODE_SET_MEMBER,
+                    value = GDF.OP.OPCODE_GET_MEMBER
+                  },
+                }
+              },
+
             ["3.1"] =
               {
                 base = "3.0",
                 decoderName = "BytecodeV0",
-                patches = 
+                patches =
                 {
                   {
                     kind = "insertValueAfter",
@@ -10673,7 +10747,7 @@
             "OP_MULTIPLY",
             "OP_DIVIDE",
             "OP_NEGATE",
-            "OP_POSITIVE", 
+            "OP_POSITIVE", -- doesnt exist in 2.1/2.0
             "OP_MODULE",
             "OP_STRING_CONCAT",
             -- bitwise
@@ -10692,6 +10766,7 @@
             "OP_IN",
             "OP_MAX" -- 25
           }
+          if GDDEFS.MAJOR_VER == 2 then table.remove(GDF.OPERATOR_NAME, 12) end -- lazy but whatever; removing "OP_POSITIVE"
 
         for version, _ in pairs(GDF.ProfileSpecs) do
           GDF.CompiledProfiles[version] = createProfileFromVersion(version)
@@ -10774,10 +10849,10 @@
 
     function checkIfGDFunction(funcAddr)
       local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
-      local OPCODEMAX = 250
-      if GDDEFS.MAJOR_VER == 3 or GDDEFS.VERSION_STRING == "4.1" then
+      local OPCODEMAX = 250 -- TODO: use enum
+      if GDDEFS.MAJOR_VER <= 3 or GDDEFS.VERSION_STRING == "4.1" then
         funcResStringNameAddr = readPointer(funcAddr) -- StringName source at 0x0;
-        funcStringNameAddr = 0xDEADBEEF -- just a placeholder
+        funcStringNameAddr = 0xBAAAAABE -- just a placeholder
       else
         funcStringNameAddr = readPointer(funcAddr) -- StringName funct name;
         funcResStringNameAddr = readPointer(funcAddr + GDDEFS.PTRSIZE) -- StringName source;
@@ -10786,26 +10861,21 @@
       funcCodeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
       firstOpcode = readInteger(funcCodeAddr) or 0
 
-      if isNotNullOrNil(funcResStringNameAddr) and isNotNullOrNil(funcStringNameAddr) and (firstOpcode < OPCODEMAX) then
+      if isNullOrNil(funcResStringNameAddr) or isNullOrNil(funcStringNameAddr) or (firstOpcode > OPCODEMAX) then return false end
 
-        if not (getStringNameStr(funcResStringNameAddr)):match("res://") then
-          return false
-        end
+      if not (  getStringNameStr(funcResStringNameAddr)  ):match("res://") then return false end
 
-        if GDDEFS.MAJOR_VER ~= 3 and GDDEFS.VERSION_STRING ~= "4.1" then
-          local funcStringAddr = readPointer(funcStringNameAddr + GDDEFS.STRING)
+      if GDDEFS.MAJOR_VER > 3 and GDDEFS.VERSION_STRING ~= "4.1" then
+        local funcStringAddr = readPointer(funcStringNameAddr + GDDEFS.STRING)
+        if isNullOrNil(funcStringAddr) then
+          funcStringAddr = readPointer(funcStringNameAddr + 0x8)
           if isNullOrNil(funcStringAddr) then
-            funcStringAddr = readPointer(funcStringNameAddr + 0x8)
-            if isNullOrNil(funcStringAddr) then
-              return false
-            end
+            return false
           end
         end
-
-        return true
       end
 
-      return false
+      return true
     end
 
     local function findGDVMCallPtr()
@@ -10861,8 +10931,7 @@
       -- we need the dummy stack even when no arguments
       if not VariantArena:init() then error("'stack' space isn't alloced") end
 
-      local vmCallAddr
-      -- node->callp("methodStringName", args, argc, err) would be an alternative to the direct call, but that requires stringName constructor.
+      local vmCallAddr -- TODO: do node->callp implementation; node->callp("methodStringName", args, argc, err) would be an alternative to the direct call, but that requires stringName constructor.
       if isNullOrNil(GDDEFS.VM_CALL) then
         findGDVMCallPtr()
         vmCallAddr = GDDEFS.VM_CALL
@@ -10989,7 +11058,7 @@
         return;
       end
 
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return mainElement, lastElement, mapSize, nodeContext
       else
         if nodeContext.struct then
@@ -11157,7 +11226,7 @@
       local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
       if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then return end
       
-      if GDDEFS.MAJOR_VER == 3 then
+      if GDDEFS.MAJOR_VER <= 3 then
         contextTable.symbol = wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+DICT_LIST' )
       end
 
@@ -11177,7 +11246,7 @@
       end
       local currentRoot = dictStructElement
 
-      if GDDEFS.MAJOR_VER == 3 then
+      if GDDEFS.MAJOR_VER <= 3 then
         currentRoot = createChildStructElem(currentRoot, 'dictList', GDDEFS.DICT_LIST, vtPointer, 'dictList')
         contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_LIST' )
       end
@@ -11195,7 +11264,7 @@
       if dumpContext:shouldStop() or isNullOrNil(dictAddr) then return end -- if (not (dictAddr > 0)) then return; end
 
       local dictRoot = dictAddr
-      if GDDEFS.MAJOR_VER == 3 then
+      if GDDEFS.MAJOR_VER <= 3 then
         dictRoot = readPointer( (dictAddr or 0) + GDDEFS.DICT_LIST) -- for 3.x it's dictList actually
       end
 
@@ -11522,7 +11591,7 @@
         return;
       end
 
-      if GDDEFS.MAJOR_VER == 4 then
+      if GDDEFS.MAJOR_VER >= 4 then
         return mainElement, endElement, mapSize
       else
         return getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
@@ -12224,7 +12293,7 @@
       if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1 then
         if findGDExtensionInterfacePtr() then GDI.Extension = GDExtendedInterface end
       end
-      if GDDEFS.MAJOR_VER == 3 then
+      if GDDEFS.MAJOR_VER == 3 then -- doesn't exist in 2.x
         if findGDNativeAPIStruct() then GDI.GDNative = GDNativeInterface end
       end
 
