@@ -1157,6 +1157,7 @@
                 "BASIS", -- MATRIX3
                 "TRANSFORM3D",
                 "COLOR",
+                "IMAGE",
                 "NODE_PATH",
                 "RID", -- _RID
                 "OBJECT",
@@ -1176,7 +1177,15 @@
           ["2.1"] = { base = "2.0", patches = {} },
 
           -- no changes on major-minor
-          ["3.0"] = { base = "2.1", patches = { kind = "removeValue", value = "INPUT_EVENT" } },
+          ["3.0"] =
+            {
+              base = "2.1",
+              patches =
+                { 
+                  { kind = "removeValue", value = "IMAGE" },
+                  { kind = "removeValue", value = "INPUT_EVENT" }
+                }
+            },
           ["3.1"] = { base = "3.0", patches = {} },
           ["3.2"] = { base = "3.1", patches = {} },
           ["3.3"] = { base = "3.2", patches = {} },
@@ -1233,7 +1242,7 @@
           ["4.1"] = { base = "4.0", patches = {} },
           ["4.2"] = { base = "4.1", patches = {} },
           ["4.3"] = { base = "4.2", patches = {} },
-          ["4.4"] = { base = "4.3", patches = { kind = "insertValueAfter", anchor = "PACKED_COLOR_ARRAY", value = "PACKED_VECTOR4_ARRAY" } },
+          ["4.4"] = { base = "4.3", patches = { { kind = "insertValueAfter", anchor = "PACKED_COLOR_ARRAY", value = "PACKED_VECTOR4_ARRAY" } } },
           ["4.5"] = { base = "4.4", patches = {} },
           ["4.6"] = { base = "4.5", patches = {} },
           ["4.7"] = { base = "4.6", patches = {} },
@@ -4094,10 +4103,12 @@
         if GDDEFS.CUSTOMVER then
           offsets.VPChildren = offsets.VPChildren - 0x10
           offsets.VPObjStringName = offsets.VPObjStringName - 0x10
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance - 0x10
           offsets.NodeGDScriptName = offsets.NodeGDScriptName - 0x10
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap - 0x20
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap - 0x20
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM - 0x20
+          offsets.oVariantVector = offsets.oVariantVector - 0x18
         end
 
         return offsets
@@ -4311,7 +4322,7 @@
         GDDEFS.VAR_NAMEINDEX_I = 0x18
         GDDEFS.CLR_PTR = 0x20
         -- GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
-      elseif GDDEFS.MAJOR_VER <= 3 then
+      elseif GDDEFS.MAJOR_VER == 3 then
         GDDEFS.MAXTYPE = 27
         GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
         if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
@@ -4336,6 +4347,31 @@
         GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
         GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
         -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
+      elseif GDDEFS.MAJOR_VER == 2 then
+        GDDEFS.MAXTYPE = 27
+        GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
+        if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
+        GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
+        GDDEFS.CHILDREN_SIZE = 0x4
+        GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
+        GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
+        GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
+        GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
+        GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
+        GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
+        GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
+        GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
+        GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
+        GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
+        GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
+        GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
+        GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
+        GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x8 -- changed
+        GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
+        GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
+        GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
+        GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
+
       else
         error("Unexpected version")
       end
