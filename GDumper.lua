@@ -3613,19 +3613,23 @@
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 17
 
-        end
+        end 
         if GDDEFS.CUSTOMVER then
-          error("Not defined yet")
           -- GDDEFS.STRING = 0x8
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- Godot Engine 4.2.3 
+          -- godot.windows.template_release.double.x86_64.exe 
+          offsets.VPChildren = offsets.VPChildren + 0x48 + 0x10
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48 + 0x10
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48 + 0x10
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48 + 0x10
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48 + 0x10
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48 + 0x10
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
-
+          offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode + 0x20
+          offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts + 0x20
+          offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals + 0x20
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
         end
 
         return offsets
@@ -4634,6 +4638,7 @@
       table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 85 C0 0F 11 85 ? ? ? ? 49 0F ? ? 48 89 05", toRel = 3 } ) -- 4.3
       table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 8D 8F ? ? ? ? 48 3B C7 49 0F 44 C7 48 8B 05", toRel = 3 } )
       table.insert(sigs, { sig = "48 8B 05 ? ? ? ? 48 85 C0 74 0D 80 B8 ? ? ? ? 00 0F", toRel = 3 } )
+      table.insert(sigs, { sig = "48 89 05 ? ? ? ? 0F 11 85 ? ? 00 00 E8 ? ? ? ? 48 8D", toRel = 3 } ) -- 4.1
 
       table.insert(sigs, { sig = "39 0D ? ? ? ? 75 06 89 35 ? ? ? ? 0F 28 05", toRel = 2 } ) -- 32 4.6
       table.insert(sigs, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4D 8B 24 24", toRel = 3 } )
@@ -10841,22 +10846,6 @@
       else                                                          return ("addr?(0x%08X)"):format(addrInt)
       end
     end
-
-      -- local disasmModule = dofile( getCheatEngineDir() .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] ) -- TODO: split into modules
-
-      -- local disasm = disasmModule.install({
-      --   GDDEFS = GDDEFS,
-      --   addStructureElem = addStructureElem,
-      --   addLayoutStructElem = addLayoutStructElem,
-      --   getGDTypeName = getGDTypeName,
-      --   iterateFuncConstantsToStruct = iterateFuncConstantsToStruct,
-      --   iterateFuncGlobalsToStruct = iterateFuncGlobalsToStruct,
-      --   sendDebugMessage = sendDebugMessage,
-      -- })
-
-      -- local defineGDFunctionEnums = disasm.defineGDFunctionEnums
-      -- disassembleGDFunctionCodeToStruct = disasm.disassembleGDFunctionCodeToStruct
-      -- formatDisassembledAddress = disasm.formatDisassembledAddress
 
     function checkIfGDFunction(funcAddr)
       local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
