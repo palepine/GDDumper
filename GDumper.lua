@@ -5317,6 +5317,8 @@
       table.insert(sigs, "40 53 48 83 EC ? 48 8B D1 45 33 C0 48 8D ? 24 ? E8 ? ? ? ? 48 8D ? 24 ? E8" ) -- 4.6, 4.3 4.1, just a swapped encoding
       table.insert(sigs, "56 53 48 83 EC ? 45 31 C0 48 8D ? 24 ? 48 89 CA 48 89 F1 E8 ? ? ? ? 48 89 F1 E8" ) -- 4.5 4.4
 
+      table.insert(sigs, "41 57 41 56 41 55 41 54 55 57 56 53 48 81 EC ? ? ? ? 45 31 C0 48 8D 44 24 ? 48 89 CA 48 89 C1" ) -- 4.3
+
       table.insert(sigs, "41 57 41 56 41 55 41 54 55 57 56 53 48 83 EC ? 4? 8D ? 24 ? 48 89 CA ? 89 ? E8" ) -- merged 4.1 4.2
       table.insert(sigs, "41 57 41 56 41 55 41 54 55 57 56 53 48 83 EC ? 4? 8D ? 24 ? 48 89 CA ? 89 ? 48 89 44 24 ? E8 ? ? ? ? 4C 8B 05 ? ? ? ? 48 8B 6C 24 ? 4D 8B 70 ? 4D 85 F6 OF" ) -- merged 4.3 / 4.1
 
@@ -10894,8 +10896,11 @@
       table.insert(sigs, { isheavy = true,  sig = "4C 89 7C 24 28 89 44 24 20 48 89 ? >48 89 ? >48 89 ? E8", sigsize = 19 }) -- 4.5 ret 64<
       table.insert(sigs, { isheavy = true, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
       table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
+      table.insert(sigs, { isheavy = true, sig = "4C 89 64 24 28 89 44 24 20 4C 8B 8C 24 ? ? 00 00 48 89 D9 49 89 F0 E8", sigsize = 22 }) -- 4.3
       table.insert(sigs, { isheavy = false, sig = "4C 89 64 24 30      48 8B D6 48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 25 }) -- 4.3 ret 64<
       table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4-4.3
+      table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
+
       table.insert(sigs, { isheavy = false, sig = "4C 89 ? 24 28 89 44 24 20 48 89 F1 49 89 D8 E8", sigsize = 16 }) -- 4.2
       table.insert(sigs, { isheavy = true,  sig = "4C 89 74 24 28 89 44 24 20 49 89 D8 49 89 E9 E8", sigsize = 16 }) -- 4.2 Godot Engine v4.2.2.stable.official.15073afe3
 
