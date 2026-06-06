@@ -911,86 +911,57 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TYPES/SIZE
 
+    local function isValidVariantType(typeId)
+      local maxType = GDDEFS.VARIANT_TYPE_PROFILE.enums.VARIANT_MAX
+      return type(typeId) == "number" and typeId >= 0 and typeId < maxType
+    end
+
+    local function validateVariantStride(vectorPtr, vectorSize, sizeOfVariant)
+      if vectorSize <= 0 then return false end
+      for index = 0, vectorSize - 1 do
+        local typeId = readInteger(vectorPtr + index * sizeOfVariant)
+        if not isValidVariantType(typeId) then return false end
+      end
+
+      return true
+    end
+
     --- @unreliable takes in a vector + its size. Returns an inferred variant size and successBool
     ---@param vectorPtr number
     ---@param vectorSize number
     local function redefineVariantSizeByVector(vectorPtr, vectorSize)
-      if isNullOrNil(vectorPtr) or isNullOrNil(vectorSize) then return 0, false; end
-      -- assert((type(vectorPtr) == 'number'), "vectorPtr has to be a number, instead got: " .. type(vectorPtr))
-      -- assert((type(vectorSize) == 'number') and (vectorSize > 0), "VectorSize is empty or not a number, type: " .. type(vectorSize))
+      if isNullOrNil(vectorPtr) or isNullOrNil(vectorSize) then return 0x18, false; end
+      
+      -- if we already checked
+      if GDDEFS.SIZEOF_VARIANT then return GDDEFS.SIZEOF_VARIANT, true end
 
-      if isNullOrNil(vectorSize) then
-        -- sendDebugMessage('Bad vector size for '..numtohexstr(vectorPtr));
-        return 0x18, true;
+      local stdVectorSize = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
+
+      -- whatever, let's try again later
+      if vectorSize < 2 then return stdVectorSize, true end
+
+      local matches = {}
+
+      for _, sizeOfVariant in ipairs( { 0x18, 0x28, 0x30 } ) do -- 0x18, 0x28, 0x30, 0x40
+        -- we do runs with assumtions until one vector passes
+        if validateVariantStride( vectorPtr, vectorSize, sizeOfVariant ) then
+          matches[ #matches + 1 ] = sizeOfVariant -- { sizeOfVariant, count++ }
+        end
       end
 
-      if GDDEFS.MAJOR_VER >= 4 then
-        if (vectorSize == 1) and (getGDTypeName( readInteger(vectorPtr) ) == "DICTIONARY") then -- TODO: BRITTLE, investigate how consistent dictionaries do that
-          -- sendDebugMessage("1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
-          return 0x30, true;
-        elseif (vectorSize == 1) then
-          -- sendDebugMessage("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
-          return 0x18, true;
-        end
-
-        if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
-          return 0x18, true;
-        elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) then -- if it's 0x30
-          -- sendDebugMessage("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x30, true;
-        elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) then -- if it's 0x40
-          -- sendDebugMessage("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x40, true;
-        end
-
-        if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
-          return 0x18, true;
-        elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
-          -- sendDebugMessage("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x30, true;
-        elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x40)) and getGDTypeName(readInteger(vectorPtr + 0x40 * 2)) then
-          -- sendDebugMessage("Variant was resized to 0x40 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x40, true;
-        end
-
-      elseif GDDEFS.MAJOR_VER <= 3 then
-        if (vectorSize == 1) and (getGDTypeName(vectorPtr) == 'DICTIONARY') then -- for some reasons single-sized vectors with dict were 0x30
-          -- sendDebugMessage("1-sized Vector: Variant was resized to 0x30 (vector: "..('%x '):format(vectorPtr))
-          return 0x20, true;
-        elseif (vectorSize == 1) then
-          -- sendDebugMessage("1-sized Vector: Variant was left 0x18 long (vector: "..('%x '):format(vectorPtr))
-          return 0x18, true; -- Usual size is 0x18 in 3.x
-        end
-
-        if (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) then -- is it a valid variant Type?
-          return 0x18, true; -- Usual size is 0x18 in 3.x
-        elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) then
-          -- sendDebugMessage("2s Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x20, true;
-        elseif (vectorSize == 2) and getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) then
-          -- sendDebugMessage("2s Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x30, true; -- what's the longest for 3.x?
-        end
-
-        if getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x18)) and getGDTypeName(readInteger(vectorPtr + 0x18 * 2)) then -- is it a valid variant Type?
-          return 0x18, true; -- Usual size is 0x18 in 3.x
-        elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x20)) and getGDTypeName(readInteger(vectorPtr + 0x20 * 2)) then
-          -- sendDebugMessage("Variant was resized to 0x20 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x20, true;
-        elseif getGDTypeName(readInteger(vectorPtr)) and getGDTypeName(readInteger(vectorPtr + 0x30)) and getGDTypeName(readInteger(vectorPtr + 0x30 * 2)) then
-          -- sendDebugMessage("Variant was resized to 0x30 (vector: "..('%x'):format(vectorPtr)..")")
-          return 0x30, true; -- what's the longest for 3.x?
-        end
-      else
-        -- TODO
+      if #matches == 1 then
+        GDDEFS.SIZEOF_VARIANT = matches[1]
+        return matches[1], true
       end
+
+      sendDebugMessage("============SIZE OF VECTOR ISNT INFERRED============")
+      return stdVectorSize, false
 
       -- sendDebugMessage("Variant resize failed past 4 cases (vector: "..numtohexstr(vectorPtr)..")")
       -- // Variant takes 24 bytes when real_t is float, and 40 bytes if double.
       -- // It only allocates extra memory for AABB/Transform2D (24, 48 if double),
       -- // Basis/Transform3D (48, 96 if double), Projection (64, 128 if double),
       -- // and PackedArray/Array/Dictionary (platform-dependent).
-      return false;
     end
 
     --- returns an adjusted offset to a variant value
@@ -3105,29 +3076,35 @@
       local major, minor, patch = 0, 0, 0
       if isNullOrNil(GDDEFS) then GDDEFS = {} end
 
-      if lregexScan and type(lregexScan) == "function" then
-        GDDEFS.FULL_GDVERSION_STRING = getGodotVersionString()
-      end
-
       local ver = getGodotVersionFromMagic()
+      local magicFail = true
       if isNotNullOrNil(ver) and next(ver) then
         GDDEFS.VERSION_STRING = tostring(ver.major) .. '.' .. tostring(ver.minor)
         GDDEFS.MAJOR_VER = ver.major
         GDDEFS.MINOR_VER = ver.minor
         GDDEFS.PATCH_VER = ver.patch
         GDDEFS.FULL_GDVERSION_STRING = "Godot Engine ".. ver.major .. '.' .. ver.minor .. '.' .. ver.patch
-      else
-        print("getGodotVersionFromMagic: failed to find magic")
-        if isNotNullOrNil(GDDEFS.FULL_GDVERSION_STRING) then
-        major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("v(%d+)%.(%d+)")
+        magicFail = false
+      end
+
+      if lregexScan and type(lregexScan) == "function" then
+        GDDEFS.FULL_GDVERSION_STRING = getGodotVersionString()
+      end
+
+      if magicFail then
+        print("Failed to find Godot magic")
+        major, minor = (GDDEFS.FULL_GDVERSION_STRING or ''):match("v(%d+)%.(%d+)")
         if isNullOrNil(major) or isNullOrNil(minor) then major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("Godot Engine v?(%d+)%.(%d+)") end
-        end
+        if isNullOrNil(major) or isNullOrNil(minor) then error('failed to find Godot Version') end
       end
 
       local exportTableStr = getExportTableName() or ""
       GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.CUSTOMVER = getIsCustomVer()
+
+      GDDEFS.USES_DOUBLE_REALT = exportTableStr:match("%.double%.") ~= nil
+
       -- GDDEFS.CUSTOMVER = (GDDEFS.FULL_GDVERSION_STRING):match("custom") and true or false
 
       -- elseif (exportTableStr):match( "release" ) then -- or "opt" or "dev6"
@@ -3619,18 +3596,31 @@
           -- GDDEFS.STRING = 0x8
           -- Godot Engine 4.2.3 
           -- godot.windows.template_release.double.x86_64.exe 
-          offsets.VPChildren = offsets.VPChildren + 0x48 + 0x10
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48 + 0x10
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48 + 0x10
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48 + 0x10
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48 + 0x10
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48 + 0x10
+          offsets.VPChildren = offsets.VPChildren + 0x48
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
           offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
           offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode + 0x20
           offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts + 0x20
           offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals + 0x20
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
+        end
+
+        if GDDEFS.USES_DOUBLE_REALT then
+          -- GDDEFS.STRING = 0x8
+          -- Godot Engine 4.2.3 
+          -- godot.windows.template_release.double.x86_64.exe 
+          offsets.VPChildren = offsets.VPChildren + 0x10
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x10
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x10
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap +0x10
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x10
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x10
+          -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
         end
 
         return offsets
@@ -4235,6 +4225,7 @@
         GDDEFS.DEBUGVER = config.GDDebugVer
         GDDEFS.CUSTOMVER = config.GDCustomver
         GDDEFS.MONO = config.isMonoTarget and config.isMonoTarget or false
+        GDDEFS.USES_DOUBLE_REALT = config.usesDoubleRealT
       else
         defineGDVersion()
         if isNotNullOrNil(config.GDCustomver) then GDDEFS.CUSTOMVER = config.GDCustomver end
