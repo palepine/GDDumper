@@ -12022,7 +12022,7 @@
 
       if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
 
-      printf("%-90s%-90s%s", "Script", "Absolute", "Name")
+      printf("%-90s%-90s%s", "[Script]", "[Abs]", "[Name]")
       for _, nodeAddr in pairs(GD_DUMP_MONITOR_NODES_ABS) do
         local gdScriptName, absPath = getNodeNameFromGDScript(nodeAddr, true)
         local nodeNameStr = getNodeName(nodeAddr)
@@ -12090,8 +12090,8 @@
         local resultAbs = {} -- { name : addr }
         for i, val in ipairs(tabl) do
           local scriptName, longName = getNodeNameFromGDScript(val, true)
-          result[ scriptName ] = val
-          resultAbs[ longName ] = val
+          result[ scriptName or '' ] = val
+          resultAbs[ longName or '' ] = val
         end
         return result, resultAbs
       end
