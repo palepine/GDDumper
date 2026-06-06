@@ -12019,10 +12019,11 @@
 
       if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
 
-      for k, nodeAddr in pairs(gd_dumpedMonitorNodes) do
-        -- local GDScriptName = getNodeNameFromGDScript(nodeAddr) or ''
+      printf("ScriptName%-90sabs%-90sname%-90s", '', '', '')
+      for _, nodeAddr in pairs(gd_dumpedMonitorNodes) do
+        local gdScriptName, absPath = getNodeNameFromGDScript(nodeAddr, true)
         local nodeNameStr = getNodeName(nodeAddr) or ''
-        printf(">Node Scriptname: %-50sname: %-50s \t Node addr: %X", k, nodeNameStr, tonumber(nodeAddr))
+        printf("%-90s%-90s%-90s", gdScriptName or  '', absPath or  '', nodeNameStr ) -- \t Node addr: %X --[[, tonumber(nodeAddr)]]
       end
     end
 
