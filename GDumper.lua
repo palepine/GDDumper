@@ -7,7 +7,6 @@
   -- TODO more offsets for non-GDI objects
   -- TODO doxygen comments
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
-  -- TODO: full object path as a separate symbol?
   -- TODO: ObjectDB inspection
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// FORWARD DECLARATIONS
@@ -926,7 +925,7 @@
       return true
     end
 
-    --- @unreliable takes in a vector + its size. Returns an inferred variant size and successBool
+    --- takes in a vector + its size. Returns an inferred variant size and successBool
     ---@param vectorPtr number
     ---@param vectorSize number
     local function redefineVariantSizeByVector(vectorPtr, vectorSize)
@@ -973,8 +972,7 @@
       end
       if (getGDTypeName(gdType) == 'OBJECT') then
         return 0x10
-      end -- objects have 0x10 offset for value
-      -- not sure about the rest
+      end -- objects have 0x10 offset for value, their ID before
       return 0x8 -- the rest have this offset
     end
 
@@ -3092,7 +3090,7 @@
       end
 
       if magicFail then
-        print("Failed to find Godot magic")
+        sendDebugMessage("Failed to find Godot magic")
         major, minor = (GDDEFS.FULL_GDVERSION_STRING or ''):match("v(%d+)%.(%d+)")
         if isNullOrNil(major) or isNullOrNil(minor) then major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("Godot Engine v?(%d+)%.(%d+)") end
         if isNullOrNil(major) or isNullOrNil(minor) then error('failed to find Godot Version') end
