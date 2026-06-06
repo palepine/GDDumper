@@ -10924,7 +10924,7 @@
       -- we need the dummy stack even when no arguments
       if not VariantArena:init() then error("'stack' space isn't alloced") end
 
-      local vmCallAddr -- TODO: do node->callp implementation; node->callp("methodStringName", args, argc, err) would be an alternative to the direct call, but that requires stringName constructor.
+      local vmCallAddr
       if isNullOrNil(GDDEFS.VM_CALL) then
         findGDVMCallPtr()
         vmCallAddr = GDDEFS.VM_CALL
@@ -11022,7 +11022,47 @@
       local functionAddr = getGDFunctionFromNode( nodeAddr, funcName )
       if isNullOrNil(functionAddr) then error("Function address not found") end
 
-      return GDAPI.executeGDFunction(functionAddr, gdScriptInstance, argTable)
+      if isNotNullOrNil(GDDEFS.VM_CALL) then
+        return GDAPI.executeGDFunction(functionAddr, gdScriptInstance, argTable)
+      else
+        -- calling methods via node->callp("functionStringName", args, argc, err)
+        local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX )
+        if isNullOrNil(callpMethod) then error('callp not found') end
+
+        local gdScript = getNodeGDScript(nodeAddr)
+        if isNullOrNil(gdScript) then error('gdscript invalid') end -- wouldn't make sense
+
+        -- construct bound method StringName
+        local methodSName = GDI.construct_string_name( funcName )
+        if isNullOrNil(methodSName) then error('string name not constructed') end
+        local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
+        writePointer(stringNamePtr, methodSName) -- we need the stringName to be stored in a pointer passed to callp
+
+        -- VariantArg setup
+        if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
+          setupCallArgs(VariantArena, GDVariant, argTable)
+        end
+
+        local int_t = 0
+        local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- rcx
+        local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset } -- r9
+        local argCount = (argTable and #argTable) or 0
+        local err = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
+        writeInteger(err.value, -1)
+
+        local returned = executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err)
+      
+        deAlloc(stringNamePtr)
+        GDI.destroy_string_name(methodSName)
+
+        local errVal = readPointer( err.value )
+
+        -- success
+        if errVal == 0 then return VariantArena.base + VariantArena.returnBufOffset end
+      
+        -- fail
+        error('Fail, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
+      end
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
