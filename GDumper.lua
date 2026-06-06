@@ -4891,7 +4891,7 @@
       return getStringNameStr(nodeNamePtr)
     end
 
-    function GDAPI.getNodeNameFromGDScript(nodeAddr)
+    function GDAPI.getNodeNameFromGDScript(nodeAddr, bWithAbsPath)
      if isNullOrNil(nodeAddr) then return 'N??' end
 
       local GDScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
@@ -4923,6 +4923,10 @@
         return 'N??'
       end
 
+      if bWithAbsPath then
+        local parsedPath = GDScriptName:gsub("^res://", ""):gsub("%.[^.]+$", ""):gsub("/", ".") -- catch only res://(.*).ext with dots instead of /
+        return scriptMatch, parsedPath
+      end
 
       return scriptMatch
     end
