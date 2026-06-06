@@ -8,6 +8,7 @@
   -- TODO doxygen comments
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
   -- TODO: full object path as a separate symbol?
+  -- TODO: ObjectDB inspection
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// FORWARD DECLARATIONS
   local GDAPI = {}
@@ -4144,7 +4145,6 @@
 
       GDDEFS.STRING = 0x10
       
-      gd_dumpedMonitorNodes = {};
       debugPrefix = 1;
       if targetIs64Bit() then
         GDDEFS.PTRSIZE = 0x8
@@ -12008,38 +12008,46 @@
       assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
       if not (gdOffsetsDefined) then print('define the offsets first, silly') return; end
 
-      if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
+      if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
 
-      return gd_dumpedMonitorNodes[nodeName]
+      local longName = GD_DUMP_MONITOR_NODES_ABS[nodeName]
+      if longName then return longName end
+
+      return GD_DUMP_MONITOR_NODES[nodeName]
     end
 
     --- prints all gathered nodeNames
     function GDAPI.printDumpedNodes()
       if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
-      if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
+      if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
 
-      printf("ScriptName%-90sabs%-90sname%-90s", '', '', '')
-      for _, nodeAddr in pairs(gd_dumpedMonitorNodes) do
+      printf("Script%-90sAbsolute%-90sname%-90s", '', '', '')
+      for _, nodeAddr in pairs(GD_DUMP_MONITOR_NODES_ABS) do
         local gdScriptName, absPath = getNodeNameFromGDScript(nodeAddr, true)
-        local nodeNameStr = getNodeName(nodeAddr) or ''
-        printf("%-90s%-90s%-90s", gdScriptName or  '', absPath or  '', nodeNameStr ) -- \t Node addr: %X --[[, tonumber(nodeAddr)]]
+        local nodeNameStr = getNodeName(nodeAddr)
+        printf("%-90s%-90s%-90s", gdScriptName, absPath, nodeNameStr ) -- \t Node addr: %X --[[, tonumber(nodeAddr)]]
       end
     end
 
     local function unregisterNodes()
-      if (not gd_registeredNodes) or next(gd_registeredNodes) == nil then return; end
-      for i, k in ipairs(gd_registeredNodes) do
-        unregisterSymbol(k)
-      end
-      gd_registeredNodes = {}
+      if (not GD_REGISTERED_NODES) or next(GD_REGISTERED_NODES) == nil then return; end
+      for _, k in ipairs(GD_REGISTERED_NODES) do unregisterSymbol(k) end
+      for _, k in ipairs(GD_REGISTERED_NODES_ABS) do unregisterSymbol(k) end
+      GD_REGISTERED_NODES = {}
+      GD_REGISTERED_NODES_ABS = {}
     end
 
     local function registerDumpedNodes()
-      if (not gd_dumpedMonitorNodes) or next(gd_dumpedMonitorNodes) == nil then return; end
+      if (not GD_DUMP_MONITOR_NODES) or next(GD_DUMP_MONITOR_NODES) == nil then return; end
       unregisterNodes() -- unregister the current & freed nodes
-      for k, nodeAddr in pairs(gd_dumpedMonitorNodes) do
-        table.insert(gd_registeredNodes, k)
+      for k, nodeAddr in pairs(GD_DUMP_MONITOR_NODES) do
+        table.insert(GD_REGISTERED_NODES, k)
+        registerSymbol(k, nodeAddr, true)
+      end
+      -- 2 linear loops to avoid potentially expensive getName operations
+      for k, nodeAddr in pairs(GD_DUMP_MONITOR_NODES_ABS) do
+        table.insert(GD_REGISTERED_NODES_ABS, k)
         registerSymbol(k, nodeAddr, true)
       end
     end
@@ -12063,10 +12071,12 @@
         self.visited[addr] = true
         if checkForGDScript(addr) then
           table.insert(self.dumped, addr)
+          local scriptName, absScriptPath = getNodeNameFromGDScript(addr, true)
           -- will (un)register twice, but early, potentially
-          local name = getNodeNameFromGDScript(addr)
-          registerSymbol(name, addr, true)
-          table.insert(gd_registeredNodes, name)
+          registerSymbol(absScriptPath, addr, true) -- register long symbol
+          registerSymbol(scriptName, addr, true) -- register short name alias (might collide)
+          table.insert(GD_REGISTERED_NODES_ABS, absScriptPath)
+          table.insert(GD_REGISTERED_NODES, absScriptPath)
         end
         return true
       end
@@ -12077,10 +12087,13 @@
 
       local function cloneArrayAsMap(tabl)
         local result = {} -- { name : addr }
+        local resultAbs = {} -- { name : addr }
         for i, val in ipairs(tabl) do
-          result[ getNodeNameFromGDScript(val) ] = val
+          local scriptName, longName = getNodeNameFromGDScript(val, true)
+          result[ scriptName ] = val
+          resultAbs[ longName ] = val
         end
-        return result
+        return result, resultAbs
       end
 
       local mainNodeDict = getMainNodeDict() or {}
@@ -12089,15 +12102,16 @@
         processNodeForNodes(value.PTR, dumpContext)
       end
 
-      gd_dumpedMonitorNodes = cloneArrayAsMap(dumpContext.dumped)
+      GD_DUMP_MONITOR_NODES, GD_DUMP_MONITOR_NODES_ABS = cloneArrayAsMap(dumpContext.dumped)
       registerDumpedNodes()
     end
 
     function nodeMonitorService(thr)
       thr.Name = "GD Node Monitor Service"
-      --thr.freeOnTerminate(false)
-      gd_dumpedMonitorNodes = {};
-      gd_registeredNodes = {};
+      GD_DUMP_MONITOR_NODES = {};
+      GD_DUMP_MONITOR_NODES_ABS = {};
+      GD_REGISTERED_NODES = {};
+      GD_REGISTERED_NODES_ABS = {};
 
       while not thr.Terminated do
         
