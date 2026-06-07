@@ -34,6 +34,4 @@ offsetConstMap =            -- GDScript->constants - layout same as w/ offsetGDF
 
 offsetVariantMap =          -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode
 
-offsetVariantMapVarType =   -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking 
-
 offsetVariantMapIndex =     -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes
