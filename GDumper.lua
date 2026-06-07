@@ -114,7 +114,7 @@
       --- gets some section info (bounds)
       ---@param sectionName number
       ---@return table
-      function GDAPI.getSectionBounds(sectionName)
+      local function getSectionBounds(sectionName)
         local base = getAddress(process)
         if base == 0 or base == nil then
           base = enumModules()[1].Address
@@ -941,7 +941,7 @@
 
       local matches = {}
 
-      for _, sizeOfVariant in ipairs( { 0x18, 0x28, 0x30 } ) do -- 0x18, 0x28, 0x30, 0x40
+      for _, sizeOfVariant in ipairs( { 0x18, 0x28 } ) do -- 0x18, 0x28, 0x30, 0x40
         -- we do runs with assumtions until one vector passes
         if validateVariantStride( vectorPtr, vectorSize, sizeOfVariant ) then
           matches[ #matches + 1 ] = sizeOfVariant -- { sizeOfVariant, count++ }
@@ -956,7 +956,6 @@
       sendDebugMessage("============SIZE OF VECTOR ISNT INFERRED============")
       return stdVectorSize, false
 
-      -- sendDebugMessage("Variant resize failed past 4 cases (vector: "..numtohexstr(vectorPtr)..")")
       -- // Variant takes 24 bytes when real_t is float, and 40 bytes if double.
       -- // It only allocates extra memory for AABB/Transform2D (24, 48 if double),
       -- // Basis/Transform3D (48, 96 if double), Projection (64, 128 if double),
@@ -1583,8 +1582,6 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS
 
-    -- TODO: make magic dereferences more obvious
-
     local function getNodeChildrenInfo(nodeAddr)
       if isNullOrNil(nodeAddr) then
         return nil, nil;
@@ -1607,7 +1604,7 @@
 
     local function getNextMapElement(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
-        return readPointer(mapElement)
+        return readPointer(mapElement) -- next is at 0x0
       else
         return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
       end
@@ -1615,19 +1612,14 @@
 
     local function getDictElemPairNext(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
-        return readPointer(mapElement)
+        return readPointer(mapElement) -- at 0x0
       else
         return readPointer( (mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
       end
     end
 
     local function getDictionarySizeFromVariantPtr(variantPtr)
-      -- if GDDEFS.MAJOR_VER >= 4 then
-      --     return readInteger(readPointer(variantPtr) + GDDEFS.DICT_SIZE)
-      -- else
-      --     return readInteger(readPointer(readPointer(variantPtr) + GDDEFS.DICT_LIST) + GDDEFS.DICT_SIZE)
-      -- end
-      return readInteger( ( readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
+      return readInteger( (readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
     end
 
     local function isArrayEmptyFromVariantPtr(variantPtr)
@@ -1646,9 +1638,9 @@
     local function getVariantNameFromMapElement(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
         return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
-      else
-        return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
       end
+
+      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
     end
 
     local function prepareObjectParent(entry, emitter, parent, contextTable)
@@ -1690,9 +1682,7 @@
     end
 
     local function getFunctionMapName(mapElement)
-      if isNullOrNil(mapElement) then
-        return nil
-      end
+      if isNullOrNil(mapElement) then return nil end
 
       if GDDEFS.MAJOR_VER >= 4 then
         return getGDFunctionName(mapElement)
@@ -4821,7 +4811,7 @@
 
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
-    function GDAPI.getNodeGDScriptInstance(nodeAddr)
+    local function getNodeGDScriptInstance(nodeAddr)
       if isNullOrNil(nodeAddr) then
         return nil
       end
@@ -4909,13 +4899,13 @@
     ---@return number @ script type enum
     function checkForGDScript(nodeAddr)
 
-      if isNullOrNil(nodeAddr) or not isVtable( getVtable(nodeAddr) ) then
+      if isNullOrNil(nodeAddr) --[[or not isVtable( getVtable(nodeAddr) )]] then -- make it a little cheaper
         -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return false
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) or not isVtable( getVtable(scriptInstance) ) then
+      if isNullOrNil(scriptInstance) --[[or not isVtable( getVtable(scriptInstance) )]] then
         -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return false
       end
@@ -4931,38 +4921,39 @@
         -- sendDebugMessage('gdScriptName invalid')
         return false
       end
+
       local gdScriptName = readUTFString(gdScriptName)
 
       if (gdScriptName):sub(1,4) == 'res:' then
         return true
-      else
-        return false
       end
 
+      return false
     end
 
     function checkScriptType(nodeAddr)
-      if GDDEFS.MONO == false then return 0 end;
-      if isNullOrNil(nodeAddr) or not isVtable( getVtable(nodeAddr) ) then
-        sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
+      -- if GDDEFS.MONO == false then return 0 end; -- has to be checked already
+
+      if isNullOrNil(nodeAddr) --[[or not isVtable( getVtable(nodeAddr) )]] then
+        -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) or not isVtable( getVtable(scriptInstance) ) then
-        sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+      if isNullOrNil(scriptInstance) --[[or not isVtable( getVtable(scriptInstance) )]] then
+        -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
       if isNullOrNil(gdscript) or not isVtable( getVtable(gdscript) ) then
-        sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
+        -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
         return 0
       end
       
       local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
       if isNullOrNil(gdScriptName) then
-        sendDebugMessage('gdScriptName invalid')
+        -- sendDebugMessage('gdScriptName invalid')
         return 0
       end
 
@@ -4979,20 +4970,18 @@
     end
 
     function checkIfObjectWithChildren(objAddr)
-      
-      if isNullOrNil(objAddr) or not isVtable( getVtable(objAddr) ) then return false end -- if object itself is valid & has a vtable
+      if isNullOrNil(objAddr) then return false end -- if object itself is valid
       local objectChildren, childrenSize = getNodeChildrenInfo(objAddr) -- check children & if it's a valid pointer
       if isNullOrNil(childrenSize) then return false end -- if no children, we don't need it
       local childAddr = readPointer(objectChildren)
-      if isNullOrNil(childAddr) or not isVtable( getVtable(childAddr) ) then return false end  -- let's check the 0th object for vtable
+      if isNullOrNil(childAddr) or not isVtable( getVtable(childAddr) ) then return false end  -- check the 0th object for vtable
       return true
-      
     end
 
     --- builds a structure layout for a node's children array
     ---@param childrenArrStruct userdata
     ---@param nodeAddr number
-    function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress) -- TODO: repurpose for visitor & emitters?
+    function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress)
 
       local childrenAddr, childrenSize = getNodeChildrenInfo(baseAddress)
 
@@ -5015,12 +5004,9 @@
           addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE), vtPointer)
         end
       end
-
-      return
     end
 
     function iterateNodeChildrenForNodes(baseAddress, dumpContext)
-      if dumpContext:shouldStop() then return end
 
       local childrenAddr, childrenSize = getNodeChildrenInfo(baseAddress)
       if isNullOrNil(childrenSize) then return; end
@@ -5030,7 +5016,6 @@
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
         processNodeForNodes(childAddr, dumpContext)
       end
-      return
     end
 
     --- go over child nodes in the main nodes
@@ -6782,7 +6767,7 @@
                 local operation = contextTable.codeInts[contextTable.instrPointer + 4] -- operator is 4*0x4 after
                 addStructureElem(contextTable.codeStructElement, 'Operator: ', (contextTable.instrPointer - 1 + 4) * 0x4, vtDword)
 
-                local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR' -- TODO not sure, is that the same thing: operator_names[_code_ptr[ip + 4]];
+                local operationName = GDF.OPERATOR_NAME[operation + 1] or 'UNKNOWN_OPERATOR'
                 local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
                 local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
@@ -6819,7 +6804,6 @@
                 local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
 
-                -- TODO create function constants lookup for disassembling
                 local operand3 = getGDTypeName(contextTable.codeInts[contextTable.instrPointer + 4])
                 -- Ref<Script> script_type = get_constant(_code_ptr[ip + 3] & ADDR_MASK);
                 -- Variant::Type builtin_type = (Variant::Type)_code_ptr[ip + 4];
@@ -7143,7 +7127,7 @@
               handler = function(contextTable)
                 local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                local operand2 = 'gdscript' -- TODO
+                local operand2 = 'gdscript'
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
                 local operand3 = 'debug_get_static_var_by_index(operand3)'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
@@ -7161,7 +7145,7 @@
               handler = function(contextTable)
                 local operand1 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 1])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
-                local operand2 = 'gdscript' -- TODO
+                local operand2 = 'gdscript'
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
                 local operand3 = 'debug_get_static_var_by_index(operand3)'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
@@ -7307,7 +7291,7 @@
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1) * 0x4, vtDword)
                 local operand2 = formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + 2])
                 addStructureElem(contextTable.codeStructElement, operand2, (contextTable.instrPointer - 1 + 2) * 0x4, vtDword)
-                local operand3 = 'debug_get_script_name(get_constant(operand3))' -- TODO
+                local operand3 = 'debug_get_script_name(get_constant(operand3))'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 3) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' (' .. operand3 .. ') ' .. operand1 .. ' = ' .. operand2
@@ -7816,13 +7800,13 @@
                   operand2 = operand2 .. ' = '
                 end
 
-                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                 local operand1 = formatDisassembledAddress( contextTable.codeInts[contextTable.instrPointer + 1 + argc])
                 addStructureElem(contextTable.codeStructElement, operand1, (contextTable.instrPointer - 1 + 1 + argc) * 0x4, vtDword)
                 operand1 = operand1 .. '.'
-                operand1 = operand1 .. operand3 .. '->get_name()' -- TODO
+                operand1 = operand1 .. operand3 .. '->get_name()'
                 local operandArg = '';
 
                 for i = 0, argc - 1 do
@@ -7833,7 +7817,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]),     (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. '(' .. operandArg .. ')' -- TODO retrieve the funciton name
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. operand1 .. '(' .. operandArg .. ')'
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
                 return contextTable.instrPointer + 5 + argc
@@ -7992,7 +7976,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand2 .. ' = ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
@@ -8024,7 +8008,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                 contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. '.' .. operand3 .. '->get_name()' .. '(' .. operandArg .. ')'
@@ -8863,10 +8847,10 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
-                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg .. ')' -- TODO: retrieve the funciton name
+                contextTable.opcodeName = contextTable.opcodeName .. ' ' .. operand1 .. operand3 .. '->getname()' .. '(' .. operandArg .. ')'
 
                 addLayoutStructElem(contextTable.codeStructElement, contextTable.opcodeName, GD_FUNC_DISASM_COLOR, (contextTable.instrPointer - 1 - 1) * 0x4, vtDword)
 
@@ -8903,7 +8887,7 @@
                   addStructureElem(contextTable.codeStructElement, 'arg: ' .. formatDisassembledAddress(contextTable.codeInts[contextTable.instrPointer + i + 1]), (contextTable.instrPointer - 1 + i + 1) * 0x4, vtDword)
                 end
 
-                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']' -- TODO: workaround
+                local operand3 = '_methods_ptr[' .. contextTable.codeInts[contextTable.instrPointer + 2 + instr_var_args] .. ']'
                 addStructureElem(contextTable.codeStructElement, operand3, (contextTable.instrPointer - 1 + 2 + instr_var_args) * 0x4, vtDword)
 
                 local opcodeType = contextTable.opcodeName:gsub('OPCODE_TYPE_ADJUST_', '')
@@ -10826,8 +10810,7 @@
     end
 
     function checkIfGDFunction(funcAddr)
-      local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, firstOpcode
-      local OPCODEMAX = 250 -- TODO: use enum
+      local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, funcCodeLastIdx, lastOpcode
       if GDDEFS.MAJOR_VER <= 3 or GDDEFS.VERSION_STRING == "4.1" then
         funcResStringNameAddr = readPointer(funcAddr) -- StringName source at 0x0;
         funcStringNameAddr = 0xBAAAAABE -- just a placeholder
@@ -10836,23 +10819,17 @@
         funcResStringNameAddr = readPointer(funcAddr + GDDEFS.PTRSIZE) -- StringName source;
       end
 
-      funcCodeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
-      firstOpcode = readInteger(funcCodeAddr) or 0
-
-      if isNullOrNil(funcResStringNameAddr) or isNullOrNil(funcStringNameAddr) or (firstOpcode > OPCODEMAX) then return false end
+      if isNullOrNil(funcResStringNameAddr) or isNullOrNil(funcStringNameAddr) then return false end
 
       if not (  getStringNameStr(funcResStringNameAddr)  ):match("res://") then return false end
 
-      if GDDEFS.MAJOR_VER > 3 and GDDEFS.VERSION_STRING ~= "4.1" then
-        local funcStringAddr = readPointer(funcStringNameAddr + GDDEFS.STRING)
-        if isNullOrNil(funcStringAddr) then
-          funcStringAddr = readPointer(funcStringNameAddr + 0x8)
-          if isNullOrNil(funcStringAddr) then
-            return false
-          end
-        end
-      end
+      -- get code and its size to check the OPCODE_END
+      funcCodeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
+      funcCodeLastIdx = readInteger( funcCodeAddr - GDDEFS.SIZE_VECTOR ) - 1 -- Vector<int>
+      lastOpcode = readInteger( funcCodeAddr + 4 * funcCodeLastIdx ) 
 
+      if isNullOrNil(funcCodeAddr) or ( lastOpcode ~= GDF.CurrentDisassembler:getOPEnumFromInternalOPID(GDF.OP.OPCODE_END) ) then return false end
+      -- already a strong assumption, discard the remaining checks
       return true
     end
 
@@ -11282,7 +11259,7 @@
     --- iterates a dictionary for nodes
     ---@param dictAddr number
     function iterateDictionaryForNodes(dictAddr, dumpContext)
-      if dumpContext:shouldStop() or isNullOrNil(dictAddr) then return end -- if (not (dictAddr > 0)) then return; end
+      if isNullOrNil(dictAddr) or dumpContext:shouldStop() then return end -- if (not (dictAddr > 0)) then return; end
 
       local dictRoot = dictAddr
       if GDDEFS.MAJOR_VER <= 3 then
@@ -11298,7 +11275,7 @@
       local visitor = NodeVisitor
 
       repeat
-        if dumpContext:shouldStop() then return end
+        -- if dumpContext:shouldStop() then return end
         local entry = readDictionaryValueEntry(mapElement)
         local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
         if handler then
@@ -11367,7 +11344,7 @@
     --- iterates an array for nodes
     ---@param arrayAddr number
     function iterateArrayForNodes(arrayAddr, dumpContext)
-      if dumpContext:shouldStop() or isNullOrNil(arrayAddr) then return end
+      if isNullOrNil(arrayAddr) or dumpContext:shouldStop() then return end
 
       local arrVectorAddr = readPointer( (arrayAddr or 0) + GDDEFS.ARRAY_TOVECTOR)
       if isNullOrNil(arrVectorAddr) then return; end
@@ -11380,7 +11357,7 @@
       local visitor = NodeVisitor
 
       for varIndex = 0, arrVectorSize - 1 do
-        if dumpContext:shouldStop() then return end
+        -- if dumpContext:shouldStop() then return end
         local entry = readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
 
         if isNotNullOrNil(entry.variantPtr) then
@@ -11538,12 +11515,11 @@
     --- iterate nodes only
     ---@param nodeAddr number
     function iterateVecVarForNodes(nodeAddr, dumpContext)
-      if dumpContext:shouldStop() then return end
-      if isNullOrNil(nodeAddr) then return; end
+      if isNullOrNil(nodeAddr) or dumpContext:shouldStop() then return; end
       -- if not checkForGDScript(nodeAddr) then return; end -- should be checked at this point
 
       local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-      if isNullOrNil(vectorSize) --[[or vectorSize > 1500]] then return; end
+      if isNullOrNil(vectorSize) then return; end
 
       local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
       if not ok then return; end
@@ -11551,7 +11527,7 @@
       local visitor = NodeVisitor
 
       for variantIndex = 0, vectorSize - 1 do
-        if dumpContext:shouldStop() then return end
+        -- if dumpContext:shouldStop() then return end
         local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize)
         local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
         if handler then
@@ -11652,18 +11628,24 @@
     end
 
     VariantArena =
-      { -- TODO: optimize space
+      {
         base = nil, -- alloc ptr
         size = 0x2000, -- allocated space
         cursor = 0, -- current offset
         variantSize = 0x40, -- for enough padding
-        argListOffset = 0x100, -- where const Variant **p_args
-        scratchStart = 0x500, -- space before is reserved
-        scratchEnd = 0x1F00, -- should suffice
-
-        excptOffset = 0x48,
-        returnBufOffset = 0x0,
-        callErrorOffset = 0x1B0,
+        
+        returnBufOffset = 0x0, -- 0x000..0x03F return Variant
+        excptOffset = 0x40, -- exception, let it be of Variant
+        callErrorOffset = 0x80, -- 12 bytes, it's mostly enum we are interested
+        -- some padd
+        argListOffset = 0x90, -- where const Variant **p_args
+        -- 108 8byte for ptrs
+        
+        -- scratch
+        scratchStart = 0x400,
+        scratchEnd = 0x1F00,
+        -- end padd
+        
         inited = false,
       }
 
@@ -12376,11 +12358,9 @@
   patchGDFunction = GDAPI.patchGDFunction
   getGDFunctionFromNode = GDAPI.getGDFunctionFromNode
   getNodeConstPtr = GDAPI.getNodeConstPtr
-  getNodeGDScriptInstance = GDAPI.getNodeGDScriptInstance
 
   -- misc
   buildGDGUI = GDAPI.buildGDGUI  
   printDumpedNodes = GDAPI.printDumpedNodes
   printGDConfig = GDAPI.printGDConfig
   getGDSemver = GDAPI.getGDSemver
-  getSectionBounds = GDAPI.getSectionBounds
