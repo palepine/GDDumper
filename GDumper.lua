@@ -415,7 +415,7 @@
       function GDAPI.printGDConfig()
         print
         (
-          ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapVarType = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
+          ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
           (GDDEFS.MAJOR_VER or 0x0),
           (GDDEFS.MINOR_VER or 0x0),
           (tostring(GDDEFS.CUSTOMVER)),
@@ -434,7 +434,7 @@
           (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
           (GDDEFS.CONST_MAP or 0x0),
           (GDDEFS.VAR_NAMEINDEX_MAP or 0x0),
-          (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
+          -- (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
           (GDDEFS.VAR_NAMEINDEX_I or 0x0))
           )
       end
@@ -763,7 +763,7 @@
         mainMemrec.Description = "Dumper"
         mainMemrec.Type = vtAutoAssembler
         mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapVarType =   nil, -- essential for 4.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant type for crosschecking \noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
+        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
 
         local dumpMemrec = addrList.createMemoryRecord()
         dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1634,28 +1634,13 @@
       return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR) == 0
     end
 
-    local function resolveScriptVariantType(mapElement, runtimeVariantType)
-
-
-      if GDDEFS.MAJOR_VER < 4 then
-        return runtimeVariantType
-      end
-
-      local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
-
-      if scriptType > GDDEFS.MAXTYPE then
-        scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8)
-      end
-
-      if scriptType == runtimeVariantType then
-        return scriptType
-      elseif (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType <= GDDEFS.MAXTYPE) then
-        -- sendDebugMessage('fallback1, cached type is used') -- if the source is incorrect
-        return scriptType
-      else
-        -- sendDebugMessage('fallback2, cached type is used') -- let's have cached if everything is wrong
-        return runtimeVariantType
-      end
+    local function resolveScriptVariantType(mapElement, runtimeVariantType) -- TODO: remove?
+      if GDDEFS.MAJOR_VER < 4 then return runtimeVariantType end
+      -- local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
+      -- if scriptType > GDDEFS.MAXTYPE then scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8) end
+      -- if scriptType == runtimeVariantType then return scriptType end
+      -- if (scriptType > runtimeVariantType) and (scriptType > 0 and scriptType < GDDEFS.MAXTYPE) then return scriptType end
+      return runtimeVariantType
     end
 
     local function getVariantNameFromMapElement(mapElement)
@@ -2011,7 +1996,8 @@
       local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize)
 
       local name = getVariantNameFromMapElement(mapElement);
-      local finalType = resolveScriptVariantType(mapElement, runtimeType);
+      -- local finalType = resolveScriptVariantType(mapElement, runtimeType);
+      local finalType = runtimeType
 
       local entry =
       {
@@ -3139,7 +3125,7 @@
         offsets.GDScriptConstantMap = 0x208
         offsets.GDScriptVariantNameHM = 0x180
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x44 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x10
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x178
@@ -3200,7 +3186,7 @@
         offsets.GDScriptConstantMap = 0x208
         offsets.GDScriptVariantNameHM = 0x180
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x44 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x10
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x178
@@ -3264,7 +3250,7 @@
           offsets.GDScriptConstantMap = 0x208
           offsets.GDScriptVariantNameHM = 0x180
           offsets.oVariantVector = 0x28
-          offsets.GDScriptVariantNameType = 0x44 -- 4.x
+          -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x10
           offsets.GDScriptVariantNamesIndex = nil -- 3.x
           offsets.GDScriptFunctionCode = 0x178
@@ -3339,7 +3325,7 @@
           offsets.GDScriptConstantMap = 0x160
           offsets.GDScriptVariantNameHM = 0x110
           offsets.oVariantVector = 0x1C
-          offsets.GDScriptVariantNameType = 0x20 -- 4.x
+          -- offsets.GDScriptVariantNameType = 0x20 -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x8
           offsets.GDScriptVariantNamesIndex = nil -- 3.x
           offsets.GDScriptFunctionCode = 0xE8
@@ -3406,7 +3392,7 @@
         offsets.GDScriptConstantMap = 0x208
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x48 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x48 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x180 -- 0x178
@@ -3456,7 +3442,7 @@
         offsets.GDScriptConstantMap = 0x2A8
         offsets.GDScriptVariantNameHM = 0x210
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x48 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x48 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x178
@@ -3512,7 +3498,7 @@
         offsets.GDScriptConstantMap = 0x250
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x178
@@ -3533,7 +3519,7 @@
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
-          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
 
         end
         if GDDEFS.CUSTOMVER then
@@ -3545,7 +3531,7 @@
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
         end
 
@@ -3564,7 +3550,7 @@
         offsets.GDScriptConstantMap = 0x250
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x170
@@ -3586,7 +3572,7 @@
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
-          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 17
 
         end 
@@ -3600,7 +3586,7 @@
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
+          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
           offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode + 0x20
           offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts + 0x20
@@ -3637,7 +3623,7 @@
         offsets.GDScriptConstantMap = 0x1F0
         offsets.GDScriptVariantNameHM = 0x290
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x118
@@ -3688,7 +3674,7 @@
         offsets.GDScriptConstantMap = 0x238
         offsets.GDScriptVariantNameHM = 0x2A8
         offsets.oVariantVector = 0x28
-        offsets.GDScriptVariantNameType = 0x40 -- 4.x
+        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
         offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x118
@@ -3732,7 +3718,7 @@
         offsets.GDScriptConstantMap = 0x190
         offsets.GDScriptVariantNameHM = 0x1C0
         offsets.oVariantVector = 0x20
-        offsets.GDScriptVariantNameType = nil -- 4.x
+        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
@@ -3780,7 +3766,7 @@
           offsets.GDScriptConstantMap = 0x190
           offsets.GDScriptVariantNameHM = 0x1C0
           offsets.oVariantVector = 0x20
-          offsets.GDScriptVariantNameType = nil -- 4.x
+          -- offsets.GDScriptVariantNameType = nil -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x4
           offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
           offsets.GDScriptFunctionCode = 0x50
@@ -3848,7 +3834,7 @@
           offsets.GDScriptConstantMap = 0xDC
           offsets.GDScriptVariantNameHM = 0xF4
           offsets.oVariantVector = 0x10
-          offsets.GDScriptVariantNameType = 0x34 -- 4.x
+          -- offsets.GDScriptVariantNameType = 0x34 -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x4
           offsets.GDScriptVariantNamesIndex = 0x1C -- 3.x
           offsets.GDScriptFunctionCode = 0x38
@@ -3892,7 +3878,7 @@
         offsets.GDScriptConstantMap = 0x190
         offsets.GDScriptVariantNameHM = 0x1C0
         offsets.oVariantVector = 0x20
-        offsets.GDScriptVariantNameType = nil -- 4.x
+        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
@@ -3940,7 +3926,7 @@
         offsets.GDScriptConstantMap = 0x188
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x20
-        offsets.GDScriptVariantNameType = nil -- 4.x
+        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
@@ -3986,7 +3972,7 @@
         offsets.GDScriptConstantMap = 0x198
         offsets.GDScriptVariantNameHM = 0x1C8
         offsets.oVariantVector = 0x20
-        offsets.GDScriptVariantNameType = nil -- 4.x
+        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
@@ -4034,7 +4020,7 @@
         offsets.GDScriptConstantMap = 0x198
         offsets.GDScriptVariantNameHM = 0x1C8
         offsets.oVariantVector = 0x18
-        offsets.GDScriptVariantNameType = nil -- 4.x
+        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
@@ -4076,7 +4062,7 @@
         offsets.GDScriptConstantMap = 0x148
         offsets.GDScriptVariantNameHM = 0x178
         offsets.oVariantVector = 0x30
-        offsets.GDScriptVariantNameType = nil -- 4.x
+        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
         offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
@@ -4246,7 +4232,7 @@
         GDDEFS.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex
         GDDEFS.VAR_VECTOR = offsets.oVariantVector
-        GDDEFS.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
+        -- GDDEFS.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
         GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
         GDDEFS.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
         GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
@@ -4267,7 +4253,7 @@
 
         if GDDEFS.MAJOR_VER >= 4 then
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
-          GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
+          -- GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE + 0x20)
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
@@ -4297,7 +4283,6 @@
       -- COMMON START
       if GDDEFS.MAJOR_VER >= 4 then
         GDDEFS.GDSCRIPT_REF = 0x18
-        GDDEFS.MAXTYPE = 39
         GDDEFS.FUNC_MAPVAL = 0x18
         GDDEFS.CHILDREN_SIZE = 0x8
         GDDEFS.MAP_SIZE = 0x14
@@ -4316,7 +4301,6 @@
         GDDEFS.CLR_PTR = 0x20
         -- GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
       elseif GDDEFS.MAJOR_VER == 3 then
-        GDDEFS.MAXTYPE = 27
         GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
         if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
         GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
@@ -4341,7 +4325,6 @@
         GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
         -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
       elseif GDDEFS.MAJOR_VER == 2 then
-        GDDEFS.MAXTYPE = 27
         GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
         if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
         GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
@@ -4603,7 +4586,7 @@
         else
           resolvedAddr = relativeAddr -- absolute on 32
         end
-        -- sendDebugMessage("[SceneTree] calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
+        sendDebugMessage("[SceneTree] calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
         local className = getGDObjectName(readPointer(resolvedAddr))
         if className == "SceneTree" then
           sendDebugMessage("[SceneTree] via vtable - success!") --  .. numtohexstr(resolvedAddr) .. " sig: " .. aobSignature 
@@ -4673,7 +4656,7 @@
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
         if isNotNullOrNil(candidateAddr) and isVtable(getVtable(candidateAddr)) then
 
-          -- sendDebugMessage("[VP/WIND] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
+          sendDebugMessage("[VP/WIND] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
           local className = getGDObjectName(candidateAddr)
           if className == "Viewport" or className == "Window" then
             sendDebugMessage("[VP/WIND] via vtable - success!")
