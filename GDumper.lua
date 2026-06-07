@@ -889,18 +889,18 @@
           gdMenuItem = createMenuItem(mainMenu)
           gdMenuItem.Caption = menuItemCaption
           mainMenu.Items.add(gdMenuItem)
-          addCustomMenuButtonTo(gdMenuItem, 'VP Struct', createVPStructForm)
-          addCustomMenuButtonTo(gdMenuItem, 'GD Dissector', GDDissectorSwitch)
+          addCustomMenuButtonTo(gdMenuItem, 'Root Struct', createVPStructForm)
+          addCustomMenuButtonTo(gdMenuItem, 'GD Dissect', GDDissectorSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
-          addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
-          addCustomMenuButtonTo(gdMenuItem, 'GD StuctName Lookup', GDStructNameLookupSwitch)
-          -- addCustomMenuButtonTo( gdMenuItem, 'GD Addr Lookup', GDAddressLookupSwitch )
           local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', appendDumperScript)
           -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
           
           -- addCustomMenuButtonTo(gdMenuItem, 'Append as memrec', appendDumperScriptAsMemrec)
-          addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
+          -- addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
+          addCustomMenuButtonTo(gdMenuItem, 'Stuct name Lookup', GDStructNameLookupSwitch)
+          -- addCustomMenuButtonTo( gdMenuItem, 'Addr Lookup', GDAddressLookupSwitch )
+          addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
           -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
         end
@@ -4646,10 +4646,10 @@
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
         if isNotNullOrNil(candidateAddr) and isVtable(getVtable(candidateAddr)) then
 
-          sendDebugMessage("[VP/WIND] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
+          sendDebugMessage("[ROOT] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
           local className = getGDObjectName(candidateAddr)
           if className == "Viewport" or className == "Window" then
-            sendDebugMessage("[VP/WIND] via vtable - success!")
+            sendDebugMessage("[ROOT] via vtable - success!")
             registerSymbol('oSTtoVP', i * ptrsize, false)
             return true
           end
@@ -4670,7 +4670,7 @@
           return false
         end
         local relativeAddr = readInteger(addr + 3)
-        sendDebugMessage("[VP/WIND] via sigs - success!")
+        sendDebugMessage("[ROOT] via sigs - success!")
         registerSymbol('oSTtoVP', relativeAddr, false)
         return true
       end
@@ -4710,7 +4710,7 @@
           return true
         end
       end
-      sendDebugMessage("[VP/WIND] lookup failed, you are on your own")
+      sendDebugMessage("[ROOT] lookup failed, you are on your own")
       return false
     end
 
