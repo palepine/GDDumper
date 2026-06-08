@@ -30,7 +30,7 @@ You can test your luck avoiding the steps above letting the script do that: tick
 
 ## Usage
 1. Install [Cheat Engine](https://github.com/cheat-engine/cheat-engine).
-2. Place `GDumper.lua` inside `Cheat Engine\autorun`
+2. Copy `autorun` folder into `Cheat Engine` root directory
 3. Run Cheat Engine and attach to a godot app.
 4. A `GDumper` menu item will appear
 5. e.g. click `Add Template` and/or follow instructions in the [API doc](/docs/GDUMPER_API.MD).
