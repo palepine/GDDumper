@@ -1,4 +1,3 @@
--- GDDumperModules/GDFunctionStructDisassembler.lua
 local Module = {}
 
 function Module.install(contextTable)

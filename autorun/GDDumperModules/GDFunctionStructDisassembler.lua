@@ -1,4 +1,3 @@
--- GDDumperModules/GDFunctionStructDisassembler.lua
 local Module = {}
 
 local GD_FUNC_DISASM_COLOR = 0x451630 --0x808040
