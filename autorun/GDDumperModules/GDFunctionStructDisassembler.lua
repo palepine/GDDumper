@@ -10,6 +10,7 @@ function Module.install(contextTable)
   local addLayoutStructElem = contextTable.addLayoutStructElem
   local getGDTypeName = contextTable.getGDTypeName
   local sendDebugMessage = contextTable.sendDebugMessage
+  local GDF = {}
 
   local formatDisassembledAddress = function(addrInt)
     local addrIndex = addrInt & (GDF.EADDRESS['ADDR_MASK']) -- lower 24 bits are indices
@@ -29,7 +30,7 @@ function Module.install(contextTable)
     end
   end
 
-  local GDF = {}
+
     local function defineGDFunctionEnums()
 
       local function buildReverseTable(tab)
