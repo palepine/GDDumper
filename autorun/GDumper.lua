@@ -30,6 +30,7 @@
   
   local processNodeForNodes
   local checkForGDScript
+  local checkForVectorVariant
   local checkScriptType
   local checkIfObjectWithChildren
   local iterateNodeChildrenToStruct
@@ -192,10 +193,10 @@
       ---@param VTAddr number
       ---@return boolean
       local function isVtable(VTAddr)
-        if VTAddr == 0 or VTAddr == nil then
+        if VTAddr == nil or VTAddr == 0 then
           return false
         end
-        if isNullOrNil(GDDEFS._MAIN_MODULE_INFO) then
+        if not GDDEFS._MAIN_MODULE_INFO then
           GDDEFS._MAIN_MODULE_INFO = getMainModuleInfo()
           GDDEFS._TEXT_SECTIONINFO = getSectionBounds(".text")
           if GDDEFS._TEXT_SECTIONINFO == nil then return false end
@@ -203,14 +204,17 @@
 
         if GDDEFS._MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS._MAIN_MODULE_INFO.moduleEnd then
           -- iterate a few pointers and confirm if they are executable
-          local ptrsize = targetIs64Bit() and 0x8 or 0x4
-
-          for i = 0, 5 do -- 5 pointers
-            local pmethod = readPointer(VTAddr + ptrsize * i)
-            if not isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
-              return false
-            end
+          local pmethod = readPointer(VTAddr) -- just check the first
+          if isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
+            return true
           end
+          return false
+          -- for i = 0, 2 do
+          --   local pmethod = readPointer(VTAddr + GDDEFS.PTRSIZE * i)
+          --   if not isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
+          --     return false
+          --   end
+          -- end
         else -- outside the main module
           return false
         end
@@ -3740,7 +3744,7 @@
       if not dumpContext:tryVisitNode(nodeAddr) then return end
 
       if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
-      elseif checkForGDScript(nodeAddr) then
+      elseif checkForVectorVariant(nodeAddr) then -- checkForGDScript(nodeAddr)
         iterateVecVarForNodes(nodeAddr, dumpContext)
       end
 
@@ -3839,36 +3843,33 @@
     ---@return number @ script type enum
     function checkForGDScript(nodeAddr)
 
-      if isNullOrNil(nodeAddr) --[[or not isVtable( getVtable(nodeAddr) )]] then -- make it a little cheaper
-        -- sendDebugMessage('nodeAddr/vtable invalid'.." address "..numtohexstr(nodeAddr))
-        return false
-      end
+      if isNullOrNil(nodeAddr) then return false end
 
       local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) --[[or not isVtable( getVtable(scriptInstance) )]] then
-        -- sendDebugMessage('ScriptInstance/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
-        return false
-      end
+      if isNullOrNil(scriptInstance) then return false end
 
       local gdscript = readPointer(scriptInstance + GDDEFS.GDSCRIPT_REF)
-      if isNullOrNil(gdscript) or not isVtable( getVtable(gdscript) ) then
-        -- sendDebugMessage('GDScript/vtable is 0/nil'.." address "..numtohexstr(nodeAddr))
-        return false
-      end
-      
+      if isNullOrNil(gdscript) or not isVtable( getVtable(gdscript) ) then return false end
+
       local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
-      if isNullOrNil(gdScriptName) then
-        -- sendDebugMessage('gdScriptName invalid')
-        return false
-      end
+      if isNullOrNil(gdScriptName) then return false end
+      
+      -- more expensive, already a strong assumption
+      -- if ( readUTFString(gdScriptName) ):sub(1,4) == 'res:' then return true else return false end
 
-      local gdScriptName = readUTFString(gdScriptName)
+      return true
+    end
 
-      if (gdScriptName):sub(1,4) == 'res:' then
-        return true
-      end
+    function checkForVectorVariant(nodeAddr)
+      if nodeAddr == nil then return false end
 
-      return false
+      local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
+      if isNullOrNil(scriptInstance) or not isVtable( getVtable(scriptInstance) ) then return false end
+
+      local vector = readPointer(scriptInstance + GDDEFS.VAR_VECTOR)
+      if isNullOrNil(vector) then return false end
+      -- will sufffice
+      return true
     end
 
     function checkScriptType(nodeAddr)
@@ -6016,7 +6017,7 @@
 
       for variantIndex = 0, vectorSize - 1 do
         -- if dumpContext:shouldStop() then return end
-        local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize)
+        local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize) -- TODO: optimize?
         local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
         if handler then
           handler(entry, visitor, dumpContext)
@@ -6027,25 +6028,16 @@
     --- returns a vector pointer and its size via
     ---@param nodeAddr number
     function getNodeVariantVector(nodeAddr)
-      if isNullOrNil(nodeAddr) then return; end -- assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
+      -- if isNullOrNil(nodeAddr) then return; end
 
       local scriptInstance = readPointer( (nodeAddr or 0) + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) then
-        -- sendDebugMessage('scriptInstance is absent for ' .. string.format(' %x', nodeAddr))
-        return;
-      end
+      -- if isNullOrNil(scriptInstance) then return; end
 
       local vectorPtr = readPointer( ( scriptInstance or 0) + GDDEFS.VAR_VECTOR)
       local vectorSize = readInteger( (vectorPtr or 0) - GDDEFS.SIZE_VECTOR)
 
-      if isNullOrNil(vectorPtr) then
-        -- sendDebugMessage('vector is absent for ' .. string.format(' %x', nodeAddr))
-        return;
-      end
-      if isNullOrNil(vectorSize) then
-        -- sendDebugMessage('vector size is 0/nil, node ' .. string.format(' %x', nodeAddr))
-        return;
-      end
+      -- if isNullOrNil(vectorSize) then return; end
+      -- if isNullOrNil(vectorPtr) then return; end
 
       return vectorPtr, vectorSize
     end
@@ -6088,9 +6080,10 @@
     ---@param index number
     ---@param varSize number
     ---@param bOffsetret boolean
-    function getVariantByIndex(vectorAddr, index, varSize--[[, bPushOffset]])
-      assert(type(vectorAddr) == 'number', "vector addr should be a number, instead got: " .. type(vectorAddr))
-      assert((type(index) == 'number') and (index >= 0), "index should be a valid number, instead got: " .. type(index))
+    function getVariantByIndex(vectorAddr, index, varSize)
+      if vectorAddr == nil then return end
+      -- assert(type(vectorAddr) == 'number', "vector addr should be a number, instead got: " .. type(vectorAddr))
+      -- assert((type(index) == 'number') and (index >= 0), "index should be a valid number, instead got: " .. type(index))
 
       -- if index > readInteger( ( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) ) or 0 - 1 then
       --   sendDebugMessage("index is out of vector size, pass index: " .. tostring(index) .. ' VecSize: ' .. tostring( (index > (readInteger( ( (vectorAddr or 0) - GDDEFS.SIZE_VECTOR) or 0 ) - 1)) ))
@@ -6102,17 +6095,8 @@
       local offset = varSize * index + offsetToValue
       local variantAddr = getAddress(vectorAddr + offset)
 
-      if (variantType == nil) or (variantAddr == nil) then -- variantType == 0 -- zero is nil which happens for uninitialized -- zero is possible for uninitialized variantPtr == 0 or
-        sendDebugMessage('variant ptr or type invalid');
-        -- if inMainThread() then error('variant ptr or type invalid') else return 0,0,0 end
-        return 0,0,0
-      end
-
-      -- if bPushOffset then
-        return variantAddr, variantType, offset
-      -- else
-      --   return variantAddr, variantType
-      -- end
+      -- if (variantType == nil) or (variantAddr == nil) then return 0,0,0 end
+      return variantAddr, variantType, offset
     end
 
     VariantArena =
@@ -6552,7 +6536,7 @@
         }
 
       function dumpContext:tryVisitNode(addr)
-        if isNullOrNil(addr) then return false end
+        if addr == nil then return false end
         GDDEFS.Monitor:nodeCountInc() -- how many nodes we have seen
         if self.visited[addr] then return false end
         self.visited[addr] = true
