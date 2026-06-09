@@ -366,6 +366,21 @@
         return readPointer(vtable + offsetToMethod)
       end
 
+      local function loadScriptFromTable(fileName, arg)
+        if isNullOrNil(fileName) then error('filename invalid') end
+        local tableFile = findTableFile( fileName )
+        if tableFile == nil then error('no script file found') end
+        local fileStream = tableFile.getData()
+        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
+        if scriptString == nil then error('script not loaded from file') end
+        local doScript = loadstring(scriptString)
+        if type(doScript) == 'function' then
+          return doScript()
+        else
+          error('script not parsed')
+        end
+      end
+
 
     -- ///---///--///---///--///---/// DEBUG
 
@@ -792,8 +807,14 @@
       -- attaches the script to the table
       local function appendDumperScript(sender)
         local cedir = getCheatEngineDir()
-        local scriptPath = cedir .. [[autorun\GDumper.lua]]
-        createTableFile("GDumper", scriptPath)
+        local dumperPath = cedir .. [[autorun\GDumper.lua]]
+        local offsetPath = cedir .. [[autorun\GDDumperModules\GDHardOffsets.lua]]
+        local sigPath = cedir .. [[autorun\GDDumperModules\GDSignatures.lua]]
+        local disasmPath = cedir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]]
+        createTableFile("GDumper", dumperPath)
+        createTableFile("GDOff", offsetPath)
+        createTableFile("GDSig", sigPath)
+        createTableFile("GDFDasm", disasmPath)
         sender.Enabled = false
       end
 
@@ -807,21 +828,9 @@
 
       -- load from attached script
       local function loadDumperScript(sender)
-        local tableFile = findTableFile("GDumper")
-        if tableFile == nil then error('no script file found') end
-        local fileStream = tableFile.getData()
-        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
-        if scriptString ~= nil then
-          local doScript = loadstring(scriptString)
-          if type(doScript) == 'function' then
-            doScript()
-            if sender then sender.Checked = true end
-          else
-            error('script not parsed')
-          end
-        else
-          error('script not loaded from file')
-        end
+        local ok, result = pcall(loadScriptFromTable, "GDumper")
+        if ok == false then error('Dumper load failed: '.. result or 'unknown error') end
+        if sender then sender.Checked = true end
       end
 
       local function loadDumperScriptFromFile(sender)
@@ -6767,9 +6776,16 @@
       -- init global
       initGDDefs()
 
+      local ceDir = getCheatEngineDir() or ''
+
       -- retrieve the offset getted function
-      local GDOffsetModule = dofile( getCheatEngineDir() .. [[autorun\GDDumperModules\GDHardOffsets.lua]] )
-      getStoredOffsetsFromVersion = GDOffsetModule.install( {} )
+      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDHardOffsets.lua]] )
+      if ok then
+        getStoredOffsetsFromVersion = result.install( {} )
+      else
+        -- portable, we get a module object
+        getStoredOffsetsFromVersion = loadScriptFromTable( "GDOff" ).install( {} )
+      end
 
       -- essential version definition
       initGDVersion(config)
@@ -6782,8 +6798,12 @@
       registerGDSymbols()
 
       -- retrieve the signatures
-      local GDSigModule = dofile( getCheatEngineDir() .. [[autorun\GDDumperModules\GDSignatures.lua]] )
-      GDAOB = GDSigModule.install( {} )
+      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDSignatures.lua]] )
+      if ok then
+        GDAOB = result.install( {} )
+      else
+        GDAOB = loadScriptFromTable( "GDSig" ).install( {} )
+      end
 
       -- try finding SceneTree and Viewport/Window
       if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) end
@@ -6792,8 +6812,9 @@
       defineVariantTypeProfile()
 
       -- build the correct disassembler profile
-      local GDDisasmModule = dofile( getCheatEngineDir() .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] )
-      local GDFuncDisasm = GDDisasmModule.install(
+      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] )
+      local GDFuncDisasm
+      local dependencyContext = 
         {
           GDDEFS = GDDEFS,
           addStructureElem = addStructureElem,
@@ -6802,7 +6823,13 @@
           iterateFuncConstantsToStruct = iterateFuncConstantsToStruct,
           iterateFuncGlobalsToStruct = iterateFuncGlobalsToStruct,
           sendDebugMessage = sendDebugMessage,
-        })
+        }
+
+      if ok then
+        GDFuncDisasm = result.install(dependencyContext)
+      else
+        GDFuncDisasm = loadScriptFromTable( "GDFDasm" ).install(dependencyContext)
+      end
 
       GDFunc = GDFuncDisasm.GDF
       GDFuncDisasm.defineGDFunctionEnums()
