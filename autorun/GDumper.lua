@@ -939,12 +939,11 @@
     ---@param vectorPtr number
     ---@param vectorSize number
     local function redefineVariantSizeByVector(vectorPtr, vectorSize)
-      if isNullOrNil(vectorPtr) or isNullOrNil(vectorSize) then return 0x18, false; end
-      
-      -- if we already checked
       if GDDEFS.SIZEOF_VARIANT then return GDDEFS.SIZEOF_VARIANT, true end
 
       local stdVectorSize = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
+
+      if isNullOrNil(vectorPtr) or isNullOrNil(vectorSize) then return stdVectorSize, false; end
 
       -- whatever, let's try again later
       if vectorSize < 2 then return stdVectorSize, true end
@@ -975,14 +974,8 @@
     --- returns an adjusted offset to a variant value
     ---@param gdType number
     local function getVariantValueOffset(gdType)
-      if gdType == nil then
-        return 0x8
-        -- if inMainThread() then return 0x8 else getCurrentThreadObject().terminate() end
-      end
-      if (getGDTypeName(gdType) == 'OBJECT') then
-        return 0x10
-      end -- objects have 0x10 offset for value, their ID before
-      return 0x8 -- the rest have this offset
+      if getGDTypeName(gdType) == 'OBJECT' then return 0x10 end -- objects have 0x10 offset for value, their ID before
+      return 0x8
     end
 
     local function defineVariantTypeProfile()
