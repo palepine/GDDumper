@@ -1564,15 +1564,23 @@
       local metaAddr = getObjectMeta(objAddr)
       local className = ''
 
-      if isNullOrNil(metaAddr) then return '??' end
+      if isNullOrNil(metaAddr) then return 'null' end
 
       if GDDEFS.MAJOR_VER <= 3 or (GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER < 6) then
-        className = getStringNameStr(readPointer(metaAddr) or 0) or '??'
+        className = getStringNameStr(readPointer(metaAddr) or 0) or 'nstrn'
 
-      else --[[if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 6 then]]
+      elseif GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER == 6 then
+          -- const GDType *super_type;
+          -- StringName name;
         metaAddr = getObjectMeta(objAddr)
         local stringNameAddr = readPointer(metaAddr + GDDEFS.PTRSIZE)
-        className = getStringNameStr(stringNameAddr or 0) or '??'
+        className = getStringNameStr(stringNameAddr or 0) or 'nstrn'
+      elseif GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER > 6 then
+        -- const GDType *super_type;
+        -- mutable InitState init_state = InitState::UNINITIALIZED;
+        -- StringName name;
+        local stringNameAddr = readPointer( metaAddr + GDDEFS.PTRSIZE * 2 )
+        className = getStringNameStr(stringNameAddr or 0) or 'nstrn'
       end
 
       return className

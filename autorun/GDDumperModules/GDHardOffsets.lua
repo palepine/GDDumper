@@ -81,7 +81,7 @@ function Module.install(contextTable)
         offsets.VPChildren = 0x140
         offsets.VPObjStringName = 0x190
         offsets.NodeGDScriptInstance = 0x60
-        offsets.NodeGDScriptName = 0xF0
+        offsets.NodeGDScriptName = 0xF0 -- 0xF8
         offsets.GDScriptFunctionMap = 0x230
         offsets.GDScriptConstantMap = 0x208
         offsets.GDScriptVariantNameHM = 0x180
