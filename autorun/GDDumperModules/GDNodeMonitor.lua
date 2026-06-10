@@ -118,10 +118,10 @@ function Module.install(contextTable)
 
     local function getRootNodeTable()
       local viewport = readPointer("ptVP")
-      if isNullOrNil(viewport) then getCurrentThreadObject().terminate() end
+      if isNullOrNil(viewport) then getCurrentThreadObject().terminate() return end
       
       local childrenAddr = readPointer( (viewport or 0) + CHILDREN)
-      if isNullOrNil(childrenAddr) then getCurrentThreadObject().terminate() end
+      if isNullOrNil(childrenAddr) then getCurrentThreadObject().terminate() return end
 
       local childrenSize;
       if GDDEFS.MAJOR_VER >= 4 then
@@ -130,7 +130,7 @@ function Module.install(contextTable)
         childrenSize = readInteger( childrenAddr - CHILDREN_SIZE ) or 0
       end
 
-      if isNullOrNil(childrenSize) then getCurrentThreadObject().terminate() end
+      if isNullOrNil(childrenSize) then getCurrentThreadObject().terminate() return end
 
       local nodeTable = {}
 
@@ -427,7 +427,8 @@ function Module.install(contextTable)
         return result, resultAbs
       end
 
-      local mainNodeDict = getRootNodeTable() or {}
+      local mainNodeDict = getRootNodeTable()
+      if isNullOrNil(mainNodeDict) then return end
 
       for _, value in ipairs(mainNodeDict) do
         processNodeForNodes(value, dumpContext)

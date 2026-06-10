@@ -199,16 +199,12 @@
         if GDDEFS._MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS._MAIN_MODULE_INFO.moduleEnd then
           -- iterate a few pointers and confirm if they are executable
           local pmethod = readPointer(VTAddr) -- just check the first
-          if isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
-            return true
+          for i = 0, 3 do
+            local pmethod = readPointer(VTAddr + GDDEFS.PTRSIZE * i)
+            if not isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
+              return false
+            end
           end
-          return false
-          -- for i = 0, 2 do
-          --   local pmethod = readPointer(VTAddr + GDDEFS.PTRSIZE * i)
-          --   if not isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
-          --     return false
-          --   end
-          -- end
         else -- outside the main module
           return false
         end
@@ -3025,8 +3021,6 @@
       local callErrors = { [1] = "invalid method", [2] = "invalid argument", [3] = "too many args", [4] = "too few args", [5] = "instance is null", [6] = "method not const", }
       GDDEFS.SCRIPT_ERRORS = scriptErrors
       GDDEFS.CALL_ERRORS = callErrors
-
-      GDDEFS.bDisasmFunc = true
     end
 
     local function initGDVersion(config)
@@ -3499,12 +3493,8 @@
     function getViewport()
       local viewport = readPointer("ptVP")
       if isNullOrNil(viewport) then
-        if inMainThread() then
-          print("Viewport pointer is invalid; something's wrong");
-          error('viewport pointer is invalid, couldn\'t read')
-        else
-          getCurrentThreadObject().terminate()
-        end
+        print("Viewport pointer is invalid; something's wrong");
+        error('viewport pointer is invalid, couldn\'t read')
       end
       return viewport
     end
@@ -3537,7 +3527,7 @@
       for i = 0, ( (childrenSize or 0) - 1) do
 
         local nodePtr = readPointer( (childrenAddr or 0) + i * GDDEFS.PTRSIZE)
-        if isNullOrNil(nodePtr) then if inMainThread() then error('getMainNodeDict: NO MAIN NODES') else getCurrentThreadObject().terminate() end end
+        if isNullOrNil(nodePtr) then error('getMainNodeDict: NO MAIN NODES') end
 
         local nodeNameStr = getNodeName(nodePtr)
         local gdscriptName = getNodeNameFromGDScript(nodePtr)
@@ -6366,8 +6356,6 @@
     end
 
     function GDAPI.initDumper(config)
-      -- if not (targetIsGodot) then return; end
-
       -- init global
       initGDDefs()
 
@@ -6428,7 +6416,7 @@
 
       GDFunc = GDFuncDisasm.GDF
       GDFuncDisasm.defineGDFunctionEnums()
-      bDisasmFunc= true -- whether to disasm functions, on by default
+      bDisasmFunc = true -- whether to disasm functions, on by default
 
       -- check if UTF32LE string type reged, otherwise define it
       checkGDStringType()
@@ -6447,7 +6435,7 @@
       -- find GDScriptFunctions::call()
       if not findGDVMCallPtr() then sendDebugMessage('[VM_CALL] lookup failed.') end
 
-      -- find GDScriptFunctions::call()
+      -- find mono get object
       if GDDEFS.MONO and GDDEFS.MAJOR_VER < 4 then 
         if not findMonoGetObject() then sendDebugMessage('[MONO_GETOBJ] lookup failed.') end
       end
@@ -6462,7 +6450,7 @@
           getGDTypeEnumFromName = getGDTypeEnumFromName,
           getMainModuleInfo = getMainModuleInfo,
           getSectionBounds = getSectionBounds,
-          getNodeNameFromGDScript = getNodeNameFromGDScript
+          getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
         }
 
       if ok then
