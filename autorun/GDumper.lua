@@ -28,13 +28,10 @@
   local rootOffset
   local fieldOffset
   
-  local processNodeForNodes
   local checkForGDScript
-  local checkForVectorVariant
   local checkScriptType
   local checkIfObjectWithChildren
   local iterateNodeChildrenToStruct
-  local iterateNodeChildrenForNodes
   local iterateMNodeToAddr
   local iterateNodeToStruct
   local getGDResName
@@ -58,18 +55,15 @@
   local iterateDictionary
   local iterateDictionaryToAddr
   local iterateDictionaryToStruct
-  local iterateDictionaryForNodes
   local iterateArray
   local iterateArrayToAddr
   local iterateArrayToStruct
-  local iterateArrayForNodes
   local iteratePackedArrayToAddr
   local iteratePackedArrayToStruct
   local iterateVectorVariants
   local iterateVectorVariantsForFields
   local iterateVecVarToAddr
   local iterateVecVarToStruct
-  local iterateVecVarForNodes
   local getNodeVariantVector
   local getNodeVariantMap
   local getVariantByIndex
@@ -83,13 +77,13 @@
   local makeAddr
   local makeSymAddr
 
-  local nodeMonitorService
-
   local stdcall = 0
   local timeout = nil
 
   local GDAOB
   local getStoredOffsetsFromVersion
+  
+  local getMainModuleInfo
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILS
@@ -783,7 +777,7 @@
         mainMemrec.Description = "Dumper"
         mainMemrec.Type = vtAutoAssembler
         mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n--NodeMonitorServiceSwitch()\n"
+        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n"
 
         local dumpMemrec = addrList.createMemoryRecord()
         dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -815,10 +809,12 @@
         local offsetPath = cedir .. [[autorun\GDDumperModules\GDHardOffsets.lua]]
         local sigPath = cedir .. [[autorun\GDDumperModules\GDSignatures.lua]]
         local disasmPath = cedir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]]
+        local nodemonitor = cedir .. [[autorun\GDDumperModules\GDNodeMonitor.lua]]
         createTableFile("GDumper", dumperPath)
         createTableFile("GDOff", offsetPath)
         createTableFile("GDSig", sigPath)
         createTableFile("GDFDasm", disasmPath)
+        createTableFile("GDNM", nodemonitor)
         sender.Enabled = false
       end
 
@@ -2062,31 +2058,6 @@
       return entry
     end
 
-    -- for node search
-    local function readVectorVariantEntry(variantVector, variantIndex, variantSize)
-      local variantPtr, variantType = getVariantByIndex(variantVector, variantIndex, variantSize)
-
-      return
-      {
-        index = variantIndex,
-        typeId = variantType,
-        typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
-        variantPtr = variantPtr
-      }
-    end
-
-    -- for node search
-    local function readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
-      local variantPtr, variantType = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize)
-
-      return
-      {
-        index = varIndex,
-        typeId = variantType,
-        typeName = getGDTypeName(variantType) or "UNKNOWNTYPE",
-        variantPtr = variantPtr
-      }
-    end
 
     local function readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
       local variantPtr, runtimeType, offsetToValue = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
@@ -2135,36 +2106,6 @@
 
       return entry
     end
-
-    -- for node search
-    local function readDictionaryValueEntry(mapElement)
-        local valueType = readInteger( (mapElement or 0) + GDDEFS.DICTELEM_VALTYPE)
-        local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
-        return
-        {
-          typeId = valueType,
-          typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
-          variantPtr = getAddress( (mapElement or 0) + offsetToValue)
-        }
-    end
-
-  -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// VISITORS
-
-    local NodeVisitor = {}
-
-      function NodeVisitor.recurseDictionary(dictPtr, dumpContext)
-        iterateDictionaryForNodes(dictPtr, dumpContext)
-      end
-
-      function NodeVisitor.recurseArray(arrPtr, dumpContext)
-        iterateArrayForNodes(arrPtr, dumpContext)
-      end
-
-      function NodeVisitor.visitObject(objPtr, dumpContext)
-        local realPtr, bShifted = checkObjectOffset(objPtr)
-        local nodeAddr = readPointer(realPtr)
-        processNodeForNodes(nodeAddr, dumpContext)
-      end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// EMITTERS
       -- leaves just add entries
@@ -2650,48 +2591,6 @@
         emitter.leaf(contextTable, parent, "<" .. entry.typeName .. ">" .. " " .. entry.name , rootOffset(entry, emitter), entry.ceType)
       end
 
-    GDHandlers.NodeDiscoveryHandlers = {}
-
-      GDHandlers.NodeDiscoveryHandlers.DICTIONARY = function(entry, visitor, dumpContext)
-        if dumpContext:shouldStop() then return end
-        local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
-        if isNotNullOrNil(dictSize) then
-          visitor.recurseDictionary(readPointer(entry.variantPtr), dumpContext)
-        end
-      end
-
-      GDHandlers.NodeDiscoveryHandlers.ARRAY = function(entry, visitor, dumpContext)
-        if dumpContext:shouldStop() then return end
-        if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
-          visitor.recurseArray(readPointer(entry.variantPtr), dumpContext)
-        end
-      end
-
-      GDHandlers.NodeDiscoveryHandlers.OBJECT = function(entry, visitor, dumpContext)
-        if dumpContext:shouldStop() then return end
-        visitor.visitObject(entry.variantPtr, dumpContext)
-      end
-
-      -- GDHandlers.NodeMetaHandlers = {}
-
-      --   GDHandlers.NodeMetaHandlers.DICTIONARY = function(entry, visitor)
-      --     local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
-      --     if isNotNullOrNil(dictSize) then
-      --       visitor.recurseDictionary(readPointer(entry.variantPtr))
-      --     end
-      --   end
-
-      --   GDHandlers.NodeMetaHandlers.ARRAY = function(entry, visitor)
-      --     if not isArrayEmptyFromVariantPtr(entry.variantPtr) then
-      --       visitor.recurseArray(readPointer(entry.variantPtr))
-      --     end
-      --   end
-
-      --   GDHandlers.NodeMetaHandlers.OBJECT = function(entry, visitor)
-      --     visitor.visitObject(entry.variantPtr)
-      --   end
-
-
     GDHandlers.PackedArrayHandlers = {}
 
       GDHandlers.PackedArrayHandlers.PACKED_STRING_ARRAY = function(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
@@ -3128,69 +3027,7 @@
       GDDEFS.SCRIPT_ERRORS = scriptErrors
       GDDEFS.CALL_ERRORS = callErrors
 
-      local monitor =
-        {
-          MonitorThread = nil,
-          CD = nil,
-          runCounter = nil,
-          lastRunDelta = nil,
-          lastNodeCount = nil,
-          currNodeCount = nil,
-        }
-
-        function monitor:init()
-          self.CD = 550
-          self.runCounter = -1
-          self.lastRunDelta = 0
-          self.lastNodeCount = 0
-          self.currNodeCount = 0
-          self.runBudget = 45*1000
-          if self.MonitorThread then return end
-          self.MonitorThread = createThread(nodeMonitorService)
-        end
-
-        function monitor:setCD(newMS)
-          if isNullOrNil(newMS) or type(newMS) ~= "number" or number < 0 then error('cooldown must be valid') end
-          self.CD = newMS
-        end
-        function monitor:getCD()
-          return self.CD
-        end
-
-        function monitor:profile()
-          print
-          (
-            "Runs: " .. (self.runCounter or -1)
-            ..' Delta: ' .. (self.lastRunDelta - self.CD or -1)
-            .. ' ms (raw ' .. (self.lastRunDelta or -1) .. ')'
-            .. ' Nodes met: ' .. (self.lastNodeCount or -1)
-          )
-        end
-
-        function monitor:startRun()
-          self.runCounter = self.runCounter+1
-          self.currNodeCount = 0
-        end
-
-        function monitor:endRun(runDelta)
-          self.lastRunDelta = runDelta
-          self.lastNodeCount = self.currNodeCount
-        end
-
-        function monitor:nodeCountInc()
-          self.currNodeCount = self.currNodeCount+1
-        end
-
-        function monitor:suspend()
-          self.MonitorThread.suspend()
-        end
-
-        function monitor:resume()
-          self.MonitorThread.resume()
-        end
-
-        GDDEFS.Monitor = monitor
-        GDDEFS.bDisasmFunc = true
+      GDDEFS.bDisasmFunc = true
     end
 
     local function initGDVersion(config)
@@ -3740,18 +3577,6 @@
       return nodeTable
     end
 
-    function processNodeForNodes(nodeAddr, dumpContext)
-      if not dumpContext:tryVisitNode(nodeAddr) then return end
-
-      if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
-      elseif checkForVectorVariant(nodeAddr) then -- checkForGDScript(nodeAddr)
-        iterateVecVarForNodes(nodeAddr, dumpContext)
-      end
-
-      if checkIfObjectWithChildren(nodeAddr) then
-        iterateNodeChildrenForNodes(nodeAddr, dumpContext)
-      end
-    end
 
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
@@ -3854,21 +3679,9 @@
       local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
       if isNullOrNil(gdScriptName) then return false end
       
-      -- more expensive, already a strong assumption
-      -- if ( readUTFString(gdScriptName) ):sub(1,4) == 'res:' then return true else return false end
+      -- more expensive, but stronger assumption
+      if ( readUTFString(gdScriptName) ):sub(1,4) == 'res:' then return true else return false end
 
-      return true
-    end
-
-    function checkForVectorVariant(nodeAddr)
-      if nodeAddr == nil then return false end
-
-      local scriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
-      if isNullOrNil(scriptInstance) or not isVtable( getVtable(scriptInstance) ) then return false end
-
-      local vector = readPointer(scriptInstance + GDDEFS.VAR_VECTOR)
-      if isNullOrNil(vector) then return false end
-      -- will sufffice
       return true
     end
 
@@ -3944,18 +3757,6 @@
         else
           addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE), vtPointer)
         end
-      end
-    end
-
-    function iterateNodeChildrenForNodes(baseAddress, dumpContext)
-
-      local childrenAddr, childrenSize = getNodeChildrenInfo(baseAddress)
-      if isNullOrNil(childrenSize) then return; end
-
-      for i = 0, (childrenSize - 1) do
-        if dumpContext:shouldStop() then return end
-        local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-        processNodeForNodes(childAddr, dumpContext)
       end
     end
 
@@ -5745,34 +5546,6 @@
       return
     end
 
-    --- iterates a dictionary for nodes
-    ---@param dictAddr number
-    function iterateDictionaryForNodes(dictAddr, dumpContext)
-      if isNullOrNil(dictAddr) or dumpContext:shouldStop() then return end -- if (not (dictAddr > 0)) then return; end
-
-      local dictRoot = dictAddr
-      if GDDEFS.MAJOR_VER <= 3 then
-        dictRoot = readPointer( (dictAddr or 0) + GDDEFS.DICT_LIST) -- for 3.x it's dictList actually
-      end
-
-      local dictSize = readInteger( (dictAddr or 0) + GDDEFS.DICT_SIZE)
-      if isNullOrNil(dictSize) then return; end
-
-      local mapElement = readPointer( (dictRoot or 0) + GDDEFS.DICT_HEAD)
-      if isNullOrNil(mapElement) then return end
-
-      local visitor = NodeVisitor
-
-      repeat
-        -- if dumpContext:shouldStop() then return end
-        local entry = readDictionaryValueEntry(mapElement)
-        local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
-        if handler then
-          handler(entry, visitor, dumpContext)
-        end
-        mapElement = getDictElemPairNext(mapElement)
-      until (mapElement == 0)
-    end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Array
 
@@ -5830,33 +5603,6 @@
       return
     end
 
-    --- iterates an array for nodes
-    ---@param arrayAddr number
-    function iterateArrayForNodes(arrayAddr, dumpContext)
-      if isNullOrNil(arrayAddr) or dumpContext:shouldStop() then return end
-
-      local arrVectorAddr = readPointer( (arrayAddr or 0) + GDDEFS.ARRAY_TOVECTOR)
-      if isNullOrNil(arrVectorAddr) then return; end
-      local arrVectorSize = readInteger( (arrVectorAddr or 0) - GDDEFS.SIZE_VECTOR)
-      if isNullOrNil(arrVectorSize) then return; end
-
-      local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
-      if not ok then return; end
-
-      local visitor = NodeVisitor
-
-      for varIndex = 0, arrVectorSize - 1 do
-        -- if dumpContext:shouldStop() then return end
-        local entry = readArrayValueEntry(arrVectorAddr, varIndex, variantArrSize)
-
-        if isNotNullOrNil(entry.variantPtr) then
-          local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
-          if handler then
-            handler(entry, visitor, dumpContext)
-          end
-        end
-      end
-    end
 
     --- iterates a packed array and adds it to a class
     ---@param packedArrayAddr number
@@ -6001,29 +5747,6 @@
         iterateVectorVariants(nodeContext, GDEmitters.StructEmitter, options)
     end
 
-    --- iterate nodes only
-    ---@param nodeAddr number
-    function iterateVecVarForNodes(nodeAddr, dumpContext)
-      if isNullOrNil(nodeAddr) or dumpContext:shouldStop() then return; end
-      -- if not checkForGDScript(nodeAddr) then return; end -- should be checked at this point
-
-      local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-      if isNullOrNil(vectorSize) then return; end
-
-      local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
-      if not ok then return; end
-
-      local visitor = NodeVisitor
-
-      for variantIndex = 0, vectorSize - 1 do
-        -- if dumpContext:shouldStop() then return end
-        local entry = readVectorVariantEntry(variantVector, variantIndex, variantSize) -- TODO: optimize?
-        local handler = GDHandlers.NodeDiscoveryHandlers[entry.typeName]
-        if handler then
-          handler(entry, visitor, dumpContext)
-        end
-      end
-    end
 
     --- returns a vector pointer and its size via
     ---@param nodeAddr number
@@ -6501,111 +6224,6 @@
       end
     end
 
-    local function unregisterNodes()
-      if (not GD_REGISTERED_NODES) or next(GD_REGISTERED_NODES) == nil then return; end
-      for _, k in ipairs(GD_REGISTERED_NODES) do unregisterSymbol(k) end
-      for _, k in ipairs(GD_REGISTERED_NODES_ABS) do unregisterSymbol(k) end
-      GD_REGISTERED_NODES = {}
-      GD_REGISTERED_NODES_ABS = {}
-    end
-
-    local function registerDumpedNodes()
-      if (not GD_DUMP_MONITOR_NODES) or next(GD_DUMP_MONITOR_NODES) == nil then return; end
-      unregisterNodes() -- unregister the current & freed nodes
-      for k, nodeAddr in pairs(GD_DUMP_MONITOR_NODES) do
-        table.insert(GD_REGISTERED_NODES, k)
-        registerSymbol(k, nodeAddr, true)
-      end
-      -- 2 linear loops to avoid potentially expensive getName operations
-      for k, nodeAddr in pairs(GD_DUMP_MONITOR_NODES_ABS) do
-        table.insert(GD_REGISTERED_NODES_ABS, k)
-        registerSymbol(k, nodeAddr, true)
-      end
-    end
-
-    local function nodeMonitorThread(thr)
-      thr.Name = "GD Monitor Thread"
-      thr.freeOnTerminate(false) -- we do it ourselves
-      local dumpContext =
-        {
-          startedAt = getTickCount(),
-          dumped = {}, -- only nodes with GDScript
-          visited = {}, -- every encountered node
-          budgetMs = GDDEFS.Monitor.runBudget,
-          thread = thr,
-        }
-
-      function dumpContext:tryVisitNode(addr)
-        if addr == nil then return false end
-        GDDEFS.Monitor:nodeCountInc() -- how many nodes we have seen
-        if self.visited[addr] then return false end
-        self.visited[addr] = true
-        if checkForGDScript(addr) then
-          table.insert(self.dumped, addr)
-          local scriptName, absScriptPath = getNodeNameFromGDScript(addr, true)
-          -- will (un)register twice, but early, potentially
-          registerSymbol(absScriptPath, addr, true) -- register long symbol
-          registerSymbol(scriptName, addr, true) -- register short name alias (might collide)
-          table.insert(GD_REGISTERED_NODES_ABS, absScriptPath)
-          table.insert(GD_REGISTERED_NODES, absScriptPath)
-        end
-        return true
-      end
-
-      function dumpContext:shouldStop()
-        return self.thread.Terminated or (getTickCount() - self.startedAt) > self.budgetMs
-      end
-
-      local function cloneArrayAsMap(tabl)
-        local result = {} -- { name : addr }
-        local resultAbs = {} -- { name : addr }
-        for i, val in ipairs(tabl) do
-          local scriptName, longName = getNodeNameFromGDScript(val, true)
-          result[ scriptName or '' ] = val
-          resultAbs[ longName or '' ] = val
-        end
-        return result, resultAbs
-      end
-
-      local mainNodeDict = getMainNodeDict() or {}
-
-      for _, value in pairs(mainNodeDict) do
-        processNodeForNodes(value.PTR, dumpContext)
-      end
-
-      GD_DUMP_MONITOR_NODES, GD_DUMP_MONITOR_NODES_ABS = cloneArrayAsMap(dumpContext.dumped)
-      registerDumpedNodes()
-    end
-
-    function nodeMonitorService(thr)
-      thr.Name = "GD Node Monitor Service"
-      GD_DUMP_MONITOR_NODES = {};
-      GD_DUMP_MONITOR_NODES_ABS = {};
-      GD_REGISTERED_NODES = {};
-      GD_REGISTERED_NODES_ABS = {};
-
-      while not thr.Terminated do
-        
-        GDDEFS.Monitor:startRun()
-
-        local startedAt = getTickCount()
-        local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
-        gd_currNodeMonitorThread.waitfor()
-        gd_currNodeMonitorThread.terminate()
-        gd_currNodeMonitorThread.destroy() -- free the thread...
-
-        sleep( GDDEFS.Monitor:getCD() )
-        GDDEFS.Monitor:endRun( getTickCount()-startedAt or 0 )
-
-        if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
-          -- if gd_currNodeMonitorThread and not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
-          thr.terminate()
-          return
-        end
-
-      end
-    end
-
     --- dump for a specific node and append to the parent
     ---@param parentMemrec userdata
     ---@param nodeAddr number
@@ -6835,8 +6453,24 @@
       end
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
-      GDDEFS.Monitor:init()
+      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDNodeMonitor.lua]] )
+      local GDNodeMonitor
+      local dependencyContext =
+        {
+          GDDEFS = GDDEFS,
+          readUTFString = readUTFString,
+          getGDTypeEnumFromName = getGDTypeEnumFromName,
+          getMainModuleInfo = getMainModuleInfo,
+          getSectionBounds = getSectionBounds,
+        }
 
+      if ok then
+        GDNodeMonitor = result.install(dependencyContext)
+      else
+        GDNodeMonitor = loadScriptFromTable( "GDNM" ).install(dependencyContext)
+      end
+      GDNodeMonitor:init()
+      GDDEFS.Monitor = GDNodeMonitor
     end
     godotRegisterPreinit()
 
