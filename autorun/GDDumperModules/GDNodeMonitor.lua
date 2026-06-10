@@ -27,6 +27,7 @@ function Module.install(contextTable)
 
   local USES_DOUBLE_T = GDDEFS.SIZE_VECTOR
   local variantSize = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
+  -- GDDEFS.SIZEOF_VARIANT = variantSize
 
   local BUDGET_CHECK_MASK = 0x3F -- -- 63 to check every 64 iteration
 

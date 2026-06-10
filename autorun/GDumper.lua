@@ -662,7 +662,6 @@
         return iterateVectorVariantsForFields(nodeAddr)
       end
 
-
       --- register our own structure dissector callback
       local function enableGDDissect()
         -- override CE's callback
@@ -5700,8 +5699,9 @@
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then return nil end
 
       local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-      local sizeOfVariant, ok = redefineVariantSizeByVector(variantVector, vectorSize)
-      if not ok then return nil end
+      -- local sizeOfVariant, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+      -- if not ok then return nil end
+      local sizeOfVariant = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
 
       local mapElement = headElement
       local fields = {}
