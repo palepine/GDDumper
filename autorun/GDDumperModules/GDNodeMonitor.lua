@@ -168,7 +168,7 @@ function Module.install(contextTable)
       }
 
       function monitor:init()
-        self.CD = 550
+        self.CD = 2000 -- previously 550
         self.runCounter = -1
         self.lastRunDelta = 0
         self.lastNodeCount = 0
