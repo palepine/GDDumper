@@ -6462,6 +6462,7 @@
           getGDTypeEnumFromName = getGDTypeEnumFromName,
           getMainModuleInfo = getMainModuleInfo,
           getSectionBounds = getSectionBounds,
+          getNodeNameFromGDScript = getNodeNameFromGDScript
         }
 
       if ok then
@@ -6469,8 +6470,8 @@
       else
         GDNodeMonitor = loadScriptFromTable( "GDNM" ).install(dependencyContext)
       end
-      GDNodeMonitor:init()
       GDDEFS.Monitor = GDNodeMonitor
+      GDNodeMonitor:init()
     end
     godotRegisterPreinit()
 

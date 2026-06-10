@@ -8,6 +8,7 @@ function Module.install(contextTable)
   local getGDTypeEnumFromName = contextTable.getGDTypeEnumFromName
   local getMainModuleInfo = contextTable.getMainModuleInfo
   local getSectionBounds = contextTable.getSectionBounds
+  local getNodeNameFromGDScript = contextTable.getNodeNameFromGDScript
 
   local GDDEFS = contextTable.GDDEFS
   -- to avoid table access overhead
@@ -246,10 +247,10 @@ function Module.install(contextTable)
 
       for variantIndex = 0, vectorSize - 1 do
         local variantType = readInteger( vector + variantSize * variantIndex )
-        local offsetToValue = 0x8
+        local offsetToValue = vector + variantSize*variantIndex + 0x8
 
         if variantType == eOBJECT then
-          offsetToValue = 0x10
+          offsetToValue = vector + variantSize*variantIndex + 0x10
           local objAddr = readPointer( vector + offsetToValue )
 
           if MAJORVER <= 3 then
@@ -260,7 +261,7 @@ function Module.install(contextTable)
             end
           end
 
-          if isNullOrNil(objAddr) then
+          if isNotNullOrNil(objAddr) then
             handleObjectForNodes( objAddr, dumpContext )
           end
 
@@ -334,7 +335,7 @@ function Module.install(contextTable)
             end
           end
 
-          if isNullOrNil(objAddr) then
+          if isNotNullOrNil(objAddr) then
             handleObjectForNodes( objAddr, dumpContext )
           end
 
