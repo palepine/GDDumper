@@ -116,7 +116,7 @@ function Module.install(contextTable)
       local viewport = readPointer("ptVP")
       if isNullOrNil(viewport) then getCurrentThreadObject().terminate() end
       
-      local childrenAddr = readPointer(viewport + CHILDREN)
+      local childrenAddr = readPointer( (viewport or 0) + CHILDREN)
       if isNullOrNil(childrenAddr) then getCurrentThreadObject().terminate() end
 
       local childrenSize;
