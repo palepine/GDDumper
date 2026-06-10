@@ -1,5 +1,5 @@
 local Module = {}
--- the implementations here trade readability/SoC for a potential performance boost, find the old commented out version below
+-- the implementations here trade readability/SoC for a potential performance boost (~6 times), find the old commented out version below
 
 function Module.install(contextTable)
 
@@ -27,6 +27,8 @@ function Module.install(contextTable)
 
   local USES_DOUBLE_T = GDDEFS.SIZE_VECTOR
   local variantSize = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
+
+  local BUDGET_CHECK_MASK = 0x3F -- -- 63 to check every 64 iteration
 
   local eOBJECT = getGDTypeEnumFromName('OBJECT')
   local eDICTIONARY = getGDTypeEnumFromName('DICTIONARY')
@@ -122,9 +124,9 @@ function Module.install(contextTable)
 
       local childrenSize;
       if GDDEFS.MAJOR_VER >= 4 then
-        childrenSize = readInteger( viewport + CHILDREN - CHILDREN_SIZE)
+        childrenSize = readInteger( viewport + CHILDREN - CHILDREN_SIZE) or 0
       else
-        childrenSize = readInteger( childrenAddr - CHILDREN_SIZE )
+        childrenSize = readInteger( childrenAddr - CHILDREN_SIZE ) or 0
       end
 
       if isNullOrNil(childrenSize) then getCurrentThreadObject().terminate() end
@@ -246,6 +248,8 @@ function Module.install(contextTable)
       if isNullOrNil(vectorSize) then return; end
 
       for variantIndex = 0, vectorSize - 1 do
+        if dumpContext:shouldStopPeriodic(variantIndex) then return end
+
         local variantType = readInteger( vector + variantSize * variantIndex )
         local offsetToValue = variantSize*variantIndex + 0x8
 
@@ -319,7 +323,10 @@ function Module.install(contextTable)
       local mapElement = readPointer( (dictRoot or 0) + DICT_HEAD)
       if isNullOrNil(mapElement) then return end
 
+      local iteration = 0
       repeat
+        -- if dumpContext:shouldStopPeriodic(iteration) then return end
+
         local variantType = readInteger( mapElement + DICTELEM_VALTYPE)
         local offsetToValue = DICTELEM_VALTYPE + 0x8
 
@@ -354,6 +361,8 @@ function Module.install(contextTable)
         else
           mapElement = readPointer( mapElement + DICTELEM_PAIR_NEXT ) or 0
         end
+        
+        -- iteration = iteration + 1
 
       until (mapElement == 0)
     end
@@ -400,6 +409,10 @@ function Module.install(contextTable)
 
       function dumpContext:shouldStop()
         return self.thread.Terminated or (getTickCount() - self.startedAt) > self.budgetMs -- TODO: check every other time?
+      end
+
+      function dumpContext:shouldStopPeriodic(iteration)
+        return (iteration & 0x3F) == 0 and self:shouldStop()
       end
 
       local function cloneArrayAsMap(tabl)
