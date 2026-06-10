@@ -248,7 +248,7 @@ function Module.install(contextTable)
       if isNullOrNil(vectorSize) then return; end
 
       for variantIndex = 0, vectorSize - 1 do
-        if dumpContext:shouldStopPeriodic(variantIndex) then return end
+        -- if dumpContext:shouldStopPeriodic(variantIndex) then return end
 
         local variantType = readInteger( vector + variantSize * variantIndex )
         local offsetToValue = variantSize*variantIndex + 0x8
