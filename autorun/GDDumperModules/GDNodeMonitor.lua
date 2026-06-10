@@ -176,7 +176,7 @@ function Module.install(contextTable)
       end
 
       function monitor:setCD(newMS)
-        if isNullOrNil(newMS) or type(newMS) ~= "number" or number < 0 then error('cooldown must be valid') end
+        if isNullOrNil(newMS) or type(newMS) ~= "number" or newMS < 0 then error('cooldown must be valid') end
         self.CD = newMS
       end
 
