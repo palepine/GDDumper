@@ -247,10 +247,10 @@ function Module.install(contextTable)
 
       for variantIndex = 0, vectorSize - 1 do
         local variantType = readInteger( vector + variantSize * variantIndex )
-        local offsetToValue = vector + variantSize*variantIndex + 0x8
+        local offsetToValue = variantSize*variantIndex + 0x8
 
         if variantType == eOBJECT then
-          offsetToValue = vector + variantSize*variantIndex + 0x10
+          offsetToValue = variantSize*variantIndex + 0x10
           local objAddr = readPointer( vector + offsetToValue )
 
           if MAJORVER <= 3 then
@@ -286,7 +286,7 @@ function Module.install(contextTable)
 
     function processNodeForNodes(nodeAddr, dumpContext)
       if dumpContext:shouldStop() then return end
-      if nodeAddr == nil then return false end
+      if isNullOrNil(nodeAddr) then return false end
 
       -- parse node
       local ok,
@@ -373,7 +373,7 @@ function Module.install(contextTable)
         }
 
       function dumpContext:VisitNode(addr)
-        if addr == nil then return false end
+        if isNullOrNil(addr) then return false end
         GDDEFS.Monitor:nodeCountInc() -- how many nodes we have seen
         if self.visited[addr] then return false end
         self.visited[addr] = true
@@ -388,7 +388,7 @@ function Module.install(contextTable)
         if MAJORVER >= 4 then
           size = readInteger( addr + CHILDREN - CHILDREN_SIZE )
         else
-          size = readInteger( childrenAddr - CHILDREN_SIZE )
+          size = readInteger( (childrenAddr or 0) - CHILDREN_SIZE ) or 0
         end
 
         if isNotNullOrNil(gdScriptNameAddr) then
