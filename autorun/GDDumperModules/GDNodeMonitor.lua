@@ -349,9 +349,9 @@ function Module.install(contextTable)
 
         -- getDictElemPairNext
         if MAJORVER >= 4 then
-          mapElement = readPointer(mapElement) -- at 0x0
+          mapElement = readPointer(mapElement) or 0 -- at 0x0
         else
-          mapElement = readPointer( mapElement + DICTELEM_PAIR_NEXT )
+          mapElement = readPointer( mapElement + DICTELEM_PAIR_NEXT ) or 0
         end
 
       until (mapElement == 0)
