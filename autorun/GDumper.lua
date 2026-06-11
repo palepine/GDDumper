@@ -615,7 +615,7 @@
           return nil
         end
 
-        local result = getGDObjectName(addr)
+        local result = gd_getObjectName(addr)
         if result == nil or result == '??' then
           return nil
         end
@@ -632,7 +632,7 @@
         --     return nil
         -- end
 
-        -- local result = getGDObjectName(addr)
+        -- local result = gd_getObjectName(addr)
         -- if result == nil or result == '??' then
         --     return nil
         -- end
@@ -649,7 +649,7 @@
           end
         ]]
         -- local nodeAddr = getDumpedNode(nodeName)
-        -- local fields = godot_node_enumVariants(nodeAddr)
+        -- local fields = gd_node_enumVariants(nodeAddr)
         -- if fields == nil or next(fields) == nil then return nil end
 
       end
@@ -903,15 +903,13 @@
           
           -- addCustomMenuButtonTo(gdMenuItem, 'Append as memrec', appendDumperScriptAsMemrec)
           -- addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
-          addCustomMenuButtonTo(gdMenuItem, 'Stuct name Lookup', GDStructNameLookupSwitch)
+          -- addCustomMenuButtonTo(gdMenuItem, 'Stuct name Lookup', GDStructNameLookupSwitch)
           -- addCustomMenuButtonTo( gdMenuItem, 'Addr Lookup', GDAddressLookupSwitch )
           addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
           -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
         end
       end
-
-
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TYPES/SIZE
 
@@ -2397,7 +2395,7 @@
 
       GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
         local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable)
-        local objectTypeName = getGDObjectName(readPointer(realPtr))
+        local objectTypeName = gd_getObjectName(readPointer(realPtr))
         objectTypeName = '<' .. objectTypeName .. '>'
 
         sendDebugMessage("OBJECT case: name: " .. entry.name .. " type: " .. objectTypeName .. " addr: " .. numtohexstr(realPtr))
@@ -3404,6 +3402,8 @@
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// ROOT
 
     local function tryRegSceneTree()
+      if isNotNullOrNil( readPointer('pSceneTree') ) then return true end
+
       local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
         local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
         if addr == 0 or addr == nil then
@@ -3420,7 +3420,7 @@
           resolvedAddr = relativeAddr -- absolute on 32
         end
         sendDebugMessage("[SceneTree] calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
-        local className = getGDObjectName(readPointer(resolvedAddr))
+        local className = gd_getObjectName(readPointer(resolvedAddr))
         if className == "SceneTree" then
           sendDebugMessage("[SceneTree] via vtable - success!") --  .. numtohexstr(resolvedAddr) .. " sig: " .. aobSignature 
           registerSymbol('pSceneTree', resolvedAddr, false)
@@ -3440,6 +3440,7 @@
     end
 
     local function setSTtoVPoffset()
+      if isNotNullOrNil( readPointer('ptVP') ) then return true end
 
       local sceneTree = readPointer('pSceneTree')
       local ptrsize, steps
@@ -3458,7 +3459,7 @@
         if isNotNullOrNil(candidateAddr) and isVtable(getVtable(candidateAddr)) then
 
           sendDebugMessage("[ROOT] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
-          local className = getGDObjectName(candidateAddr)
+          local className = gd_getObjectName(candidateAddr)
           if className == "Viewport" or className == "Window" then
             sendDebugMessage("[ROOT] via vtable - success!")
             registerSymbol('oSTtoVP', i * ptrsize, false)
@@ -3535,7 +3536,7 @@
       for i = 0, ( (childrenSize or 0) - 1) do
 
         local nodePtr = readPointer( (childrenAddr or 0) + i * GDDEFS.PTRSIZE)
-        if isNullOrNil(nodePtr) then error('getMainNodeDict: NO MAIN NODES') end
+        if isNullOrNil(nodePtr) then error('NO MAIN NODES') end
 
         local nodeNameStr = getNodeName(nodePtr)
         local gdscriptName = getNodeNameFromGDScript(nodePtr)
@@ -3557,14 +3558,14 @@
     --- returns a node table
     function getMainNodeTable()
       local childrenAddr, childrenSize = getVPChildren()
-      if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('getMainNodeDict: VP Children not valid') end
+      if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('VP Children not valid') end
 
       local nodeTable = {}
 
       for i = 0, (childrenSize - 1) do
         local nodeAddr = readPointer(childrenAddr + i * GDDEFS.PTRSIZE)
         if isNullOrNil(nodeAddr) then
-          error('getMainNodeDict: NO MAIN NODES')
+          error('NO MAIN NODES')
         end
         local nodeNameStr = getNodeNameFromGDScript(nodeAddr)
         if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
@@ -3573,7 +3574,6 @@
       end
       return nodeTable
     end
-
 
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
@@ -3744,7 +3744,7 @@
         if nodeName == nil or nodeName == 'N??' then
           nodeName = getNodeNameFromGDScript(nodeAddr)
         end
-        local objectTypeName = getGDObjectName(nodeAddr)
+        local objectTypeName = gd_getObjectName(nodeAddr)
         objectTypeName = '<' .. objectTypeName .. '>'
 
         -- sendDebugMessage("Checking GDScript for "..nodeName)
@@ -6184,7 +6184,7 @@
           if not v.IsStatic then table.insert(classFields, v) end
         end
       else -- GD script
-        classFields = godot_node_enumVariants( nodeAddr )
+        classFields = gd_node_enumVariants( nodeAddr )
       end
 
       if not (classFields) or next(classFields)==nil then error('node isn\'t dumped or constructed yet, try again later') end
@@ -6378,16 +6378,6 @@
         getStoredOffsetsFromVersion = loadScriptFromTable( "GDOff" ).install( {} )
       end
 
-      -- essential version definition
-      initGDVersion(config)
-
-      -- define version and offsets
-      defineGDOffsets(config)
-      gdOffsetsDefined = true
-
-      -- register symbols for pointer resolution
-      registerGDSymbols()
-
       -- retrieve the signatures
       local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDSignatures.lua]] )
       if ok then
@@ -6396,11 +6386,42 @@
         GDAOB = loadScriptFromTable( "GDSig" ).install( {} )
       end
 
-      -- try finding SceneTree and Viewport/Window
-      if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) end
+      -- essential version definition
+      initGDVersion(config)
 
       -- define type conversion helpers
       defineVariantTypeProfile()
+
+      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDStructWalker.lua]] )
+      local GDStructWalker
+      local dependencyContext =
+        {
+          GDDEFS = GDDEFS,
+          readUTFString = readUTFString,
+          getStringNameStr = getStringNameStr,
+          sendDebugMessage = sendDebugMessage,
+          getSectionBounds = getSectionBounds,
+          getMainModuleInfo = getMainModuleInfo,
+          tryRegSceneTree = tryRegSceneTree,
+          setSTtoVPoffset = setSTtoVPoffset,
+        }
+
+      if ok then
+        -- GDStructWalker = result.install(dependencyContext)
+        gd_assumeOffsets = result.install(dependencyContext)
+      -- else
+        -- GDStructWalker = loadScriptFromTable( "GDSW" ).install(dependencyContext)
+      end
+
+      -- define version and offsets
+      defineGDOffsets(config)
+      gdOffsetsDefined = true
+
+      -- register symbols for pointer resolution
+      registerGDSymbols()
+
+      -- try finding SceneTree and Viewport/Window
+      if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) end
 
       -- build the correct disassembler profile
       local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] )
@@ -6482,13 +6503,13 @@
   getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
   getDumpedNode = GDAPI.getDumpedNode
   registerNodeOffsets = GDAPI.registerNodeOffsets
-  getGDObjectName = GDAPI.getGDObjectName
+  gd_getObjectName = GDAPI.getGDObjectName
   getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
   getNodeName = GDAPI.getNodeName
-  godot_node_enumVariants = GDAPI.godot_node_enumVariants
-  godotAA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
-  getNodeChildByGDName = GDAPI.getNodeChildByGDName
-  getNodeChildByName = GDAPI.getNodeChildByName
+  gd_node_enumVariants = GDAPI.godot_node_enumVariants
+  gd_AA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
+  gd_getNodeChildByGDName = GDAPI.getNodeChildByGDName
+  gd_getNodeChildByName = GDAPI.getNodeChildByName
 
   -- scripts
   recompileGDScript = GDAPI.recompileGDScript
@@ -6496,13 +6517,42 @@
   reloadGDSInstance = GDAPI.reloadGDSInstance
   executeGDFunction = GDAPI.executeGDFunction
   callGDFunctionFromNode = GDAPI.callGDFunctionFromNode
-  patchGDFunctionConst = GDAPI.patchGDFunctionConst
   patchGDFunction = GDAPI.patchGDFunction
   getGDFunctionFromNode = GDAPI.getGDFunctionFromNode
-  getNodeConstPtr = GDAPI.getNodeConstPtr
+  gd_getNodeConstPtr = GDAPI.getNodeConstPtr
+  gd_patchFunctionConst = GDAPI.patchGDFunctionConst
 
   -- misc
   buildGDGUI = GDAPI.buildGDGUI  
   printDumpedNodes = GDAPI.printDumpedNodes
-  printGDConfig = GDAPI.printGDConfig
-  getGDSemver = GDAPI.getGDSemver
+  gd_printConfig = GDAPI.printGDConfig
+  gd_getSemver = GDAPI.getGDSemver
+  gd_assumeOffsets = GDAPI.godot_assumeOffsets
+
+  
+  --[[
+  gd_dumpNodeToAddr = GDAPI.DumpNodeToAddr
+  gd_dumpAllNodesToAddr = GDAPI.DumpAllNodesToAddr
+  gd_initDumper = GDAPI.initDumper
+
+  -- objects
+  gd_mono_getObjectFromNode = GDAPI.getMonoObjectFromNode
+  gd_getDumpedNode = GDAPI.getDumpedNode
+  gd_registerNodeOffsets = GDAPI.registerNodeOffsets
+  gd_getNodeScriptName = GDAPI.getNodeNameFromGDScript
+  gd_getNodeName = GDAPI.getNodeName
+
+  -- scripts
+  gd_recompileGDScript = GDAPI.recompileGDScript
+  gd_revertGDScript = GDAPI.revertGDScript
+  gd_reloadScriptInstance = GDAPI.reloadGDSInstance
+  gd_executeFunction = GDAPI.executeGDFunction
+  gd_callGDFunctionFromNode = GDAPI.callGDFunctionFromNode
+  gd_patchFunction = GDAPI.patchGDFunction
+  gd_getFunctionFromNode = GDAPI.getGDFunctionFromNode
+  gd_getNodeConstPtr = GDAPI.getNodeConstPtr
+
+  -- misc
+  gd_buildGUI = GDAPI.buildGDGUI  
+  gd_printDumped = GDAPI.printDumpedNodes
+  ]]
