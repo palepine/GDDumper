@@ -3402,7 +3402,7 @@
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// ROOT
 
     local function tryRegSceneTree()
-      if isNotNullOrNil( readPointer('pSceneTree') ) then return true end
+      -- if isNotNullOrNil( readPointer('pSceneTree') ) then return true end
 
       local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
         local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
@@ -3440,7 +3440,7 @@
     end
 
     local function setSTtoVPoffset()
-      if isNotNullOrNil( readPointer('ptVP') ) then return true end
+      -- if isNotNullOrNil( readPointer('ptVP') ) then return true end
 
       local sceneTree = readPointer('pSceneTree')
       local ptrsize, steps

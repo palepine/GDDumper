@@ -84,23 +84,24 @@ function Module.install(contextTable)
       VARIANT_VECTOR = nil,
     }
 
-  if GDDEFS.MAJOR_VER >= 4 then
-    if GDDEFS.MINOR_VER <= 4 then
-      GDDEFS.GET_TYPE_INDX = 8
-    elseif GDDEFS.MINOR_VER == 5 then
-      GDDEFS.GET_TYPE_INDX = 9
-    elseif GDDEFS.MINOR_VER >= 6 then
-      GDDEFS.GET_TYPE_INDX = 10
-    end
-  else
-    GDDEFS.GET_TYPE_INDX = 6
-  end
+  -- if GDDEFS.MAJOR_VER >= 4 then
+  --   if GDDEFS.MINOR_VER <= 4 then
+  --     GDDEFS.GET_TYPE_INDX = 8
+  --   elseif GDDEFS.MINOR_VER == 5 then
+  --     GDDEFS.GET_TYPE_INDX = 9
+  --   elseif GDDEFS.MINOR_VER >= 6 then
+  --     GDDEFS.GET_TYPE_INDX = 10
+  --   end
+  -- else
+  --   GDDEFS.GET_TYPE_INDX = 6
+  -- end
 
   local viewport = readPointer("ptVP")
   if isNullOrNil(viewport) then 
-    if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) else
-      return
-    end
+    return
+  --   if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) else
+  --     return
+  --   end
   end
 
   -- HELPERS
@@ -646,7 +647,7 @@ function Module.install(contextTable)
       if assumedOffsets.SCRIPT_INSTANCE then return assumedOffsets.SCRIPT_INSTANCE end
       if isNullOrNil(nodeAddr) then return end
 
-      local SCRIPT_INSTANCE, scriptInst, NODE_REF, SCRIPT_REF;
+      local SCRIPT_INSTANCE, scriptInst, NODE_REF;
       local found = false
 
       for i=1, (0x100/GDDEFS.PTRSIZE) do
@@ -662,7 +663,6 @@ function Module.install(contextTable)
         for j=0, 3 do
           -- after the vtable
           NODE_REF = GDDEFS.PTRSIZE + j * GDDEFS.PTRSIZE
-          SCRIPT_REF = NODE_REF + GDDEFS.PTRSIZE
           local ownerNode = readPointer( scriptInst + NODE_REF )
           if isNotNullOrNil(ownerNode) and getVtableValidated(ownerNode) and ownerNode == nodeAddr then
             ownerRefFound = true
@@ -1910,52 +1910,6 @@ function Module.install(contextTable)
 
   -- FUCN MAP END
 
-  local function assumeGDScriptOffsets(nodeAddr)
-    if not assumedOffsets.SCRIPT_REF then return end
-
-    local scriptAddr, nodeRefAddr;
-
-    local scriptInstanceAddr = readPointer( nodeAddr + assumedOffsets.SCRIPT_INSTANCE )
-    local scriptAddr = readPointer( scriptInstanceAddr + assumedOffsets.SCRIPT_REF ) -- gdscript ref is after the owner (node)
-
-    if isNullOrNil(scriptAddr) then return end
-    if not assumeScriptNameOffset(scriptAddr) then return end
-    if GDDEFS.MONO then
-      sendDebugMessage('Target uses mono, skipping map offsets')
-      return
-    end
-    
-    assumeFuncMapOffset(scriptAddr)
-    assumeVariantMapOffset(scriptAddr) -- TODO memberInfo name 
-    assumeConstMapOffset(scriptAddr)
-
-  end
-
-  local function assumeNodeOffsets()
-
-    local childrennoffset = assumeChildrenOffset()
-    assumeObjNameOffset()
-
-    -- only root offsets available
-    if isNullOrNil(childrennoffset) then return end
-
-    local nodeTable = getMainNodeTable()
-
-    for _, value in ipairs(nodeTable) do
-      if not assumeScriptInstanceOffset(value) then goto continue end
-
-      assumeGDScriptOffsets(value)
-
-      assumeVariantVector(value)
-
-      ::continue::
-    end
-
-    reportFailedOffsets()
-
-  end
-
-
   local function assumeSampleOffsets(sample)
     local nodeAddr = sample.nodeAddr
 
@@ -2082,79 +2036,6 @@ function Module.install(contextTable)
       return false
     end
 
-    local function probeScriptNameStage(samples)
-      for _, sample in ipairs(samples) do
-        local candidates = probeScriptNameCandidates(sample)
-
-        recordCandidates("SCRIPT_NAME", candidates, sample)
-      end
-
-      local best = chooseBestCandidate("SCRIPT_NAME",
-      {
-        requiredHits = 2,
-        requiredScripts = 2,
-        requiredScore = 8,
-      })
-
-      if not best then return false end
-
-      assumedOffsets.SCRIPT_NAME = best.offset
-
-      sendDebugMessage( "[PROBE] SCRIPT_NAME = 0x" .. numtohexstr(best.offset) )
-
-      return true
-    end
-
-    local function probeMapAndVectorStage(samples)
-      for _, sample in ipairs(samples) do
-        local variantMaps = probeVariantMapCandidates(sample)
-        local constMaps = probeConstMapCandidates(sample)
-        local funcMaps = probeFuncMapCandidates(sample)
-
-        recordCandidates("VARIANT_MAP", variantMaps, sample)
-        recordCandidates("CONST_MAP", constMaps, sample)
-        recordCandidates("FUNC_MAP", funcMaps, sample)
-
-        for _, mapCandidate in ipairs(variantMaps) do
-          local vectors = probeVariantVectorCandidates(sample, mapCandidate)
-          recordCandidates("VARIANT_VECTOR", vectors, sample)
-        end
-      end
-    end
-
-    local function commitCategory(category, assumedName, options)
-      local candidate = chooseBestCandidate(category, options)
-
-      if not candidate then return nil end
-
-      assumedOffsets[assumedName] = candidate.offset
-
-      sendDebugMessage( "[PROBE] " .. assumedName .. " = 0x" .. numtohexstr(candidate.offset) )
-
-      return candidate
-    end
-
-    local function commitProbedLayout()
-      local variantMap = commitCategory( "VARIANT_MAP", "VARIANT_MAP" )
-
-      local constMap = commitCategory( "CONST_MAP", "CONST_MAP" )
-
-      local funcMap = commitCategory( "FUNC_MAP", "FUNC_MAP" )
-
-      local variantVector = chooseBestCandidate( "VARIANT_VECTOR" )
-
-      if variantVector then
-        assumedOffsets.VARIANT_VECTOR = variantVector.offset
-        assumedOffsets.VARIANT_VECTOR_SIZE = variantVector.sizeOffset
-        sendDebugMessage( "[PROBE] VARIANT_VECTOR = 0x" .. numtohexstr(variantVector.offset) .. ", size offset = 0x" .. numtohexstr(variantVector.sizeOffset) )
-      end
-
-      return variantMap ~= nil or
-             constMap ~= nil or
-             funcMap ~= nil or
-             variantVector ~= nil
-    end
-
     local function validateProbedSample(sample)
       if isNullOrNil(sample.scriptAddr) then return false end
       if isNullOrNil(sample.scriptInst) then return false end
@@ -2203,54 +2084,6 @@ function Module.install(contextTable)
       sendDebugMessage( ("[PROBE] Holdout verification: %d/%d, %.2f"):format( passed, tested, ratio ) )
 
       return ratio >= 0.75
-    end
-
-    local function probeNodeOffsets()
-      clearEvidence()
-      clearAssumedOffsets()
-
-      if not resolveStrongNodeOffsets() then
-        reportFailedOffsets()
-        return false
-      end
-
-      local rootNodes = getMainNodeTable()
-      local nodeSamples = collectNodeSamples(rootNodes)
-
-      if #nodeSamples == 0 then
-        sendDebugMessage("[PROBE] No valid node samples")
-        reportFailedOffsets()
-        return false
-      end
-
-      if not resolveStrongScriptInstanceOffsets(nodeSamples) then
-        reportFailedOffsets()
-        return false
-      end
-
-      local scriptSamples = collectUniqueScriptSamples(nodeSamples)
-
-      if #scriptSamples == 0 then
-        sendDebugMessage("[PROBE] No unique GDScript samples")
-        reportFailedOffsets()
-        return false
-      end
-
-      local trainingSamples, holdoutSamples = splitSamples(scriptSamples)
-
-      if not probeScriptNameStage(trainingSamples) then
-        sendDebugMessage("[PROBE] SCRIPT_NAME discovery failed")
-        reportFailedOffsets()
-        return false
-      end
-
-      probeMapAndVectorStage(trainingSamples)
-      commitProbedLayout()
-
-      local verified = verifyProbedOffsets(holdoutSamples)
-
-      reportFailedOffsets()
-      return verified
     end
 
     local function probeAndCommitCategory( category, assumedName, samples, probeFunction, options )
