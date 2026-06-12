@@ -2306,3 +2306,7 @@ hashmap/hashset: 4 pointers, capacity, size
 	Map<StringName, Vector<StringName> > _signals;
 
 ]]
+
+
+-- gd_assumeOffsets()
+-- gd_probeOffsets()

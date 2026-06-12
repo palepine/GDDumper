@@ -6407,7 +6407,7 @@
         }
 
       if ok then
-        GDStructWalker = result.install(dependencyContext)
+        GDStructWalker = result.install(dependencyContext) or {}
         gd_assumeOffsets = GDStructWalker.assume
         gd_probeOffsets = GDStructWalker.probe
       -- else
