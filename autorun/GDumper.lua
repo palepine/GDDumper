@@ -6407,8 +6407,9 @@
         }
 
       if ok then
-        -- GDStructWalker = result.install(dependencyContext)
-        gd_assumeOffsets = result.install(dependencyContext)
+        GDStructWalker = result.install(dependencyContext)
+        gd_assumeOffsets = GDStructWalker.assume
+        gd_probeOffsets = GDStructWalker.probe
       -- else
         -- GDStructWalker = loadScriptFromTable( "GDSW" ).install(dependencyContext)
       end
@@ -6528,6 +6529,7 @@
   gd_printConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
   gd_assumeOffsets = GDAPI.godot_assumeOffsets
+  gd_probeOffsets = GDAPI.godot_probeOffsets
 
   
   --[[
