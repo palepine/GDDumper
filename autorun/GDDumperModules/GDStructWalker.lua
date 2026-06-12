@@ -219,7 +219,7 @@ function Module.install(contextTable)
       else
         funcStringNameAddr = readPointer(funcAddr) -- StringName funct name;
         funcResStringNameAddr = readPointer(funcAddr + GDDEFS.PTRSIZE) -- StringName source;
-        if HMFuncSNameAddr ~= funcResStringNameAddr then return false end -- should be fine?
+        if HMFuncSNameAddr ~= funcStringNameAddr then return false end -- should be fine?
       end
 
       if isNullOrNil(funcResStringNameAddr) or isNullOrNil(funcStringNameAddr) then return false end
@@ -257,6 +257,49 @@ function Module.install(contextTable)
       end
 
       return childrenAddr, childrenSize
+    end
+
+    local function offsetCount()
+      local count = 0
+
+      for _, value in pairs(assumedOffsets) do
+        if value ~= nil then count = count + 1 end
+      end
+
+      return count
+    end
+
+    local function allOffsetsResolved()
+      if not assumedOffsets.CHILDREN then return false end
+      if not assumedOffsets.OBJ_STRING_NAME then return false end
+      if not assumedOffsets.SCRIPT_INSTANCE then return false end
+      if not assumedOffsets.SCRIPT_REF then return false end
+      if not assumedOffsets.SCRIPT_NAME then return false end
+
+      if GDDEFS.MONO then return true end
+
+      if not assumedOffsets.VARIANT_MAP then return false end
+      if not assumedOffsets.VARIANT_VECTOR then return false end
+      if not assumedOffsets.VARIANT_VECTOR_SIZE then return false end
+      if not assumedOffsets.CONST_MAP then return false end
+      if not assumedOffsets.FUNC_MAP then return false end
+
+      return true
+    end
+
+    local function makeNodeSample(nodeAddr)
+      local sample = { nodeAddr = nodeAddr, }
+
+      if not assumedOffsets.SCRIPT_INSTANCE then return sample end
+      if not assumedOffsets.SCRIPT_REF then return sample end
+
+      sample.scriptInst = readPointer(nodeAddr + assumedOffsets.SCRIPT_INSTANCE)
+
+      if isNullOrNil(sample.scriptInst) then return sample end
+
+      sample.scriptAddr = readPointer(sample.scriptInst + assumedOffsets.SCRIPT_REF)
+
+      return sample
     end
 
   -- HELPERS END
@@ -457,6 +500,72 @@ function Module.install(contextTable)
       return training, holdout
     end
 
+
+    local function clearEvidence()
+      evidence = {}
+    end
+
+    local function clearAssumedOffsets()
+      for key in pairs(assumedOffsets) do assumedOffsets[key] = nil end
+    end
+
+    local function formatOffsets()
+      return
+        ("CHILDREN: 0x%X\n" ..
+        "OBJ_STRING_NAME: 0x%X\n" ..
+        "SCRIPT_INSTANCE: 0x%X\n" ..
+        "SCRIPT_REF: 0x%X\n" ..
+        "VARIANT_VECTOR: 0x%X\n" ..
+        "VARIANT_VECTOR_SIZE: 0x%X\n" ..
+        "SCRIPT_NAME: 0x%X\n" ..
+        "FUNC_MAP: 0x%X\n" ..
+        "CONST_MAP: 0x%X\n" ..
+        "VARIANT_MAP: 0x%X"):format(
+          assumedOffsets.CHILDREN or 0,
+          assumedOffsets.OBJ_STRING_NAME or 0,
+          assumedOffsets.SCRIPT_INSTANCE or 0,
+          assumedOffsets.SCRIPT_REF or 0,
+          assumedOffsets.VARIANT_VECTOR or 0,
+          assumedOffsets.VARIANT_VECTOR_SIZE or 0,
+          assumedOffsets.SCRIPT_NAME or 0,
+          assumedOffsets.FUNC_MAP or 0,
+          assumedOffsets.CONST_MAP or 0,
+          assumedOffsets.VARIANT_MAP or 0
+        )
+    end
+
+    local function printCurrentOffsets()
+      print(formatOffsets())
+    end
+
+    local function candidateConflictsWithCommittedMap(candidate, category)
+      if category ~= "VARIANT_MAP" and candidate.offset == assumedOffsets.VARIANT_MAP then
+        return true
+      end
+
+      if category ~= "CONST_MAP" and candidate.offset == assumedOffsets.CONST_MAP then
+        return true
+      end
+
+      if category ~= "FUNC_MAP" and candidate.offset == assumedOffsets.FUNC_MAP then
+        return true
+      end
+
+      return false
+    end
+
+    local function recordFilteredCandidates(category, candidates, sample)
+      for _, candidate in ipairs(candidates or {}) do
+        if candidateConflictsWithCommittedMap(candidate, category) then
+          goto continue
+        end
+
+        recordCandidate(category, candidate, sample)
+
+        ::continue::
+      end
+    end
+
   -- EVIDENCE-BASED HELPERS END
 
   -- CHILDREN START
@@ -464,6 +573,7 @@ function Module.install(contextTable)
       local CHILDREN;
       local childrenSize, childrenAddr, nodeAddr;
       local found = false
+      local viewport = readPointer("ptVP")
 
       for i=0, (0x300/GDDEFS.PTRSIZE) do
         CHILDREN = 0x20 + i * GDDEFS.PTRSIZE
@@ -781,8 +891,8 @@ function Module.install(contextTable)
           end
 
           -- successful case
-          VARIANT_MAP = VARIANT_MAP + GDDEFS.PTRSIZE * 2
           VARIANT_MAP_SIZE = VARIANT_MAP + GDDEFS.PTRSIZE * 4 + 0x4
+          VARIANT_MAP = VARIANT_MAP + GDDEFS.PTRSIZE * 2
           sendDebugMessage('Valid Variant HashMap offset 0x' .. numtohexstr( VARIANT_MAP ) )
           found = true
           break
@@ -1446,11 +1556,11 @@ function Module.install(contextTable)
       if GDDEFS.MAJOR_VER >= 4 then
 
         local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*3
-        local limit = 0x200
+        local limit = 0x300
 
         if assumedOffsets.VARIANT_MAP then
           startFrom = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*4
-          limit = 0x100
+          limit = 0x120
         end
 
         if assumedOffsets.CONST_MAP and assumedOffsets.CONST_MAP < 0x400 then
@@ -1846,45 +1956,86 @@ function Module.install(contextTable)
   end
 
 
+  local function assumeSampleOffsets(sample)
+    local nodeAddr = sample.nodeAddr
+
+    if not assumedOffsets.SCRIPT_INSTANCE then
+      assumeScriptInstanceOffset(nodeAddr)
+    end
+
+    sample = makeNodeSample(nodeAddr)
+
+    if isNullOrNil(sample.scriptAddr) then return end
+
+    assumeScriptNameOffset(sample.scriptAddr)
+
+    if not assumedOffsets.SCRIPT_NAME then return end
+    if GDDEFS.MONO then return end
+
+    if GDDEFS.MAJOR_VER >= 4 then
+      assumeVariantMapOffset(sample.scriptAddr)
+
+      if assumedOffsets.VARIANT_MAP then
+        assumeVariantVector(nodeAddr)
+        assumeConstMapOffset(sample.scriptAddr)
+      end
+
+      assumeFuncMapOffset(sample.scriptAddr)
+
+      return
+    end
+
+    assumeFuncMapOffset(sample.scriptAddr)
+
+    if not assumedOffsets.FUNC_MAP then return end
+    assumeVariantMapOffset(sample.scriptAddr)
+    assumeConstMapOffset(sample.scriptAddr)
+
+    if assumedOffsets.VARIANT_MAP then
+      assumeVariantVector(nodeAddr)
+    end
+
+  end
+
+  local function assumeNodeOffsetsDeep()
+    clearAssumedOffsets()
+
+    if not assumeChildrenOffset() then
+      reportFailedOffsets()
+      return false
+    end
+
+    assumeObjNameOffset()
+
+    local rootNodes = getMainNodeTable()
+    local nodeSamples = collectNodeSamples(rootNodes)
+
+    local maxPasses = 4
+
+    for pass = 1, maxPasses do
+      local before = offsetCount()
+
+      for _, sample in ipairs(nodeSamples) do
+        assumeSampleOffsets(sample)
+
+        if allOffsetsResolved() then
+          reportFailedOffsets()
+          return true
+        end
+      end
+
+      local after = offsetCount()
+
+      -- No milestone was discovered during this pass.
+      if after == before then break end
+    end
+
+    reportFailedOffsets()
+    return allOffsetsResolved()
+  end
+
   -- EVIDENCE ORCHESTRATION START
     -- refactored with ai
-
-    local function clearEvidence()
-      evidence = {}
-    end
-
-    local function clearAssumedOffsets()
-      for key in pairs(assumedOffsets) do assumedOffsets[key] = nil end
-    end
-
-    local function formatOffsets()
-      return
-        ("CHILDREN: 0x%X\n" ..
-        "OBJ_STRING_NAME: 0x%X\n" ..
-        "SCRIPT_INSTANCE: 0x%X\n" ..
-        "SCRIPT_REF: 0x%X\n" ..
-        "VARIANT_VECTOR: 0x%X\n" ..
-        "VARIANT_VECTOR_SIZE: 0x%X\n" ..
-        "SCRIPT_NAME: 0x%X\n" ..
-        "FUNC_MAP: 0x%X\n" ..
-        "CONST_MAP: 0x%X\n" ..
-        "VARIANT_MAP: 0x%X"):format(
-          assumedOffsets.CHILDREN or 0,
-          assumedOffsets.OBJ_STRING_NAME or 0,
-          assumedOffsets.SCRIPT_INSTANCE or 0,
-          assumedOffsets.SCRIPT_REF or 0,
-          assumedOffsets.VARIANT_VECTOR or 0,
-          assumedOffsets.VARIANT_VECTOR_SIZE or 0,
-          assumedOffsets.SCRIPT_NAME or 0,
-          assumedOffsets.FUNC_MAP or 0,
-          assumedOffsets.CONST_MAP or 0,
-          assumedOffsets.VARIANT_MAP or 0
-        )
-    end
-
-    local function printCurrentOffsets()
-      print(formatOffsets())
-    end
 
     local function recordCandidates(category, candidates, sample)
       for _, candidate in ipairs(candidates or {}) do
@@ -2087,16 +2238,151 @@ function Module.install(contextTable)
 
       local trainingSamples, holdoutSamples = splitSamples(scriptSamples)
 
-      -- Stage 1 must commit SCRIPT_NAME because all map probes depend on it.
       if not probeScriptNameStage(trainingSamples) then
         sendDebugMessage("[PROBE] SCRIPT_NAME discovery failed")
         reportFailedOffsets()
         return false
       end
 
-      -- Stage 2 probes all related maps and vectors.
       probeMapAndVectorStage(trainingSamples)
       commitProbedLayout()
+
+      local verified = verifyProbedOffsets(holdoutSamples)
+
+      reportFailedOffsets()
+      return verified
+    end
+
+    local function probeAndCommitCategory( category, assumedName, samples, probeFunction, options )
+      for _, sample in ipairs(samples) do
+        if isNullOrNil(sample.scriptAddr) then goto continue end
+
+        local candidates = probeFunction(sample)
+        -- recordCandidates(category, candidates, sample)
+        recordFilteredCandidates(category, candidates, sample)
+
+        ::continue::
+      end
+
+      local best = chooseBestCandidate(category, options)
+
+      if not best then return nil end
+
+      assumedOffsets[assumedName] = best.offset
+
+      sendDebugMessage( "[PROBE] " .. assumedName .. " = 0x" .. numtohexstr(best.offset) )
+
+      return best
+    end
+
+    local function probeVariantPairCandidates(sample)
+      local results = {}
+      local mapCandidates = probeVariantMapCandidates(sample)
+
+      for _, mapCandidate in ipairs(mapCandidates) do
+        local vectorCandidates = probeVariantVectorCandidates(sample, mapCandidate)
+
+        for _, vectorCandidate in ipairs(vectorCandidates) do
+
+          table.insert(results, makeCandidate(
+            mapCandidate.offset,
+            (mapCandidate.score or 0) + (vectorCandidate.score or 0) + 5,
+            {
+              mapOffset = mapCandidate.offset,
+              mapSize = mapCandidate.mapSize,
+              mapSizeOffset = mapCandidate.mapSizeOffset,
+
+              vectorOffset = vectorCandidate.offset,
+              vectorSizeOffset = vectorCandidate.sizeOffset,
+              vectorSize = vectorCandidate.vectorSize,
+            }
+          ))
+
+        end
+      end
+
+      return results
+    end
+
+    local function probeAndCommitVariantPair(samples)
+      for _, sample in ipairs(samples) do
+        if isNullOrNil(sample.scriptAddr) then goto continue end
+        if isNullOrNil(sample.scriptInst) then goto continue end
+
+        local candidates = probeVariantPairCandidates(sample)
+        recordCandidates("VARIANT_PAIR", candidates, sample)
+
+        ::continue::
+      end
+
+      local best = chooseBestCandidate("VARIANT_PAIR")
+
+      if not best then return false end
+
+      assumedOffsets.VARIANT_MAP = best.mapOffset
+      assumedOffsets.VARIANT_VECTOR = best.vectorOffset
+      assumedOffsets.VARIANT_VECTOR_SIZE = best.vectorSizeOffset
+
+      sendDebugMessage( "[PROBE] VARIANT_MAP = 0x" .. numtohexstr(best.mapOffset) .. ", VARIANT_VECTOR = 0x" .. numtohexstr(best.vectorOffset) )
+
+      return true
+    end
+
+    local function probeNodeOffsetsMilestone()
+      clearEvidence()
+      clearAssumedOffsets()
+
+      if not resolveStrongNodeOffsets() then
+        reportFailedOffsets()
+        return false
+      end
+
+      local rootNodes = getMainNodeTable()
+      local nodeSamples = collectNodeSamples(rootNodes)
+
+      if #nodeSamples == 0 then
+        reportFailedOffsets()
+        return false
+      end
+
+      if not resolveStrongScriptInstanceOffsets(nodeSamples) then
+        reportFailedOffsets()
+        return false
+      end
+
+      local scriptSamples = collectUniqueScriptSamples(nodeSamples)
+      local trainingSamples, holdoutSamples = splitSamples(scriptSamples)
+
+      local scriptName = probeAndCommitCategory( "SCRIPT_NAME", "SCRIPT_NAME", trainingSamples, probeScriptNameCandidates, { requiredHits=2, requiredScripts=2, requiredScore=8, } )
+
+      if not scriptName then
+        reportFailedOffsets()
+        return false
+      end
+
+      if GDDEFS.MONO then
+        return true
+      end
+
+      if GDDEFS.MAJOR_VER >= 4 then
+        probeAndCommitVariantPair(trainingSamples)
+
+        if assumedOffsets.VARIANT_MAP then
+          probeAndCommitCategory( "CONST_MAP", "CONST_MAP", trainingSamples, probeConstMapCandidates )
+        end
+
+        probeAndCommitCategory( "FUNC_MAP", "FUNC_MAP", trainingSamples, probeFuncMapCandidates )
+      else
+        probeAndCommitCategory( "FUNC_MAP", "FUNC_MAP", trainingSamples, probeFuncMapCandidates )
+
+        if assumedOffsets.FUNC_MAP then
+          probeAndCommitVariantPair(trainingSamples)
+        end
+
+        if assumedOffsets.FUNC_MAP then
+          probeAndCommitCategory( "CONST_MAP", "CONST_MAP", trainingSamples, probeConstMapCandidates )
+        end
+      end
 
       local verified = verifyProbedOffsets(holdoutSamples)
 
@@ -2107,16 +2393,16 @@ function Module.install(contextTable)
   -- EVIDENCE ORCHESTRATION END
 
     local function printAssumedOffsets()
-      clearAssumedOffsets()
+      assumeNodeOffsetsDeep()
 
-      assumeNodeOffsets()
       printCurrentOffsets()
 
       return assumedOffsets
     end
 
     local function printProbedOffsets()
-      probeNodeOffsets()
+      probeNodeOffsetsMilestone()
+
       printCurrentOffsets()
 
       return assumedOffsets
