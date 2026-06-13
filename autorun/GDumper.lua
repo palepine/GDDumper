@@ -2008,7 +2008,7 @@
         ceType = getCETypeFromGD(finalType)
       }
 
-      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
+      if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2032,7 +2032,7 @@
         ceType = getCETypeFromGD(finalType)
       }
 
-      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
+      if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2056,7 +2056,7 @@
         ceType = getCETypeFromGD(constType)
       }
 
-      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
+      if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2078,7 +2078,7 @@
         ceType = getCETypeFromGD(runtimeType)
       }
 
-      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
+      if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2105,7 +2105,7 @@
           keyValueAddr = keyValueAddr
         }
 
-      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
+      if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -6519,7 +6519,7 @@
   recompileGDScript = GDAPI.recompileGDScript
   revertGDScript = GDAPI.revertGDScript
   reloadGDSInstance = GDAPI.reloadGDSInstance
-  executeGDFunction = GDAPI.executeGDFunction
+  gd_executeFunction = GDAPI.executeGDFunction
   callGDFunctionFromNode = GDAPI.callGDFunctionFromNode
   patchGDFunction = GDAPI.patchGDFunction
   getGDFunctionFromNode = GDAPI.getGDFunctionFromNode
