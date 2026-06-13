@@ -110,12 +110,6 @@ function Module.install(contextTable)
   -- end
 
   local viewport = readPointer("pRoot")
-  if isNullOrNil(viewport) then 
-    return
-  --   if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('pRoot', '[pSceneTree]+oSTtoVP', false) else
-  --     return
-  --   end
-  end
 
   -- HELPERS
     
@@ -2497,6 +2491,7 @@ function Module.install(contextTable)
   -- EVIDENCE ORCHESTRATION END
 
   local function printAssumedOffsets()
+    if isNullOrNil(viewport) then return {} end
     assumeNodeOffsetsDeep()
 
     printCurrentOffsets()
@@ -2505,6 +2500,7 @@ function Module.install(contextTable)
   end
 
   local function printProbedOffsets()
+    if isNullOrNil(viewport) then return {} end
     probeNodeOffsetsMilestone()
 
     printCurrentOffsets()
