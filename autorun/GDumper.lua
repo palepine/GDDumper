@@ -85,6 +85,8 @@
   
   local getMainModuleInfo
 
+  local bGDDebug = false
+
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILS
     -- ///---///--///---///--///---/// POINTER HANDLERS
@@ -2006,7 +2008,7 @@
         ceType = getCETypeFromGD(finalType)
       }
 
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2030,7 +2032,7 @@
         ceType = getCETypeFromGD(finalType)
       }
 
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2054,7 +2056,7 @@
         ceType = getCETypeFromGD(constType)
       }
 
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2076,7 +2078,7 @@
         ceType = getCETypeFromGD(runtimeType)
       }
 
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2103,7 +2105,7 @@
           keyValueAddr = keyValueAddr
         }
 
-      -- sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue))
+      if bGDDebug then sendDebugMessage("name:\t" .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
 
       return entry
     end
@@ -2253,7 +2255,7 @@
 
         local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
           local funcRoot
-          if not bDisasmFunc then -- let's 
+          if not GDDEFS.bDisasmFunc then -- let's 
             funcRoot = createChildStructElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer, "GDFunction")
             local funcValueAddr = readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
             emitFunctionCodeStruct(funcRoot, funcName)
@@ -6413,7 +6415,7 @@
 
       GDFunc = GDFuncDisasm.GDF
       GDFuncDisasm.defineGDFunctionEnums()
-      bDisasmFunc = true -- whether to disasm functions, on by default
+      GDDEFS.bDisasmFunc = true -- whether to disasm functions, on by default
 
       local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDStructWalker.lua]] )
       local GDStructWalker
