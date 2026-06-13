@@ -1,4 +1,7 @@
 local Module = {}
+-- That's a debug module which's optional and used only to guess offsets to be recorded in the hardoffset module, at least for stable engine versions
+-- obviously enough, for this to work, the root 
+-- the probing implementation is likely to provide report false results for it's based on scoring
 
 local function isNullOrNil(toCheck)
   return toCheck == nil or toCheck == 0
@@ -81,9 +84,19 @@ function Module.install(contextTable)
       OBJ_STRING_NAME = nil,
       SCRIPT_INSTANCE = nil,
       SCRIPT_REF = nil,
+      SCRIPT_NAME = nil,
       VARIANT_VECTOR = nil,
-    }
+      VARIANT_VECTOR_SIZE = nil,
+      VARIANT_MAP = nil,
+      VARIANT_MAP_SIZE = nil,
+      CONST_MAP = nil,
 
+      FUNC_MAP = nil,
+      FUNC_CODE = nil,
+      FUNC_CONST = nil,
+      FUNC_GLOBALS = nil,
+    }
+    
   -- if GDDEFS.MAJOR_VER >= 4 then
   --   if GDDEFS.MINOR_VER <= 4 then
   --     GDDEFS.GET_TYPE_INDX = 8
@@ -96,10 +109,10 @@ function Module.install(contextTable)
   --   GDDEFS.GET_TYPE_INDX = 6
   -- end
 
-  local viewport = readPointer("ptVP")
+  local viewport = readPointer("pRoot")
   if isNullOrNil(viewport) then 
     return
-  --   if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) else
+  --   if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('pRoot', '[pSceneTree]+oSTtoVP', false) else
   --     return
   --   end
   end
@@ -244,6 +257,11 @@ function Module.install(contextTable)
 
       if not assumedOffsets.VARIANT_VECTOR then sendDebugMessage('[WALK] VAR VECTOR - FAIL') end
       if not assumedOffsets.VARIANT_VECTOR_SIZE then sendDebugMessage('[WALK] VAR VECTOR SIZE - FAIL') end
+
+      if not assumedOffsets.FUNC_CODE then sendDebugMessage('[WALK] GD FUNCTION CODE - FAIL') end
+      if not assumedOffsets.FUNC_CONST then sendDebugMessage('[WALK] GD FUNCTION CONST - FAIL') end
+      if not assumedOffsets.FUNC_GLOBALS then sendDebugMessage('[WALK] GD FUNCTION GLOBALS - FAIL') end
+
     end
 
     local function getNodeChildrenInfo(nodeAddr)
@@ -285,10 +303,15 @@ function Module.install(contextTable)
       if not assumedOffsets.CONST_MAP then return false end
       if not assumedOffsets.FUNC_MAP then return false end
 
+      if not assumedOffsets.FUNC_CODE then return false end
+      if not assumedOffsets.FUNC_CONST then return false end
+      if not assumedOffsets.FUNC_GLOBALS then return false end
+
       return true
     end
 
     local function makeNodeSample(nodeAddr)
+      -- add node addr, script instance and script ref
       local sample = { nodeAddr = nodeAddr, }
 
       if not assumedOffsets.SCRIPT_INSTANCE then return sample end
@@ -302,6 +325,47 @@ function Module.install(contextTable)
 
       return sample
     end
+
+    local function clearAssumedOffsets()
+      for key in pairs(assumedOffsets) do assumedOffsets[key] = nil end
+    end
+
+    local function formatOffsets()
+      return
+        ("CHILDREN: 0x%X\n" ..
+        "OBJ_STRING_NAME: 0x%X\n" ..
+        "SCRIPT_INSTANCE: 0x%X\n" ..
+        "SCRIPT_REF: 0x%X\n" ..
+        "VARIANT_VECTOR: 0x%X\n" ..
+        "VARIANT_VECTOR_SIZE: 0x%X\n" ..
+        "SCRIPT_NAME: 0x%X\n" ..
+        "FUNC_MAP: 0x%X\n" ..
+        "FUNC_CODE: 0x%X\n" ..
+        "FUNC_CONST: 0x%X\n" ..
+        "FUNC_GLOBALS: 0x%X\n" ..
+        "CONST_MAP: 0x%X\n" ..
+        "VARIANT_MAP: 0x%X"):format
+        (
+          assumedOffsets.CHILDREN or 0,
+          assumedOffsets.OBJ_STRING_NAME or 0,
+          assumedOffsets.SCRIPT_INSTANCE or 0,
+          assumedOffsets.SCRIPT_REF or 0,
+          assumedOffsets.VARIANT_VECTOR or 0,
+          assumedOffsets.VARIANT_VECTOR_SIZE or 0,
+          assumedOffsets.SCRIPT_NAME or 0,
+          assumedOffsets.FUNC_MAP or 0,
+          assumedOffsets.FUNC_CODE or 0,
+          assumedOffsets.FUNC_CONST or 0,
+          assumedOffsets.FUNC_GLOBALS or 0,
+          assumedOffsets.CONST_MAP or 0,
+          assumedOffsets.VARIANT_MAP or 0
+        )
+    end
+
+    local function printCurrentOffsets()
+      print(formatOffsets())
+    end
+
 
   -- HELPERS END
 
@@ -411,10 +475,12 @@ function Module.install(contextTable)
       local visited = {}
       local samples = {}
 
+      -- root children first
       for _, nodeAddr in ipairs(rootNodes) do
         table.insert(queue, { nodeAddr = nodeAddr, depth = 0 })
       end
 
+      -- BFS
       while queueIndex <= #queue and #samples < RESOLVER_CONFIG.maxNodes do
         local current = queue[queueIndex]
         queueIndex = queueIndex + 1
@@ -501,42 +567,8 @@ function Module.install(contextTable)
       return training, holdout
     end
 
-
     local function clearEvidence()
       evidence = {}
-    end
-
-    local function clearAssumedOffsets()
-      for key in pairs(assumedOffsets) do assumedOffsets[key] = nil end
-    end
-
-    local function formatOffsets()
-      return
-        ("CHILDREN: 0x%X\n" ..
-        "OBJ_STRING_NAME: 0x%X\n" ..
-        "SCRIPT_INSTANCE: 0x%X\n" ..
-        "SCRIPT_REF: 0x%X\n" ..
-        "VARIANT_VECTOR: 0x%X\n" ..
-        "VARIANT_VECTOR_SIZE: 0x%X\n" ..
-        "SCRIPT_NAME: 0x%X\n" ..
-        "FUNC_MAP: 0x%X\n" ..
-        "CONST_MAP: 0x%X\n" ..
-        "VARIANT_MAP: 0x%X"):format(
-          assumedOffsets.CHILDREN or 0,
-          assumedOffsets.OBJ_STRING_NAME or 0,
-          assumedOffsets.SCRIPT_INSTANCE or 0,
-          assumedOffsets.SCRIPT_REF or 0,
-          assumedOffsets.VARIANT_VECTOR or 0,
-          assumedOffsets.VARIANT_VECTOR_SIZE or 0,
-          assumedOffsets.SCRIPT_NAME or 0,
-          assumedOffsets.FUNC_MAP or 0,
-          assumedOffsets.CONST_MAP or 0,
-          assumedOffsets.VARIANT_MAP or 0
-        )
-    end
-
-    local function printCurrentOffsets()
-      print(formatOffsets())
     end
 
     local function candidateConflictsWithCommittedMap(candidate, category)
@@ -574,7 +606,7 @@ function Module.install(contextTable)
       local CHILDREN;
       local childrenSize, childrenAddr, nodeAddr;
       local found = false
-      local viewport = readPointer("ptVP")
+      local viewport = readPointer("pRoot")
 
       for i=0, (0x300/GDDEFS.PTRSIZE) do
         CHILDREN = 0x20 + i * GDDEFS.PTRSIZE
@@ -846,20 +878,23 @@ function Module.install(contextTable)
       if GDDEFS.MAJOR_VER >= 4 then
         -- if not assumedOffsets.FUNC_MAP then return end
 
-        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*3
-
-        local limit = 0x300
-
-        if assumedOffsets.CONST_MAP then
-          limit = assumedOffsets.CONST_MAP
-        end
+        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*4
+        local scanEnd = 0x300
 
         if assumedOffsets.FUNC_MAP then
-          limit = assumedOffsets.FUNC_MAP
+          -- startFrom = assumedOffsets.CONST_MAP - GDDEFS.PTRSIZE*20
+          scanEnd = assumedOffsets.FUNC_MAP - GDDEFS.PTRSIZE * 4
         end
 
-        for i=0, (limit/GDDEFS.PTRSIZE) do
-          VARIANT_MAP = startFrom + i * GDDEFS.PTRSIZE
+        if assumedOffsets.CONST_MAP then
+          -- startFrom = assumedOffsets.CONST_MAP - GDDEFS.PTRSIZE*10
+          scanEnd = assumedOffsets.CONST_MAP - GDDEFS.PTRSIZE * 4
+        end
+
+        if scanEnd < startFrom then return end
+
+        for candidateOffset = startFrom, scanEnd, GDDEFS.PTRSIZE do
+          VARIANT_MAP = candidateOffset
 
           local mapAddr =   readPointer( scriptAddr + VARIANT_MAP )
           local hashAddr =  readPointer( scriptAddr + VARIANT_MAP + GDDEFS.PTRSIZE )
@@ -904,21 +939,24 @@ function Module.install(contextTable)
       else --[[ if GDDEFS.MAJOR_VER <= 3 then ]]
         -- for more precise assumption, function map is the most reliable
         if not assumedOffsets.FUNC_MAP then return end
+
         local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*3
-        local limit = 0x100
+        local scanEnd = 0x300
 
         if assumedOffsets.CONST_MAP then
           startFrom = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*2
-          limit = assumedOffsets.CONST_MAP + 0x60
+          -- scanEnd = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*20
         end
 
         if assumedOffsets.FUNC_MAP then
           startFrom = assumedOffsets.FUNC_MAP + GDDEFS.PTRSIZE*2
-          limit = assumedOffsets.FUNC_MAP + 0x40
+          -- scanEnd = assumedOffsets.FUNC_MAP + GDDEFS.PTRSIZE*15
         end
 
-        for i=0, (limit/GDDEFS.PTRSIZE) do
-          VARIANT_MAP = startFrom + i * GDDEFS.PTRSIZE
+        if scanEnd < startFrom then return end
+
+        for candidateOffset = startFrom, scanEnd, GDDEFS.PTRSIZE do
+          VARIANT_MAP = candidateOffset
 
           -- script field 
           local mapAddr =     readPointer( scriptAddr + VARIANT_MAP )
@@ -1147,26 +1185,23 @@ function Module.install(contextTable)
       if GDDEFS.MAJOR_VER >= 4 then
         if not assumedOffsets.VARIANT_MAP then return end
 
-        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*3
-        local limit = 0x300
-
-        if assumedOffsets.SCRIPT_NAME then
-          startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*4
-          limit = 0x200
-        end
+        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*4
+        local scanEnd = 0x200
 
         if assumedOffsets.VARIANT_MAP then
           startFrom = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*4
-          limit = 0x100
+          -- scanEnd = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*15
         end
 
         if assumedOffsets.FUNC_MAP then
-          limit = assumedOffsets.FUNC_MAP
+          scanEnd = assumedOffsets.FUNC_MAP - GDDEFS.PTRSIZE * 3
+          -- scanEnd = assumedOffsets.FUNC_MAP + GDDEFS.PTRSIZE*25
         end
 
-        for i=0, (limit/GDDEFS.PTRSIZE) do
-          CONST_MAP = startFrom + i * GDDEFS.PTRSIZE
+        if scanEnd < startFrom then return end
 
+        for candidateOffset = startFrom, scanEnd, GDDEFS.PTRSIZE do
+          CONST_MAP = candidateOffset
           local mapAddr =   readPointer( scriptAddr + CONST_MAP )
           local hashAddr =  readPointer( scriptAddr + CONST_MAP + GDDEFS.PTRSIZE )
           local headAddr =  readPointer( scriptAddr + CONST_MAP + GDDEFS.PTRSIZE * 2 )
@@ -1226,19 +1261,24 @@ function Module.install(contextTable)
         
       else --[[ if GDDEFS.MAJOR_VER <= 3 then ]]
         if not assumedOffsets.FUNC_MAP then return end
+
         local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*3
-        local limit = 0x100
+        local scanEnd = 0x200
 
         if assumedOffsets.VARIANT_MAP then
-          limit = assumedOffsets.VARIANT_MAP
+          startFrom = assumedOffsets.VARIANT_MAP - GDDEFS.PTRSIZE*35
+          scanEnd = assumedOffsets.VARIANT_MAP - GDDEFS.PTRSIZE * 3
         end
 
         if assumedOffsets.FUNC_MAP then
-          limit = assumedOffsets.FUNC_MAP
+          startFrom = assumedOffsets.FUNC_MAP - GDDEFS.PTRSIZE*15
+          scanEnd = assumedOffsets.FUNC_MAP - GDDEFS.PTRSIZE * 3
         end
 
-        for i=0, (limit/GDDEFS.PTRSIZE) do
-          CONST_MAP = startFrom + i * GDDEFS.PTRSIZE
+        if scanEnd < startFrom then return end
+
+        for candidateOffset = startFrom, scanEnd, GDDEFS.PTRSIZE do
+          CONST_MAP = candidateOffset
 
           -- script field
           local mapAddr =     readPointer( scriptAddr + CONST_MAP )
@@ -1555,21 +1595,23 @@ function Module.install(contextTable)
 
       if GDDEFS.MAJOR_VER >= 4 then
 
-        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*3
-        local limit = 0x300
+        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*4
+        local scanEnd = 0x300
 
         if assumedOffsets.VARIANT_MAP then
           startFrom = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*4
-          limit = 0x120
+          -- scanEnd = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*10
         end
 
-        if assumedOffsets.CONST_MAP and assumedOffsets.CONST_MAP < 0x400 then
+        if assumedOffsets.CONST_MAP then
           startFrom = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*4
-          limit = 0x50
+          -- scanEnd = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*10
         end
 
-        for i=0, (limit/GDDEFS.PTRSIZE) do
-          FUNC_MAP = startFrom + i * GDDEFS.PTRSIZE
+        if scanEnd < startFrom then return end
+
+        for candidateOffset = startFrom, scanEnd, GDDEFS.PTRSIZE do
+          FUNC_MAP = candidateOffset
 
           local mapAddr =   readPointer( scriptAddr + FUNC_MAP )
           local hashAddr =  readPointer( scriptAddr + FUNC_MAP + GDDEFS.PTRSIZE )
@@ -1609,20 +1651,23 @@ function Module.install(contextTable)
 
       else --[[ if GDDEFS.MAJOR_VER <= 3 then ]]
 
-        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*3
-        local limit = 0x100
+        local startFrom = assumedOffsets.SCRIPT_NAME + GDDEFS.PTRSIZE*4
+        local scanEnd = 0x200
 
         if assumedOffsets.CONST_MAP then
-          startFrom = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*2
-          limit = assumedOffsets.CONST_MAP + 0x60
+          startFrom = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*3
+          scanEnd = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*15
         end
 
         if assumedOffsets.VARIANT_MAP then
-          limit = assumedOffsets.VARIANT_MAP
+          -- startFrom = assumedOffsets.VARIANT_MAP - GDDEFS.PTRSIZE*35
+          scanEnd = assumedOffsets.VARIANT_MAP - GDDEFS.PTRSIZE*2
         end
 
-        for i=0, (limit/GDDEFS.PTRSIZE) do
-          FUNC_MAP = startFrom + i * GDDEFS.PTRSIZE
+        if scanEnd < startFrom then return end
+
+        for candidateOffset = startFrom, scanEnd, GDDEFS.PTRSIZE do
+          FUNC_MAP = candidateOffset
 
           -- script field 
           local mapAddr =     readPointer( scriptAddr + FUNC_MAP )
@@ -1910,6 +1955,223 @@ function Module.install(contextTable)
 
   -- FUCN MAP END
 
+  -- FUNC STRUCT START
+
+    local function collectGDFunctionAddresses(scriptAddr)
+      local results = {}
+      local visited = {}
+      local maxFunctions = 64
+
+      if not assumedOffsets.FUNC_MAP then return results end
+
+      if GDDEFS.MAJOR_VER >= 4 then
+        local currentElem = readPointer(scriptAddr + assumedOffsets.FUNC_MAP)
+
+        while isNotNullOrNil(currentElem) and #results < maxFunctions do
+          if visited[currentElem] then break end
+          if isInvalidPointer(currentElem) then break end
+
+          visited[currentElem] = true
+
+          local funcAddr = readPointer(currentElem + GDDEFS.PTRSIZE * 3)
+
+          if isNotNullOrNil(funcAddr) and not isInvalidPointer(funcAddr) then
+            table.insert(results, funcAddr)
+          end
+
+          currentElem = readPointer(currentElem)
+        end
+
+        return results
+      end
+
+      -- 3.x RBT map
+      local rootAddr = readPointer(scriptAddr + assumedOffsets.FUNC_MAP)
+      local endAddr = readPointer(scriptAddr + assumedOffsets.FUNC_MAP + GDDEFS.PTRSIZE)
+      if isNullOrNil(rootAddr) then return results end
+      if isNullOrNil(endAddr) then return results end
+
+      local ptrBase = rootAddr + alignOffset(0x4, GDDEFS.PTRSIZE)
+      local currentElem = readPointer(ptrBase + GDDEFS.PTRSIZE)
+
+      -- Find the first element.
+      while isNotNullOrNil(currentElem) and currentElem ~= endAddr do
+        if visited[currentElem] then return results end
+        if isInvalidPointer(currentElem) then return results end
+
+        visited[currentElem] = true
+
+        local currentBase = currentElem + alignOffset(0x4, GDDEFS.PTRSIZE)
+        local leftElem = readPointer(currentBase + GDDEFS.PTRSIZE)
+        if leftElem == endAddr then break end
+
+        currentElem = leftElem
+      end
+
+      visited = {}
+
+      while isNotNullOrNil(currentElem) and currentElem ~= endAddr and #results < maxFunctions do
+
+        if visited[currentElem] then break end
+        if isInvalidPointer(currentElem) then break end
+
+        visited[currentElem] = true
+
+        local currentBase = currentElem + alignOffset(0x4, GDDEFS.PTRSIZE)
+        local funcAddr = readPointer(currentBase + GDDEFS.PTRSIZE * 6)
+
+        if isNotNullOrNil(funcAddr) and not isInvalidPointer(funcAddr) then
+          table.insert(results, funcAddr)
+        end
+
+        currentElem = readPointer(currentBase + GDDEFS.PTRSIZE * 3)
+      end
+
+      return results
+    end
+
+    local function getVectorSize(vectorAddr)
+      if isNullOrNil(vectorAddr) then return nil end
+      if isInvalidPointer(vectorAddr) then return nil end
+      if not assumedOffsets.VARIANT_VECTOR_SIZE then return nil end
+
+      local size = readInteger(vectorAddr - assumedOffsets.VARIANT_VECTOR_SIZE)
+
+      if size == nil then return nil end
+      if size < 0 or size > 100000 then return nil end
+
+      return size
+    end
+
+    local function validateFunctionCodeVector(vectorAddr, opcodeContext)
+      local size = getVectorSize(vectorAddr)
+
+      if not size or size < 1 then return false end
+
+      local firstOpcode = readInteger(vectorAddr)
+      local lastOpcode = readInteger(vectorAddr + (size - 1) * 4)
+
+      if lastOpcode ~= opcodeContext:getOPEnumFromInternalOPID(GDFunc.OP.OPCODE_END) then return false end
+
+      return true
+    end
+
+    local function validateFunctionConstVector(vectorAddr)
+      local size = getVectorSize(vectorAddr)
+
+      if not size or size < 1 then return false end
+
+      local tested = math.min(size, 4)
+
+      for i = 0, tested - 1 do
+        local variantAddr = vectorAddr + i * sizeOfVariant
+        local variantType = readInteger(variantAddr)
+
+        if not isValidVariantType(variantType) then return false end
+      end
+
+      return true
+    end
+
+    local function validateFunctionGlobalVector(vectorAddr)
+      local size = getVectorSize(vectorAddr)
+
+      if not size or size < 1 then return false end
+
+      local tested = math.min(size, 4)
+
+      for i = 0, tested - 1 do
+        local stringNameAddr = readPointer(vectorAddr + i * GDDEFS.PTRSIZE)
+
+        if isNullOrNil(stringNameAddr) then return false end
+        if isInvalidPointer(stringNameAddr) then return false end
+
+        local name = getStringNameStr(stringNameAddr)
+
+        if name == '??' then return false end -- TODO: could it be a mess?
+      end
+
+      return true
+    end
+
+    local function findFunctionVectorOffset(funcAddrs, validator, excludedOffsets)
+      local bestOffset
+      local bestHits = 0
+      local scanEnd = 0x280
+
+      for candidateOffset = 0, scanEnd, GDDEFS.PTRSIZE do
+        if excludedOffsets and excludedOffsets[candidateOffset] then goto continue end
+
+        local hits = 0
+
+        for _, funcAddr in ipairs(funcAddrs) do
+          local vectorAddr = readPointer(funcAddr + candidateOffset)
+          if validator(vectorAddr) then hits = hits + 1 end
+        end
+
+        if hits > bestHits then
+          bestHits = hits
+          bestOffset = candidateOffset
+        end
+
+        ::continue::
+      end
+
+      local requiredHits = math.min(2, #funcAddrs)
+
+      if bestHits < requiredHits then return nil end
+
+      return bestOffset
+    end
+
+    local function assumeGDFuncOffset(scriptAddr)
+      if assumedOffsets.FUNC_CODE and assumedOffsets.FUNC_CONST and assumedOffsets.FUNC_GLOBALS then return true end
+
+      if not assumedOffsets.FUNC_MAP then return false end
+      if not assumedOffsets.VARIANT_VECTOR_SIZE then return false end
+      if not GDFunc then return false end
+
+      local funcAddrs = collectGDFunctionAddresses(scriptAddr)
+
+      if #funcAddrs == 0 then return false end
+
+      local excluded = {}
+
+      if not assumedOffsets.FUNC_CODE then
+        assumedOffsets.FUNC_CODE = findFunctionVectorOffset( funcAddrs, function(vectorAddr) return validateFunctionCodeVector(vectorAddr, GDFunc.CurrentDisassembler) end )
+
+        if assumedOffsets.FUNC_CODE then
+          excluded[assumedOffsets.FUNC_CODE] = true
+          sendDebugMessage( 'Valid GDFunction Code offset 0x' .. numtohexstr(assumedOffsets.FUNC_CODE) )
+        end
+
+      else
+        excluded[assumedOffsets.FUNC_CODE] = true
+      end
+
+      if not assumedOffsets.FUNC_CONST then
+        assumedOffsets.FUNC_CONST = findFunctionVectorOffset( funcAddrs, validateFunctionConstVector, excluded )
+
+        if assumedOffsets.FUNC_CONST then
+          excluded[assumedOffsets.FUNC_CONST] = true
+          sendDebugMessage( 'Valid GDFunction Const offset 0x' .. numtohexstr(assumedOffsets.FUNC_CONST) )
+        end
+      else
+        excluded[assumedOffsets.FUNC_CONST] = true
+      end
+
+      if not assumedOffsets.FUNC_GLOBALS then
+        assumedOffsets.FUNC_GLOBALS = findFunctionVectorOffset( funcAddrs, validateFunctionGlobalVector, excluded )
+        if assumedOffsets.FUNC_GLOBALS then
+          sendDebugMessage( 'Valid GDFunction Globals offset 0x' .. numtohexstr(assumedOffsets.FUNC_GLOBALS) )
+        end
+      end
+
+      return assumedOffsets.FUNC_CODE and assumedOffsets.FUNC_CONST and assumedOffsets.FUNC_GLOBALS
+    end
+
+  -- FUNC STRUCT END
+
   local function assumeSampleOffsets(sample)
     local nodeAddr = sample.nodeAddr
 
@@ -1930,25 +2192,32 @@ function Module.install(contextTable)
       assumeVariantMapOffset(sample.scriptAddr)
 
       if assumedOffsets.VARIANT_MAP then
-        assumeVariantVector(nodeAddr)
-        assumeConstMapOffset(sample.scriptAddr)
+        assumeVariantVector(nodeAddr) -- we have means to validate the vector with map size
+        assumeConstMapOffset(sample.scriptAddr) -- we have a starting point for constants
       end
 
-      assumeFuncMapOffset(sample.scriptAddr)
+      assumeFuncMapOffset(sample.scriptAddr) -- reliable, seems to work fine without enforcing var-func boundaries for const map
 
+      if assumedOffsets.FUNC_MAP and assumedOffsets.VARIANT_VECTOR_SIZE then
+        assumeGDFuncOffset(sample.scriptAddr)
+      end
       return
     end
 
+    -- 3.x
     assumeFuncMapOffset(sample.scriptAddr)
 
     if not assumedOffsets.FUNC_MAP then return end
-    assumeVariantMapOffset(sample.scriptAddr)
-    assumeConstMapOffset(sample.scriptAddr)
+    assumeVariantMapOffset(sample.scriptAddr) -- func map is in-between the const and variant maps
+    assumeConstMapOffset(sample.scriptAddr) -- this makes the assumption more reliable
 
     if assumedOffsets.VARIANT_MAP then
       assumeVariantVector(nodeAddr)
     end
 
+    if assumedOffsets.FUNC_MAP and assumedOffsets.VARIANT_VECTOR_SIZE then
+      assumeGDFuncOffset(sample.scriptAddr)
+    end
   end
 
   local function assumeNodeOffsetsDeep()
@@ -1961,6 +2230,7 @@ function Module.install(contextTable)
 
     assumeObjNameOffset()
 
+    -- collect samples for continuous gdscript analysis
     local rootNodes = getMainNodeTable()
     local nodeSamples = collectNodeSamples(rootNodes)
 
@@ -1972,6 +2242,7 @@ function Module.install(contextTable)
       for _, sample in ipairs(nodeSamples) do
         assumeSampleOffsets(sample)
 
+        -- if collected all, stop
         if allOffsetsResolved() then
           reportFailedOffsets()
           return true
@@ -1989,7 +2260,7 @@ function Module.install(contextTable)
   end
 
   -- EVIDENCE ORCHESTRATION START
-    -- refactored with ai
+    -- refactored from assumption logic with ai; allegedly inferior precision, but let it be for now
 
     local function recordCandidates(category, candidates, sample)
       for _, candidate in ipairs(candidates or {}) do
@@ -2225,21 +2496,21 @@ function Module.install(contextTable)
 
   -- EVIDENCE ORCHESTRATION END
 
-    local function printAssumedOffsets()
-      assumeNodeOffsetsDeep()
+  local function printAssumedOffsets()
+    assumeNodeOffsetsDeep()
 
-      printCurrentOffsets()
+    printCurrentOffsets()
 
-      return assumedOffsets
-    end
+    return assumedOffsets
+  end
 
-    local function printProbedOffsets()
-      probeNodeOffsetsMilestone()
+  local function printProbedOffsets()
+    probeNodeOffsetsMilestone()
 
-      printCurrentOffsets()
+    printCurrentOffsets()
 
-      return assumedOffsets
-    end
+    return assumedOffsets
+  end
 
   return
     {
