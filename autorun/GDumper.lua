@@ -493,7 +493,7 @@
         -- let's ensure VP is found, it will throw an error otherwise
         getViewport()
 
-        local symbolToChildren = '[[ptVP]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[ptVP]+CHILDREN]'
+        local symbolToChildren = '[[pRoot]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[pRoot]+CHILDREN]'
         local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
         local childrenStruct = createVPStructure()
 
@@ -3439,8 +3439,8 @@
       return false
     end
 
-    local function setSTtoVPoffset()
-      -- if isNotNullOrNil( readPointer('ptVP') ) then return true end
+    local function setSTtoRootOffset()
+      -- if isNotNullOrNil( readPointer('pRoot') ) then return true end
 
       local sceneTree = readPointer('pSceneTree')
       local ptrsize, steps
@@ -3462,12 +3462,12 @@
           local className = gd_getObjectName(candidateAddr)
           if className == "Viewport" or className == "Window" then
             sendDebugMessage("[ROOT] via vtable - success!")
-            registerSymbol('oSTtoVP', i * ptrsize, false)
+            registerSymbol('oSTtoRoot', i * ptrsize, false)
             return true
           end
           -- for j=13, steps do
           --     if readPointer(candidateAddr + j*ptrsize) == sceneTree then
-          --         registerSymbol('oSTtoVP', i*ptrsize, false)
+          --         registerSymbol('oSTtoRoot', i*ptrsize, false)
           --         sendDebugMessage('nested loop: '..numtohexstr(i*ptrsize))
           --         return true
           --     end
@@ -3483,13 +3483,13 @@
         end
         local relativeAddr = readInteger(addr + 3)
         sendDebugMessage("[ROOT] via sigs - success!")
-        registerSymbol('oSTtoVP', relativeAddr, false)
+        registerSymbol('oSTtoRoot', relativeAddr, false)
         return true
       end
       
       for i, sig in ipairs( GDAOB.Root ) do
         if setVPRVA(sig) then
-          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig .. "\t value: " .. numtohexstr(getAddress('oSTtoVP')))
+          sendDebugMessage('hit at: ' .. tostring(i) .. "\t" .. sig .. "\t value: " .. numtohexstr(getAddress('oSTtoRoot')))
           return true
         end
       end
@@ -3500,7 +3500,7 @@
     --- returns a valid Viewport pointer
     --- @return number
     function getViewport()
-      local viewport = readPointer("ptVP")
+      local viewport = readPointer("pRoot")
       if isNullOrNil(viewport) then
         print("Viewport pointer is invalid; something's wrong");
         error('viewport pointer is invalid, couldn\'t read')
@@ -6318,16 +6318,16 @@
 
       local mainNodeDict = getMainNodeDict()
 
-      local symbolToChildren = '[[ptVP]+CHILDREN]' -- .. '+' .. numtohexstr(GDDEFS.CHILDREN)
+      local symbolToChildren = '[[pRoot]+CHILDREN]' -- .. '+' .. numtohexstr(GDDEFS.CHILDREN)
       local newNodeSymStr, GDSIsym, variantVectorSym, GDScriptSym, GDScriptConstMapSym
       local nodeContext;
 
       for key, value in pairs(mainNodeDict) do
-        newNodeSymStr = symbolToChildren .. '+' .. numtohexstr(value.index) .. "*" .. numtohexstr(GDDEFS.PTRSIZE) -- [[ptVP]+CHILDREN]+i*ptrsize
-        GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )                              -- [[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
-        variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
-        GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
-        GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[ptVP]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
+        newNodeSymStr = symbolToChildren .. '+' .. numtohexstr(value.index) .. "*" .. numtohexstr(GDDEFS.PTRSIZE) -- [[pRoot]+CHILDREN]+i*ptrsize
+        GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )                              -- [[[[pRoot]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
+        variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[pRoot]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
+        GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[pRoot]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
+        GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[pRoot]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
 
         value.MEMREC = synchronize(function(value, key, parentRec)
           local newNodeMemRec = addMemRecTo(key, value.PTR, getCETypeFromGD(value.TYPE), parentRec)
@@ -6392,6 +6392,29 @@
       -- define type conversion helpers
       defineVariantTypeProfile()
 
+      -- build the correct disassembler profile
+      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] )
+      local GDFuncDisasm
+      local dependencyContext = 
+        {
+          GDDEFS = GDDEFS,
+          addStructureElem = addStructureElem,
+          addLayoutStructElem = addLayoutStructElem,
+          getGDTypeName = getGDTypeName,
+          iterateFuncConstantsToStruct = iterateFuncConstantsToStruct,
+          iterateFuncGlobalsToStruct = iterateFuncGlobalsToStruct,
+          sendDebugMessage = sendDebugMessage,
+        }
+      if ok then
+        GDFuncDisasm = result.install(dependencyContext)
+      else
+        GDFuncDisasm = loadScriptFromTable( "GDFDasm" ).install(dependencyContext)
+      end
+
+      GDFunc = GDFuncDisasm.GDF
+      GDFuncDisasm.defineGDFunctionEnums()
+      bDisasmFunc = true -- whether to disasm functions, on by default
+
       local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDStructWalker.lua]] )
       local GDStructWalker
       local dependencyContext =
@@ -6403,7 +6426,7 @@
           getSectionBounds = getSectionBounds,
           getMainModuleInfo = getMainModuleInfo,
           tryRegSceneTree = tryRegSceneTree,
-          setSTtoVPoffset = setSTtoVPoffset,
+          setSTtoRootOffset = setSTtoRootOffset,
         }
 
       if ok then
@@ -6422,31 +6445,9 @@
       registerGDSymbols()
 
       -- try finding SceneTree and Viewport/Window
-      if tryRegSceneTree() and setSTtoVPoffset() then registerSymbol('ptVP', '[pSceneTree]+oSTtoVP', false) end
+      if tryRegSceneTree() and setSTtoRootOffset() then registerSymbol('pRoot', '[pSceneTree]+oSTtoRoot', false) end
 
-      -- build the correct disassembler profile
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] )
-      local GDFuncDisasm
-      local dependencyContext = 
-        {
-          GDDEFS = GDDEFS,
-          addStructureElem = addStructureElem,
-          addLayoutStructElem = addLayoutStructElem,
-          getGDTypeName = getGDTypeName,
-          iterateFuncConstantsToStruct = iterateFuncConstantsToStruct,
-          iterateFuncGlobalsToStruct = iterateFuncGlobalsToStruct,
-          sendDebugMessage = sendDebugMessage,
-        }
 
-      if ok then
-        GDFuncDisasm = result.install(dependencyContext)
-      else
-        GDFuncDisasm = loadScriptFromTable( "GDFDasm" ).install(dependencyContext)
-      end
-
-      GDFunc = GDFuncDisasm.GDF
-      GDFuncDisasm.defineGDFunctionEnums()
-      bDisasmFunc = true -- whether to disasm functions, on by default
 
       -- check if UTF32LE string type reged, otherwise define it
       checkGDStringType()
@@ -6528,8 +6529,8 @@
   printDumpedNodes = GDAPI.printDumpedNodes
   gd_printConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
-  gd_assumeOffsets = GDAPI.godot_assumeOffsets
-  gd_probeOffsets = GDAPI.godot_probeOffsets
+  gd_assumeOffsets = nil --= GDAPI.godot_assumeOffsets
+  gd_probeOffsets = nil --= GDAPI.godot_probeOffsets
 
   
   --[[

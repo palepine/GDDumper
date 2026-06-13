@@ -117,7 +117,7 @@ function Module.install(contextTable)
     end
 
     local function getRootNodeTable()
-      local viewport = readPointer("ptVP")
+      local viewport = readPointer("pRoot")
       if isNullOrNil(viewport) then getCurrentThreadObject().terminate() return end
       
       local childrenAddr = readPointer( (viewport or 0) + CHILDREN)

@@ -11,7 +11,7 @@ For the moment being, the doc isn't complete and features only most useful funct
 
   > Notes:
   > 1. Use `Debug Mode` to log errors/status
-  > 2. When called, the script will try to find the SceneTree/root, in case of failure - find and register the root address with a symbol called `ptVP`
+  > 2. When called, the script will try to find the SceneTree/root, in case of failure - find and register the root address with a symbol called `pRoot`
 
 - `DumpNodeToAddr( parentMemoryRecord, nodeAddr, doConstantsAsWell )`
 > Builds the tree for the specified node into the CE Address List (recursively)
