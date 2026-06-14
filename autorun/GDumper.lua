@@ -3143,7 +3143,7 @@
           GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x3C
 
           -- next*, prev*, key_variant, value_variant
-          GDDEFS.DICTELEM_KEY_VARIANT = GDDEFS.PTRSIZE*2 -- TODO: alignment on 32x for variants -- 0x10
+          GDDEFS.DICTELEM_KEY_VARIANT = GDDEFS.PTRSIZE*2 -- 0x10, seems aligned well
           GDDEFS.DICTELEM_VALUE_VARIANT = GDDEFS.DICTELEM_KEY_VARIANT + GDDEFS.SIZEOF_VARIANT
 
         -- CONSTANTS
