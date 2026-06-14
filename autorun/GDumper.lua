@@ -230,13 +230,13 @@
         return false
       end
 
-    local function alignOffset(offset, alignment)
-      local remaining = offset % alignment -- get remaining bytes for alignment
-      if remaining ~= 0 then
-        offset = offset + (alignment - remaining)
+      local function alignOffset(offset, alignment)
+        local remaining = offset % alignment -- get remaining bytes for alignment
+        if remaining ~= 0 then
+          offset = offset + (alignment - remaining)
+        end
+        return offset
       end
-      return offset
-    end
 
     -- ///---///--///---///--///---/// MEMRECS
       --- adds a memrec to parent
@@ -455,7 +455,6 @@
           (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
           (GDDEFS.CONST_MAP or 0x0),
           (GDDEFS.VARIANTMAP or 0x0),
-          -- (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
           (GDDEFS.VARIANTMAP_INDEX or 0x0))
           )
       end
@@ -3150,7 +3149,7 @@
         -- CONSTANTS
           -- next*, prev*, key_string_name*, value_variant
           GDDEFS.CONSTELEM_KEYVAL = GDDEFS.PTRSIZE*2
-          GDDEFS.CONSTELEM_VALUE_VARIANT = GDDEFS.PTRSIZE*3 -- 0x18
+          GDDEFS.CONSTELEM_VALUE_VARIANT = GDDEFS.PTRSIZE*2 + alignOffset(GDDEFS.PTRSIZE, 8) -- 0x18 / 0x10
         -- VARIANT MAP
           GDDEFS.VARIANTELEM_KEY_VAL = GDDEFS.PTRSIZE*2
           GDDEFS.VARIANTMAP_INDEX = GDDEFS.PTRSIZE*3 -- 0x18
