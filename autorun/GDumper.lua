@@ -3077,7 +3077,6 @@
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex
         GDDEFS.VAR_VECTOR = offsets.oVariantVector
         GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
-        GDDEFS.VARIANTMAP_INDEX = offsets.GDScriptVariantNamesIndex
         GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
         GDDEFS.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
         GDDEFS.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
@@ -3112,7 +3111,6 @@
           GDDEFS.MAJOR_VER = 3
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
-          GDDEFS.VARIANTMAP_INDEX = config.offsetVariantMapIndex or 0x38
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR - 0x10)
           -- for Object vtable 3.0-3.6 [6]
@@ -3188,7 +3186,7 @@
 
           -- typedef List<Pair<const K *, V> > InternalList;
           GDDEFS.DICTELEM_KEY = GDDEFS.PTRSIZE*0
-            GDDEFS.DICTELEM_KEY_VARIANT = 0x0
+          GDDEFS.DICTELEM_KEY_VARIANT = 0x0
           GDDEFS.DICTELEM_VALUE_VARIANT = GDDEFS.PTRSIZE*1
           GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_VALUE_VARIANT + GDDEFS.SIZEOF_VARIANT -- 0x20
 
@@ -3200,10 +3198,13 @@
           GDDEFS.CONSTELEM_KEYVAL = GDDEFS.MAP_KEY -- 0x30
           GDDEFS.CONSTELEM_VALUE_VARIANT = GDDEFS.MAP_KEY + GDDEFS.PTRSIZE -- 0x38
 
-        -- just this for now
-        if GDDEFS.MAJOR_VER == 2 then
-          GDDEFS.ARRAY_TOVECTOR = 0x8 -- changed
-        end
+        -- VARIANT
+          GDDEFS.VARIANTMAP_INDEX = alignOffset( 0x4, GDDEFS.PTRSIZE ) + GDDEFS.PTRSIZE * 6
+
+          -- just this for now
+          if GDDEFS.MAJOR_VER == 2 then
+            GDDEFS.ARRAY_TOVECTOR = 0x8 -- changed
+          end
 
       else
         error("Unexpected version")

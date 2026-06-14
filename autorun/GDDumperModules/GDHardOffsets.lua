@@ -10,6 +10,28 @@ end
 
 function Module.install(contextTable)
 
+    local function getAssumed( offsets )
+      if gd_assumeOffsets and type(gd_assumeOffsets) == 'function' then
+        print('ASSUMING OFFSETS FALLBACK FOR AN UNRECORDED VERSION/RELEASE')
+        local assumed = gd_assumeOffsets()
+        offsets.VPChildren = assumed.CHILDREN
+        offsets.VPObjStringName = assumed.OBJ_STRING_NAME
+        offsets.NodeGDScriptInstance = assumed.SCRIPT_INSTANCE
+        offsets.NodeGDScriptName = assumed.SCRIPT_NAME
+        offsets.GDScriptFunctionMap = assumed.FUNC_MAP
+        offsets.GDScriptConstantMap = assumed.CONST_MAP
+        offsets.GDScriptVariantNameHM = assumed.VARIANT_MAP
+        offsets.oVariantVector = assumed.VARIANT_VECTOR
+        offsets.NodeVariantVectorSizeOffset = assumed.VARIANT_VECTOR_SIZE
+        offsets.GDScriptFunctionCode = assumed.FUNC_CODE
+        offsets.GDScriptFunctionCodeConsts = assumed.FUNC_CONST
+        offsets.GDScriptFunctionCodeGlobals = assumed.FUNC_GLOBALS
+        return offsets
+      end
+      -- error('Unhandled version')
+      return nil
+    end
+
     local function getStoredOffsetsFromVersion(verStr)
 
       local verStr = verStr or GDDEFS.VERSION_STRING
@@ -17,6 +39,9 @@ function Module.install(contextTable)
 
       local assumed = {}
       local offsets = {}
+
+      -- non-stable versions should be handled by the else clause
+      -- stable ones
 
       if verStr == "4.6" then
         GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
@@ -39,9 +64,7 @@ function Module.install(contextTable)
           offsets.GDScriptConstantMap = 0x208
           offsets.GDScriptVariantNameHM = 0x180
           offsets.oVariantVector = 0x28
-          -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x10
-          offsets.GDScriptVariantNamesIndex = nil -- 3.x
           offsets.GDScriptFunctionCode = 0x178
           offsets.GDScriptFunctionCodeConsts = 0x198
           offsets.GDScriptFunctionCodeGlobals = 0x1A8
@@ -58,32 +81,16 @@ function Module.install(contextTable)
             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
             offsets.oVariantVector = offsets.oVariantVector + 0x28
             -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
-
-            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
           end
 
           if GDDEFS.CUSTOMVER then
             offsets.VPChildren = offsets.VPChildren + 0x48
             offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-            -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
             offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
             offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
             offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
             offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
-
-            -- offsets.oVariantVector = offsets.oVariantVector
-            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
           end
         else
 
@@ -96,9 +103,7 @@ function Module.install(contextTable)
           offsets.GDScriptConstantMap = 0x160
           offsets.GDScriptVariantNameHM = 0x110
           offsets.oVariantVector = 0x1C
-          -- offsets.GDScriptVariantNameType = 0x20 -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x8
-          offsets.GDScriptVariantNamesIndex = nil -- 3.x
           offsets.GDScriptFunctionCode = 0xE8
           offsets.GDScriptFunctionCodeConsts = 0x140
           offsets.GDScriptFunctionCodeGlobals = 0x100
@@ -113,30 +118,12 @@ function Module.install(contextTable)
             offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
             offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
             offsets.oVariantVector = offsets.oVariantVector + 0x28
-            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
           end
 
-          -- if GDDEFS.CUSTOMVER then
-          --   offsets.VPChildren = offsets.VPChildren + 0x48
-          --   offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          --   -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
-          --   offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          --   offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          --   offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          --   offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          --   -- offsets.oVariantVector = offsets.oVariantVector
-          --   -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-          --   -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-          --   -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-          --   -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-          --   -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-          --   -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-          -- end
+          if GDDEFS.CUSTOMVER then
+            offsets = getAssumed(offsets)
+            if offsets == nil then error("Not defined yet") end
+          end
 
 
         end
@@ -164,9 +151,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x208
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x48 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x180 -- 0x178
         offsets.GDScriptFunctionCodeConsts = 0x1A0 -- 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1B0 -- 0x1A8
@@ -199,6 +184,11 @@ function Module.install(contextTable)
           -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
         end
 
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
         return offsets
 
       elseif verStr == "4.4" then
@@ -214,9 +204,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x2A8
         offsets.GDScriptVariantNameHM = 0x210
         offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x48 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x178
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
@@ -254,6 +242,12 @@ function Module.install(contextTable)
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
 
         end
+
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
         return offsets
 
       elseif verStr == "4.3" then
@@ -270,9 +264,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x250
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x178
         offsets.GDScriptFunctionCodeConsts = 0x198
         offsets.GDScriptFunctionCodeGlobals = 0x1A8
@@ -291,7 +283,6 @@ function Module.install(contextTable)
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
 
         end
         if GDDEFS.CUSTOMVER then
@@ -303,8 +294,12 @@ function Module.install(contextTable)
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
+        end
+        
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
 
         return offsets
@@ -322,9 +317,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x250
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x170
         offsets.GDScriptFunctionCodeConsts = 0x190
         offsets.GDScriptFunctionCodeGlobals = 0x1A0
@@ -344,7 +337,6 @@ function Module.install(contextTable)
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 17
 
         end 
@@ -358,7 +350,6 @@ function Module.install(contextTable)
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType + 0x8 -- 4.x
           -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
           offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode + 0x20
           offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts + 0x20
@@ -379,6 +370,11 @@ function Module.install(contextTable)
           -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 0
         end
 
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
         return offsets
 
       elseif verStr == "4.1" then
@@ -395,9 +391,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x1F0
         offsets.GDScriptVariantNameHM = 0x290
         offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x118
         offsets.GDScriptFunctionCodeConsts = 0x100
         offsets.GDScriptFunctionCodeGlobals = 0xF0
@@ -433,6 +427,11 @@ function Module.install(contextTable)
           offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 2
         end
 
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
         return offsets
 
       elseif verStr == "4.0" then
@@ -446,16 +445,13 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x238
         offsets.GDScriptVariantNameHM = 0x2A8
         offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x40 -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x8
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
         offsets.GDScriptFunctionCode = 0x118
         offsets.GDScriptFunctionCodeConsts = 0x100
         offsets.GDScriptFunctionCodeGlobals = 0xF0
         offsets.GDScriptFunctionCodeArg = 0xA0
         
         if GDDEFS.DEBUGVER then
-          -- error("Not defined yet")
           -- GDDEFS.STRING = 0x8
           offsets.VPChildren = offsets.VPChildren + 0x8
           offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -466,16 +462,22 @@ function Module.install(contextTable)
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x30
         elseif GDDEFS.CUSTOMVER then
-          error("Not defined yet")
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.VPChildren = offsets.VPChildren + 0x48
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
 
-          return offsets
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
+        return offsets
 
       elseif verStr == "3.6" then
         GDDEFS.GET_TYPE_INDX = 6
@@ -490,9 +492,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x190
         offsets.GDScriptVariantNameHM = 0x1C0
         offsets.oVariantVector = 0x20
-        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
@@ -512,7 +512,6 @@ function Module.install(contextTable)
           offsets.oVariantVector = offsets.oVariantVector + 0x18
         end
         if GDDEFS.CUSTOMVER then
-          -- error("Not defined yet")
           GDDEFS.STRING = 0x10
           offsets.VPChildren = offsets.VPChildren --[[+0x48]]
           offsets.VPObjStringName = offsets.VPObjStringName --[[+0x48]]
@@ -520,6 +519,11 @@ function Module.install(contextTable)
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap --[[+0x48]]
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap --[[+0x48]]
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM --[[+0x48]]
+        end
+
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
 
         return offsets
@@ -538,9 +542,7 @@ function Module.install(contextTable)
           offsets.GDScriptConstantMap = 0x190
           offsets.GDScriptVariantNameHM = 0x1C0
           offsets.oVariantVector = 0x20
-          -- offsets.GDScriptVariantNameType = nil -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x4
-          offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
           offsets.GDScriptFunctionCode = 0x50
           offsets.GDScriptFunctionCodeConsts = 0x20
           offsets.GDScriptFunctionCodeGlobals = 0x30
@@ -585,25 +587,26 @@ function Module.install(contextTable)
           offsets.GDScriptConstantMap = 0xDC
           offsets.GDScriptVariantNameHM = 0xF4
           offsets.oVariantVector = 0x10
-          -- offsets.GDScriptVariantNameType = 0x34 -- 4.x
           offsets.NodeVariantVectorSizeOffset = 0x4
-          offsets.GDScriptVariantNamesIndex = 0x1C -- 3.x
           offsets.GDScriptFunctionCode = 0x38
           offsets.GDScriptFunctionCodeConsts = 0x20
           offsets.GDScriptFunctionCodeGlobals = 0x28
 
           if GDDEFS.DEBUGVER then
-            error("Not defined yet")
-            offsets.VPChildren = offsets.VPChildren + 0x4
-            offsets.VPObjStringName = offsets.VPObjStringName + 0x4
-            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x4
-            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x4
-            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x4
-            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x4
-            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x4
-            offsets.oVariantVector = offsets.oVariantVector + 0x0C
-          elseif GDDEFS.CUSTOMVER then
-            error("Not defined yet")
+            -- offsets.VPChildren = offsets.VPChildren + 0x4
+            -- offsets.VPObjStringName = offsets.VPObjStringName + 0x4
+            -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x4
+            -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x4
+            -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x4
+            -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x4
+            -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x4
+            -- offsets.oVariantVector = offsets.oVariantVector + 0x0C
+            offsets = getAssumed(offsets)
+            if offsets == nil then error("Not defined yet") end
+
+          end
+
+          if GDDEFS.CUSTOMVER then
             -- offsets.VPChildren = offsets.VPChildren+0x48
             -- offsets.VPObjStringName = offsets.VPObjStringName+0x48
             -- offsets.NodeGDScriptName = offsets.NodeGDScriptName+0x48
@@ -611,8 +614,17 @@ function Module.install(contextTable)
             -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap+0x48
             -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM+0x48
             --  offsets.oVariantVector = offsets.oVariantVector+0x18
+            offsets = getAssumed(offsets)
+            if offsets == nil then error("Not defined yet") end
           end
+
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
+
+        end
+
 
         return offsets
 
@@ -629,9 +641,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x190
         offsets.GDScriptVariantNameHM = 0x1C0
         offsets.oVariantVector = 0x20
-        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
@@ -640,7 +650,6 @@ function Module.install(contextTable)
         offsets.GDScriptRealoadIndex = 42
         
         if GDDEFS.DEBUGVER then
-          -- error("Not defined yet")
           -- GDDEFS.STRING = 0x8
           offsets.VPChildren = offsets.VPChildren + 0x8
           offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -651,15 +660,22 @@ function Module.install(contextTable)
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x18
         elseif GDDEFS.CUSTOMVER then
-          error("Not defined yet")
           -- GDDEFS.STRING = 0x8
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          offsets.oVariantVector = offsets.oVariantVector + 0x18
+          -- offsets.VPChildren = offsets.VPChildren + 0x48
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.oVariantVector = offsets.oVariantVector + 0x18
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+
+        end
+        
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
 
         return offsets
@@ -677,9 +693,7 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x188
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x20
-        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
@@ -687,7 +701,6 @@ function Module.install(contextTable)
         offsets.GDScriptRealoadIndex = 41
         
         if GDDEFS.DEBUGVER then
-          -- error("Not defined yet")
           -- GDDEFS.STRING = 0x8
           offsets.VPChildren = offsets.VPChildren + 0x8
           offsets.VPObjStringName = offsets.VPObjStringName + 0x8
@@ -698,15 +711,21 @@ function Module.install(contextTable)
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
           offsets.oVariantVector = offsets.oVariantVector + 0x18
         elseif GDDEFS.CUSTOMVER then
-          error("Not defined yet")
           -- GDDEFS.STRING = 0x8
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          offsets.oVariantVector = offsets.oVariantVector + 0x18
+          -- offsets.VPChildren = offsets.VPChildren + 0x48
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.oVariantVector = offsets.oVariantVector + 0x18
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
 
         return offsets
@@ -714,7 +733,7 @@ function Module.install(contextTable)
       elseif verStr == "3.2" then
         GDDEFS.GET_TYPE_INDX = 6
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 6 -- 12
-        -- error("Not defined yet")
+
         offsets.VPChildren = 0x108
         offsets.VPObjStringName = 0x120
         offsets.NodeGDScriptInstance = 0x50
@@ -723,42 +742,48 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x198
         offsets.GDScriptVariantNameHM = 0x1C8
         offsets.oVariantVector = 0x20
-        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
         offsets.GDScriptFunctionCodeArg = 0xA0
         
         if GDDEFS.DEBUGVER then
-          error("Not defined yet")
           -- GDDEFS.STRING = 0x8
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-          offsets.oVariantVector = offsets.oVariantVector + 0x18
+          -- offsets.VPChildren = offsets.VPChildren + 0x8
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          -- offsets.oVariantVector = offsets.oVariantVector + 0x18
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
         if GDDEFS.CUSTOMVER then
           -- godot.windows.opt.64.exe
           -- Godot Engine v3.2.stable.custom_build
           offsets.VPChildren = offsets.VPChildren + 0x8
           offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
           offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
           offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
           offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
         end
 
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
         return offsets
 
       elseif verStr == "3.1" then
-        print("No recorded version found")
-        error("Not defined yet")
+
+        offsets = getAssumed(offsets)
+        if offsets == nil then error("Not defined yet") end
+        return offsets
+
       elseif verStr == "3.0" then
         -- 3.0.6.stable.official
         GDDEFS.GET_TYPE_INDX = 6
@@ -771,32 +796,32 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x198
         offsets.GDScriptVariantNameHM = 0x1C8
         offsets.oVariantVector = 0x18
-        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
 
         if GDDEFS.DEBUGVER then
-          error("Not defined yet")
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-          offsets.oVariantVector = offsets.oVariantVector + 0x18
+          -- offsets.VPChildren = offsets.VPChildren + 0x8
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          -- offsets.oVariantVector = offsets.oVariantVector + 0x18
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
         if GDDEFS.CUSTOMVER then
-          error("Not defined yet")
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          -- offsets.VPChildren = offsets.VPChildren + 0x8
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
         end
 
         return offsets
@@ -813,22 +838,13 @@ function Module.install(contextTable)
         offsets.GDScriptConstantMap = 0x148
         offsets.GDScriptVariantNameHM = 0x178
         offsets.oVariantVector = 0x30
-        -- offsets.GDScriptVariantNameType = nil -- 4.x
         offsets.NodeVariantVectorSizeOffset = 0x4
-        offsets.GDScriptVariantNamesIndex = 0x38 -- 3.x
         offsets.GDScriptFunctionCode = 0x50
         offsets.GDScriptFunctionCodeConsts = 0x20
         offsets.GDScriptFunctionCodeGlobals = 0x30
 
         if GDDEFS.DEBUGVER then
-          -- offsets.VPChildren = offsets.VPChildren + 0x8
-          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-          -- offsets.oVariantVector = offsets.oVariantVector + 0x18
+
         end
         if GDDEFS.CUSTOMVER then
           offsets.VPChildren = offsets.VPChildren - 0x10
@@ -851,11 +867,9 @@ function Module.install(contextTable)
         error("Not defined yet")
       else
 
-        -- 4.7 latest verion fallback with assumption
+        -- latest verion fallback with assumption
         if gd_assumeOffsets and type(gd_assumeOffsets) == 'function' then
           print( "UNRECORDED or UNSTABLE version " .. (verStr or '?') ..  " , fallback to assumption heuristic" )
-          assumed = gd_assumeOffsets()
-
           GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
           GDDEFS.DICT_TAIL = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*3 -- 0x28
           GDDEFS.DICT_SIZE = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x34
@@ -864,55 +878,7 @@ function Module.install(contextTable)
           GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
           -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
-          offsets.VPChildren = assumed.CHILDREN
-          offsets.VPObjStringName = assumed.OBJ_STRING_NAME
-          offsets.NodeGDScriptInstance = assumed.SCRIPT_INSTANCE
-          offsets.NodeGDScriptName = assumed.SCRIPT_NAME
-          offsets.GDScriptFunctionMap = assumed.FUNC_MAP
-          offsets.GDScriptConstantMap = assumed.CONST_MAP
-          offsets.GDScriptVariantNameHM = assumed.VARIANT_MAP
-          offsets.oVariantVector = assumed.VARIANT_VECTOR
-          offsets.NodeVariantVectorSizeOffset = assumed.VARIANT_VECTOR_SIZE
-          offsets.GDScriptVariantNamesIndex = alignOffset( 0x4, GDDEFS.PTRSIZE ) + GDDEFS.PTRSIZE * 6
-          offsets.GDScriptFunctionCode = assumed.FUNC_CODE
-          offsets.GDScriptFunctionCodeConsts = assumed.FUNC_CONST
-          offsets.GDScriptFunctionCodeGlobals = assumed.FUNC_GLOBALS
-
-        
-          if GDDEFS.DEBUGVER then
-            offsets.VPChildren = offsets.VPChildren + 0x8
-            offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-            offsets.oVariantVector = offsets.oVariantVector + 0x28
-            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-          end
-
-          if GDDEFS.CUSTOMVER then
-            offsets.VPChildren = offsets.VPChildren + 0x48
-            offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-            -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
-            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-            -- offsets.oVariantVector = offsets.oVariantVector
-            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-          end
-
+          offsets = getAssumed(offsets)
           return offsets
         end
 
