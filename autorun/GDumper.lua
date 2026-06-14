@@ -230,6 +230,14 @@
         return false
       end
 
+    local function alignOffset(offset, alignment)
+      local remaining = offset % alignment -- get remaining bytes for alignment
+      if remaining ~= 0 then
+        offset = offset + (alignment - remaining)
+      end
+      return offset
+    end
+
     -- ///---///--///---///--///---/// MEMRECS
       --- adds a memrec to parent
       ---@param memRecName string
@@ -446,9 +454,9 @@
           (GDDEFS.FUNC_CONST or 0x0),
           (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
           (GDDEFS.CONST_MAP or 0x0),
-          (GDDEFS.VAR_NAMEINDEX_MAP or 0x0),
+          (GDDEFS.VARIANTMAP or 0x0),
           -- (GDDEFS.VAR_NAMEINDEX_VARTYPE or 0x0),
-          (GDDEFS.VAR_NAMEINDEX_I or 0x0))
+          (GDDEFS.VARIANTMAP_INDEX or 0x0))
           )
       end
 
@@ -1647,7 +1655,7 @@
         return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
       end
 
-      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
+      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
     end
 
     local function prepareObjectParent(entry, emitter, parent, contextTable)
@@ -1694,7 +1702,7 @@
       if GDDEFS.MAJOR_VER >= 4 then
         return getGDFunctionName(mapElement)
       end
-      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KVALUE))
+      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
     end
 
     local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
@@ -1716,12 +1724,13 @@
 
     local function getConstMapLookupResult(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
-        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
+        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT)
         local offsetToValue = getVariantValueOffset(constType)
-        return getAddress(mapElement + GDDEFS.CONSTELEM_VALTYPE + offsetToValue), getCETypeFromGD(constType)
+        return getAddress(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT + offsetToValue), getCETypeFromGD(constType)
       else
-        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-        return getAddress(mapElement + GDDEFS.CONSTELEM_VALVAL), getCETypeFromGD(constType)
+        local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT)
+        local offsetToValue = getVariantValueOffset(constType)
+        return getAddress(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT + offsetToValue), getCETypeFromGD(constType)
       end
     end
 
@@ -1779,10 +1788,11 @@
         return nil
       end
 
-      local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
-      if not ok then
-        return nil
-      end
+      -- local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
+      -- if not ok then return nil end
+
+      local variantArrSize = GDDEFS.SIZEOF_VARIANT
+      
       return arrVectorAddr, arrVectorSize, variantArrSize
     end
 
@@ -1800,26 +1810,28 @@
 
       if GDDEFS.MAJOR_VER <= 3 then
         local keyPtr = readPointer(mapElement) -- key is a ptr
-        keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEYTYPE)
-        keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEYVAL)
+        keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEY_VARIANT) -- variant's 0x0 is type
+        local offsetToValue = getVariantValueOffset(keyType)
+        keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEY_VARIANT + offsetToValue)
       else
-        keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEYTYPE) -- those can be a key , NodePath, Callable, StringName, etc
-        keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEYVAL)
+        keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEY_VARIANT)
+        local offsetToValue = getVariantValueOffset(keyType)
+        keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEY_VARIANT + offsetToValue)
       end
 
       local keyTypeName = getGDTypeName(keyType)
       local keyName = "UNKNOWN"
 
-      if keyTypeName == 'STRING' then
+      if keyTypeName == 'STRING' then -- TODO: handler + stringification implementation?
         -- immediate String
         keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
       elseif keyTypeName == 'STRING_NAME' then
         keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
       elseif keyTypeName == 'FLOAT' then
         keyName = tostring(readDouble(keyValueAddr) or "_couldnt_read") -- in godot 3.x real is 4 byte float or not?
-      elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'RID' or keyTypeName == 'CALLABLE' then
+      elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'CALLABLE' then
         keyName = tostring(readPointer(keyValueAddr) or "_couldnt_read")
-      elseif keyTypeName == 'INT' then
+      elseif keyTypeName == 'INT' or keyTypeName == 'RID' then
         keyName = tostring(readInteger(keyValueAddr, true) or "_couldnt_read")
       else -- bool | might need separate for Vector2, Vector3, Color, etc
         keyName = tostring(readInteger(keyValueAddr) or "_couldnt_read")
@@ -1989,7 +2001,7 @@
 
     local function readNodeVariantEntry(mapElement, variantVector, variantSize)
       -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
-      local variantIndex = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_I);
+      local variantIndex = readInteger(mapElement + GDDEFS.VARIANTMAP_INDEX);
       local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize)
 
       local name = getVariantNameFromMapElement(mapElement);
@@ -2040,8 +2052,8 @@
 
     local function readNodeConstEntry(mapElement)
       local constName = getNodeConstName(mapElement)
-      local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALTYPE)
-      local offsetToValue = GDDEFS.CONSTELEM_VALTYPE + getVariantValueOffset(constType)
+      local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT)
+      local offsetToValue = GDDEFS.CONSTELEM_VALUE_VARIANT + getVariantValueOffset(constType)
       local constPtr = getAddress(mapElement + offsetToValue)
 
       local entry =
@@ -2087,8 +2099,8 @@
     local function readDictionaryContainerEntry(mapElement)
 
       local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
-      local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALTYPE)
-      local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+      local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALUE_VARIANT)
+      local offsetToValue = GDDEFS.DICTELEM_VALUE_VARIANT + getVariantValueOffset(valueType)
       local valueValuePtr = getAddress(mapElement + offsetToValue)
 
       local entry =
@@ -3062,11 +3074,11 @@
         GDDEFS.GDSCRIPTNAME = offsets.NodeGDScriptName
         GDDEFS.FUNC_MAP = offsets.GDScriptFunctionMap
         GDDEFS.CONST_MAP = offsets.GDScriptConstantMap
-        GDDEFS.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
+        GDDEFS.VARIANTMAP = offsets.GDScriptVariantNameHM
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex
         GDDEFS.VAR_VECTOR = offsets.oVariantVector
         GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
-        GDDEFS.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
+        GDDEFS.VARIANTMAP_INDEX = offsets.GDScriptVariantNamesIndex
         GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
         GDDEFS.FUNC_CONST = offsets.GDScriptFunctionCodeConsts
         GDDEFS.FUNC_GLOBNAMEPTR = offsets.GDScriptFunctionCodeGlobals
@@ -3079,7 +3091,7 @@
         GDDEFS.GDSCRIPTNAME = config.offsetGDScriptName or 0x0
         GDDEFS.FUNC_MAP = config.offsetFuncMap or 0x0
         GDDEFS.CONST_MAP = config.offsetConstMap or 0x0
-        GDDEFS.VAR_NAMEINDEX_MAP = config.offsetVariantMap or 0x0
+        GDDEFS.VARIANTMAP = config.offsetVariantMap or 0x0
         GDDEFS.GDSCRIPT_RELOAD_INDX = config.GDScriptRealoadIndex
         GDDEFS.FUNC_CODE = config.offsetGDFunctionCode or 0x0
 
@@ -3101,7 +3113,7 @@
           GDDEFS.MAJOR_VER = 3
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
-          GDDEFS.VAR_NAMEINDEX_I = config.offsetVariantMapIndex or 0x38
+          GDDEFS.VARIANTMAP_INDEX = config.offsetVariantMapIndex or 0x38
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR - 0x10)
           -- for Object vtable 3.0-3.6 [6]
@@ -3113,72 +3125,86 @@
       -- MANUAL END
 
       -- COMMON START
+      GDDEFS.SIZEOF_VARIANT = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
+
       if GDDEFS.MAJOR_VER >= 4 then
-        GDDEFS.GDSCRIPT_REF = 0x18
-        GDDEFS.FUNC_MAPVAL = 0x18
-        GDDEFS.CHILDREN_SIZE = 0x8
-        GDDEFS.MAP_SIZE = 0x14
-        GDDEFS.ARRAY_TOVECTOR = 0x10
-        GDDEFS.P_ARRAY_TOARR = 0x18
-        GDDEFS.P_ARRAY_SIZE = 0x8
-        GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
-        GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
-        GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x34 -- 0x3C
-        GDDEFS.DICTELEM_KEYTYPE = 0x10
-        GDDEFS.DICTELEM_KEYVAL = 0x18
-        GDDEFS.DICTELEM_VALTYPE = 0x28
-        GDDEFS.CONSTELEM_KEYVAL = 0x10
-        GDDEFS.CONSTELEM_VALTYPE = 0x18
-        GDDEFS.VAR_NAMEINDEX_I = 0x18
+        GDDEFS.GDSCRIPT_REF = alignOffset( alignOffset(GDDEFS.PTRSIZE, 0x8)+0x8 , GDDEFS.PTRSIZE ) + GDDEFS.PTRSIZE -- vtable*, uint64_t id, owner*, gdscript*
+        GDDEFS.FUNC_MAPVAL = GDDEFS.PTRSIZE*3 -- next*, prev*, key*, value*
+        GDDEFS.CHILDREN_SIZE = 0x4+0x4 -- int size int capacity
+        GDDEFS.MAP_SIZE = GDDEFS.PTRSIZE*2 + 0x4 -- head*, tail*, int capacity, int size
+
+        -- ARRAYS
+          GDDEFS.ARRAY_TOVECTOR = alignOffset( alignOffset(4, GDDEFS.PTRSIZE) , GDDEFS.PTRSIZE ) + GDDEFS.PTRSIZE -- int refcount, byte VectorWriteProxy<T> write, vectorCoW*
+          GDDEFS.P_ARRAY_TOARR = GDDEFS.PTRSIZE + alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE -- 0x18
+
+        -- DICTIONARY
+          -- int refcount, ptr*, (ptr*), elements**, hashes*, head*, tail*, capacity, size
+          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*2 -- 0x28
+          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*3 -- 0x30
+          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x3C
+
+          -- next*, prev*, key_variant, value_variant
+          GDDEFS.DICTELEM_KEY_VARIANT = GDDEFS.PTRSIZE*2 -- TODO: alignment on 32x for variants -- 0x10
+          GDDEFS.DICTELEM_VALUE_VARIANT = GDDEFS.DICTELEM_KEY_VARIANT + GDDEFS.SIZEOF_VARIANT
+
+        -- CONSTANTS
+          -- next*, prev*, key_string_name*, value_variant
+          GDDEFS.CONSTELEM_KEYVAL = GDDEFS.PTRSIZE*2
+          GDDEFS.CONSTELEM_VALUE_VARIANT = GDDEFS.PTRSIZE*3 -- 0x18
+        -- VARIANT MAP
+          GDDEFS.VARIANTELEM_KEY_VAL = GDDEFS.PTRSIZE*2
+          GDDEFS.VARIANTMAP_INDEX = GDDEFS.PTRSIZE*3 -- 0x18
+
         GDDEFS.CLR_PTR = 0x20
-        -- GDDEFS.SCRIPTFUNC_STRING = GDFunctionString or 0x60
-      elseif GDDEFS.MAJOR_VER == 3 then
-        GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
-        if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
-        GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
+
+      elseif GDDEFS.MAJOR_VER <= 3 then
+
+        GDDEFS.GDSCRIPT_REF = GDDEFS.PTRSIZE*2 --0x10
+        if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF + 0x8 end
+
         GDDEFS.CHILDREN_SIZE = 0x4
-        GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
-        GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
-        GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
-        GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
-        GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
-        GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
-        GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
-        GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
-        GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
-        GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
-        GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
-        GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
-        GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
-        GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x10
-        GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
-        GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
-        GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
-        GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
-        -- GDDEFS.SCRIPTFUNC_STRING = oGDFunctionString or 0x80
-      elseif GDDEFS.MAJOR_VER == 2 then
-        GDDEFS.GDSCRIPT_REF = GDDEFS.GDSCRIPT_REF or 0x10
-        if GDDEFS.MONO then GDDEFS.GDSCRIPT_REF = 0x10 + 0x8 end
-        GDDEFS.FUNC_MAPVAL = GDDEFS.FUNC_MAPVAL or 0x38
-        GDDEFS.CHILDREN_SIZE = 0x4
-        GDDEFS.MAP_SIZE = GDDEFS.MAP_SIZE or 0x10
-        GDDEFS.MAP_LELEM = GDDEFS.MAP_LELEM or 0x10
-        GDDEFS.MAP_NEXTELEM = GDDEFS.MAP_NEXTELEM or 0x20
-        GDDEFS.MAP_KVALUE = GDDEFS.MAP_KVALUE or 0x30
-        GDDEFS.DICT_LIST = GDDEFS.DICT_LIST or 0x8
-        GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x0
-        GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x8
-        GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x1C -- GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x10
-        GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT or 0x20
-        GDDEFS.DICTELEM_KEYTYPE = GDDEFS.DICTELEM_KEYTYPE or 0x0
-        GDDEFS.DICTELEM_KEYVAL = GDDEFS.DICTELEM_KEYVAL or 0x8
-        GDDEFS.DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE or 0x8
-        GDDEFS.DICTELEM_VALVAL = GDDEFS.DICTELEM_VALVAL or 0x10
-        GDDEFS.ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR or 0x8 -- changed
-        GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x8
-        GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0x18
-        GDDEFS.CONSTELEM_KEYVAL = GDDEFS.CONSTELEM_KEYVAL or 0x30
-        GDDEFS.CONSTELEM_VALTYPE = GDDEFS.CONSTELEM_VALTYPE or 0x38
+
+        -- MAP (RBT)
+          -- map itself: root*, sentinel*, int size
+          GDDEFS.MAP_SIZE = GDDEFS.PTRSIZE*2 -- 0x10
+          
+          -- map Node: int color, right*, left*, parent*, _next*, _prev*, Key(*), Value(*)
+          GDDEFS.MAP_RELEM = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*0
+          GDDEFS.MAP_LELEM = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 -- 0x10
+          GDDEFS.MAP_PARELEM = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2
+          GDDEFS.MAP_NEXTELEM = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*3 -- 0x20
+          GDDEFS.MAP_PREVELEM = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*4
+          GDDEFS.MAP_KEY = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*5 -- 0x30
+          GDDEFS.MAP_VAL = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*6
+          GDDEFS.FUNC_MAPVAL = GDDEFS.MAP_VAL
+        
+        -- DICTIONARY
+          -- int refCount, ptr_List*, ptr_HashMap*, capacity, size;
+          GDDEFS.DICT_LIST = alignOffset(0x4, GDDEFS.PTRSIZE)
+          GDDEFS.DICT_HASHMAP = alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE
+          GDDEFS.DICT_SIZE =  GDDEFS.DICT_SIZE or alignOffset(0x4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + 0x4 -- right?
+          -- OrderedHashMap aka InternalList list, InternalMap map;
+          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or GDDEFS.PTRSIZE*0 -- 0x0
+          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or GDDEFS.PTRSIZE*1
+
+          -- typedef List<Pair<const K *, V> > InternalList;
+          GDDEFS.DICTELEM_KEY = GDDEFS.PTRSIZE*0
+            GDDEFS.DICTELEM_KEY_VARIANT = 0x0
+          GDDEFS.DICTELEM_VALUE_VARIANT = GDDEFS.PTRSIZE*1
+          GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_VALUE_VARIANT + GDDEFS.SIZEOF_VARIANT -- 0x20
+
+        -- ARRAY
+          GDDEFS.ARRAY_TOVECTOR = alignOffset( alignOffset(4, GDDEFS.PTRSIZE) , GDDEFS.PTRSIZE ) + GDDEFS.PTRSIZE -- 0x10, same as 4.x
+          GDDEFS.P_ARRAY_TOARR = alignOffset(4, GDDEFS.PTRSIZE) -- 0x8
+
+        -- CONSTANTS
+          GDDEFS.CONSTELEM_KEYVAL = GDDEFS.MAP_KEY -- 0x30
+          GDDEFS.CONSTELEM_VALUE_VARIANT = GDDEFS.MAP_KEY + GDDEFS.PTRSIZE -- 0x38
+
+        -- just this for now
+        if GDDEFS.MAJOR_VER == 2 then
+          GDDEFS.ARRAY_TOVECTOR = 0x8 -- changed
+        end
 
       else
         error("Unexpected version")
@@ -3209,7 +3235,6 @@
       registerSymbol('MAP_LELEM', GDDEFS.MAP_LELEM, true)
       registerSymbol('MAP_NEXTELEM', GDDEFS.MAP_NEXTELEM, true)
       registerSymbol('DICTELEM_PAIR_NEXT', GDDEFS.DICTELEM_PAIR_NEXT, true)
-      registerSymbol('DICTELEM_VALVAL', GDDEFS.DICTELEM_VALVAL, true)
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// STRING
@@ -4969,8 +4994,11 @@
       if isNullOrNil(funcConstAddr) then error("function const addr is invalid") end
 
       local vectorSize = readInteger(funcConstAddr - GDDEFS.SIZE_VECTOR)
-      local sizeOfVariant, ok = redefineVariantSizeByVector(funcConstAddr, vectorSize)
-      if not ok then error("size refedinition failed") end
+
+      -- local sizeOfVariant, ok = redefineVariantSizeByVector(funcConstAddr, vectorSize)
+      -- if not ok then error("size refedinition failed") end
+      local sizeOfVariant = GDDEFS.SIZEOF_VARIANT
+
       local targetConstAddr = getVariantByIndex(funcConstAddr, constIndex, sizeOfVariant)
 
       -- todo: base it on handlers
@@ -5032,12 +5060,9 @@
         return;
       end
 
-      local variantSize, ok = redefineVariantSizeByVector(funcConstantVect, vectorSize)
-
-      if not ok then
-        sendDebugMessage("Variant resize failed")
-        return
-      end
+      -- local variantSize, ok = redefineVariantSizeByVector(funcConstantVect, vectorSize)
+      -- if not ok then sendDebugMessage("Variant resize failed") return end
+      local variantSize = GDDEFS.SIZEOF_VARIANT
       local emitter = GDEmitters.StructEmitter
 
       for variantIndex = 0, (vectorSize - 1) do
@@ -5681,11 +5706,9 @@
       end
 
       local variantVector, vectorSize = getNodeVariantVector(nodeContext.addr)
-      local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
-      if not ok then
-        sendDebugMessage("Variant resize strangely failed")
-        return;
-      end
+      -- local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+      -- if not ok then sendDebugMessage("Variant resize strangely failed") return; end
+      local variantSize = GDDEFS.SIZEOF_VARIANT
 
       local mapElement = headElement
 
@@ -5717,7 +5740,7 @@
       local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
       -- local sizeOfVariant, ok = redefineVariantSizeByVector(variantVector, vectorSize)
       -- if not ok then return nil end
-      local sizeOfVariant = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
+      local sizeOfVariant = GDDEFS.SIZEOF_VARIANT -- GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
 
       local mapElement = headElement
       local fields = {}
@@ -5798,9 +5821,9 @@
         return;
       end
 
-      local mainElement = readPointer(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP) -- head / root
-      local endElement = readPointer(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.PTRSIZE) -- tail / end
-      local mapSize = readInteger(gdScriptAddr + GDDEFS.VAR_NAMEINDEX_MAP + GDDEFS.MAP_SIZE)
+      local mainElement = readPointer(gdScriptAddr + GDDEFS.VARIANTMAP) -- head / root
+      local endElement = readPointer(gdScriptAddr + GDDEFS.VARIANTMAP + GDDEFS.PTRSIZE) -- tail / end
+      local mapSize = readInteger(gdScriptAddr + GDDEFS.VARIANTMAP + GDDEFS.MAP_SIZE)
 
       if isNullOrNil(mainElement) or isNullOrNil(endElement) or isNullOrNil(mapSize) then
         sendDebugMessage('Variant: (hash)map is not found')

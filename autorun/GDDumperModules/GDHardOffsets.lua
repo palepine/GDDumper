@@ -19,14 +19,14 @@ function Module.install(contextTable)
       local offsets = {}
 
       if verStr == "4.6" then
-        
+        GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
+        GDDEFS.DICT_TAIL = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*3 -- 0x28
+        GDDEFS.DICT_SIZE = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+        GDDEFS.GET_TYPE_INDX = 10
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
+
         if GDDEFS._x64 then
-          GDDEFS.DICT_HEAD = 0x20
-          GDDEFS.DICT_TAIL = 0x28
-          GDDEFS.DICT_SIZE = 0x34 --0x3C
-          GDDEFS.GET_TYPE_INDX = 10
-          GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
           -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
 
           -- godot.windows.template_release.x86_64.exe
@@ -86,24 +86,6 @@ function Module.install(contextTable)
             -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
           end
         else
-          error("Not defined yet")
-          GDDEFS.GDSCRIPT_REF = 0x14
-          GDDEFS.FUNC_MAPVAL = 0xC
-          GDDEFS.CHILDREN_SIZE = 0x8
-          GDDEFS.MAP_SIZE = 0xC
-          GDDEFS.ARRAY_TOVECTOR = 0x8
-          GDDEFS.P_ARRAY_TOARR = 0x18
-          GDDEFS.P_ARRAY_SIZE = 0x8
-          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or 0x28
-          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or 0x30
-          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or 0x34
-          GDDEFS.DICTELEM_KEYTYPE = 0x10
-          GDDEFS.DICTELEM_KEYVAL = 0x18
-          GDDEFS.DICTELEM_VALTYPE = 0x28
-          GDDEFS.CONSTELEM_KEYVAL = 0x8
-          GDDEFS.CONSTELEM_VALTYPE = 0x10
-          GDDEFS.VAR_NAMEINDEX_I = 0xC
-          GDDEFS.GET_TYPE_INDX = 10
 
           -- custom
           offsets.VPChildren = 0xF0
@@ -118,8 +100,8 @@ function Module.install(contextTable)
           offsets.NodeVariantVectorSizeOffset = 0x8
           offsets.GDScriptVariantNamesIndex = nil -- 3.x
           offsets.GDScriptFunctionCode = 0xE8
-          offsets.GDScriptFunctionCodeConsts = 0xF8
-          offsets.GDScriptFunctionCodeGlobals = 0x118
+          offsets.GDScriptFunctionCodeConsts = 0x140
+          offsets.GDScriptFunctionCodeGlobals = 0x100
           -- offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
 
           if GDDEFS.DEBUGVER then
@@ -162,9 +144,10 @@ function Module.install(contextTable)
         return offsets
 
       elseif verStr == "4.5" then
-        GDDEFS.DICT_HEAD = 0x20
-        GDDEFS.DICT_TAIL = 0x28
-        GDDEFS.DICT_SIZE = 0x34 -- 0x3C
+        GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
+        GDDEFS.DICT_TAIL = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*3 -- 0x28
+        GDDEFS.DICT_SIZE = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x34
+
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 9
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 5 -- 14
@@ -591,27 +574,6 @@ function Module.install(contextTable)
             offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
           end
         else
-          -- GDDEFS.STRING = 0x8 -- ascii
-          GDDEFS.GDSCRIPT_REF = 0x8
-          GDDEFS.MAP_SIZE = 0x10
-          GDDEFS.MAP_LELEM = 0x8
-          GDDEFS.MAP_NEXTELEM = 0x10
-          GDDEFS.MAP_KVALUE = 0x18
-          GDDEFS.FUNC_MAPVAL = 0x1C
-          GDDEFS.DICT_LIST = 0x4
-          GDDEFS.DICT_HEAD = 0x0
-          GDDEFS.DICT_TAIL = 0x4
-          GDDEFS.DICT_SIZE = 0x10
-          GDDEFS.DICTELEM_PAIR_NEXT = 0x20
-          GDDEFS.DICTELEM_KEYTYPE = 0x0
-          GDDEFS.DICTELEM_KEYVAL = 0x8
-          GDDEFS.DICTELEM_VALTYPE = 0x8
-          GDDEFS.DICTELEM_VALVAL = 0x10
-          GDDEFS.ARRAY_TOVECTOR = 0x8
-          GDDEFS.P_ARRAY_TOARR = GDDEFS.P_ARRAY_TOARR or 0x4
-          GDDEFS.P_ARRAY_SIZE = GDDEFS.P_ARRAY_SIZE or 0xC
-          GDDEFS.CONSTELEM_KEYVAL = 0x18
-          GDDEFS.CONSTELEM_VALTYPE = 0x20
 
           -- godot.windows.opt.32.exe
           -- Godot Engine v3.5.3.stable.official
@@ -894,9 +856,9 @@ function Module.install(contextTable)
           print( "UNRECORDED or UNSTABLE version " .. (verStr or '?') ..  " , fallback to assumption heuristic" )
           assumed = gd_assumeOffsets()
 
-          GDDEFS.DICT_HEAD = 0x20
-          GDDEFS.DICT_TAIL = 0x28
-          GDDEFS.DICT_SIZE = 0x34
+          GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
+          GDDEFS.DICT_TAIL = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*3 -- 0x28
+          GDDEFS.DICT_SIZE = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x34
           GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
           GDDEFS.GET_TYPE_INDX = 10
           GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
@@ -915,23 +877,8 @@ function Module.install(contextTable)
           offsets.GDScriptFunctionCode = assumed.FUNC_CODE
           offsets.GDScriptFunctionCodeConsts = assumed.FUNC_CONST
           offsets.GDScriptFunctionCodeGlobals = assumed.FUNC_GLOBALS
-          
-          -- offsets.VPChildren = 0x140
-          -- offsets.VPObjStringName = 0x190
-          -- offsets.NodeGDScriptInstance = 0x60
-          -- offsets.NodeGDScriptName = 0xF8 -- 0xF0
-          -- offsets.GDScriptFunctionMap = 0x238 -- 0x230
-          -- offsets.GDScriptConstantMap = 0x210 -- 0x208
-          -- offsets.GDScriptVariantNameHM = 0x188 -- 0x180
-          -- offsets.oVariantVector = 0x28
-          -- -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
-          -- offsets.NodeVariantVectorSizeOffset = 0x10
-          -- offsets.GDScriptVariantNamesIndex = nil -- 3.x
-          -- offsets.GDScriptFunctionCode = 0x178
-          -- offsets.GDScriptFunctionCodeConsts = 0x198
-          -- offsets.GDScriptFunctionCodeGlobals = 0x1A8
-          -- offsets.GDScriptFunctionCodeArg = 0xA0
 
+        
           if GDDEFS.DEBUGVER then
             offsets.VPChildren = offsets.VPChildren + 0x8
             offsets.VPObjStringName = offsets.VPObjStringName + 0x8

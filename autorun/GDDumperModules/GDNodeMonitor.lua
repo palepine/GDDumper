@@ -22,7 +22,7 @@ function Module.install(contextTable)
   
   local DICT_LIST = GDDEFS.DICT_LIST
   local DICT_HEAD = GDDEFS.DICT_HEAD
-  local DICTELEM_VALTYPE = GDDEFS.DICTELEM_VALTYPE
+  local DICTELEM_VALUE_VARIANT = GDDEFS.DICTELEM_VALUE_VARIANT
   local DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT
 
   local USES_DOUBLE_T = GDDEFS.SIZE_VECTOR
@@ -328,8 +328,8 @@ function Module.install(contextTable)
       repeat
         -- if dumpContext:shouldStopPeriodic(iteration) then return end
 
-        local variantType = readInteger( mapElement + DICTELEM_VALTYPE)
-        local offsetToValue = DICTELEM_VALTYPE + 0x8
+        local variantType = readInteger( mapElement + DICTELEM_VALUE_VARIANT)
+        local offsetToValue = DICTELEM_VALUE_VARIANT + 0x8
 
         if variantType == eOBJECT then
           offsetToValue = offsetToValue + 0x8
@@ -518,8 +518,8 @@ return Module -- exporting
 
     -- for node search
     local function readDictionaryValueEntry(mapElement)
-        local valueType = readInteger( (mapElement or 0) + GDDEFS.DICTELEM_VALTYPE)
-        local offsetToValue = GDDEFS.DICTELEM_VALTYPE + getVariantValueOffset(valueType)
+        local valueType = readInteger( (mapElement or 0) + GDDEFS.DICTELEM_VALUE_VARIANT)
+        local offsetToValue = GDDEFS.DICTELEM_VALUE_VARIANT + getVariantValueOffset(valueType)
         return
         {
           typeId = valueType,
