@@ -86,6 +86,7 @@
   local getMainModuleInfo
 
   local bGDDebug = false
+  local bHardOffsets = false
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILS
@@ -775,7 +776,7 @@
         mainMemrec.Type = vtAutoAssembler
         mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
         mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n"
-
+        -- useAssumption =             nil, -- set to true if you want the script to try to guess the offsets; unreliable
         local dumpMemrec = addrList.createMemoryRecord()
         dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
         dumpMemrec.Type = vtAutoAssembler
@@ -2974,7 +2975,7 @@
         GDDEFS.FULL_GDVERSION_STRING = getGodotVersionString()
       end
 
-      if magicFail then
+      if magicFail then -- <3 versions w/0 pck and encrypted packages
         sendDebugMessage("Failed to find Godot magic")
         major, minor = (GDDEFS.FULL_GDVERSION_STRING or ''):match("v(%d+)%.(%d+)")
         if isNullOrNil(major) or isNullOrNil(minor) then major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("Godot Engine v?(%d+)%.(%d+)") end
@@ -2985,7 +2986,6 @@
       GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.CUSTOMVER = getIsCustomVer()
-
       GDDEFS.USES_DOUBLE_REALT = exportTableStr:match("%.double%.") ~= nil
 
       -- GDDEFS.CUSTOMVER = (GDDEFS.FULL_GDVERSION_STRING):match("custom") and true or false
@@ -3054,7 +3054,7 @@
       if config == nil then config = {} end
 
       -- AUTOMATIC START
-      if bHardOffsets or config.useHardcoded then
+      if (bHardOffsets or config.useHardcoded) then
         local offsets = getStoredOffsetsFromVersion(GDDEFS.VERSION_STRING)
         GDDEFS.CHILDREN = offsets.VPChildren
         GDDEFS.OBJ_STRING_NAME = offsets.VPObjStringName
@@ -3065,7 +3065,6 @@
         GDDEFS.VAR_NAMEINDEX_MAP = offsets.GDScriptVariantNameHM
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex
         GDDEFS.VAR_VECTOR = offsets.oVariantVector
-        -- GDDEFS.VAR_NAMEINDEX_VARTYPE = offsets.GDScriptVariantNameType
         GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
         GDDEFS.VAR_NAMEINDEX_I = offsets.GDScriptVariantNamesIndex
         GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
@@ -3455,11 +3454,34 @@
         steps = 0x250 / ptrsize
       end
 
-      -- isn't elegant either
       for i = 13, steps do
         local candidateAddr = readPointer(sceneTree + i * ptrsize)
         if isNotNullOrNil(candidateAddr) and isVtable(getVtable(candidateAddr)) then
 
+          for j=13, steps do
+            if readPointer(candidateAddr + j*ptrsize) == sceneTree then
+              sendDebugMessage('[ROOT] Nested loop hit: '..numtohexstr(i*ptrsize) .. ' VTable validation...')
+
+              local className = gd_getObjectName(candidateAddr)
+              if className ~= "Viewport" and className ~= "Window" then
+                sendDebugMessage("[ROOT] Wrong hit (vtable double-check)")
+                goto continue
+              end
+
+              sendDebugMessage('[ROOT] Vtable positive - success!')
+              registerSymbol('oSTtoRoot', i*ptrsize, false)
+              return true
+            end
+            ::continue::
+          end
+
+        end
+      end
+
+      -- isn't elegant either
+      for i = 13, steps do
+        local candidateAddr = readPointer(sceneTree + i * ptrsize)
+        if isNotNullOrNil(candidateAddr) and isVtable(getVtable(candidateAddr)) then
           sendDebugMessage("[ROOT] calling a virtual method if I happen to crash: ofs\t" .. numtohexstr(i * ptrsize) .. "\taddr: " .. numtohexstr(candidateAddr))
           local className = gd_getObjectName(candidateAddr)
           if className == "Viewport" or className == "Window" then
@@ -3467,13 +3489,6 @@
             registerSymbol('oSTtoRoot', i * ptrsize, false)
             return true
           end
-          -- for j=13, steps do
-          --     if readPointer(candidateAddr + j*ptrsize) == sceneTree then
-          --         registerSymbol('oSTtoRoot', i*ptrsize, false)
-          --         sendDebugMessage('nested loop: '..numtohexstr(i*ptrsize))
-          --         return true
-          --     end
-          -- end
         end
       end
 
@@ -5134,6 +5149,7 @@
 
       -- get code and its size to check the OPCODE_END
       funcCodeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
+      if isNullOrNil(funcCodeAddr) then return false end
       funcCodeLastIdx = readInteger( funcCodeAddr - GDDEFS.SIZE_VECTOR ) - 1 -- Vector<int>
       lastOpcode = readInteger( funcCodeAddr + 4 * funcCodeLastIdx ) 
 
@@ -6435,6 +6451,7 @@
         GDStructWalker = result.install(dependencyContext) or {}
         gd_assumeOffsets = GDStructWalker.assume
         gd_probeOffsets = GDStructWalker.probe
+
       -- else
         -- GDStructWalker = loadScriptFromTable( "GDSW" ).install(dependencyContext)
       end
@@ -6448,8 +6465,6 @@
 
       -- try finding SceneTree and Viewport/Window
       if tryRegSceneTree() and setSTtoRootOffset() then registerSymbol('pRoot', '[pSceneTree]+oSTtoRoot', false) end
-
-
 
       -- check if UTF32LE string type reged, otherwise define it
       checkGDStringType()

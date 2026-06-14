@@ -1,5 +1,13 @@
 local Module = {}
 
+local function alignOffset(offset, alignment)
+  local remaining = offset % alignment -- get remaining bytes for alignment
+  if remaining ~= 0 then
+    offset = offset + (alignment - remaining)
+  end
+  return offset
+end
+
 function Module.install(contextTable)
 
     local function getStoredOffsetsFromVersion(verStr)
@@ -7,129 +15,10 @@ function Module.install(contextTable)
       local verStr = verStr or GDDEFS.VERSION_STRING
       -- offsets in Node/Objects in debug versions are shifted by 0x8 in most cases; function code/constants/globals are shifted less often
 
+      local assumed = {}
       local offsets = {}
 
-      if verStr == "4.8" then
-        GDDEFS.DICT_HEAD = 0x20
-        GDDEFS.DICT_TAIL = 0x28
-        GDDEFS.DICT_SIZE = 0x34
-        GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
-        GDDEFS.GET_TYPE_INDX = 10
-        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
-
-        offsets.VPChildren = 0x140
-        offsets.VPObjStringName = 0x190
-        offsets.NodeGDScriptInstance = 0x60
-        offsets.NodeGDScriptName = 0xF0
-        offsets.GDScriptFunctionMap = 0x230
-        offsets.GDScriptConstantMap = 0x208
-        offsets.GDScriptVariantNameHM = 0x180
-        offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
-        offsets.NodeVariantVectorSizeOffset = 0x10
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
-        offsets.GDScriptFunctionCode = 0x178
-        offsets.GDScriptFunctionCodeConsts = 0x198
-        offsets.GDScriptFunctionCodeGlobals = 0x1A8
-        offsets.GDScriptFunctionCodeArg = 0xA0 -- 0x0 type
-
-        if GDDEFS.DEBUGVER then
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-          offsets.oVariantVector = offsets.oVariantVector + 0x28
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-        end
-
-        if GDDEFS.CUSTOMVER then
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          -- offsets.oVariantVector = offsets.oVariantVector
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-        end
-
-        return offsets
-
-      elseif verStr == "4.7" then
-        GDDEFS.DICT_HEAD = 0x20
-        GDDEFS.DICT_TAIL = 0x28
-        GDDEFS.DICT_SIZE = 0x34
-        GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
-        GDDEFS.GET_TYPE_INDX = 10
-        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
-        -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
-
-        offsets.VPChildren = 0x140
-        offsets.VPObjStringName = 0x190
-        offsets.NodeGDScriptInstance = 0x60
-        offsets.NodeGDScriptName = 0xF8 -- 0xF0
-        offsets.GDScriptFunctionMap = 0x238 -- 0x230
-        offsets.GDScriptConstantMap = 0x210 -- 0x208
-        offsets.GDScriptVariantNameHM = 0x188 -- 0x180
-        offsets.oVariantVector = 0x28
-        -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
-        offsets.NodeVariantVectorSizeOffset = 0x10
-        offsets.GDScriptVariantNamesIndex = nil -- 3.x
-        offsets.GDScriptFunctionCode = 0x178
-        offsets.GDScriptFunctionCodeConsts = 0x198
-        offsets.GDScriptFunctionCodeGlobals = 0x1A8
-        offsets.GDScriptFunctionCodeArg = 0xA0
-        
-        if GDDEFS.DEBUGVER then
-          offsets.VPChildren = offsets.VPChildren + 0x8
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
-          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
-          offsets.oVariantVector = offsets.oVariantVector + 0x28
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-        end
-
-        if GDDEFS.CUSTOMVER then
-          offsets.VPChildren = offsets.VPChildren + 0x48
-          offsets.VPObjStringName = offsets.VPObjStringName + 0x48
-          -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
-          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
-          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
-          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
-          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
-          -- offsets.oVariantVector = offsets.oVariantVector
-          -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
-          -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
-          -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
-          -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
-          -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
-          -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
-        end
-
-        return offsets
-      elseif verStr == "4.6" then
+      if verStr == "4.6" then
         
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         if GDDEFS._x64 then
@@ -992,10 +881,96 @@ function Module.install(contextTable)
 
         return offsets
 
+      elseif verStr == "2.0" then
+        error("Not defined yet")
+      elseif verStr == "1.1" then
+        error("Not defined yet")
+      elseif verStr == "1.0" then
+        error("Not defined yet")
       else
+
+        -- 4.7 latest verion fallback with assumption
+        if gd_assumeOffsets and type(gd_assumeOffsets) == 'function' then
+          print( "UNRECORDED or UNSTABLE version " .. (verStr or '?') ..  " , fallback to assumption heuristic" )
+          assumed = gd_assumeOffsets()
+
+          GDDEFS.DICT_HEAD = 0x20
+          GDDEFS.DICT_TAIL = 0x28
+          GDDEFS.DICT_SIZE = 0x34
+          GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+          GDDEFS.GET_TYPE_INDX = 10
+          GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
+          -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
+
+          offsets.VPChildren = assumed.CHILDREN
+          offsets.VPObjStringName = assumed.OBJ_STRING_NAME
+          offsets.NodeGDScriptInstance = assumed.SCRIPT_INSTANCE
+          offsets.NodeGDScriptName = assumed.SCRIPT_NAME
+          offsets.GDScriptFunctionMap = assumed.FUNC_MAP
+          offsets.GDScriptConstantMap = assumed.CONST_MAP
+          offsets.GDScriptVariantNameHM = assumed.VARIANT_MAP
+          offsets.oVariantVector = assumed.VARIANT_VECTOR
+          offsets.NodeVariantVectorSizeOffset = assumed.VARIANT_VECTOR_SIZE
+          offsets.GDScriptVariantNamesIndex = alignOffset( 0x4, GDDEFS.PTRSIZE ) + GDDEFS.PTRSIZE * 6
+          offsets.GDScriptFunctionCode = assumed.FUNC_CODE
+          offsets.GDScriptFunctionCodeConsts = assumed.FUNC_CONST
+          offsets.GDScriptFunctionCodeGlobals = assumed.FUNC_GLOBALS
+          
+          -- offsets.VPChildren = 0x140
+          -- offsets.VPObjStringName = 0x190
+          -- offsets.NodeGDScriptInstance = 0x60
+          -- offsets.NodeGDScriptName = 0xF8 -- 0xF0
+          -- offsets.GDScriptFunctionMap = 0x238 -- 0x230
+          -- offsets.GDScriptConstantMap = 0x210 -- 0x208
+          -- offsets.GDScriptVariantNameHM = 0x188 -- 0x180
+          -- offsets.oVariantVector = 0x28
+          -- -- offsets.GDScriptVariantNameType = 0x44 -- 4.x
+          -- offsets.NodeVariantVectorSizeOffset = 0x10
+          -- offsets.GDScriptVariantNamesIndex = nil -- 3.x
+          -- offsets.GDScriptFunctionCode = 0x178
+          -- offsets.GDScriptFunctionCodeConsts = 0x198
+          -- offsets.GDScriptFunctionCodeGlobals = 0x1A8
+          -- offsets.GDScriptFunctionCodeArg = 0xA0
+
+          if GDDEFS.DEBUGVER then
+            offsets.VPChildren = offsets.VPChildren + 0x8
+            offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+            offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+            offsets.oVariantVector = offsets.oVariantVector + 0x28
+            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+          end
+
+          if GDDEFS.CUSTOMVER then
+            offsets.VPChildren = offsets.VPChildren + 0x48
+            offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+            -- offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance
+            offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+            offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+            offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+            offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+            -- offsets.oVariantVector = offsets.oVariantVector
+            -- offsets.GDScriptVariantNameType = offsets.GDScriptVariantNameType -- 4.x
+            -- offsets.NodeVariantVectorSizeOffset = offsets.NodeVariantVectorSizeOffset
+            -- offsets.GDScriptVariantNamesIndex = offsets.GDScriptVariantNamesIndex -- 3.x
+            -- offsets.GDScriptFunctionCode = offsets.GDScriptFunctionCode
+            -- offsets.GDScriptFunctionCodeConsts = offsets.GDScriptFunctionCodeConsts
+            -- offsets.GDScriptFunctionCodeGlobals = offsets.GDScriptFunctionCodeGlobals
+          end
+
+          return offsets
+        end
+
         print( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
         error( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
-        return offsets
       end
     end
 

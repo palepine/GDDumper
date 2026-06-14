@@ -71,7 +71,7 @@ function Module.install(contextTable)
   local readUTFString = contextTable.readUTFString
 
   local tryRegSceneTree = contextTable.tryRegSceneTree
-  local setSTtoVPoffset = contextTable.setSTtoVPoffset
+  local setSTtoRootOffset = contextTable.setSTtoRootOffset
 
   local MAIN_MODULE_INFO = getMainModuleInfo()
   local TEXT_SECTION_INFO = getSectionBounds(".text")
@@ -96,18 +96,6 @@ function Module.install(contextTable)
       FUNC_CONST = nil,
       FUNC_GLOBALS = nil,
     }
-    
-  -- if GDDEFS.MAJOR_VER >= 4 then
-  --   if GDDEFS.MINOR_VER <= 4 then
-  --     GDDEFS.GET_TYPE_INDX = 8
-  --   elseif GDDEFS.MINOR_VER == 5 then
-  --     GDDEFS.GET_TYPE_INDX = 9
-  --   elseif GDDEFS.MINOR_VER >= 6 then
-  --     GDDEFS.GET_TYPE_INDX = 10
-  --   end
-  -- else
-  --   GDDEFS.GET_TYPE_INDX = 6
-  -- end
 
   local viewport = readPointer("pRoot")
 
@@ -326,7 +314,7 @@ function Module.install(contextTable)
 
     local function formatOffsets()
       return
-        ("CHILDREN: 0x%X\n" ..
+        ("\nCHILDREN: 0x%X\n" ..
         "OBJ_STRING_NAME: 0x%X\n" ..
         "SCRIPT_INSTANCE: 0x%X\n" ..
         "SCRIPT_REF: 0x%X\n" ..
@@ -357,9 +345,36 @@ function Module.install(contextTable)
     end
 
     local function printCurrentOffsets()
-      print(formatOffsets())
+      sendDebugMessage( formatOffsets() )
     end
 
+    local function resolveRootSymbol()
+      -- we need it for root checks
+      if GDDEFS.MAJOR_VER >= 4 then
+
+        if GDDEFS.MINOR_VER <= 4 then
+          GDDEFS.GET_TYPE_INDX = 8
+        elseif GDDEFS.MINOR_VER == 5 then
+          GDDEFS.GET_TYPE_INDX = 9
+        elseif GDDEFS.MINOR_VER >= 6 then
+          GDDEFS.GET_TYPE_INDX = 10
+        end
+
+      end
+
+      if GDDEFS.MAJOR_VER <= 3 then
+        GDDEFS.GET_TYPE_INDX = 6
+      end
+
+      if tryRegSceneTree() and setSTtoRootOffset() then
+        registerSymbol('pRoot', '[pSceneTree]+oSTtoRoot', false)
+        viewport = readPointer("pRoot")
+        if isNullOrNil(viewport) then return false end
+        return true
+      end
+
+      return false
+    end
 
   -- HELPERS END
 
@@ -2491,18 +2506,20 @@ function Module.install(contextTable)
   -- EVIDENCE ORCHESTRATION END
 
   local function printAssumedOffsets()
-    if isNullOrNil(viewport) then return {} end
+    if isNullOrNil(viewport) then
+      if not resolveRootSymbol() then return {} end
+    end
     assumeNodeOffsetsDeep()
-
     printCurrentOffsets()
 
     return assumedOffsets
   end
 
   local function printProbedOffsets()
-    if isNullOrNil(viewport) then return {} end
+    if isNullOrNil(viewport) then
+      if not resolveRootSymbol() then return {} end
+    end
     probeNodeOffsetsMilestone()
-
     printCurrentOffsets()
 
     return assumedOffsets
