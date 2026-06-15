@@ -62,6 +62,7 @@
   local iteratePackedArrayToStruct
   local iterateVectorVariants
   local iterateVectorVariantsForFields
+  local iterateVectorVariantsForNamedField
   local iterateVecVarToAddr
   local iterateVecVarToStruct
   local getNodeVariantVector
@@ -666,6 +667,18 @@
 
       function GDAPI.godot_node_enumVariants(nodeAddr)
         return iterateVectorVariantsForFields(nodeAddr)
+      end
+
+      function GDAPI.gd_node_registerVariantsSelectively(nodeName, variantNameTable)
+        local nodeAddr = getDumpedNode( nodeName )
+        if isNullOrNil(nodeAddr) then error('node addr not found') end
+        if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then error('only GD targets') end
+        -- namespace = (namespace and namespace ~= '' and namespace .. '.') or ''
+
+        for _, fieldName in ipairs(variantNameTable) do
+          local field = iterateVectorVariantsForNamedField(nodeAddr, fieldName)
+          if field then registerSymbol( nodeName .. '.' .. field.Name , field.Offset , true ) end
+        end
       end
 
       --- register our own structure dissector callback
@@ -1561,9 +1574,9 @@
     end
 
     local function getObjectMeta(objAddr)
-      local method = getObjectVMethodByIndex( objAddr, GDDEFS.GET_TYPE_INDX)
+      local method = getObjectVMethodByIndex( objAddr, GDDEFS.GET_TYPE_INDX )
       if isNullOrNil(method) then return nil end
-      return executeMethod(0, nil, method, objAddr)
+      return executeMethod(0, nil, method, objAddr, objAddr)
     end
 
     function GDAPI.getGDObjectName(objAddr)
@@ -1587,7 +1600,7 @@
         -- const GDType *super_type;
         -- mutable InitState init_state = InitState::UNINITIALIZED;
         -- StringName name;
-        local stringNameAddr = readPointer( metaAddr + GDDEFS.PTRSIZE * 2 )
+        local stringNameAddr = readPointer( metaAddr + GDDEFS.PTRSIZE * 2 ) -- TODO: use alignment
         className = getStringNameStr(stringNameAddr or 0) or 'nstrn'
       end
 
@@ -2836,7 +2849,7 @@
           minLength = 15,
           maxLength = 60
         }) or {}
-        if isNotNullOrNil(fallbackGDSemVerTable) then
+        if isNotNullOrNil(fallbackGDSemVerTable) and next(fallbackGDSemVerTable) then
           return fallbackGDSemVerTable[1].text
         else
           print("Version string not found")
@@ -5738,8 +5751,6 @@
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then return nil end
 
       local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
-      -- local sizeOfVariant, ok = redefineVariantSizeByVector(variantVector, vectorSize)
-      -- if not ok then return nil end
       local sizeOfVariant = GDDEFS.SIZEOF_VARIANT -- GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
 
       local mapElement = headElement
@@ -5749,14 +5760,10 @@
       repeat
         local entry = readNodeVariantEntry(mapElement, variantVector, sizeOfVariant)
         fields[index] = {}
-        -- fields[index].index = entry.index
-        -- fields[index].name = entry.name
+        -- fields[index].Index = entry.Index
         fields[index].Name = entry.name
-        -- fields[index].offset = entry.offsetToValue
         fields[index].Offset = entry.offsetToValue
-        -- fields[index].sizeof = sizeOfVariant
         fields[index].Sizeof = sizeOfVariant
-        -- fields[index].type = entry.typeId
         fields[index].Type = entry.typeId
 
         mapElement = getNextMapElement(mapElement)
@@ -5764,6 +5771,37 @@
       until (mapElement == 0)
 
       return fields
+    end
+
+    function iterateVectorVariantsForNamedField(nodeAddr, variantName)
+      if isNullOrNil(nodeAddr) then return nil end
+      if nodeAddr == nil or variantName == '' then return nil end
+
+      local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
+      if isNullOrNil(headElement) or isNullOrNil(mapSize) then return nil end
+
+      local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
+      local sizeOfVariant = GDDEFS.SIZEOF_VARIANT
+
+      local mapElement = headElement
+      local field = {}
+      local index = 0
+
+      repeat
+        local entry = readNodeVariantEntry(mapElement, variantVector, sizeOfVariant)
+
+        if entry.name == variantName then
+          field.Name = entry.name
+          field.Offset = entry.offsetToValue
+          field.Sizeof = sizeOfVariant
+          field.Type = entry.typeId
+          return field
+        end
+
+        mapElement = getNextMapElement(mapElement)
+        index = index+1
+      until (mapElement == 0)
+      return nil
     end
 
     --- nodeAddr and owner to append to
@@ -6231,7 +6269,7 @@
       if not (classFields) or next(classFields)==nil then error('node isn\'t dumped or constructed yet, try again later') end
 
       for _ , field in pairs(classFields) do
-        registerSymbol( namespace .. nodeName .. '.' .. field.Name , field.Offset , false ) -- save them
+        registerSymbol( namespace .. nodeName .. '.' .. field.Name , field.Offset , true )
       end
     end
 
@@ -6454,6 +6492,7 @@
 
       GDFunc = GDFuncDisasm.GDF
       GDFuncDisasm.defineGDFunctionEnums()
+      GDDEFS.FUNC_OPCODE_END = GDFunc.CurrentDisassembler:getOPEnumFromInternalOPID(GDFunc.OP.OPCODE_END)
       GDDEFS.bDisasmFunc = true -- whether to disasm functions, on by default
 
       local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDStructWalker.lua]] )
@@ -6549,6 +6588,7 @@
   getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
   getNodeName = GDAPI.getNodeName
   gd_node_enumVariants = GDAPI.godot_node_enumVariants
+  gd_node_registerVariantsSelectively = GDAPI.gd_node_registerVariantsSelectively
   gd_AA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
   gd_getNodeChildByGDName = GDAPI.getNodeChildByGDName
   gd_getNodeChildByName = GDAPI.getNodeChildByName
@@ -6569,8 +6609,8 @@
   printDumpedNodes = GDAPI.printDumpedNodes
   gd_printConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
-  gd_assumeOffsets = nil --= GDAPI.godot_assumeOffsets
-  gd_probeOffsets = nil --= GDAPI.godot_probeOffsets
+  gd_assumeOffsets = nil
+  gd_probeOffsets = nil
 
   
   --[[
