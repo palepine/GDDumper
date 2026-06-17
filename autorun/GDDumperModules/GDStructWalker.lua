@@ -762,7 +762,7 @@ function Module.install(contextTable)
 
         local sizeFound = false
         -- validate the vector size and vectot itself via the size
-        for j=1, 4 do
+        for j=1, 5 do
           VARIANT_VECTOR_SIZE = j * 4
           local vectorSize = readInteger( vectorAddr - VARIANT_VECTOR_SIZE )
           if isNotNullOrNil(vectorSize) and vectorSize < 2000 and vectorMapSize == vectorSize and validateVariantStride(vectorAddr, vectorSize) then
@@ -1966,6 +1966,18 @@ function Module.install(contextTable)
 
   -- FUNC STRUCT START
 
+    local function hasValidGDFuncOffsetOrder()
+      if not assumedOffsets.FUNC_CODE then return false end
+      if not assumedOffsets.FUNC_CONST then return false end
+      if not assumedOffsets.FUNC_GLOBALS then return false end
+
+      if GDDEFS.MAJOR_VER >= 4 then
+        return assumedOffsets.FUNC_CODE < assumedOffsets.FUNC_CONST and assumedOffsets.FUNC_CONST < assumedOffsets.FUNC_GLOBALS
+      end
+
+      return assumedOffsets.FUNC_CONST < assumedOffsets.FUNC_GLOBALS and assumedOffsets.FUNC_GLOBALS < assumedOffsets.FUNC_CODE
+    end
+
     local function collectGDFunctionAddresses(scriptAddr)
       local results = {}
       local visited = {}
@@ -2134,7 +2146,7 @@ function Module.install(contextTable)
     end
 
     local function assumeGDFuncOffset(scriptAddr)
-      if assumedOffsets.FUNC_CODE and assumedOffsets.FUNC_CONST and assumedOffsets.FUNC_GLOBALS then return true end
+      if hasValidGDFuncOffsetOrder() then return true end
 
       if not assumedOffsets.FUNC_MAP then return false end
       if not assumedOffsets.VARIANT_VECTOR_SIZE then return false end
@@ -2158,6 +2170,9 @@ function Module.install(contextTable)
         excluded[assumedOffsets.FUNC_CODE] = true
       end
 
+      -- func code is absolutely essential
+      if not assumedOffsets.FUNC_CODE then return false end
+
       if not assumedOffsets.FUNC_CONST then
         assumedOffsets.FUNC_CONST = findFunctionVectorOffset( funcAddrs, validateFunctionConstVector, excluded )
 
@@ -2171,12 +2186,17 @@ function Module.install(contextTable)
 
       if not assumedOffsets.FUNC_GLOBALS then
         assumedOffsets.FUNC_GLOBALS = findFunctionVectorOffset( funcAddrs, validateFunctionGlobalVector, excluded )
+
+        if assumedOffsets.FUNC_GLOBALS and not hasValidGDFuncOffsetOrder() then
+          assumedOffsets.FUNC_GLOBALS = nil
+        end
+
         if assumedOffsets.FUNC_GLOBALS then
           sendDebugMessage( 'Valid GDFunction Globals offset 0x' .. numtohexstr(assumedOffsets.FUNC_GLOBALS) )
         end
       end
 
-      return assumedOffsets.FUNC_CODE and assumedOffsets.FUNC_CONST and assumedOffsets.FUNC_GLOBALS
+      return hasValidGDFuncOffsetOrder()
     end
 
   -- FUNC STRUCT END
