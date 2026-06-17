@@ -12,9 +12,6 @@
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// FORWARD DECLARATIONS
   local GDAPI = {}
 
-  local isNullOrNil
-  local isNotNullOrNil
-  
   local getExportTableName
   local getGodotVersionString
   
@@ -96,19 +93,19 @@
       --- checks if the value is a valid pointer
       ---@param addr number
       ---@return boolean
-      local function isValidPointer(addr)
+      function isValidPointer(addr)
         local success, result = pcall(readPointer, addr)
         return success and result ~= nil
       end
 
-      local function isInvalidPointer(addr)
+      function isInvalidPointer(addr)
         return isValidPointer(addr) == false
       end
 
       --- checks if the value is a valid pointer and not nullptr
       ---@param addr number
       ---@return boolean
-      local function isPointerNotNull(addr)
+      function isPointerNotNull(addr)
         return isValidPointer(addr) and readPointer(addr) ~= 0
       end
 
@@ -231,7 +228,8 @@
         return false
       end
 
-      local function alignOffset(offset, alignment)
+      -- global
+      function alignOffset(offset, alignment)
         local remaining = offset % alignment -- get remaining bytes for alignment
         if remaining ~= 0 then
           offset = offset + (alignment - remaining)
@@ -437,13 +435,13 @@
       function GDAPI.printGDConfig()
         print
         (
-          ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X,offsetVariantMapIndex = 0X%X}]]):format(
+          ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X}]]):format(
           (GDDEFS.MAJOR_VER or 0x0),
           (GDDEFS.MINOR_VER or 0x0),
           (tostring(GDDEFS.CUSTOMVER)),
           (tostring(GDDEFS.DEBUGVER)),
           (tostring(GDDEFS.MONO)),
-          (tostring(true)),
+          (tostring(false)),
           (GDDEFS.CHILDREN or 0x0),
           (GDDEFS.OBJ_STRING_NAME or 0x0),
           (GDDEFS.GDSCRIPTINSTANCE or 0x0),
@@ -455,9 +453,9 @@
           (GDDEFS.FUNC_CONST or 0x0),
           (GDDEFS.FUNC_GLOBNAMEPTR or 0x0),
           (GDDEFS.CONST_MAP or 0x0),
-          (GDDEFS.VARIANTMAP or 0x0),
-          (GDDEFS.VARIANTMAP_INDEX or 0x0))
+          (GDDEFS.VARIANTMAP or 0x0)
           )
+        )
       end
 
     -- ///---///--///---///--///---/// STRUCTURES
@@ -795,7 +793,7 @@
         mainMemrec.Description = "Dumper"
         mainMemrec.Type = vtAutoAssembler
         mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\noffsetVariantMapIndex =     nil, -- essential for 3.x: MemberInfo inside GDScript->member_indices, we need pointer to the Variant index for correctly mapping Variants in Nodes\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n"
+        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n"
         -- useAssumption =             nil, -- set to true if you want the script to try to guess the offsets; unreliable
         local dumpMemrec = addrList.createMemoryRecord()
         dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
@@ -1867,7 +1865,6 @@
         end
       end
 
-      -- local dictSize = readInteger(dictRoot + GDDEFS.DICT_SIZE)
       local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
       if isNullOrNil(dictSize) then
         sendDebugMessage('dictSize isnt valid')
@@ -3152,6 +3149,11 @@
           GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*2 -- 0x28
           GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*3 -- 0x30
           GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x3C
+          if GDDEFS.MINOR_VER >= 6 then
+            GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD - GDDEFS.PTRSIZE -- 0x20, GDDEFS.PTRSIZE*1 after refcount instead of 2
+            GDDEFS.DICT_TAIL = GDDEFS.DICT_HEAD - GDDEFS.PTRSIZE -- 0x28
+            GDDEFS.DICT_SIZE = GDDEFS.DICT_HEAD - GDDEFS.PTRSIZE -- 0x34
+          end
 
           -- next*, prev*, key_variant, value_variant
           GDDEFS.DICTELEM_KEY_VARIANT = GDDEFS.PTRSIZE*2 -- 0x10, seems aligned well
@@ -3729,10 +3731,10 @@
       if isNullOrNil(gdscript) or not isVtable( getVtable(gdscript) ) then return false end
 
       local gdScriptName = readPointer(gdscript + GDDEFS.GDSCRIPTNAME)
-      if isNullOrNil(gdScriptName) then return false end
+      if isNullOrNil(gdScriptName) then sendDebugMessage(numtohexstr(nodeAddr) .. ' script name absent') return false end
       
       -- more expensive, but stronger assumption
-      if ( readUTFString(gdScriptName) ):sub(1,4) == 'res:' then return true else return false end
+      if ( readUTFString(gdScriptName) ):sub(1,4) == 'res:' then return true else sendDebugMessage(numtohexstr(nodeAddr) .. ' res:// not matched') return false end
 
       return true
     end

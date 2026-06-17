@@ -44,9 +44,6 @@ function Module.install(contextTable)
       -- stable ones
 
       if verStr == "4.6" then
-        GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
-        GDDEFS.DICT_TAIL = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*3 -- 0x28
-        GDDEFS.DICT_SIZE = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x34
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 10
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
@@ -131,9 +128,6 @@ function Module.install(contextTable)
         return offsets
 
       elseif verStr == "4.5" then
-        GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
-        GDDEFS.DICT_TAIL = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*3 -- 0x28
-        GDDEFS.DICT_SIZE = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x34
 
         GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
         GDDEFS.GET_TYPE_INDX = 9
@@ -870,9 +864,6 @@ function Module.install(contextTable)
         -- latest verion fallback with assumption
         if gd_assumeOffsets and type(gd_assumeOffsets) == 'function' then
           print( "UNRECORDED or UNSTABLE version " .. (verStr or '?') ..  " , fallback to assumption heuristic" )
-          GDDEFS.DICT_HEAD = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*2 -- 0x20
-          GDDEFS.DICT_TAIL = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*3 -- 0x28
-          GDDEFS.DICT_SIZE = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*1 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x34
           GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
           GDDEFS.GET_TYPE_INDX = 10
           GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
