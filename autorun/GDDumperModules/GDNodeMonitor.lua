@@ -223,7 +223,7 @@ function Module.install(contextTable)
 
     local function handleDictionaryForNodes(dictAddr, dumpContext)
       if isNullOrNil(dictAddr) or dumpContext:shouldStop() then return end
-      local dictSize = readInteger( dictAddr + DICT_SIZE)
+      local dictSize = readInteger( dictAddr + DICT_SIZE) -- TODO: size sanity checks?
       if isNotNullOrNil(dictSize) then
         iterateDictionaryForNodes( dictAddr, dictSize, dumpContext )
       end
@@ -246,10 +246,11 @@ function Module.install(contextTable)
 
     function iterateVecVarForNodes(vector, dumpContext)
       local vectorSize = readInteger( vector - SIZE_VECTOR )
-      if isNullOrNil(vectorSize) then return; end
+      if isNullOrNil(vectorSize) then return; end -- TODO: size sanity check?
 
       for variantIndex = 0, vectorSize - 1 do
         -- if dumpContext:shouldStopPeriodic(variantIndex) then return end
+        if (variantIndex & BUDGET_CHECK_MASK) == 0 and (dumpContext.thread.Terminated or getTickCount() - dumpContext.startedAt > dumpContext.budgetMs) then return end
 
         local variantType = readInteger( vector + variantSize * variantIndex )
         local offsetToValue = variantSize*variantIndex + 0x8
@@ -304,7 +305,7 @@ function Module.install(contextTable)
       if not ok then return end
 
       if MONOUSED and checkIfCSScript( gdScriptNameAddr ) == eCSScript then
-      elseif vectorAddr then
+      elseif isNotNullOrNil(vectorAddr) then
         iterateVecVarForNodes( vectorAddr, dumpContext )
       end
 
@@ -327,6 +328,8 @@ function Module.install(contextTable)
       local iteration = 0
       repeat
         -- if dumpContext:shouldStopPeriodic(iteration) then return end
+        -- inlined
+        if (iteration & BUDGET_CHECK_MASK) == 0 and (dumpContext.thread.Terminated or getTickCount() - dumpContext.startedAt > dumpContext.budgetMs) then return end
 
         local variantType = readInteger( mapElement + DICTELEM_VALUE_VARIANT)
         local offsetToValue = DICTELEM_VALUE_VARIANT + 0x8
@@ -363,7 +366,7 @@ function Module.install(contextTable)
           mapElement = readPointer( mapElement + DICTELEM_PAIR_NEXT ) or 0
         end
         
-        -- iteration = iteration + 1
+        iteration = iteration + 1
 
       until (mapElement == 0)
     end
@@ -388,9 +391,11 @@ function Module.install(contextTable)
         if self.visited[addr] then return false end
         self.visited[addr] = true
 
-        local scriptInstanceAddr = readPointer( addr + SCRIPT_INSTANCE ) or 0
+        local scriptInstanceAddr = readPointer( addr + SCRIPT_INSTANCE )
+        if isNullOrNil(scriptInstanceAddr) then return false end
         local vectorAddr = readPointer( scriptInstanceAddr + VARIANT_VECTOR )
-        local scriptAddr = readPointer( scriptInstanceAddr + SCRIPTREF ) or 0
+        local scriptAddr = readPointer( scriptInstanceAddr + SCRIPTREF )
+        if isNullOrNil(scriptAddr) then return false end
         local gdScriptNameAddr = readPointer( scriptAddr + GDSCRIPTNAME )
 
         local childrenAddr = readPointer( addr + CHILDREN )
@@ -409,7 +414,7 @@ function Module.install(contextTable)
       end
 
       function dumpContext:shouldStop()
-        return self.thread.Terminated or (getTickCount() - self.startedAt) > self.budgetMs -- TODO: check every other time?
+        return self.thread.Terminated or (getTickCount() - self.startedAt) > self.budgetMs
       end
 
       function dumpContext:shouldStopPeriodic(iteration)
@@ -421,8 +426,10 @@ function Module.install(contextTable)
         local resultAbs = {} -- { name : addr }
         for i, val in ipairs(tabl) do
           local scriptName, longName = getNodeNameFromGDScript(val, true)
-          result[ scriptName or '' ] = val
-          resultAbs[ longName or '' ] = val
+          if scriptName and scriptName ~= 'N??' and longName and longName ~= '' then
+            result[scriptName] = val
+            resultAbs[longName] = val
+          end
         end
         return result, resultAbs
       end
@@ -649,7 +656,7 @@ return Module -- exporting
           registerSymbol(absScriptPath, addr, true) -- register long symbol
           registerSymbol(scriptName, addr, true) -- register short name alias (might collide)
           table.insert(GD_REGISTERED_NODES_ABS, absScriptPath)
-          table.insert(GD_REGISTERED_NODES, absScriptPath)
+          table.insert(GD_REGISTERED_NODES, scriptName)
         end
         return true
       end
