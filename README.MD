@@ -6,7 +6,10 @@
 
 Cheat Engine Godot Dumper is a [Cheat Engine](https://github.com/cheat-engine/cheat-engine) script that let's you inspect & extract runtime Godot apps via Cheat Engine API. The script features dumping SceneTree data, helping with reverse engineering, modding or debugging.
 
-THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY.
+__THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY.__
+
+## Platform
+The script mainly supports Windows x86-64 (x64/x32). If you wish to see native support for ARM MacOS, x86-64 Linux - feel free to request that and support the cause.
 
 ## Features
 - Godot 3.x and 4.x. support
@@ -36,7 +39,9 @@ You can test your luck avoiding the steps above letting the script do that: tick
 5. e.g. click `Add Template` and/or follow instructions in the [API doc](/docs/GDUMPER_API.MD).
 
 ## Support
-If you find the script useful, [consider supporting me here](https://ko-fi.com/vesperpallens)
+If you find the script useful, [consider supporting me here so I make the tool better](https://ko-fi.com/vesperpallens)
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/R6R813UKCL)
 
 ## Contributing
 I'd appreciate any help/ideas with features I haven't implemented or that can be implemented more efficiently.
