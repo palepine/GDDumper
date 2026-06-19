@@ -79,16 +79,16 @@ function Module.install(contextTable)
     end
 
     local function checkChildArray( childArray, size )
-      if isNullOrNil(size) then return false end -- if no children, we don't need it
-      if isNullOrNil(childArray) then return false end
+      if size == nil or size == 0 then return false end -- if no children, we don't need it
+      if childArray == nil or childArray == 0 then return false end
       local childElem = readPointer(childArray)
-      if isNullOrNil(childElem) or not isVtable( getVtable(childElem) ) then return false end  -- check the 0th object for vtable
+      if childElem == nil or childElem == 0 or not isVtable( readPointer(childElem) ) then return false end  -- check the 0th object for vtable
       return true
     end
 
     local function checkIfCSScript( scriptNameAddr )
 
-      if isNullOrNil(scriptNameAddr) then return 0 end
+      if scriptNameAddr == nil or scriptNameAddr == 0 then return 0 end
 
       local gdScriptName = readUTFString(scriptNameAddr) -- todo: anything more efficient?
       if  (gdScriptName):sub(-3) == '.cs' then return 2 end
@@ -118,10 +118,10 @@ function Module.install(contextTable)
 
     local function getRootNodeTable()
       local viewport = readPointer("pRoot")
-      if isNullOrNil(viewport) then getCurrentThreadObject().terminate() return end
+      if viewport == nil or viewport == 0 then getCurrentThreadObject().terminate() return end
       
       local childrenAddr = readPointer( (viewport or 0) + CHILDREN)
-      if isNullOrNil(childrenAddr) then getCurrentThreadObject().terminate() return end
+      if childrenAddr == nil or childrenAddr == 0 then getCurrentThreadObject().terminate() return end
 
       local childrenSize;
       if GDDEFS.MAJOR_VER >= 4 then
@@ -130,13 +130,13 @@ function Module.install(contextTable)
         childrenSize = readInteger( childrenAddr - CHILDREN_SIZE ) or 0
       end
 
-      if isNullOrNil(childrenSize) then getCurrentThreadObject().terminate() return end
+      if childrenSize == nil or childrenSize == 0 then getCurrentThreadObject().terminate() return end
 
       local nodeTable = {}
 
       for i = 0, (childrenSize - 1) do
         local nodeAddr = readPointer(childrenAddr + i * PTRSIZE)
-        if isNotNullOrNil(nodeAddr) then
+        if nodeAddr ~= nil and nodeAddr ~= 0 then 
           table.insert(nodeTable, nodeAddr)  
         end
       end
@@ -179,7 +179,7 @@ function Module.install(contextTable)
       end
 
       function monitor:setCD(newMS)
-        if isNullOrNil(newMS) or type(newMS) ~= "number" or newMS < 0 then error('cooldown must be valid') end
+        if newMS == nil or newMS == 0 or type(newMS) ~= "number" or newMS < 0 then error('cooldown must be valid') end
         self.CD = newMS
       end
 
@@ -222,18 +222,18 @@ function Module.install(contextTable)
   -- TYPE HANDLERS
 
     local function handleDictionaryForNodes(dictAddr, dumpContext)
-      if isNullOrNil(dictAddr) or dumpContext:shouldStop() then return end
+      if dictAddr == nil or dictAddr == 0 or dumpContext:shouldStop() then return end
       local dictSize = readInteger( dictAddr + DICT_SIZE) -- TODO: size sanity checks?
-      if isNotNullOrNil(dictSize) then
+      if dictSize ~= nil and dictSize ~= 0 then
         iterateDictionaryForNodes( dictAddr, dictSize, dumpContext )
       end
     end
 
     local function handleArrayForNodes(arrAddr, dumpContext)
-      if isNullOrNil(arrAddr) or dumpContext:shouldStop() then return end
+      if arrAddr == nil or arrAddr == 0 or dumpContext:shouldStop() then return end
 
       local arrVectorAddr = readPointer( arrAddr + ARRAY_TOVECTOR )
-      if isNullOrNil(arrVectorAddr) then return; end
+      if arrVectorAddr == nil or arrVectorAddr == 0 then return; end
       iterateVecVarForNodes( arrVectorAddr, dumpContext )
     end
 
@@ -246,7 +246,7 @@ function Module.install(contextTable)
 
     function iterateVecVarForNodes(vector, dumpContext)
       local vectorSize = readInteger( vector - SIZE_VECTOR )
-      if isNullOrNil(vectorSize) then return; end -- TODO: size sanity check?
+      if vectorSize == nil or vectorSize == 0 then return; end -- TODO: size sanity check?
 
       for variantIndex = 0, vectorSize - 1 do
         -- if dumpContext:shouldStopPeriodic(variantIndex) then return end
@@ -261,13 +261,13 @@ function Module.install(contextTable)
 
           if MAJORVER <= 3 then
             -- for references
-            if not isVtable( getVtable( objAddr ) ) then
+            if not isVtable( readPointer( objAddr ) ) then
               -- shift once w/o validation, check checkObjectOffset for context
               objAddr = readPointer( readPointer( vector + offsetToValue - PTRSIZE ) )
             end
           end
 
-          if isNotNullOrNil(objAddr) then
+          if objAddr ~= nil and objAddr ~= 0 then 
             handleObjectForNodes( objAddr, dumpContext )
           end
 
@@ -292,7 +292,7 @@ function Module.install(contextTable)
 
     function processNodeForNodes(nodeAddr, dumpContext)
       if dumpContext:shouldStop() then return end
-      if isNullOrNil(nodeAddr) then return false end
+      if nodeAddr == nil or nodeAddr == 0 then return false end
 
       -- parse node
       local ok,
@@ -305,7 +305,7 @@ function Module.install(contextTable)
       if not ok then return end
 
       if MONOUSED and checkIfCSScript( gdScriptNameAddr ) == eCSScript then
-      elseif isNotNullOrNil(vectorAddr) then
+      elseif vectorAddr ~= nil and vectorAddr ~= 0 then
         iterateVecVarForNodes( vectorAddr, dumpContext )
       end
 
@@ -315,7 +315,7 @@ function Module.install(contextTable)
     end
 
     function iterateDictionaryForNodes(dictAddr, dictSize, dumpContext)
-      if isNullOrNil(dictAddr) or dumpContext:shouldStop() then return end
+      if dictAddr == nil or dictAddr == 0 or dumpContext:shouldStop() then return end
 
       local dictRoot = dictAddr
       if GDDEFS.MAJOR_VER <= 3 then
@@ -323,7 +323,7 @@ function Module.install(contextTable)
       end
 
       local mapElement = readPointer( (dictRoot or 0) + DICT_HEAD)
-      if isNullOrNil(mapElement) then return end
+      if mapElement == nil or mapElement == 0 then return end
 
       local iteration = 0
       repeat
@@ -340,13 +340,13 @@ function Module.install(contextTable)
 
           if MAJORVER <= 3 then
             -- for references
-            if not isVtable( getVtable( objAddr ) ) then
+            if not isVtable( readPointer( objAddr ) ) then
               -- shift once w/o validation, check checkObjectOffset for context
               objAddr = readPointer( readPointer( mapElement + offsetToValue - PTRSIZE ) )
             end
           end
 
-          if isNotNullOrNil(objAddr) then
+          if objAddr ~= nil and objAddr ~= 0 then
             handleObjectForNodes( objAddr, dumpContext )
           end
 
@@ -386,16 +386,16 @@ function Module.install(contextTable)
         }
 
       function dumpContext:VisitNode(addr)
-        if isNullOrNil(addr) then return false end
+        if addr == nil or addr == 0 then return false end
         GDDEFS.Monitor:nodeCountInc() -- how many nodes we have seen
         if self.visited[addr] then return false end
         self.visited[addr] = true
 
         local scriptInstanceAddr = readPointer( addr + SCRIPT_INSTANCE )
-        if isNullOrNil(scriptInstanceAddr) then return false end
+        if scriptInstanceAddr == nil or scriptInstanceAddr == 0 then return false end
         local vectorAddr = readPointer( scriptInstanceAddr + VARIANT_VECTOR )
         local scriptAddr = readPointer( scriptInstanceAddr + SCRIPTREF )
-        if isNullOrNil(scriptAddr) then return false end
+        if scriptAddr == nil or scriptAddr == 0 then return false end
         local gdScriptNameAddr = readPointer( scriptAddr + GDSCRIPTNAME )
 
         local childrenAddr = readPointer( addr + CHILDREN )
@@ -406,7 +406,7 @@ function Module.install(contextTable)
           size = readInteger( (childrenAddr or 0) - CHILDREN_SIZE ) or 0
         end
 
-        if isNotNullOrNil(gdScriptNameAddr) then
+        if gdScriptNameAddr ~= nil and gdScriptNameAddr ~= 0 then
           table.insert(self.dumped, addr)
         end
 
@@ -435,7 +435,7 @@ function Module.install(contextTable)
       end
 
       local mainNodeDict = getRootNodeTable()
-      if isNullOrNil(mainNodeDict) then return end
+      if mainNodeDict == nil or mainNodeDict == 0 then return end
 
       for _, value in ipairs(mainNodeDict) do
         processNodeForNodes(value, dumpContext)
