@@ -1,7 +1,23 @@
 local Module = {}
 
+local LATEST_SEMVER_SUPPORTED = "4.7" -- Update me to the latest supported version when support is provided
+
 function Module.install(contextTable)
   local GDDEFS = contextTable.GDDEFS
+
+  local function installVersionFallback(tab, lastVersion)
+    local metatable = 
+      {
+        __index = function(table, version)
+          local fallback = rawget(table, lastVersion)
+          if fallback then
+            print( ("[TYPES] Version %s is not defined, do that; falling back to %s") :format( tostring(version), tostring(lastVersion) ) )
+          end
+          return fallback
+        end
+      }
+    setmetatable(tab, metatable)
+  end
 
   local function defineVariantTypeProfile()
     if GDDEFS.VARIANT_TYPE_PROFILE then
@@ -243,8 +259,9 @@ function Module.install(contextTable)
         ["4.5"] = { base = "4.4", patches = {} },
         ["4.6"] = { base = "4.5", patches = {} },
         ["4.7"] = { base = "4.6", patches = {} },
-        ["4.8"] = { base = "4.7", patches = {} },
       }
+
+    installVersionFallback( specs, LATEST_SEMVER_SUPPORTED )
 
     local version = GDDEFS.VERSION_STRING
     local resolved = prepareProfileSpec(version, specs)

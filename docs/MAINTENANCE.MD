@@ -23,11 +23,11 @@ Each new minor version needs the following updates (or validation).
 
 ### Godot Engine Variant Types (essential)
 
-- Variant [major.minor] profiles in `GDDumperModules/GDTypes.lua`
+- Variant [major.minor] profiles in `GDDumperModules/GDTypes.lua` + latest ver
 
 ### GD Function Disassembler
 
-- GDFunction [major.minor] profiles in `GDDumperModules/GDFunctionStructDisassembler.lua`
+- GDFunction [major.minor] profiles in `GDDumperModules/GDFunctionStructDisassembler.lua` + latest ver
   - In case new opcodes are added, they have to be added to all respective enums and structure disassembler handlers have to be defined.
   - Essential for GDFunction disassembler to operate
 

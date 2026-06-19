@@ -6296,7 +6296,7 @@
         loadScriptFromTable( "GDNM" ).install(dependencyContext)
       end
 
-      -- it will spin from now
+      -- it will spin from now on
       GDDEFS.Monitor:init()
 
     end

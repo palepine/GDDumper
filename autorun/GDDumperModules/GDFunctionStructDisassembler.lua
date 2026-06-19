@@ -1,5 +1,7 @@
 local Module = {}
 
+local LATEST_SEMVER_SUPPORTED = "4.7" -- Update me to the latest supported version when support is provided
+
 local GD_FUNC_DISASM_COLOR = 0x451630 --0x808040
 
 local function numtohexstr(num) return ("%X"):format(num or -1) end
@@ -11,6 +13,20 @@ function Module.install(contextTable)
   local getGDTypeName = contextTable.getGDTypeName
   local sendDebugMessage = contextTable.sendDebugMessage
   local GDF = {}
+
+  local function installVersionFallback(tab, lastVersion)
+    local metatable = 
+      {
+        __index = function(table, version)
+          local fallback = rawget(table, lastVersion)
+          if fallback then
+            print( ("[GDFunc] Version %s is not defined, do that; falling back to %s") :format( tostring(version), tostring(lastVersion) ) )
+          end
+          return fallback
+        end
+      }
+    setmetatable(tab, metatable)
+  end
 
   local formatDisassembledAddress = function(addrInt)
     local addrIndex = addrInt & (GDF.EADDRESS['ADDR_MASK']) -- lower 24 bits are indices
@@ -3302,12 +3318,7 @@ function Module.install(contextTable)
               decoderName = "BytecodeV1",
               patches = {}
             },
-          ["4.8"] =
-            {
-              base = "4.7",
-              decoderName = "BytecodeV1",
-              patches = {}
-            }
+
         }
       GDF.CompiledProfiles = {}
       GDF.EADDRESS =
@@ -4416,13 +4427,14 @@ function Module.install(contextTable)
         GDF.CompiledProfiles[version] = createProfileFromVersion(version)
       end
 
+      installVersionFallback( GDF.CompiledProfiles, LATEST_SEMVER_SUPPORTED )
+
       if GDDEFS.VERSION_STRING then
         GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion(GDDEFS.VERSION_STRING)
       end
 
     end
   end
-
 
   -- main script will access via global
   GDFunc = GDF

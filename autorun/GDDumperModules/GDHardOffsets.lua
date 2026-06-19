@@ -1,5 +1,7 @@
 local Module = {}
 
+-- TODO: metatables, profiles, full semver instead of ifelse mess when it will make sense
+
 local function alignOffset(offset, alignment)
   local remaining = offset % alignment -- get remaining bytes for alignment
   if remaining ~= 0 then
