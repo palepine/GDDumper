@@ -23,7 +23,7 @@ Each new minor version needs the following updates (or validation).
 
 ### Godot Engine Variant Types (essential)
 
-- Variant [major.minor] profiles in `defineVariantTypeProfile()`
+- Variant [major.minor] profiles in `GDDumperModules/GDTypes.lua`
 
 ### GD Function Disassembler
 
