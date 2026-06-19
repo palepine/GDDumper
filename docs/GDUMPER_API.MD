@@ -6,7 +6,7 @@ For the moment being, the doc isn't complete and features only most useful funct
 
 ## Dumper
 
-- `gd_initDumped(config)`
+- `gd_initDumper(config)`
 > Initializes the dumper with the passed config. The script might guess the offsets if passed as `gd_initDumped( {useHardcoded = true} )`
 
   > Notes:
