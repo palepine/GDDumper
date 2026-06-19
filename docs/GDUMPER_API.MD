@@ -109,6 +109,22 @@ For the moment being, the doc isn't complete and features only most useful funct
   gd_reloadScriptInstance( nodeAddr ) -- hot-reload this node's ScriptInstance for members to be constructed
   ```
 
+## Node Spider Service
+
+- `GDDEFS.Monitor:suspend()` / `GDDEFS.Monitor:resume()`
+> suspends/resumes the service that continuously dispatches threads walking the Node tree.
+
+  > Notes: 
+  >1) This service is responsible for discovering nodes with gdscript to enable most API functions
+  >2) The service may load the CPU due to myriads of memory reads which would integrate to higher CPU usage as a result
+  >3) Control the wait time between these runs with setSD(newCD)
+
+- `GDDEFS.Monitor:profile()`
+> Reports the current run iteration, previous run delta and the amount of hit nodes, e.g. `Runs: 126 Delta: 2 ms (raw 500) Nodes met: 187`
+
+- `GDDEFS.Monitor:setCD( newMS )`
+> sets a wait time between monitor runs, default is 500ms. Increase the wait time when frequent runs aren't necessary.
+
 ## Misc
 
 - `gd_printDumped()`
