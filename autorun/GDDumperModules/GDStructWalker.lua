@@ -2545,10 +2545,12 @@ function Module.install(contextTable)
     return assumedOffsets
   end
 
+  gd_assumeOffsets = printAssumedOffsets
+  gd_probeOffsets = printProbedOffsets
+
   return
     {
-      assume = printAssumedOffsets,
-      probe = printProbedOffsets,
+      ok = true
     }
 end
 
@@ -2610,7 +2612,3 @@ hashmap/hashset: 4 pointers, capacity, size
 	Map<StringName, Vector<StringName> > _signals;
 
 ]]
-
-
--- gd_assumeOffsets()
--- gd_probeOffsets()

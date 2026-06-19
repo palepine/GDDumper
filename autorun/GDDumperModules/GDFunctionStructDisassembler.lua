@@ -4423,10 +4423,17 @@ function Module.install(contextTable)
     end
   end
 
+
+  -- main script will access via global
+  GDFunc = GDF
+  defineGDFunctionEnums()
+
+  GDFunc.FUNC_OPCODE_END = GDFunc.CurrentDisassembler:getOPEnumFromInternalOPID(GDFunc.OP.OPCODE_END)
+  GDDEFS.bDisasmFunc = true -- whether to disasm functions, on by default
+
   return
     {
-      defineGDFunctionEnums = defineGDFunctionEnums,
-      GDF = GDF,
+      ok = true
     }
 end
 

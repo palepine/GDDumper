@@ -14,18 +14,18 @@ function Module.install(contextTable)
       if gd_assumeOffsets and type(gd_assumeOffsets) == 'function' then
         print('ASSUMING OFFSETS FALLBACK FOR AN UNRECORDED VERSION/RELEASE')
         local assumed = gd_assumeOffsets()
-        offsets.VPChildren = assumed.CHILDREN
-        offsets.VPObjStringName = assumed.OBJ_STRING_NAME
-        offsets.NodeGDScriptInstance = assumed.SCRIPT_INSTANCE
-        offsets.NodeGDScriptName = assumed.SCRIPT_NAME
-        offsets.GDScriptFunctionMap = assumed.FUNC_MAP
-        offsets.GDScriptConstantMap = assumed.CONST_MAP
-        offsets.GDScriptVariantNameHM = assumed.VARIANT_MAP
-        offsets.oVariantVector = assumed.VARIANT_VECTOR
-        offsets.NodeVariantVectorSizeOffset = assumed.VARIANT_VECTOR_SIZE
-        offsets.GDScriptFunctionCode = assumed.FUNC_CODE
-        offsets.GDScriptFunctionCodeConsts = assumed.FUNC_CONST
-        offsets.GDScriptFunctionCodeGlobals = assumed.FUNC_GLOBALS
+        offsets.VPChildren = assumed.CHILDREN or 0
+        offsets.VPObjStringName = assumed.OBJ_STRING_NAME or 0
+        offsets.NodeGDScriptInstance = assumed.SCRIPT_INSTANCE or 0
+        offsets.NodeGDScriptName = assumed.SCRIPT_NAME or 0
+        offsets.GDScriptFunctionMap = assumed.FUNC_MAP or 0
+        offsets.GDScriptConstantMap = assumed.CONST_MAP or 0
+        offsets.GDScriptVariantNameHM = assumed.VARIANT_MAP or 0
+        offsets.oVariantVector = assumed.VARIANT_VECTOR or 0
+        offsets.NodeVariantVectorSizeOffset = assumed.VARIANT_VECTOR_SIZE or 0
+        offsets.GDScriptFunctionCode = assumed.FUNC_CODE or 0
+        offsets.GDScriptFunctionCodeConsts = assumed.FUNC_CONST or 0
+        offsets.GDScriptFunctionCodeGlobals = assumed.FUNC_GLOBALS or 0
         return offsets
       end
       -- error('Unhandled version')
@@ -43,8 +43,61 @@ function Module.install(contextTable)
       -- non-stable versions should be handled by the else clause
       -- stable ones
 
-      if verStr == "4.6" then
-        GDDEFS.STRING = 0x8 -- we need it for correct addr/struct representation
+      if verStr == "4.7" then
+        GDDEFS.STRING = 0x8
+        GDDEFS.GET_TYPE_INDX = 10
+        GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
+
+        -- Godot Engine v4.7.stable.official 
+        -- godot.windows.template_release.x86_64.exe 
+        offsets.VPChildren = 0x140
+        offsets.VPObjStringName = 0x190
+        offsets.NodeGDScriptInstance = 0x60
+        offsets.NodeGDScriptName = 0xF8 -- new field before scriptname, avalanche for maps
+        offsets.GDScriptFunctionMap = 0x238
+        offsets.GDScriptConstantMap = 0x210
+        offsets.GDScriptVariantNameHM = 0x188
+        offsets.oVariantVector = 0x28
+        offsets.NodeVariantVectorSizeOffset = 0x10
+        offsets.GDScriptFunctionCode = 0x160 -- 0x18 less, TightLocalVector<Pair<int, Variant::Type>> for HashMap<int, Variant::Type>
+        offsets.GDScriptFunctionCodeConsts = 0x180
+        offsets.GDScriptFunctionCodeGlobals = 0x1B8 -- not relatively consistent anymore?
+        offsets.GDScriptFunctionCodeArg = 0xF4
+        offsets.GDScriptRealoadIndex = 45 -- diff by -1
+
+        if GDDEFS.DEBUGVER then
+          offsets.VPChildren = offsets.VPChildren + 0x8
+          offsets.VPObjStringName = offsets.VPObjStringName + 0x8
+          offsets.NodeGDScriptInstance = offsets.NodeGDScriptInstance + 0x8
+          offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x8
+          offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x8
+          offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x8
+          offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x8
+          offsets.oVariantVector = offsets.oVariantVector + 0x28
+          offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex + 20
+        end
+
+        if GDDEFS.CUSTOMVER then
+          -- offsets.VPChildren = offsets.VPChildren + 0x48
+          -- offsets.VPObjStringName = offsets.VPObjStringName + 0x48
+          -- offsets.NodeGDScriptName = offsets.NodeGDScriptName + 0x48
+          -- offsets.GDScriptFunctionMap = offsets.GDScriptFunctionMap + 0x48
+          -- offsets.GDScriptConstantMap = offsets.GDScriptConstantMap + 0x48
+          -- offsets.GDScriptVariantNameHM = offsets.GDScriptVariantNameHM + 0x48
+          -- offsets.GDScriptRealoadIndex = offsets.GDScriptRealoadIndex - 1
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
+        if not GDDEFS._x64 then
+          offsets = getAssumed(offsets)
+          if offsets == nil then error("Not defined yet") end
+        end
+
+        return offsets
+
+      elseif verStr == "4.6" then
+        GDDEFS.STRING = 0x8
         GDDEFS.GET_TYPE_INDX = 10
         GDDEFS.CALLP_INDX = GDDEFS.GET_TYPE_INDX + 4
 

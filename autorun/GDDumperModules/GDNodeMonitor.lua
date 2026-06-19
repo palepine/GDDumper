@@ -472,7 +472,12 @@ function Module.install(contextTable)
       end
     end
 
-  return monitor
+  GDDEFS.Monitor = monitor
+
+  return
+    {
+      ok = true
+    }
 end
 
 return Module -- exporting
