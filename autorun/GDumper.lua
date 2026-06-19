@@ -3396,7 +3396,7 @@
 
     --- get a Node name by addr
     ---@param nodeAddr number
-    function GDAPI.getNodeName(nodeAddr)
+    function GDAPI.gd_getNodeName(nodeAddr)
       if isNullOrNil(nodeAddr) then return 'N??' end
 
       local nodeNamePtr = readPointer(nodeAddr + GDDEFS.OBJ_STRING_NAME)
