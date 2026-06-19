@@ -486,7 +486,7 @@
           structElem.BackgroundColor = 0x6C3157
           structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
           structElem.VarType = vtPointer
-          structElem.Name = getNodeName(mainNodeTable[i + 1])
+          structElem.Name = gd_getNodeName(mainNodeTable[i + 1])
         end
         struct.endUpdate()
         struct.addToGlobalStructureList() -- so we can use it
@@ -575,8 +575,8 @@
         if checkForGDScript(baseaddr) and isVtable( getVtable(baseaddr) ) then
           dumpedDissectorNodes = {} -- redundant?
           -- safe to assume, that's a starting point
-          local nodeName = getNodeName(baseaddr)
-          if nodeName == 'N??' then nodeName = getNodeNameFromGDScript(baseaddr) end
+          local nodeName = gd_getNodeName(baseaddr)
+          if nodeName == 'N??' then nodeName = gd_getNodeNameFromScript(baseaddr) end
           nodeName = nodeName and nodeName or 'Anon Node'
           struct.Name = ' Node: ' .. nodeName
           local scriptInstStructElem = struct.addElement()
@@ -658,7 +658,7 @@
           fieldName: resb 4
           end
         ]]
-        -- local nodeAddr = getDumpedNode(nodeName)
+        -- local nodeAddr = gd_getDumpedNode(nodeName)
         -- local fields = gd_node_enumVariants(nodeAddr)
         -- if fields == nil or next(fields) == nil then return nil end
 
@@ -669,7 +669,7 @@
       end
 
       function GDAPI.gd_node_registerVariantsSelectively(nodeName, variantNameTable)
-        local nodeAddr = getDumpedNode( nodeName )
+        local nodeAddr = gd_getDumpedNode( nodeName )
         if isNullOrNil(nodeAddr) then error('node addr not found') end
         if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then error('only GD targets') end
         -- namespace = (namespace and namespace ~= '' and namespace .. '.') or ''
@@ -794,22 +794,22 @@
         mainMemrec.Description = "Dumper"
         mainMemrec.Type = vtAutoAssembler
         mainMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ninitDumper(config)\n[DISABLE]\n"
+        mainMemrec.Script = "{$lua}\n[ENABLE]\nif syntaxcheck then return end\nlocal config = {\n---- e.g. Godot Engine v4.5.1.stable.custom_build ;;; godot.windows.template_debug.x86_64.exe\n---- If you specify all ENGINE VER values, set useHardcoded to true to let script use hardcoded offsets\n---- If you don't have the CERegEx plugin, the\n\n-- ENGINE VER START\nuseHardcoded =              true, -- set to true if you want the script to use hardcoded offsets to skip defining OFFSETS below, false if you do it yourself\nGDCustomver =               nil, -- (optional) if custom build ver, false otherwise;\nmajorVersion =              nil, -- (optional) major godot ver, e.g. 4\nminorVersion =              nil, -- (optional) minor godot ver, e.g. 5\nGDDebugVer =                nil, -- (optional) if it's template_debug ver, false otherwise\nisMonoTarget =              nil, -- (optional) set to true if it's using mono/C#, false otherwise\n-- ENGINE VER END\n\n-- replace nil with hex offsets according to the instruction\n-- OFFSETS START\noffsetNodeChildren =        nil, -- offset to Node->children, it's a classic array of Nodes: consecutive 8/4 byte ptrs on x64/x32 apps respectively\noffsetNodeStringName =      nil,  -- offset to Node->name, it's a pointer to StringName object which usually has a string at either 0x8 or 0x10 (x64)\noffsetGDScriptInstance =    nil, -- for Node types that have a GDScript, Node->GDScriptInstance, it points to an object with a vTable where the next pointer is the owner Node reference and the next offset being the GDScript\noffsetVariantVector =       nil, -- Node->GDScriptInstance->\noffsetVariantVectorSize =   nil, -- located 0x4 or 0x8 or 0x10 behind 1st elem of a vector\n\noffsetGDScriptName =        nil, -- Node->GDScriptInstance->GDScript->name, it points to a raw string data that starts with res://\noffsetFuncMap =             nil, -- if you need funcs: GDScript->member_functions - in 4.x - (4 consecutive pointers, capacity and size) use offset to the Head (second to the last ptr) || in 3.x (pointer to the RBT root and the sentinel after it) use offset to the root\noffsetGDFunctionCode =      nil, -- if you need funcs: GDScript->member_functions['abc']->code - it's an int array inside a function storing implemented GDFunction byetcode, very easy to spot\noffsetGDFunctionConst =     nil, -- if you need funcs: GDScript->member_functions['abc']->constants - it's a Vector<Variant> with script constants, relative to code\noffsetGDFunctionGlobals =   nil, -- if you need funcs: GDScript->member_functions['abc']->global_names - Vector of StringNames, relative to code and constants\noffsetConstMap =            nil, -- GDScript->constants - layout same as w/ offsetGDFunctionCode\noffsetVariantMap =          nil, -- GDScript->member_indices - layout same as w/ offsetGDFunctionCode\n\n--vtGetClassNameIndex =       nil, -- 0-based vtable index to the virtual method that returns class name for _this_ object\n-- OFFSETS END\n}\ngd_initDumped(config)\n[DISABLE]\n"
         -- useAssumption =             nil, -- set to true if you want the script to try to guess the offsets; unreliable
         local dumpMemrec = addrList.createMemoryRecord()
-        dumpMemrec.Description = 'TEMPLATE: DumpOneNodeSymbol'
+        dumpMemrec.Description = 'TEMPLATE: dump node'
         dumpMemrec.Type = vtAutoAssembler
         dumpMemrec.Async = true
         dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
-        dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpNodeToAddr(memrec, getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
+        dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\ngd_dumpNodeToAddr(memrec, gd_getDumpedNode( "Globals" ), false) -- change Globals to other node names\n[DISABLE]'
         dumpMemrec.appendToEntry(mainMemrec)
 
         local dumpMemrec = addrList.createMemoryRecord()
-        dumpMemrec.Description = 'Dump All Nodes (main)'
+        dumpMemrec.Description = 'Dump Nodes (no children)'
         dumpMemrec.Type = vtAutoAssembler
         dumpMemrec.Options = '[moHideChildren,moDeactivateChildrenAsWell]'
         dumpMemrec.Async = true
-        dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\nDumpAllNodesToAddr()\n[DISABLE]'
+        dumpMemrec.Script = '{$lua}\nif syntaxcheck then return end\n[ENABLE]\ngd_dumpAllNodesToAddr()\n[DISABLE]'
         dumpMemrec.appendToEntry(mainMemrec)
 
         local supportPalique = addrList.createMemoryRecord()
@@ -888,7 +888,7 @@
       end
 
       --- creates a menu button in the main menu
-      function GDAPI.buildGDGUI()
+      function GDAPI.gd_buildGUI()
         if GDGUIInit then
           return
         end
@@ -2679,7 +2679,7 @@
               -- end
 
               if targetIsGodot then
-                synchronize(buildGDGUI())
+                synchronize(gd_buildGUI())
 
               elseif targetIsGodot == false and GDGUIInit == true then
                 synchronize(function()
@@ -3327,8 +3327,8 @@
         local nodePtr = readPointer( (childrenAddr or 0) + i * GDDEFS.PTRSIZE)
         if isNullOrNil(nodePtr) then error('NO MAIN NODES') end
 
-        local nodeNameStr = getNodeName(nodePtr)
-        local gdscriptName = getNodeNameFromGDScript(nodePtr)
+        local nodeNameStr = gd_getNodeName(nodePtr)
+        local gdscriptName = gd_getNodeNameFromScript(nodePtr)
         registerSymbol(gdscriptName, nodePtr, true)
 
           nodeDict[nodeNameStr] =
@@ -3356,8 +3356,8 @@
         if isNullOrNil(nodeAddr) then
           error('NO MAIN NODES')
         end
-        local nodeNameStr = getNodeNameFromGDScript(nodeAddr)
-        if nodeNameStr == 'N??' then nodeNameStr = getNodeName(nodeAddr) end
+        local nodeNameStr = gd_getNodeNameFromScript(nodeAddr)
+        if nodeNameStr == 'N??' then nodeNameStr = gd_getNodeName(nodeAddr) end
         registerSymbol(nodeNameStr, nodeAddr, true)
         table.insert(nodeTable, nodeAddr)
       end
@@ -3408,7 +3408,7 @@
       return getStringNameStr(nodeNamePtr)
     end
 
-    function GDAPI.getNodeNameFromGDScript(nodeAddr, bWithAbsPath)
+    function GDAPI.gd_getNodeNameFromScript(nodeAddr, bWithAbsPath)
      if isNullOrNil(nodeAddr) then return 'N??' end
 
       local GDScriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
@@ -3529,9 +3529,9 @@
 
       for i = 0, (childrenSize - 1) do
         local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-        local nodeName = getNodeName(nodeAddr)
+        local nodeName = gd_getNodeName(nodeAddr)
         if nodeName == nil or nodeName == 'N??' then
-          nodeName = getNodeNameFromGDScript(nodeAddr)
+          nodeName = gd_getNodeNameFromScript(nodeAddr)
         end
         local objectTypeName = gd_getObjectName(nodeAddr)
         objectTypeName = '<' .. objectTypeName .. '>'
@@ -3554,8 +3554,8 @@
       assert(type(parent) == "userdata", "parent has to exist")
 
 
-      local nodeName = getNodeName(nodeAddr)
-      local gdscriptName = getNodeNameFromGDScript(nodeAddr)
+      local nodeName = gd_getNodeName(nodeAddr)
+      local gdscriptName = gd_getNodeNameFromScript(nodeAddr)
       sendDebugMessage('MemberNode: ' .. tostring(nodeName))
 
       for i, storedNode in ipairs(dumpedNodes) do -- check if a node was already dumped
@@ -3616,8 +3616,8 @@
     ---@param scriptInstStructElement userdata
     function iterateNodeToStruct(nodeAddr, scriptInstStructElement)
 
-      local nodeName = getNodeName(nodeAddr) or 'NIL';
-      local scriptName = getNodeNameFromGDScript(nodeAddr)
+      local nodeName = gd_getNodeName(nodeAddr) or 'NIL';
+      local scriptName = gd_getNodeNameFromScript(nodeAddr)
 
       sendDebugMessage('Node: ' .. tostring(nodeName))
       
@@ -3762,7 +3762,7 @@
       local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr) -- children should be valid
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-        if gdName == getNodeNameFromGDScript(childAddr) then
+        if gdName == gd_getNodeNameFromScript(childAddr) then
           return childAddr
         end
       end
@@ -3776,14 +3776,14 @@
       local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr)
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
-        if nodeName == getNodeName(childAddr) then
+        if nodeName == gd_getNodeName(childAddr) then
           return childAddr
         end
       end
       return nil
     end
 
-    function GDAPI.getMonoObjectFromNode(nodeAddr)
+    function GDAPI.gd_mono_getObjectFromNode(nodeAddr)
       assert(GDDEFS.MONO, 'Target has to be mono')
       assert(checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"], 'Node has to use C#')
 
@@ -4488,7 +4488,7 @@
       return false
     end
 
-    function GDAPI.recompileGDScript(nodeAddr, fileName)
+    function GDAPI.gd_recompileScript(nodeAddr, fileName)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(type(fileName)=='string', 'Script file name has to be a string, instead got: '..type(fileName))
       assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
@@ -4555,7 +4555,7 @@
       error('hotreloading GDScript failed, err: ' .. tostring(GDDEFS.SCRIPT_ERRORS[eError]) )
     end
 
-    function GDAPI.reloadGDSInstance(nodeAddr)
+    function GDAPI.gd_reloadScriptInstance(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
@@ -4620,7 +4620,7 @@
 
     --- reloads from the binary tokens
     ---@param nodeAddr number
-    function GDAPI.revertGDScript(nodeAddr)
+    function GDAPI.gd_revertScript(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
       assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
@@ -4697,12 +4697,12 @@
     --- gets a functionPtr by nodename (root children) and funcname
     ---@param nodeAddr number
     ---@param funcName string
-    function GDAPI.getGDFunctionFromNode(nodeAddr, funcName)
+    function GDAPI.gd_getFunctionFromNode(nodeAddr, funcName)
       assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(funcName) == 'string', "Func name has to be a string, instead got: " .. type(funcName))
       assert(checkForGDScript(nodeAddr) == true, "Node addr doesn't have a GDScript" )
 
-      local gdScriptName = getNodeNameFromGDScript(nodeAddr) or "N??"
+      local gdScriptName = gd_getNodeNameFromScript(nodeAddr) or "N??"
       local nodeMapContext = { addr = nodeAddr, name = '', gdname = '', memrec = nil, struct = nil, symbol = funcName or '' }
       local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeMapContext)
       return findMapEntryByName(headElement, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement)
@@ -4712,7 +4712,7 @@
     ---@param funcObjAddr number
     ---@param patchToBytes table
     ---@param startPos number @0-based position to start patching from
-    function GDAPI.patchGDFunction( funcObjAddr, patchToBytes, startPos  )
+    function GDAPI.gd_patchFunction( funcObjAddr, patchToBytes, startPos  )
       assert(type(funcObjAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcObjAddr))
       assert(type(patchToBytes) == 'table', "Patch Bytes have to be a table, instead got: " .. type(patchToBytes))
 
@@ -4731,7 +4731,7 @@
     ---@param constIndex number@0-based position to start patching from
     ---@param CEvalueType number@type must match
     ---@param value number
-    function GDAPI.patchGDFunctionConst( funcObjAddr, constIndex, CEvalueType, value  )
+    function GDAPI.gd_patchFunctionConst( funcObjAddr, constIndex, CEvalueType, value  )
       assert(type(funcObjAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcObjAddr))
       assert(type(constIndex) == 'number', "Const index must be a number, instead got: " .. type(constIndex))
       assert(type(value) == 'number', "value has to be a number, instead got: " .. type(value))
@@ -5052,14 +5052,14 @@
       end
     end
 
-    function GDAPI.callGDFunctionFromNode(nodeAddr, funcName, argTable)
+    function GDAPI.gd_callFunctionFromNode(nodeAddr, funcName, argTable)
       assert(isNotNullOrNil(nodeAddr), "Node Addr must be valid")
       assert(type(funcName) == 'string', "function name must be a string, instead got: " .. type(funcName))
 
       local gdScriptInstance = getNodeGDScriptInstance(nodeAddr)
       if isNullOrNil(gdScriptInstance) then error("Nodes' script instance not found") end
 
-      local functionAddr = getGDFunctionFromNode( nodeAddr, funcName )
+      local functionAddr = gd_getFunctionFromNode( nodeAddr, funcName )
       if isNullOrNil(functionAddr) then error("Function address not found") end
 
       if isNotNullOrNil(GDDEFS.VM_CALL) then
@@ -5227,8 +5227,8 @@
       local currentContainer = nodeMapContext.struct
       local currentSymbol = nodeMapContext.symbol
       local index = 0;
-      local nodeName = getNodeName(nodeMapContext.addr) or "UnknownNode"
-      if nodeName == 'N??' then nodeName = getNodeNameFromGDScript(nodeMapContext.addr) end
+      local nodeName = gd_getNodeName(nodeMapContext.addr) or "UnknownNode"
+      if nodeName == 'N??' then nodeName = gd_getNodeNameFromScript(nodeMapContext.addr) end
 
       repeat
         local entry = readNodeConstEntry(mapElement)
@@ -5978,8 +5978,8 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dumper
 
-    function GDAPI.registerNodeOffsets(nodeName, namespace)
-      local nodeAddr = getDumpedNode( nodeName )
+    function GDAPI.gd_registerNodeOffsets(nodeName, namespace)
+      local nodeAddr = gd_getDumpedNode( nodeName )
       if isNullOrNil(nodeAddr) then error('node addr not found') end
       namespace = (namespace and namespace ~= '' and namespace .. '.') or ''
 
@@ -6009,7 +6009,7 @@
 
     --- gets a dumped Node by name
     ---@param nodeName string
-    function GDAPI.getDumpedNode(nodeName)
+    function GDAPI.gd_getDumpedNode(nodeName)
       assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
       if not (gdOffsetsDefined) then print('define the offsets first, silly') return; end
 
@@ -6022,15 +6022,15 @@
     end
 
     --- prints all gathered nodeNames
-    function GDAPI.printDumpedNodes()
+    function GDAPI.gd_printDumped()
       if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
       if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
 
       printf("%-90s%-90s%s", "[Script]", "[Abs]", "[Name]")
       for _, nodeAddr in pairs(GD_DUMP_MONITOR_NODES_ABS) do
-        local gdScriptName, absPath = getNodeNameFromGDScript(nodeAddr, true)
-        local nodeNameStr = getNodeName(nodeAddr)
+        local gdScriptName, absPath = gd_getNodeNameFromScript(nodeAddr, true)
+        local nodeNameStr = gd_getNodeName(nodeAddr)
         printf("%-90s%-90s%s", gdScriptName, absPath, nodeNameStr)
       end
     end
@@ -6039,7 +6039,7 @@
     ---@param parentMemrec userdata
     ---@param nodeAddr number
     ---@param bDoConstants number
-    function GDAPI.DumpNodeToAddr(parentMemrec, nodeAddr, bDoConstants)
+    function GDAPI.gd_dumpNodeToAddr(parentMemrec, nodeAddr, bDoConstants)
       assert(type(parentMemrec) == "userdata", 'Parent address has to be userdata, instead got: ' .. type(parentMemrec))
       assert(type(nodeAddr) == "number", 'Node address has to be a number, instead got: ' .. type(nodeAddr))
       if not (gdOffsetsDefined) then
@@ -6051,8 +6051,8 @@
       dumpedNodes = {}; -- let's start from scratch for single node dumps | there might be race conditions, not a big issue for most cases
       table.insert(dumpedNodes, nodeAddr)
 
-      local nodeNameStr = getNodeName(nodeAddr)
-      local gdscriptName = getNodeNameFromGDScript(nodeAddr)
+      local nodeNameStr = gd_getNodeName(nodeAddr)
+      local gdscriptName = gd_getNodeNameFromScript(nodeAddr)
 
       if not checkForGDScript(nodeAddr) then
         -- sendDebugMessage('node '..nodeNameStr..' doesnt have GDScript/Inst')
@@ -6102,7 +6102,7 @@
     end
 
     --- dumps all the active objects to the Address List
-    function GDAPI.DumpAllNodesToAddr(thr)
+    function GDAPI.gd_dumpAllNodesToAddr(thr)
       if not (gdOffsetsDefined) then
         print('define the offsets first, silly')
         return
@@ -6176,7 +6176,7 @@
 
     end
 
-    function GDAPI.initDumper(config)
+    function GDAPI.gd_initDumped(config)
       -- init global
       initGDDefs()
 
@@ -6287,7 +6287,7 @@
           getGDTypeEnumFromName = getGDTypeEnumFromName,
           getMainModuleInfo = getMainModuleInfo,
           getSectionBounds = getSectionBounds,
-          getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
+          gd_getNodeNameFromScript = GDAPI.gd_getNodeNameFromScript
         }
 
       if ok then
@@ -6304,18 +6304,18 @@
 
   
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// API
-  
-  DumpNodeToAddr = GDAPI.DumpNodeToAddr
-  DumpAllNodesToAddr = GDAPI.DumpAllNodesToAddr
-  initDumper = GDAPI.initDumper
+
+  gd_dumpNodeToAddr = GDAPI.gd_dumpNodeToAddr
+  gd_dumpAllNodesToAddr = GDAPI.gd_dumpAllNodesToAddr
+  gd_initDumped = GDAPI.gd_initDumped
 
   -- objects
-  getMonoObjectFromNode = GDAPI.getMonoObjectFromNode
-  getDumpedNode = GDAPI.getDumpedNode
-  registerNodeOffsets = GDAPI.registerNodeOffsets
+  gd_mono_getObjectFromNode = GDAPI.gd_mono_getObjectFromNode
+  gd_getDumpedNode = GDAPI.gd_getDumpedNode
+  gd_registerNodeOffsets = GDAPI.gd_registerNodeOffsets
   gd_getObjectName = GDAPI.getGDObjectName
-  getNodeNameFromGDScript = GDAPI.getNodeNameFromGDScript
-  getNodeName = GDAPI.getNodeName
+  gd_getNodeNameFromScript = GDAPI.gd_getNodeNameFromScript
+  gd_getNodeName = GDAPI.gd_getNodeName
   gd_node_enumVariants = GDAPI.godot_node_enumVariants
   gd_node_registerVariantsSelectively = GDAPI.gd_node_registerVariantsSelectively
   gd_AA_GETNODESTRUCT = GDAPI.godotAA_GETNODESTRUCT
@@ -6323,48 +6323,20 @@
   gd_getNodeChildByName = GDAPI.getNodeChildByName
 
   -- scripts
-  recompileGDScript = GDAPI.recompileGDScript
-  revertGDScript = GDAPI.revertGDScript
-  reloadGDSInstance = GDAPI.reloadGDSInstance
+  gd_recompileScript = GDAPI.gd_recompileScript
+  gd_revertScript = GDAPI.gd_revertScript
+  gd_reloadScriptInstance = GDAPI.gd_reloadScriptInstance
   gd_executeFunction = GDAPI.executeGDFunction
-  callGDFunctionFromNode = GDAPI.callGDFunctionFromNode
-  patchGDFunction = GDAPI.patchGDFunction
-  getGDFunctionFromNode = GDAPI.getGDFunctionFromNode
+  gd_callFunctionFromNode = GDAPI.gd_callFunctionFromNode
+  gd_patchFunction = GDAPI.gd_patchFunction
+  gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode
   gd_getNodeConstPtr = GDAPI.getNodeConstPtr
-  gd_patchFunctionConst = GDAPI.patchGDFunctionConst
+  gd_patchFunctionConst = GDAPI.gd_patchFunctionConst
 
   -- misc
-  buildGDGUI = GDAPI.buildGDGUI  
-  printDumpedNodes = GDAPI.printDumpedNodes
+  gd_buildGUI = GDAPI.gd_buildGUI  
+  gd_printDumped = GDAPI.gd_printDumped
   gd_printConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
   gd_assumeOffsets = nil
   gd_probeOffsets = nil
-
-  
-  --[[
-  gd_dumpNodeToAddr = GDAPI.DumpNodeToAddr
-  gd_dumpAllNodesToAddr = GDAPI.DumpAllNodesToAddr
-  gd_initDumper = GDAPI.initDumper
-
-  -- objects
-  gd_mono_getObjectFromNode = GDAPI.getMonoObjectFromNode
-  gd_getDumpedNode = GDAPI.getDumpedNode
-  gd_registerNodeOffsets = GDAPI.registerNodeOffsets
-  gd_getNodeScriptName = GDAPI.getNodeNameFromGDScript
-  gd_getNodeName = GDAPI.getNodeName
-
-  -- scripts
-  gd_recompileGDScript = GDAPI.recompileGDScript
-  gd_revertGDScript = GDAPI.revertGDScript
-  gd_reloadScriptInstance = GDAPI.reloadGDSInstance
-  gd_executeFunction = GDAPI.executeGDFunction
-  gd_callGDFunctionFromNode = GDAPI.callGDFunctionFromNode
-  gd_patchFunction = GDAPI.patchGDFunction
-  gd_getFunctionFromNode = GDAPI.getGDFunctionFromNode
-  gd_getNodeConstPtr = GDAPI.getNodeConstPtr
-
-  -- misc
-  gd_buildGUI = GDAPI.buildGDGUI  
-  gd_printDumped = GDAPI.printDumpedNodes
-  ]]

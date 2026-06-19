@@ -8,7 +8,7 @@ function Module.install(contextTable)
   local getGDTypeEnumFromName = contextTable.getGDTypeEnumFromName
   local getMainModuleInfo = contextTable.getMainModuleInfo
   local getSectionBounds = contextTable.getSectionBounds
-  local getNodeNameFromGDScript = contextTable.getNodeNameFromGDScript
+  local gd_getNodeNameFromScript = contextTable.gd_getNodeNameFromScript
 
   local GDDEFS = contextTable.GDDEFS
   -- to avoid table access overhead
@@ -425,7 +425,7 @@ function Module.install(contextTable)
         local result = {} -- { name : addr }
         local resultAbs = {} -- { name : addr }
         for i, val in ipairs(tabl) do
-          local scriptName, longName = getNodeNameFromGDScript(val, true)
+          local scriptName, longName = gd_getNodeNameFromScript(val, true)
           if scriptName and scriptName ~= 'N??' and longName and longName ~= '' then
             result[scriptName] = val
             resultAbs[longName] = val
@@ -656,7 +656,7 @@ return Module -- exporting
         self.visited[addr] = true
         if checkForGDScript(addr) then
           table.insert(self.dumped, addr)
-          local scriptName, absScriptPath = getNodeNameFromGDScript(addr, true)
+          local scriptName, absScriptPath = gd_getNodeNameFromScript(addr, true)
           -- will (un)register twice, but early, potentially
           registerSymbol(absScriptPath, addr, true) -- register long symbol
           registerSymbol(scriptName, addr, true) -- register short name alias (might collide)
@@ -674,7 +674,7 @@ return Module -- exporting
         local result = {} -- { name : addr }
         local resultAbs = {} -- { name : addr }
         for i, val in ipairs(tabl) do
-          local scriptName, longName = getNodeNameFromGDScript(val, true)
+          local scriptName, longName = gd_getNodeNameFromScript(val, true)
           result[ scriptName or '' ] = val
           resultAbs[ longName or '' ] = val
         end
