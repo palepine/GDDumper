@@ -197,7 +197,7 @@ function Module.install(contextTable)
         offsets.NodeGDScriptInstance = 0x68
         offsets.NodeGDScriptName = 0x120
         offsets.GDScriptFunctionMap = 0x268
-        offsets.GDScriptConstantMap = 0x208
+        offsets.GDScriptConstantMap = 0x240 --0x208
         offsets.GDScriptVariantNameHM = 0x1B8
         offsets.oVariantVector = 0x28
         offsets.NodeVariantVectorSizeOffset = 0x8
