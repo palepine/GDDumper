@@ -930,6 +930,7 @@
           -- addCustomMenuButtonTo(gdMenuItem, 'Stuct name Lookup', GDStructNameLookupSwitch)
           -- addCustomMenuButtonTo( gdMenuItem, 'Addr Lookup', GDAddressLookupSwitch )
           addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
+          addCustomMenuButtonTo(gdMenuItem, 'API doc' , function() shellExecute("https://github.com/palepine/GDDumper/blob/main/docs/GDUMPER_API.MD") end)
           addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
           -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
         end
