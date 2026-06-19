@@ -56,6 +56,11 @@ For the moment being, the doc isn't complete and features only most useful funct
 
   > Note: be cautious for it calls a virtual method whose index might shift in some versions - the target would just likely crash
 
+- `gd_mono_getObjectFromNode(nodeAddr)`
+>returns a mono object address for the respective node address. A script must be attached to the node. Do whatever DotNet Collector API allows you to with it.
+
+## Script
+
 - `gd_patchFunction( funcObjAddr, patchToBytes, startPos )`
 > patches the function's bytecode to the bytes passed
   ```lua
@@ -68,11 +73,6 @@ For the moment being, the doc isn't complete and features only most useful funct
 
 - `gd_getFunctionFromNode( nodeAddr, funcName )`
 > gets the func from the respective node via its name (example above)
-
-- `gd_mono_getObjectFromNode(nodeAddr)`
->returns a mono object address for the respective node address. A script must be attached to the node. Do whatever DotNet Collector API allows you to with it.
-
-## Script
 
 - `gd_callFunctionFromNode( nodeAddr, funcName, argTable )`
 >Invokes a user-defined script function for the respective node. Note: not every Variant type is implemented
