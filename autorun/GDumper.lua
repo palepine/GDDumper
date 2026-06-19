@@ -6337,7 +6337,7 @@
   -- misc
   gd_buildGUI = GDAPI.gd_buildGUI  
   gd_printDumped = GDAPI.gd_printDumped
-  gd_printConfig = GDAPI.printGDConfig
+  gd_reportConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
   gd_assumeOffsets = nil
   gd_probeOffsets = nil
