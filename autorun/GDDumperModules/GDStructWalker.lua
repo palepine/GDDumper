@@ -892,12 +892,12 @@ function Module.install(contextTable)
 
         if assumedOffsets.FUNC_MAP then
           -- startFrom = assumedOffsets.CONST_MAP - GDDEFS.PTRSIZE*20
-          scanEnd = assumedOffsets.FUNC_MAP - GDDEFS.PTRSIZE * 4
+          scanEnd = assumedOffsets.FUNC_MAP - GDDEFS.PTRSIZE * 3
         end
 
         if assumedOffsets.CONST_MAP then
           -- startFrom = assumedOffsets.CONST_MAP - GDDEFS.PTRSIZE*10
-          scanEnd = assumedOffsets.CONST_MAP - GDDEFS.PTRSIZE * 4
+          scanEnd = assumedOffsets.CONST_MAP - GDDEFS.PTRSIZE * 3
         end
 
         if scanEnd < startFrom then return end
@@ -1198,7 +1198,7 @@ function Module.install(contextTable)
         local scanEnd = 0x200
 
         if assumedOffsets.VARIANT_MAP then
-          startFrom = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*4
+          startFrom = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*2
           -- scanEnd = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*15
         end
 
@@ -1608,12 +1608,12 @@ function Module.install(contextTable)
         local scanEnd = 0x300
 
         if assumedOffsets.VARIANT_MAP then
-          startFrom = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*4
+          startFrom = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*2
           -- scanEnd = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*10
         end
 
         if assumedOffsets.CONST_MAP then
-          startFrom = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*4
+          startFrom = assumedOffsets.CONST_MAP + GDDEFS.PTRSIZE*2
           -- scanEnd = assumedOffsets.VARIANT_MAP + GDDEFS.PTRSIZE*10
         end
 
