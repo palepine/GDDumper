@@ -2739,6 +2739,7 @@
       local exportTableStr = getExportTableName() or ""
       GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
+      GDDEFS.IS_STABLE_VER = (exportTableStr):match("stable") and true or false
       GDDEFS.CUSTOMVER = getIsCustomVer()
       GDDEFS.USES_DOUBLE_REALT = exportTableStr:match("%.double%.") ~= nil
 
