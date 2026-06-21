@@ -19,7 +19,7 @@ local OffsetProfiles = {}
 function Module.install(contextTable)
 
   local PTRSIZE = targetIs64Bit() and 0x8 or 0x4
-
+  local sendDebugMessage = contextTable.sendDebugMessage
 -- OFFSET DEFINITION
 
   OffsetProfiles[4][7] =
@@ -28,7 +28,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 10,
         CALLP_DELTA = 4,
-        STRING = 0x8,
         GDScriptRealoadIndex = 45, -- diff by -1
       },
       -- releases
@@ -91,7 +90,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 10,
         CALLP_DELTA = 4,
-        STRING = 0x8,
         GDScriptRealoadIndex = 46,
       },
       -- releases
@@ -120,19 +118,18 @@ function Module.install(contextTable)
           },
           x86 =
           {
-            -- set custom
-            VPChildren = 0xF0,
-            VPObjStringName = 0x12C,
-            NodeGDScriptInstance = 0x40,
-            NodeGDScriptName = 0xC4,
-            GDScriptFunctionMap = 0x178,
-            GDScriptConstantMap = 0x160,
-            GDScriptVariantNameHM = 0x110,
-            oVariantVector = 0x1C,
-            NodeVariantVectorSizeOffset = 0x8,
-            GDScriptFunctionCode = 0xE8,
-            GDScriptFunctionCodeConsts = 0x140,
-            GDScriptFunctionCodeGlobals = 0x100,
+            -- VPChildren = 0xF0,
+            -- VPObjStringName = 0x12C,
+            -- NodeGDScriptInstance = 0x40,
+            -- NodeGDScriptName = 0xC4,
+            -- GDScriptFunctionMap = 0x178,
+            -- GDScriptConstantMap = 0x160,
+            -- GDScriptVariantNameHM = 0x110,
+            -- oVariantVector = 0x1C,
+            -- NodeVariantVectorSizeOffset = 0x8,
+            -- GDScriptFunctionCode = 0xE8,
+            -- GDScriptFunctionCodeConsts = 0x140,
+            -- GDScriptFunctionCodeGlobals = 0x100,
             -- offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
           },
 
@@ -155,16 +152,21 @@ function Module.install(contextTable)
 
           tools =
           {
-            fallback = true,
-            add = -- todo: 32 bit custom version
+            -- fallback = true,
+            set =
             {
-              -- VPChildren = 0x48,
-              -- VPObjStringName = 0x48,
-              -- NodeGDScriptName = 0x48,
-              -- GDScriptFunctionMap = 0x48,
-              -- GDScriptConstantMap = 0x48,
-              -- GDScriptVariantNameHM = 0x48,
-              -- GDScriptRealoadIndex = - 1,
+              VPChildren = 0xF0,
+              VPObjStringName = 0x12C,
+              NodeGDScriptInstance = 0x40,
+              NodeGDScriptName = 0xC4,
+              GDScriptFunctionMap = 0x178,
+              GDScriptConstantMap = 0x160,
+              GDScriptVariantNameHM = 0x110,
+              oVariantVector = 0x1C,
+              NodeVariantVectorSizeOffset = 0x8,
+              GDScriptFunctionCode = 0xE8,
+              GDScriptFunctionCodeConsts = 0x140,
+              GDScriptFunctionCodeGlobals = 0x100,
             }
           },
 
@@ -181,7 +183,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 9,
         CALLP_DELTA = 5, -- 14
-        STRING = 0x8,
         GDScriptRealoadIndex = 47,
       },
       -- releases
@@ -261,7 +262,7 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 8,
         CALLP_DELTA = 5, -- 13
-        STRING = 0x10,
+        -- STRING = 0x4+0x4 + GDDEFS.PTRSIZE,
         GDScriptRealoadIndex = 46,
       },
       -- releases
@@ -341,7 +342,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 8,
         CALLP_DELTA = 5, -- 13
-        STRING = 0x10,
         GDScriptRealoadIndex = 44,
       },
       -- releases
@@ -419,7 +419,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 8,
         CALLP_DELTA = 5, -- 13
-        STRING = 0x10,
         GDScriptRealoadIndex = 44,
       },
       -- releases
@@ -514,7 +513,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 8,
         CALLP_DELTA = 5, -- 13
-        STRING = 0x10,
         GDScriptRealoadIndex = 44,
       },
       -- releases
@@ -597,7 +595,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 8,
         CALLP_DELTA = 5, -- 13
-        STRING = 0x10,
         GDScriptRealoadIndex = 44, -- todo
       },
       -- releases
@@ -660,7 +657,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 6,
         CALLP_DELTA = 6, -- 12
-        STRING = 0x10,
         GDScriptRealoadIndex = 42,
       },
       -- releases
@@ -709,10 +705,7 @@ function Module.install(contextTable)
 
           tools =
           {
-            set =
-            {
-              STRING = 0x10
-            }
+            fallback = true,
           },
 
           usesDouble =
@@ -729,7 +722,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 6,
         CALLP_DELTA = 6, -- 12
-        STRING = 0x10,
         GDScriptRealoadIndex = 42,
       },
       -- releases
@@ -813,7 +805,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 6,
         CALLP_DELTA = 6, -- 12
-        STRING = 0x10,
         GDScriptRealoadIndex = 42,
       },
       -- releases
@@ -879,7 +870,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 6,
         CALLP_DELTA = 6, -- 12
-        STRING = 0x10,
         GDScriptRealoadIndex = 41,
       },
       -- releases
@@ -944,7 +934,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 6,
         CALLP_DELTA = 6, -- 12
-        STRING = 0x10,
         GDScriptRealoadIndex = 41, -- todo
       },
       -- releases
@@ -1005,7 +994,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 6,
         CALLP_DELTA = 6, -- 12
-        STRING = 0x10,
         GDScriptRealoadIndex = 41, -- todo
       },
       -- releases
@@ -1045,7 +1033,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 6,
         CALLP_DELTA = 6, -- 12
-        STRING = 0x10,
         GDScriptRealoadIndex = 41, -- todo
       },
       -- releases
@@ -1099,7 +1086,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 7,
         CALLP_DELTA = 6, -- todo
-        STRING = 0x10,
         GDScriptRealoadIndex = 41, -- todo
       },
       -- releases
@@ -1163,7 +1149,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 7,
         CALLP_DELTA = 6, -- todo
-        STRING = 0x10,
         GDScriptRealoadIndex = 41, -- todo
       },
       -- releases
@@ -1202,7 +1187,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 7,
         CALLP_DELTA = 6, -- todo
-        STRING = 0x10,
         GDScriptRealoadIndex = 41, -- todo
       },
       -- releases
@@ -1241,7 +1225,6 @@ function Module.install(contextTable)
       {
         GET_TYPE_INDX = 7,
         CALLP_DELTA = 6, -- todo
-        STRING = 0x10,
         GDScriptRealoadIndex = 41, -- todo
       },
       -- releases
@@ -1276,7 +1259,6 @@ function Module.install(contextTable)
 
 -- OFFSET DEFINITION END
 
-
   -- HELPERS START
     local function copyTable(source)
       local copy = {}
@@ -1305,9 +1287,9 @@ function Module.install(contextTable)
         offsets.GDScriptFunctionCodeConsts = assumed.FUNC_CONST or 0
         offsets.GDScriptFunctionCodeGlobals = assumed.FUNC_GLOBALS or 0
 
-        offsets.STRING = 0x8
-        offsets.GET_TYPE_INDX = 10
-        offsets.CALLP_INDX = offsets.GET_TYPE_INDX + 4
+        offsets.STRING = 0x4+0x4+GDDEFS.PTRSIZE
+        -- offsets.GET_TYPE_INDX = 10
+        -- offsets.CALLP_INDX = offsets.GET_TYPE_INDX + 4
         return offsets
       end
       print( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
@@ -1315,7 +1297,10 @@ function Module.install(contextTable)
     end
 
     local function applyDefaults(offsets, profile)
-      if not profile.default then return end
+      if not profile.default then
+        sendDebugMessage('No default values...')
+        return
+      end
       offsets.STRING = profile.default.STRING
       offsets.GET_TYPE_INDX = profile.default.GET_TYPE_INDX
       offsets.CALLP_INDX = offsets.GET_TYPE_INDX + profile.default.CALLP_DELTA
@@ -1323,22 +1308,25 @@ function Module.install(contextTable)
       return offsets
     end
 
-    local function applyModifier(offsets, modifier, fallbackName)
+    local function applyModifier(offsets, modifier, opName)
       if not modifier then return offsets end
 
       if modifier.fallback then
+        sendDebugMessage('Fallback case for: ' .. (opName or ''))
         local assumed = getAssumed(offsets)
-        if assumed == nil then error(fallbackName .. " offsets are not defined and assumption failed") end
+        if assumed == nil then error(opName .. " offsets are not defined and assumption failed") end
         return assumed
       end
 
       if modifier.add then
+        -- sendDebugMessage('Add case for: ' .. (opName or '') )
         for key, delta in pairs( modifier.add ) do
           offsets[key] = (offsets[key] or 0) + delta
         end
       end
 
       if modifier.set then
+        -- sendDebugMessage('Set case for: ' .. (opName or '') )
         for key, value in pairs( modifier.set ) do
           offsets[key] = value
         end
@@ -1350,8 +1338,14 @@ function Module.install(contextTable)
     local function getArchitectureOffsets(minorProfile, architecture)
 
       local arcitectureProfile = minorProfile[ architecture ]
-      if not arcitectureProfile then return nil end
-      if arcitectureProfile.fallback then   return getAssumed( {} )   end
+      if not arcitectureProfile then
+        sendDebugMessage('Arch offsets not found, nil returned')
+        return nil
+      end
+      if arcitectureProfile.fallback then
+        sendDebugMessage('Architecture doesnt have offsets, fallback')
+        return getAssumed( {} )
+      end
 
       return copyTable( arcitectureProfile )
     end
@@ -1362,6 +1356,7 @@ function Module.install(contextTable)
       -- get major and check
       local majorTable = OffsetProfiles[version.major]
       if majorTable == nil then
+        sendDebugMessage('Major profile table not found, fallback')
         offsets = getAssumed( {} )
         return offsets
       end
@@ -1369,6 +1364,7 @@ function Module.install(contextTable)
       -- get minor and check
       local minorTable = majorTable[version.minor]
       if minorTable == nil then
+        sendDebugMessage('Minor profile table not found, fallback')
         offsets = getAssumed( {} )
         return offsets
       end
@@ -1381,6 +1377,7 @@ function Module.install(contextTable)
       local offsets = getArchitectureOffsets(release_profile, architecture)
 
       if offsets == nil then
+        sendDebugMessage('Offsets not found, fallback')
         offsets = getAssumed( {} )
         if offsets == nil then error("No offsets for requested architecture") end
       end
@@ -1398,21 +1395,21 @@ function Module.install(contextTable)
 
   -- HELPERS END
 
-    local function getStoredOffsetsFromVersion(major, minor, patch)
-      local version =
-      {
-        major = major,
-        minor = minor,
-        release = patch,
-        x64 = GDDEFS._x64,
-        debug = GDDEFS.DEBUGVER,
-        tools = GDDEFS.CUSTOMVER,
-        usesDouble = GDDEFS.USES_DOUBLE_REALT,
-      }
-      local offsets = getStoredOffsets(version)
+  local function getStoredOffsetsFromVersion(major, minor, patch)
+    local version =
+    {
+      major = major,
+      minor = minor,
+      release = patch,
+      x64 = GDDEFS._x64,
+      debug = GDDEFS.DEBUGVER,
+      tools = GDDEFS.CUSTOMVER,
+      usesDouble = GDDEFS.USES_DOUBLE_REALT,
+    }
+    local offsets = getStoredOffsets(version)
 
-      return offsets
-    end
+    return offsets
+  end
 
   return getStoredOffsetsFromVersion
 end
