@@ -659,8 +659,11 @@ function Module.install(contextTable)
       local OBJ_STRING_NAME, nodenameAddr;
       local found = false
 
-      for i=1, (0x300/GDDEFS.PTRSIZE) do
-        OBJ_STRING_NAME = (assumedOffsets.CHILDREN or 0x30) + i * GDDEFS.PTRSIZE
+      local startFrom = (assumedOffsets.CHILDREN + GDDEFS.PTRSIZE) or 0x30
+      local scanEnd = 0x300
+
+      for candidateOffset = startFrom, scanEnd, GDDEFS.PTRSIZE do
+        OBJ_STRING_NAME = (assumedOffsets.CHILDREN or 0x30) + candidateOffset
 
         nodenameAddr = readPointer( viewport + OBJ_STRING_NAME )
         if isNullOrNil(nodenameAddr) then goto continue end
