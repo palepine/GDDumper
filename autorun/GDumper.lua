@@ -83,6 +83,7 @@
   local defineVariantTypeProfile
 
   local getMainModuleInfo
+  local checkStringNameType
 
   local bGDDebug = false
   local bHardOffsets = false
@@ -1973,10 +1974,9 @@
 
         ---------------------------------------------------------------------------------
 
-        local function emitStringNameStruct(parent, label, offset, stringFieldLabel, isUTF, innerOffset)
+        local function emitStringNameStruct(parent, label, offset, stringFieldLabel, stringType, innerOffset)
           local outer = addStructureElem(parent, label, offset, vtPointer)
           outer.ChildStruct = createStructure("StringName")
-          local stringType = vtUnicodeString and isUTF or vtString
 
           local inner = addStructureElem(outer, label, innerOffset, vtPointer)
           inner.ChildStruct = createStructure("stringy")
@@ -2201,8 +2201,7 @@
         end
 
         local stringNameAddr = readPointer(entry.variantPtr)
-        local isUTF, offsetToString = checkStringNameType(stringNameAddr)
-        local stringType = vtUnicodeString and isUTF or vtString
+        local stringType, offsetToString = checkStringNameType(stringNameAddr)
 
         if emitter == GDEmitters.StructEmitter then
           local outer = emitter.branch(contextTable, parent, "<STRING_NAME> " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
@@ -2213,6 +2212,7 @@
             emitter.leaf(contextTable, parent, "<STRING_NAME> " .. entry.name, rootOffset(entry, emitter), vtPointer)
             return
           end
+          
           
           local stringContext =
           {
@@ -3175,23 +3175,23 @@
 
     --- reads a string from StringName
     ---@param stringNameAddr number
-    ---@return bool @ nil on invalid, true on UTF, false on ASCII
+    ---@return number @ CEType
     ---@return number @ offset to string
     function checkStringNameType(stringNameAddr)
       if isNullOrNil(stringNameAddr) then
-        return nil, 0x8 + GDDEFS.PTRSIZE
+        return vtUnicodeString, 0x8 + GDDEFS.PTRSIZE
       end
       
       local nameAddr = readPointer( stringNameAddr + 0x8 ) -- 4+4
       if isNotNullOrNil(nameAddr) and isValidPointer(nameAddr) then
         if isInsideRDataStatic(nameAddr) then
-          return false, 0x8
+          return vtString, 0x8
         end
-        return true, 0x8
+        return vtUnicodeString, 0x8
       end
       nameAddr = readPointer( stringNameAddr + 0x8 + GDDEFS.PTRSIZE ) -- 4+4+ptr
       if isNullOrNil(nameAddr) or isInvalidPointer(nameAddr) then return nil, 0x8 + GDDEFS.PTRSIZE end
-      return true, 0x8 + GDDEFS.PTRSIZE
+      return vtUnicodeString, 0x8 + GDDEFS.PTRSIZE
     end
 
 
@@ -4869,11 +4869,11 @@
         local stringFieldLabel = "GlobName[" .. variantIndex .. "] string"
         local stringNamePtr = readPointer(funcGlobalVect + entryOffset)
 
-        local isUTF, stringOffset = checkStringNameType(stringNamePtr)
+        local stringType, stringOffset = checkStringNameType(stringNamePtr)
 
         -- sendDebugMessage('Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
 
-        emitStringNameStruct(funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, isUTF, stringOffset)
+        emitStringNameStruct(funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, stringType, stringOffset)
       end
 
       return;
