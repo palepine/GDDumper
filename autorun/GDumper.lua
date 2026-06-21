@@ -1307,7 +1307,7 @@
     local function getObjectMeta(objAddr)
       local method = getObjectVMethodByIndex( objAddr, GDDEFS.GET_TYPE_INDX )
       if isNullOrNil(method) then return nil end
-      return executeMethod(0, nil, method, objAddr, objAddr)
+      return executeMethod(0, nil, method, objAddr)
     end
 
     function GDAPI.getGDObjectName(objAddr)
@@ -2731,7 +2731,7 @@
 
       if magicFail then -- <3 versions w/0 pck and encrypted packages
         sendDebugMessage("Failed to find Godot magic")
-        major, minor = (GDDEFS.FULL_GDVERSION_STRING or ''):match("v(%d+)%.(%d+)")
+        major, minor, patch = (GDDEFS.FULL_GDVERSION_STRING or ''):match("v(%d+)%.(%d+)%.?(%d*)") -- m.m.p or m.m
         if isNullOrNil(major) or isNullOrNil(minor) then major, minor = (GDDEFS.FULL_GDVERSION_STRING):match("Godot Engine v?(%d+)%.(%d+)") end
         if isNullOrNil(major) or isNullOrNil(minor) then error('failed to find Godot Version') end
       end
@@ -2749,6 +2749,7 @@
       if isNotNullOrNil(major) and isNotNullOrNil(minor) then
         GDDEFS.MAJOR_VER = tonumber(major)
         GDDEFS.MINOR_VER = tonumber(minor)
+        GDDEFS.PATCH_VER = tonumber(patch)
         GDDEFS.VERSION_STRING = major .. '.' .. minor
       end
 
@@ -2793,6 +2794,7 @@
         GDDEFS.VERSION_STRING = tostring(config.majorVersion) .. '.' .. tostring(config.minorVersion)
         GDDEFS.MAJOR_VER = config.majorVersion
         GDDEFS.MINOR_VER = config.minorVersion
+        GDDEFS.PATCH_VER = config.releaseVersion
         GDDEFS.DEBUGVER = config.GDDebugVer
         GDDEFS.CUSTOMVER = config.GDCustomver
         GDDEFS.MONO = config.isMonoTarget and config.isMonoTarget or false
@@ -2809,7 +2811,12 @@
 
       -- AUTOMATIC START
       if (bHardOffsets or config.useHardcoded) then
-        local offsets = getStoredOffsetsFromVersion(GDDEFS.VERSION_STRING)
+        local offsets = getStoredOffsetsFromVersion(GDDEFS.MAJOR_VER, GDDEFS.MINOR_VER, GDDEFS.PATCH_VER)
+        GDDEFS.STRING = offsets.STRING or GDDEFS.STRING
+        GDDEFS.GET_TYPE_INDX = offsets.GET_TYPE_INDX or GDDEFS.GET_TYPE_INDX
+        GDDEFS.CALLP_INDX = offsets.CALLP_INDX or GDDEFS.CALLP_INDX
+        GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex or GDDEFS.GDSCRIPT_RELOAD_INDX
+
         GDDEFS.CHILDREN = offsets.VPChildren
         GDDEFS.OBJ_STRING_NAME = offsets.VPObjStringName
         GDDEFS.GDSCRIPTINSTANCE = offsets.NodeGDScriptInstance
@@ -2817,7 +2824,6 @@
         GDDEFS.FUNC_MAP = offsets.GDScriptFunctionMap
         GDDEFS.CONST_MAP = offsets.GDScriptConstantMap
         GDDEFS.VARIANTMAP = offsets.GDScriptVariantNameHM
-        GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex
         GDDEFS.VAR_VECTOR = offsets.oVariantVector
         GDDEFS.SIZE_VECTOR = offsets.NodeVariantVectorSizeOffset
         GDDEFS.FUNC_CODE = offsets.GDScriptFunctionCode
@@ -2935,7 +2941,7 @@
           -- typedef List<Pair<const K *, V> > InternalList;
           GDDEFS.DICTELEM_KEY = GDDEFS.PTRSIZE*0
           GDDEFS.DICTELEM_KEY_VARIANT = 0x0
-          GDDEFS.DICTELEM_VALUE_VARIANT = GDDEFS.PTRSIZE*1
+          GDDEFS.DICTELEM_VALUE_VARIANT = 0x8 -- GDDEFS.PTRSIZE*1 apparently 8byte aligned on x32
           GDDEFS.DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_VALUE_VARIANT + GDDEFS.SIZEOF_VARIANT -- 0x20
 
         -- ARRAY
@@ -6303,7 +6309,8 @@
     end
     godotRegisterPreinit()
 
-  
+    if (getCEVersion() < 7.7) then ShowMessage('Please update CE to 7.7 or newer') end
+
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// API
 
   gd_dumpNodeToAddr = GDAPI.gd_dumpNodeToAddr
