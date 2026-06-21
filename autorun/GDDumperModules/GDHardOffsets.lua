@@ -175,6 +175,89 @@ function Module.install(contextTable)
             fallback = true,
           },
         },
+      [3] =
+        {
+          x64 =
+          {
+            -- godot.windows.template_release.x86_64.exe
+            -- Godot Engine v4.6.stable.official.89cea1439
+            VPChildren = 0x140,
+            VPObjStringName = 0x190,
+            NodeGDScriptInstance = 0x60,
+            NodeGDScriptName = 0xF8,
+            GDScriptFunctionMap = 0x238,
+            GDScriptConstantMap = 0x210,
+            GDScriptVariantNameHM = 0x188,
+            oVariantVector = 0x28,
+            NodeVariantVectorSizeOffset = 0x10,
+
+            GDScriptFunctionCode = 0x178,
+            GDScriptFunctionCodeConsts = 0x198,
+            GDScriptFunctionCodeGlobals = 0x1A8,
+            GDScriptFunctionCodeArg = 0xA0,
+
+            -- timer 2D0 time_left | 2D8 isactive | 2C0 waittime
+          },
+          x86 =
+          {
+            -- VPChildren = 0xF0,
+            -- VPObjStringName = 0x12C,
+            -- NodeGDScriptInstance = 0x40,
+            -- NodeGDScriptName = 0xC4,
+            -- GDScriptFunctionMap = 0x178,
+            -- GDScriptConstantMap = 0x160,
+            -- GDScriptVariantNameHM = 0x110,
+            -- oVariantVector = 0x1C,
+            -- NodeVariantVectorSizeOffset = 0x8,
+            -- GDScriptFunctionCode = 0xE8,
+            -- GDScriptFunctionCodeConsts = 0x140,
+            -- GDScriptFunctionCodeGlobals = 0x100,
+            -- offsets.GDScriptFunctionCodeArg = 0xA0 -- 0xf4 argc
+          },
+
+          -- modifiers
+          debug =
+          {
+            add =
+            {
+              VPChildren = 0x8,
+              VPObjStringName = 0x8,
+              NodeGDScriptInstance = 0x8,
+              NodeGDScriptName = 0x8,
+              GDScriptFunctionMap = 0x8,
+              GDScriptConstantMap = 0x8,
+              GDScriptVariantNameHM = 0x8,
+              oVariantVector = 0x28,
+              GDScriptRealoadIndex = 0, -- todo
+            }
+          },
+
+          tools =
+          {
+            -- fallback = true,
+            set =
+            {
+              VPChildren = 0xF0,
+              VPObjStringName = 0x12C,
+              NodeGDScriptInstance = 0x40,
+              NodeGDScriptName = 0xC4,
+              GDScriptFunctionMap = 0x178,
+              GDScriptConstantMap = 0x160,
+              GDScriptVariantNameHM = 0x110,
+              oVariantVector = 0x1C,
+              NodeVariantVectorSizeOffset = 0x8,
+              GDScriptFunctionCode = 0xE8,
+              GDScriptFunctionCodeConsts = 0x140,
+              GDScriptFunctionCodeGlobals = 0x100,
+            }
+          },
+
+          usesDouble =
+          {
+            fallback = true,
+          },
+        },
+
     }
 
   OffsetProfiles[4][5] =

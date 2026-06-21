@@ -322,11 +322,11 @@ function Module.install(contextTable)
         "VARIANT_VECTOR_SIZE: 0x%X\n" ..
         "SCRIPT_NAME: 0x%X\n" ..
         "FUNC_MAP: 0x%X\n" ..
+        "CONST_MAP: 0x%X\n" ..
+        "VARIANT_MAP: 0x%X\n" ..
         "FUNC_CODE: 0x%X\n" ..
         "FUNC_CONST: 0x%X\n" ..
-        "FUNC_GLOBALS: 0x%X\n" ..
-        "CONST_MAP: 0x%X\n" ..
-        "VARIANT_MAP: 0x%X"):format
+        "FUNC_GLOBALS: 0x%X\n"):format
         (
           assumedOffsets.CHILDREN or 0,
           assumedOffsets.OBJ_STRING_NAME or 0,
@@ -336,11 +336,11 @@ function Module.install(contextTable)
           assumedOffsets.VARIANT_VECTOR_SIZE or 0,
           assumedOffsets.SCRIPT_NAME or 0,
           assumedOffsets.FUNC_MAP or 0,
+          assumedOffsets.CONST_MAP or 0,
+          assumedOffsets.VARIANT_MAP or 0,
           assumedOffsets.FUNC_CODE or 0,
           assumedOffsets.FUNC_CONST or 0,
-          assumedOffsets.FUNC_GLOBALS or 0,
-          assumedOffsets.CONST_MAP or 0,
-          assumedOffsets.VARIANT_MAP or 0
+          assumedOffsets.FUNC_GLOBALS or 0
         )
     end
 
