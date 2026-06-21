@@ -1973,17 +1973,16 @@
 
         ---------------------------------------------------------------------------------
 
-        local function emitStringNameStruct(parent, label, offset, stringFieldLabel, bUniShift)
+        local function emitStringNameStruct(parent, label, offset, stringFieldLabel, isUTF, innerOffset)
           local outer = addStructureElem(parent, label, offset, vtPointer)
           outer.ChildStruct = createStructure("StringName")
+          local stringType = vtUnicodeString and isUTF or vtString
 
-          local innerOffset = bUniShift and GDDEFS.STRING or (GDDEFS.STRING - GDDEFS.PTRSIZE)
           local inner = addStructureElem(outer, label, innerOffset, vtPointer)
           inner.ChildStruct = createStructure("stringy")
-          local stringElem = addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0,
-            bUniShift and vtUnicodeString or vtString)
+          local stringElem = addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0, stringType)
 
-          if not bUniShift then
+          if stringType == vtString then
             stringElem.Bytesize = 100
           end
 
@@ -2201,25 +2200,28 @@
           contextTable.symbol =  wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+STRING' )
         end
 
+        local stringNameAddr = readPointer(entry.variantPtr)
+        local isUTF, offsetToString = checkStringNameType(stringNameAddr)
+        local stringType = vtUnicodeString and isUTF or vtString
+
         if emitter == GDEmitters.StructEmitter then
-          local outer = emitter.branch(contextTable, parent, "<STRINGNAME> " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
-          local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, GDDEFS.STRING, vtPointer, "stringy")
-          emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, vtUnicodeString)
+          local outer = emitter.branch(contextTable, parent, "<STRING_NAME> " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
+          local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, offsetToString, vtPointer, "stringy")
+          emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, stringType)
         else
-          local stringNameAddr = readPointer(entry.variantPtr)
           if isNullOrNil(stringNameAddr) then
-            emitter.leaf(contextTable, parent, "<STRINGNAME> " .. entry.name, rootOffset(entry, emitter), vtPointer)
+            emitter.leaf(contextTable, parent, "<STRING_NAME> " .. entry.name, rootOffset(entry, emitter), vtPointer)
             return
           end
-
+          
           local stringContext =
           {
             nodeAddr = contextTable.nodeAddr,
             nodeName = contextTable.nodeName,
-            baseAddress = stringNameAddr + GDDEFS.STRING,
+            baseAddress = stringNameAddr + offsetToString,
             symbol = contextTable.symbol and contextTable.symbol or ''
           }
-          emitter.leaf(stringContext, parent, "<STRINGNAME> " .. entry.name, 0x0, vtString)
+          emitter.leaf(stringContext, parent, "<STRING_NAME> " .. entry.name, 0x0, stringType)
         end
 
       end
@@ -2770,7 +2772,7 @@
           ["CS"] = 2
         }
 
-      GDDEFS.STRING = 0x10
+
       
       debugPrefix = 1;
       if targetIs64Bit() then
@@ -2785,6 +2787,7 @@
       local callErrors = { [1] = "invalid method", [2] = "invalid argument", [3] = "too many args", [4] = "too few args", [5] = "instance is null", [6] = "method not const", }
       GDDEFS.SCRIPT_ERRORS = scriptErrors
       GDDEFS.CALL_ERRORS = callErrors
+      GDDEFS.STRING = 0x4+0x4+GDDEFS.PTRSIZE
     end
 
     local function initGDVersion(config)
@@ -2813,7 +2816,6 @@
       -- AUTOMATIC START
       if (bHardOffsets or config.useHardcoded) then
         local offsets = getStoredOffsetsFromVersion(GDDEFS.MAJOR_VER, GDDEFS.MINOR_VER, GDDEFS.PATCH_VER)
-        GDDEFS.STRING = offsets.STRING or GDDEFS.STRING
         GDDEFS.GET_TYPE_INDX = offsets.GET_TYPE_INDX or GDDEFS.GET_TYPE_INDX
         GDDEFS.CALLP_INDX = offsets.CALLP_INDX or GDDEFS.CALLP_INDX
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex or GDDEFS.GDSCRIPT_RELOAD_INDX
@@ -3056,7 +3058,7 @@
 
     function codePointToUTF8(codePoint)
       if (codePoint < 0 or codePoint > 0x10FFFF) or (codePoint >= 0xD800 and codePoint <= 0xDFFF) then
-        return 'w-t-f'
+        return '�'
       elseif codePoint <= 0x7F then
         return string.char(codePoint)
       elseif codePoint <= 0x7FF then
@@ -3158,27 +3160,40 @@
     --- reads a string from StringName
     ---@param stringNameAddr number
     function getStringNameStr(stringNameAddr)
-      if isNullOrNil(stringNameAddr) then
-        return 'NaN_strname'
+      if isNullOrNil(stringNameAddr) then return 'NaN_strname' end
+      -- before 4.5: int refcount, int staticcount, cname*, name*; cnames are static ascii
+      -- 4.5=<: int refcount, int staticcount, name*
+      local nameAddr = readPointer( stringNameAddr + 0x8 ) -- 4+4
+      if isNotNullOrNil(nameAddr) and isValidPointer(nameAddr) then
+        if isInsideRDataStatic(nameAddr) then return readString(nameAddr, 150) end -- cstring
+        return readUTFString(nameAddr)
       end
-      local retStringAddr = readPointer(stringNameAddr + GDDEFS.STRING)
-
-      if isNullOrNil(retStringAddr) or isInvalidPointer(retStringAddr) then
-        retStringAddr = readPointer(stringNameAddr + 0x8) -- for cases when StringName holds data at 0x8
-        if isNullOrNil(retStringAddr) then
-          return '??' -- return an empty string if no string was found
-        end
-
-        -- Try ASCII if it's static & in pck
-        if isInsideRDataStatic(retStringAddr) then
-          -- a static ASCII string's last resort
-          return readString(retStringAddr, 100)
-        end
-
-        return readUTFString(retStringAddr) or '??'
-      end
-      return readUTFString(retStringAddr)
+      nameAddr = readPointer( stringNameAddr + 0x8 + GDDEFS.PTRSIZE ) -- 4+4+ptr
+      if isNullOrNil(nameAddr) or isInvalidPointer(nameAddr) then return '??' end
+      return readUTFString(nameAddr)
     end
+
+    --- reads a string from StringName
+    ---@param stringNameAddr number
+    ---@return bool @ nil on invalid, true on UTF, false on ASCII
+    ---@return number @ offset to string
+    function checkStringNameType(stringNameAddr)
+      if isNullOrNil(stringNameAddr) then
+        return nil, 0x8 + GDDEFS.PTRSIZE
+      end
+      
+      local nameAddr = readPointer( stringNameAddr + 0x8 ) -- 4+4
+      if isNotNullOrNil(nameAddr) and isValidPointer(nameAddr) then
+        if isInsideRDataStatic(nameAddr) then
+          return false, 0x8
+        end
+        return true, 0x8
+      end
+      nameAddr = readPointer( stringNameAddr + 0x8 + GDDEFS.PTRSIZE ) -- 4+4+ptr
+      if isNullOrNil(nameAddr) or isInvalidPointer(nameAddr) then return nil, 0x8 + GDDEFS.PTRSIZE end
+      return true, 0x8 + GDDEFS.PTRSIZE
+    end
+
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// ROOT
 
@@ -4853,15 +4868,12 @@
         local label = "GlobName[" .. variantIndex .. "] stringName"
         local stringFieldLabel = "GlobName[" .. variantIndex .. "] string"
         local stringNamePtr = readPointer(funcGlobalVect + entryOffset)
-        local bUniShift = false
 
-        if isPointerNotNull(stringNamePtr) then
-          bUniShift = isPointerNotNull(stringNamePtr + GDDEFS.STRING)
-        end
+        local isUTF, stringOffset = checkStringNameType(stringNamePtr)
 
         -- sendDebugMessage('Looping: label: '..label.." funcVector: "..numtohexstr(funcGlobalVect))
 
-        emitStringNameStruct(funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, bUniShift)
+        emitStringNameStruct(funcGlobalNameStructElem, label, entryOffset, stringFieldLabel, isUTF, stringOffset)
       end
 
       return;
@@ -6193,10 +6205,10 @@
       -- retrieve the offset getted function
       local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDHardOffsets.lua]] )
       if ok then
-        getStoredOffsetsFromVersion = result.install( {} )
+        getStoredOffsetsFromVersion = result.install( { sendDebugMessage = sendDebugMessage, } )
       else
         -- portable, we get a module object
-        getStoredOffsetsFromVersion = loadScriptFromTable( "GDOff" ).install( {} )
+        getStoredOffsetsFromVersion = loadScriptFromTable( "GDOff" ).install( { sendDebugMessage = sendDebugMessage, } )
       end
 
       -- retrieve the signatures
