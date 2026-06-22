@@ -215,9 +215,7 @@ function Module.install(contextTable)
       function monitor:notifyRunFinished(event)
         for id, callback in pairs(self.observers) do
           local ok, err = pcall(callback, event)
-          if not ok then
-            print(("Monitor observer id(%s) failed: %s"):format(tostring(id), tostring(err)))
-          end
+          if not ok then print(("Monitor observer id(%s) failed: %s"):format(tostring(id), tostring(err))) end
         end
       end
 
