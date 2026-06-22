@@ -59,6 +59,45 @@ For the moment being, the doc isn't complete and features only most useful funct
 - `gd_mono_getObjectFromNode(nodeAddr)`
 >returns a mono object address for the respective node address. A script must be attached to the node. Do whatever DotNet Collector API allows you to with it.
 
+- `gd_run_subscribe( callbackName, callback )`
+>subscribe a callback to run at the end of each Node Monitor run. Returns the subscriber id.
+
+  ```lua
+  gd_run_subscribe( 'OnEndNotification', function() print('shalashaska') end )
+  ```
+
+- `gd_run_getSubscriberID(callbackName)`
+>returns a subscriber id for the passed callbackName. Check `gd_run_unsubscribe` for usage
+
+- `gd_run_unsubscribe(subID)`
+>unsubscribe an existing callback via its subscriber ID
+
+  ```lua
+  gd_run_unsubscribe( gd_run_getSubscriberID('OnEndNotification') ) -- no more shalashaska
+  ```
+
+- `gd_run_subscribeRegisterNode( nodeName, memrec )`
+> subscribe the following node to be registered as soon as it becomes available. Passing a memrec is optional.
+
+  > Notes: 
+  >1) No need to unsubscribe, it unsubscribes once registered
+  >2) if a memrec object is passed, it will become activated upon node being registered; if it's a header/group with an address, it will be filled in
+
+  ```lua
+  gd_run_subscribeRegisterNode('Globals') -- my field offset symbols will be available as soon as possible
+  ```
+
+- `gd_run_subscribeRegisterNodeSelectively( nodeName, variantNameTable, memrec )`
+> does same thing as `gd_run_subscribeRegisterNode` but with selected variants only
+
+  > Notes: 
+  >1) No need to unsubscribe, it unsubscribes once registered
+  >2) if a memrec object is passed, it will become activated upon node being registered; if it's a header/group with an address, it will be filled in
+
+  ```lua
+  gd_run_subscribeRegisterNodeSelectively( 'Globals' , { 'currentScene' } ) -- only currentScene will be registered
+  ```
+
 ## Script
 
 - `gd_patchFunction( funcObjAddr, patchToBytes, startPos )`
@@ -109,7 +148,7 @@ For the moment being, the doc isn't complete and features only most useful funct
   gd_reloadScriptInstance( nodeAddr ) -- hot-reload this node's ScriptInstance for members to be constructed
   ```
 
-## Node Spider Service
+## Node Monitor Service
 
 - `GDDEFS.Monitor:suspend()` / `GDDEFS.Monitor:resume()`
 > suspends/resumes the service that continuously dispatches threads walking the Node tree.
