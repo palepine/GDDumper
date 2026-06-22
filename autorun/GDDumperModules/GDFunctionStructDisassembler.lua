@@ -4,8 +4,6 @@ local LATEST_SEMVER_SUPPORTED = "4.7" -- Update me to the latest supported versi
 
 local GD_FUNC_DISASM_COLOR = 0x451630 --0x808040
 
-local function numtohexstr(num) return ("%X"):format(num or -1) end
-
 function Module.install(contextTable)
   local GDDEFS = contextTable.GDDEFS
   local addStructureElem = contextTable.addStructureElem
