@@ -165,6 +165,8 @@ function Module.install(contextTable)
         lastRunDelta = nil,
         lastNodeCount = nil,
         currNodeCount = nil,
+        observers = {},
+        nextObserverId = 0,
       }
 
       function monitor:init()
@@ -176,6 +178,47 @@ function Module.install(contextTable)
         self.runBudget = 45*1000
         if self.MonitorThread then return end
         self.MonitorThread = createThread(nodeMonitorService)
+      end
+
+      -- Observer
+      function monitor:onRunFinished(name ,callback)
+        if type(name) ~= 'string' or name == '' then error("subscriber name expected") end
+        if type(callback) ~= "function" then error("callback expected") end
+
+        local oldId = GDDEFS.NODE_SUBS[name]
+        if oldId then self:offRunFinished(oldId) end
+
+        self.nextObserverId = self.nextObserverId + 1
+        local id = self.nextObserverId
+
+        self.observers[id] = callback
+        GDDEFS.NODE_SUBS[name] = id
+        GDDEFS.NODE_SUBSID[id] = name
+
+        return id
+      end
+
+      function monitor:offRunFinished(id)
+        if not id then return false end
+
+        self.observers[id] = nil
+
+        local name = GDDEFS.NODE_SUBSID[id]
+        if name then
+          GDDEFS.NODE_SUBS[name] = nil
+          GDDEFS.NODE_SUBSID[id] = nil
+          return true
+        end
+        return false
+      end
+
+      function monitor:notifyRunFinished(event)
+        for id, callback in pairs(self.observers) do
+          local ok, err = pcall(callback, event)
+          if not ok then
+            print(("Monitor observer id(%s) failed: %s"):format(tostring(id), tostring(err)))
+          end
+        end
       end
 
       function monitor:setCD(newMS)
@@ -191,8 +234,8 @@ function Module.install(contextTable)
         print
         (
           "Runs: " .. (self.runCounter or -1)
-          ..' Delta: ' .. (self.lastRunDelta - self.CD or -1)
-          .. ' ms (raw ' .. (self.lastRunDelta or -1) .. ')'
+          ..' Delta: ' .. (self.lastRunDelta or -1)
+          .. ' ms (wait ' .. (self.CD or -1) .. ')'
           .. ' Nodes met: ' .. (self.lastNodeCount or -1)
         )
       end
@@ -205,6 +248,8 @@ function Module.install(contextTable)
       function monitor:endRun(runDelta)
         self.lastRunDelta = runDelta
         self.lastNodeCount = self.currNodeCount
+
+        self:notifyRunFinished( { nodes = GD_DUMP_MONITOR_NODES or {}, nodesAbs = GD_DUMP_MONITOR_NODES_ABS or {}, } )
       end
 
       function monitor:nodeCountInc()
@@ -218,6 +263,7 @@ function Module.install(contextTable)
       function monitor:resume()
         self.MonitorThread.resume()
       end
+
 
   -- TYPE HANDLERS
 
@@ -460,9 +506,9 @@ function Module.install(contextTable)
         gd_currNodeMonitorThread.terminate()
         gd_currNodeMonitorThread.destroy() -- free the thread...
 
-        sleep( GDDEFS.Monitor:getCD() )
         GDDEFS.Monitor:endRun( getTickCount()-startedAt or 0 )
 
+        sleep( GDDEFS.Monitor:getCD() )
         if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
           -- if gd_currNodeMonitorThread and not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
           thr.terminate()
@@ -473,6 +519,73 @@ function Module.install(contextTable)
     end
 
   GDDEFS.Monitor = monitor
+
+  function gd_run_subscribe(callbackName, callback)
+    return GDDEFS.Monitor:onRunFinished( callbackName, callback ) -- returns an id
+  end
+
+  function gd_run_unsubscribe(subID)
+    return GDDEFS.Monitor:offRunFinished(subID) -- returns true on success
+  end
+
+  function gd_run_getSubscriberID(subName)
+    return GDDEFS.NODE_SUBS[subName]
+  end
+
+  function gd_run_subscribeRegisterNode(nodeName, memrec)
+    if type(nodeName) ~= 'string' or nodeName == '' then error("node name expected") end
+
+    local subName = 'mr_' .. nodeName
+    local subId
+
+    subId = GDDEFS.Monitor:onRunFinished(subName, function(event)
+      local nodeAddr = event.nodesAbs[nodeName]
+      if isNullOrNil(nodeAddr) then
+        nodeAddr = event.nodes[nodeName]
+      end
+
+      if nodeAddr then
+        gd_registerNodeOffsets(nodeName)
+
+        if memrec ~= nil and memrec.getClassName and memrec.getClassName() == 'TMemoryRecord' then
+          synchronize(function()
+            if memrec.IsAddressGroupHeader then memrec.Address = string.format('%X', nodeAddr) end
+            memrec.Active = true
+          end)
+        end
+
+        GDDEFS.Monitor:offRunFinished(subId)
+      end
+    end)
+
+    return subId
+  end
+
+  function gd_run_subscribeRegisterNodeSelectively(nodeName, variantNameTable, memrec)
+    if type(nodeName) ~= 'string' or nodeName == '' then error("node name expected") end
+
+    local subName = 'mr_' .. nodeName
+    local subId
+
+    subId = GDDEFS.Monitor:onRunFinished(subName, function(event)
+      local nodeAddr = event.nodes[nodeName]
+
+      if nodeAddr then
+        gd_node_registerVariantsSelectively(nodeName, variantNameTable)
+
+        if memrec ~= nil and memrec.getClassName and memrec.getClassName() == 'TMemoryRecord' then
+          synchronize(function()
+            memrec.Address = string.format('%X', nodeAddr)
+            memrec.Active = true
+          end)
+        end
+
+        GDDEFS.Monitor:offRunFinished(subId)
+      end
+    end)
+
+    return subId
+  end
 
   return
     {

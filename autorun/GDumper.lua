@@ -2772,8 +2772,9 @@
           ["CS"] = 2
         }
 
-
-      
+      GDDEFS.NODE_SUBS = {}
+      GDDEFS.NODE_SUBSID = {}
+     
       debugPrefix = 1;
       if targetIs64Bit() then
         GDDEFS.PTRSIZE = 0x8
@@ -6368,5 +6369,8 @@
   gd_printDumped = GDAPI.gd_printDumped
   gd_reportConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
-  gd_assumeOffsets = nil
-  gd_probeOffsets = nil
+  gd_assumeOffsets = nil -- GDStructWalker.lua
+  gd_probeOffsets = nil -- GDStructWalker.lua
+  gd_subscribeToRun = nil -- GDNodeMonitor.lua
+  gd_run_subscribeRegisterNodeSelectively = nil -- GDNodeMonitor.lua
+  gd_run_getSubscriberID = nil -- GDNodeMonitor.lua
