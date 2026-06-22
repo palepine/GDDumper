@@ -6046,9 +6046,18 @@
       if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
 
       if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
+      
+      -- sorted output
+      local keys = {}
+      for k in pairs(GD_DUMP_MONITOR_NODES_ABS) do
+        table.insert(keys, k)
+      end
+
+      table.sort(keys, function(a, b) return a:lower() < b:lower() end )
 
       printf( "%-90s%-90s%s" , "[Abs]" , "[Script]" , "[Name]" )
-      for _, nodeAddr in pairs(GD_DUMP_MONITOR_NODES_ABS) do
+      for _, key in ipairs(keys) do
+        local nodeAddr = GD_DUMP_MONITOR_NODES_ABS[key]
         local gdScriptName, absPath = gd_getNodeNameFromScript(nodeAddr, true)
         local nodeNameStr = gd_getNodeName(nodeAddr)
         printf("%-90s%-90s%s", absPath, gdScriptName, nodeNameStr)
