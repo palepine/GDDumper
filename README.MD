@@ -9,7 +9,7 @@ Cheat Engine Godot Dumper is a [Cheat Engine](https://github.com/cheat-engine/ch
 __THE SCRIPT IS PROVIDED FOR EDUCATIONAL AND RESEARCH PURPOSES. USE IT RESPONSIBLY.__
 
 ## Platform
-The script mainly supports Windows x86-64 (x64/x32). If you wish to see native support for ARM MacOS, x86-64 Linux - feel free to request that and support the cause.
+The script mainly supports Windows x86-64 (x64/x32). If you wish to see native support for ARM MacOS, x86-64 Linux - feel free to request that and [support the cause](https://ko-fi.com/vesperpallens).
 
 ## Features
 - Godot 3.x and 4.x. support
