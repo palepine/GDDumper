@@ -1,6 +1,69 @@
 local Module = {}
 -- the implementations here trade readability/SoC for a potential performance boost (~6 times), find the old commented out version below
 
+-- TODO: CS / events / MultiReadExclusiveWriteSynchronizer
+--[[
+https://antumce.github.io/CE_LDoc/classes/MultiReadExclusiveWriteSynchronizer.html
+https://antumce.github.io/CE_LDoc/classes/Event.html
+https://antumce.github.io/CE_LDoc/classes/CriticalSection.html
+
+local criticalSection = createCriticalSection()
+-- tryEnter ()
+
+local cache = {}
+
+function getCached(key, compute)
+  
+  criticalSection.enter()
+
+  local value = cache[key]
+  if value == nil then
+    value = compute(key)
+    cache[key] = value
+  end
+
+  criticalSection.leave()
+  return value
+end
+
+getCPUCount() for concurrency, shows cores only
+
+---
+
+local toProcess = {}
+local nodeMonitorReady = createEvent(false, false)
+
+function addJob(job)
+  criticalSection.enter()
+  
+  table.insert( toProcess, job )
+
+  criticalSection.leave()
+
+  nodeMonitorReady.setEvent()
+end
+
+-- consumer
+
+while true do
+  nodeMonitorReady.waitFor()
+
+  while true do
+    criticalSection.enter()
+
+    local item = table.remove( toProcess, 1 )
+
+    criticalSection.leave()
+
+    -- validate item
+
+    processItem( item )
+  end
+end
+
+
+]]
+
 function Module.install(contextTable)
 
   -- todo: watch visited dictionaries/arrays?
@@ -497,7 +560,9 @@ function Module.install(contextTable)
       GD_REGISTERED_NODES_ABS = {};
 
       while not thr.Terminated do
+
         GDDEFS.Monitor:startRun()
+
         local startedAt = getTickCount()
         local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
         gd_currNodeMonitorThread.waitfor()
