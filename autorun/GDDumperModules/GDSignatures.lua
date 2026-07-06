@@ -35,6 +35,9 @@ function Module.install(contextTable)
     
     table.insert(SceneTreeAOB, { sig = "4C 89 3D ? ? ? ? 48 8D BC 24 ? ? 00 00 B8 ? ? ? ? 48 89 F1 48 8D AC 24", toRel = 3 } ) -- 4.6 KSPlaytest
     table.insert(SceneTreeAOB, { sig = "48 39 1D ? ? ? ? 75 ? 31 ED 48 89 2D ? ? ? ? 48", toRel = 3 } ) -- 4.6 KSPlaytest
+    
+    table.insert(SceneTreeAOB, { sig = "4C 89 35 ? ? ? ? 66 0F 6F 0D ? ? ? ? 48 8D 15 ? ? ? ? 48 8D 4C 24", toRel = 3 } ) -- 4.7/8 non-stable
+
 
   local RootAOB = {}
     table.insert(RootAOB, "48 8B 9? ? ? ? ? 4? 8D 8F ? ? ? ? 45 33 C0 E8")
@@ -65,6 +68,7 @@ function Module.install(contextTable)
     table.insert(RootAOB, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
 
   local GDExtensionAOB = {}
+
     table.insert(GDExtensionAOB, "53 48 83 EC ? 45 31 C0 48 89 CA 48 8D 4C 24 ? E8 ? ? ? ? 48 8D 4C 24 ? E8" ) -- 4.6
     table.insert(GDExtensionAOB, "40 53 48 83 EC ? 48 8B D1 45 33 C0 48 8D ? 24 ? E8 ? ? ? ? 48 8D ? 24 ? E8" ) -- 4.6, 4.3 4.1, just a swapped encoding
     table.insert(GDExtensionAOB, "56 53 48 83 EC ? 45 31 C0 48 8D ? 24 ? 48 89 CA 48 89 F1 E8 ? ? ? ? 48 89 F1 E8" ) -- 4.5 4.4
@@ -73,6 +77,8 @@ function Module.install(contextTable)
 
     table.insert(GDExtensionAOB, "41 57 41 56 41 55 41 54 55 57 56 53 48 83 EC ? 4? 8D ? 24 ? 48 89 CA ? 89 ? E8" ) -- merged 4.1 4.2
     table.insert(GDExtensionAOB, "41 57 41 56 41 55 41 54 55 57 56 53 48 83 EC ? 4? 8D ? 24 ? 48 89 CA ? 89 ? 48 89 44 24 ? E8 ? ? ? ? 4C 8B 05 ? ? ? ? 48 8B 6C 24 ? 4D 8B 70 ? 4D 85 F6 OF" ) -- merged 4.3 / 4.1
+
+    table.insert(GDExtensionAOB, "45 33 C0 48 8D 4D ? E8 ? ? ? ? 4C 8D 45 28 C7 45 28 00 00 00 00 48 8D 55 30 E8" ) -- non-stable release
 
   local GDNativeAOB = {}
     table.insert(GDNativeAOB, "48 8D 3D ? ? ? ? 66 48 0F 6E C0 66 48 0F 6E C9" )
