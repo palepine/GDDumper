@@ -2542,8 +2542,26 @@
     end
 
     local function getIsCustomVer()
-      -- the best I can do as of now for TOOLS_ENABLED
       local customVerStrAddr = AOBScanModuleUnique(process, "63 75 73 74 6F 6D 5F 62 75 69 6C 64", "-W-X-C") -- custom_build - in most cases it does the trick
+      if isNotNullOrNil(customVerStrAddr) then
+        return true
+      else
+        return false
+      end
+    end
+
+    local function getIsMSVC()
+      -- Visual C++ Compiler RO
+      local customVerStrAddr = AOBScanModuleUnique(process, "3F 41 56 4E 6F 64 65 40 40", "+W-X+C") -- ?AVNode@@
+      if isNotNullOrNil(customVerStrAddr) then
+        return true
+      else
+        return false
+      end
+    end
+
+    local function getIsMINGW() -- TODO
+      local customVerStrAddr = AOBScanModuleUnique(process, "DE AD BA BE", "+W-X-C")
       if isNotNullOrNil(customVerStrAddr) then
         return true
       else
@@ -2742,7 +2760,10 @@
       GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.IS_STABLE_VER = (exportTableStr):match("stable") and true or false
-      GDDEFS.CUSTOMVER = getIsCustomVer()
+      
+      -- GDDEFS.CUSTOMVER = getIsCustomVer()
+      GDDEFS.CUSTOMVER = getIsMSVC()
+
       GDDEFS.USES_DOUBLE_REALT = exportTableStr:match("%.double%.") ~= nil
 
       -- GDDEFS.CUSTOMVER = (GDDEFS.FULL_GDVERSION_STRING):match("custom") and true or false
