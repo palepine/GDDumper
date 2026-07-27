@@ -1286,14 +1286,16 @@
         if getCustomType("GD4 String") then
           GDDEFS.GD4_STRING_EXISTS = true
         else
-          -- lua implementation lacking writing functionality
-          registerCustomTypeLua('GD4 String', 1, gd4string_bytestovalue, gd4string_valuetobytes, false, true)
 
-          -- c implementation
-          -- https://github.com/cheat-engine/cheat-engine/issues/3345
-          -- local procName = process
-          -- registerCustomTypeAutoAssembler(cAAUTF32StringTypeScript)
-          -- OpenProcess(procName)
+          if ( getCEVersion() < 7.7 ) then
+            -- lua implementation lacking writing functionality
+            registerCustomTypeLua('GD4 String', 1, gd4string_bytestovalue, gd4string_valuetobytes, false, true)
+          else
+            -- c implementation
+            -- https://github.com/cheat-engine/cheat-engine/issues/3345
+            registerCustomTypeAutoAssembler(cAAUTF32StringTypeScript)
+          end
+
           GDDEFS.GD4_STRING_EXISTS = true
         end
       else
