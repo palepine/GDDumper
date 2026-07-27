@@ -150,18 +150,18 @@ For the moment being, the doc isn't complete and features only most useful funct
 
 ## Node Monitor Service
 
-- `GDDEFS.Monitor:suspend()` / `GDDEFS.Monitor:resume()`
+- `gd_monitor_pause()` / `gd_monitor_resume()`
 > suspends/resumes the service that continuously dispatches threads walking the Node tree.
 
   > Notes: 
   >1) This service is responsible for discovering nodes with gdscript to enable most API functions
   >2) The service may load the CPU due to myriads of memory reads which would integrate to higher CPU usage as a result
-  >3) Control the wait time between these runs with setSD(newCD)
+  >3) Control the wait time between these runs with gd_monitor_setCD(newCD)
 
-- `GDDEFS.Monitor:profile()`
+- `gd_monitor_status()`
 > Reports the current run iteration, previous run delta and the amount of hit nodes, e.g. `Runs: 126 Delta: 2 ms (raw 500) Nodes met: 187`
 
-- `GDDEFS.Monitor:setCD( newMS )`
+- `gd_monitor_setCD( newMS )`
 > sets a wait time between monitor runs, default is 500ms. Increase the wait time when frequent runs aren't necessary.
 
 ## Misc
