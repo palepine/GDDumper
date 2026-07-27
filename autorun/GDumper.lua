@@ -6385,3 +6385,7 @@
   gd_subscribeToRun = nil -- GDNodeMonitor.lua
   gd_run_subscribeRegisterNodeSelectively = nil -- GDNodeMonitor.lua
   gd_run_getSubscriberID = nil -- GDNodeMonitor.lua
+  gd_monitor_pause = nil -- GDNodeMonitor.lua
+  gd_monitor_resume = nil -- GDNodeMonitor.lua
+  gd_monitor_status = nil -- GDNodeMonitor.lua
+  gd_monitor_setCD = nil -- GDNodeMonitor.lua

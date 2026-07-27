@@ -2548,6 +2548,30 @@ function Module.install(contextTable)
     return assumedOffsets
   end
 
+  gd_monitor_pause = function()
+    if GDDEFS and GDDEFS.Monitor then
+      GDDEFS.Monitor:suspend()
+    end
+  end
+
+  gd_monitor_resume = function()
+    if GDDEFS and GDDEFS.Monitor then
+      GDDEFS.Monitor:resume()
+    end
+  end
+
+  gd_monitor_status = function()
+    if GDDEFS and GDDEFS.Monitor then
+      GDDEFS.Monitor:profile()
+    end
+  end
+
+  gd_monitor_setCD = function(ms)
+    if GDDEFS and GDDEFS.Monitor then
+      GDDEFS.Monitor:setCD(ms)
+    end
+  end
+
   gd_assumeOffsets = printAssumedOffsets
   gd_probeOffsets = printProbedOffsets
 
