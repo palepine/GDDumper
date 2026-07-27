@@ -2541,7 +2541,7 @@
       end
     end
 
-    local function getIsCustomVer()
+    local function getIsCustomBuildVer()
       local customVerStrAddr = AOBScanModuleUnique(process, "63 75 73 74 6F 6D 5F 62 75 69 6C 64", "-W-X-C") -- custom_build - in most cases it does the trick
       if isNotNullOrNil(customVerStrAddr) then
         return true
@@ -2761,7 +2761,7 @@
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.IS_STABLE_VER = (exportTableStr):match("stable") and true or false
       
-      -- GDDEFS.CUSTOMVER = getIsCustomVer()
+      -- GDDEFS.CUSTOMVER = getIsCustomBuildVer()
       GDDEFS.CUSTOMVER = getIsMSVC()
 
       GDDEFS.USES_DOUBLE_REALT = exportTableStr:match("%.double%.") ~= nil
