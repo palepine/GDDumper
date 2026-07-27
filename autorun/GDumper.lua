@@ -178,7 +178,7 @@
       end
 
       local function isInsideSectionRange(addr, sectionInfo)
-        if addr == nil or addr == 0 then
+        if addr == nil or addr == 0 or sectionInfo == nil then
           return false
         end
         if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
