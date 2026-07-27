@@ -460,6 +460,15 @@
         )
       end
 
+      local function requireOffsetsDefined()
+        if gdOffsetsDefined then
+          return true
+        end
+
+        print('define the offsets first, silly')
+        return false
+      end
+
     -- ///---///--///---///--///---/// STRUCTURES
 
       --- deletes ALL structures, constructs a children structure of the viewport
@@ -497,10 +506,7 @@
 
       --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
       local function createVPStructForm()
-        if not (gdOffsetsDefined) then
-          print('define the offsets first, silly')
-          return
-        end
+        requireOffsetsDefined()
         -- let's ensure VP is found, it will throw an error otherwise
         getViewport()
 
@@ -562,10 +568,7 @@
       ---@param struct userdata @the newly created struct
       ---@param baseaddr number  @the address form the parent pointer
       function GDStructureDissect(struct, baseaddr)
-        if not (gdOffsetsDefined) then
-          print('define the offsets first, silly')
-          return
-        end
+        requireOffsetsDefined()
 
         if isNullOrNil(baseaddr) then
           return false
@@ -735,7 +738,6 @@
 
       --- toggling dissector override
       local function GDDissectorSwitch(sender)
-        -- if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
         sender.Checked = not sender.Checked
         if sender.Checked then
           enableGDDissect()
@@ -745,10 +747,7 @@
       end
 
       local function GDStructNameLookupSwitch(sender)
-        if not (gdOffsetsDefined) then
-          print('define the offsets first, silly')
-          return
-        end
+        requireOffsetsDefined()
         sender.Checked = not sender.Checked
         if sender.Checked then
           enableGDStructNameLookup()
@@ -758,10 +757,7 @@
       end
 
       local function GDAddressLookupSwitch(sender)
-        if not (gdOffsetsDefined) then
-          print('define the offsets first, silly')
-          return
-        end
+        requireOffsetsDefined()
         sender.Checked = not sender.Checked
         if sender.Checked then
           enableGDAddressLookup()
@@ -6053,7 +6049,7 @@
     ---@param nodeName string
     function GDAPI.gd_getDumpedNode(nodeName)
       assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-      if not (gdOffsetsDefined) then print('define the offsets first, silly') return; end
+      requireOffsetsDefined()
 
       if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
 
@@ -6065,7 +6061,7 @@
 
     --- prints all gathered nodeNames
     function GDAPI.gd_printDumped()
-      if not (gdOffsetsDefined) then print('define the offsets first, silly') return end
+      requireOffsetsDefined()
 
       if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
       
@@ -6093,10 +6089,7 @@
     function GDAPI.gd_dumpNodeToAddr(parentMemrec, nodeAddr, bDoConstants)
       assert(type(parentMemrec) == "userdata", 'Parent address has to be userdata, instead got: ' .. type(parentMemrec))
       assert(type(nodeAddr) == "number", 'Node address has to be a number, instead got: ' .. type(nodeAddr))
-      if not (gdOffsetsDefined) then
-        print('define the offsets first, silly')
-        return
-      end
+      requireOffsetsDefined()
 
       debugPrefix = 1; -- reset debug prefix, don't use that while running Node threads
       dumpedNodes = {}; -- let's start from scratch for single node dumps | there might be race conditions, not a big issue for most cases
@@ -6154,10 +6147,7 @@
 
     --- dumps all the active objects to the Address List
     function GDAPI.gd_dumpAllNodesToAddr(thr)
-      if not (gdOffsetsDefined) then
-        print('define the offsets first, silly')
-        return
-      end
+      requireOffsetsDefined()
 
       print('MAIN: DUMP PROCESS STARTED')
       debugPrefix = 1; -- reset debug prefix
