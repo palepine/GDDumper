@@ -2,12 +2,11 @@
 -- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code initially.
 -- Source code on github: https://github.com/palepine/GDDumper
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TODOS
-  -- TODO addresslist should include node's children of children
-  -- TODO tree view form with polling
-  -- TODO more offsets for non-GDI objects
+  -- TODO tree view form
   -- TODO doxygen comments
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
   -- TODO: ObjectDB inspection
+  -- TODO: selective dynamic address dump for a node's variants (arrays/dictionaries)
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// FORWARD DECLARATIONS
   local GDAPI = {}
@@ -290,6 +289,14 @@
         return newMemRec
       end
 
+      function memrecTimeout(memrec, timeoutMS)
+        if memrec == nil and type(memrec) ~= "userdata" then return end
+        timeoutMS = timeoutMS or 50
+        local callback = function(memrec)
+          memrec.Active = false
+        end
+        createTimer( timeoutMS, callback, memrec )
+      end
     -- ///---///--///---///--///---/// MISC UTILS
 
       --- turns off showOnPrint
