@@ -290,7 +290,7 @@
       end
 
       function memrecTimeout(memrec, timeoutMS)
-        if memrec == nil and type(memrec) ~= "userdata" then return end
+        if memrec == nil or type(memrec) ~= "userdata" then return end
         timeoutMS = timeoutMS or 50
         local callback = function(memrec)
           memrec.Active = false
