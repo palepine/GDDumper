@@ -39,7 +39,7 @@ You can test your luck avoiding the steps above letting the script do that: tick
 5. e.g. click `Add Template` and/or follow instructions in the [API doc](/docs/GDUMPER_API.MD).
 
 ## Support
-If you find the script useful, [consider supporting me here so keep improving the tool](https://ko-fi.com/vesperpallens)
+If you find the script useful, consider supporting me here so keep improving the tool
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/R6R813UKCL)
 
