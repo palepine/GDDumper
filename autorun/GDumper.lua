@@ -302,7 +302,9 @@
 
       --- turns off showOnPrint
       function GDD.Utils.disablePrintPopup()
-        GetLuaEngine().cbShowOnPrint.Checked = false
+        synchronize(function()
+          GetLuaEngine().cbShowOnPrint.Checked = false
+        end)
       end
 
       function GDD.Memory.getMainModuleInfo()
