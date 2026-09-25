@@ -632,9 +632,6 @@
 
           GDD.Objects.iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-        elseif GDDEFS.bDisasmFunc and GDD.Functions.isGDFunction(baseaddr) then
-          GDD.Functions.disassembleCodeToStruct(baseaddr, struct)
-
         elseif GDD.Objects.checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
           local childrenStructElem = struct.addElement()
           childrenStructElem.Name = 'Children'
@@ -2017,34 +2014,16 @@
           return outer, inner, stringElem
         end
 
-        function GDD.Emitters.emitFunctionCodeStruct(funcParent, funcName)
-          return GDD.Structures.addStructureElem(funcParent, 'Code: ' .. funcName, GDDEFS.FUNC_CODE, vtPointer)
-        end
+        function GDD.Emitters.emitFunctionStructEntry(funcStructElement, funcName)
+          local funcRoot = GDD.Structures.addStructureElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer)
 
-        function GDD.Emitters.emitFunctionConstantsStruct(funcParent, funcName, funcValueAddr)
-          local constantsElem = GDD.Structures.createChildStructElem(funcParent, "Constants: " .. funcName, GDDEFS.FUNC_CONST, vtPointer, "GDFConst")
-          local funcConstAddr = readPointer(funcValueAddr + GDDEFS.FUNC_CONST)
-          GDD.Functions.iterateConstantsToStruct(funcConstAddr, constantsElem)
-          return constantsElem
-        end
+          -- callback is better, guessing isn't realiable for general use
+          funcRoot.OnCreateChild = function(_, funcAddr)
+            if isNullOrNil(funcAddr) then return nil end
 
-        function GDD.Emitters.emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
-          local globalsElem = GDD.Structures.createChildStructElem(funcParent, "Globals: " .. funcName, GDDEFS.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals")
-          local funcGlobalAddr = readPointer(funcValueAddr + GDDEFS.FUNC_GLOBNAMEPTR)
-          GDD.Functions.iterateGlobalsToStruct(funcGlobalAddr, globalsElem)
-          return globalsElem
-        end
-
-        function GDD.Emitters.emitFunctionStructEntry(funcStructElement, mapElement, funcName)
-          local funcRoot
-          if not GDDEFS.bDisasmFunc then -- let's 
-            funcRoot = GDD.Structures.createChildStructElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer, "GDFunction")
-            local funcValueAddr = readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
-            GDD.Emitters.emitFunctionCodeStruct(funcRoot, funcName)
-            GDD.Emitters.emitFunctionConstantsStruct(funcRoot, funcName, funcValueAddr)
-            GDD.Emitters.emitFunctionGlobalsStruct(funcRoot, funcName, funcValueAddr)
-          else
-            funcRoot = GDD.Structures.addStructureElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer)
+            local funcStruct = createStructure('GDFunction')
+            GDD.Functions.disassembleCodeToStruct(funcAddr, funcStruct)
+            return funcStruct
           end
 
           return funcRoot
@@ -4863,7 +4842,7 @@
 
         local funcName = getFunctionMapName(mapElement) or "UNKNOWN" -- the layout is similar to constant map's
 
-        emitFunctionStructEntry(nodeMapContext.struct, mapElement, funcName)
+        emitFunctionStructEntry(nodeMapContext.struct, funcName)
 
         index = index + 1
         mapElement = advanceFunctionMapElement(mapElement)
@@ -4943,7 +4922,6 @@
     function GDD.Functions.disassembleCodeToStruct(funcAddr, funcStruct)
       assert((type(funcAddr) == 'number') and (funcAddr ~= 0), 'funcAddr has to be a valid pointer, instead got: ' .. type(funcAddr))
 
-      local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE) -- TODO: resolve that with a a helper
       funcStruct.Name = 'ScriptFunc'
       local codeStructElement = funcStruct.addElement()
       codeStructElement.Name = 'FuncCode'
@@ -4967,6 +4945,11 @@
       local funcGlobalAddr = readPointer(funcAddr + GDDEFS.FUNC_GLOBNAMEPTR)
       GDD.Functions.iterateGlobalsToStruct(funcGlobalAddr, funcGlobalNameStructElem)
 
+      if not GDDEFS.bDisasmFunc then return end
+
+      local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE) -- TODO: resolve that with a helper
+      if isNullOrNil(codeAddr) then return end
+
       local codeInts = {}
       local codeSize, currIndx, currOpcode = 0, 0, 0
       while true do
@@ -4986,6 +4969,7 @@
       return
     end
 
+    -- heuristic to guess GDScript funcs
     function GDD.Functions.isGDFunction(funcAddr)
       local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, funcCodeLastIdx, lastOpcode
       if GDDEFS.MAJOR_VER <= 3 or GDDEFS.VERSION_STRING == "4.1" then
