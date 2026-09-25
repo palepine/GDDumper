@@ -13,6 +13,7 @@
     {
       API = {},
       Memory = {},
+      Helpers = {},
       Utils = {},
       Structures = {},
       GUI = {},
@@ -75,26 +76,32 @@
     local success, result = pcall(readPointer, addr)
     return success and result ~= nil
   end
+  GDD.Helpers.isValidPointer = isValidPointer
 
   local function isInvalidPointer(addr)
     return not isValidPointer(addr)
   end
+  GDD.Helpers.isInvalidPointer = isInvalidPointer
 
   local function isPointerNotNull(addr)
     return isValidPointer(addr) and readPointer(addr) ~= 0
   end
+  GDD.Helpers.isPointerNotNull = isPointerNotNull
 
   local function isNullOrNil(toCheck)
     return toCheck == nil or toCheck == 0
   end
+  GDD.Helpers.isNullOrNil = isNullOrNil
 
   local function isNotNullOrNil(toCheck)
     return not isNullOrNil(toCheck)
   end
+  GDD.Helpers.isNotNullOrNil = isNotNullOrNil
 
   local function getVtable(addr)
     return readPointer(addr)
   end
+  GDD.Helpers.getVtable = getVtable
 
   local function isVtable(VTAddr)
     if VTAddr == nil or VTAddr == 0 then return false end
@@ -117,12 +124,14 @@
 
     return true
   end
+  GDD.Helpers.isVtable = isVtable
 
   local function getVtableValidated(addr)
     local vtable = readPointer(addr)
     if not isVtable(vtable) then return nil end
     return vtable
   end
+  GDD.Helpers.getVtableValidated = getVtableValidated
 
   local function isInsideRDataStatic(strAddr)
     if strAddr == nil or strAddr == 0 then return false end
@@ -131,30 +140,36 @@
     if sectionInfo == nil then return false end
     return GDD.Memory.isInsideSectionRange(strAddr, sectionInfo) or false
   end
+  GDD.Helpers.isInsideRDataStatic = isInsideRDataStatic
 
   local function alignOffset(offset, alignment)
     local remaining = offset % alignment
     if remaining ~= 0 then offset = offset + (alignment - remaining) end
     return offset
   end
+  GDD.Helpers.alignOffset = alignOffset
 
   local function strMul(str, times)
     return string.rep(str, times)
   end
+  GDD.Helpers.strMul = strMul
 
   local function numtohexstr(num)
     return ('%X'):format(num or -1)
   end
+  GDD.Helpers.numtohexstr = numtohexstr
 
   local function getStackDepth()
     local level = 1
     while debug.getinfo(level, 'f') do level = level + 1 end
     return level - 1
   end
+  GDD.Helpers.getStackDepth = getStackDepth
 
   local function getDebugPrefix()
     return strMul('>', getStackDepth()) .. ' '
   end
+  GDD.Helpers.getDebugPrefix = getDebugPrefix
 
   local function sendDebugMessage(msg)
     if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
@@ -164,6 +179,7 @@
       print(getDebugPrefix() .. name .. ':' .. currLine .. ' ' .. tostring(msg))
     end
   end
+  GDD.Helpers.sendDebugMessage = sendDebugMessage
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILS
@@ -501,6 +517,10 @@
 
         print('define the offsets first, silly')
         return false
+      end
+
+      function GDAPI.gd_getDumper()
+        return GDD
       end
 
     -- ///---///--///---///--///---/// STRUCTURES
