@@ -125,6 +125,13 @@ For the moment being, the doc isn't complete and features only most useful funct
   gd_callFunctionFromNode( gd_getDumpedNode('game') , 'checkAccuracy' , args )
   ```
 
+- `gd_callp( objectAddr, methodName, argTable )`
+>Invokes a method directly through the object's `Object::callp()` vmethod.
+
+  ```lua
+  local returnVariant = gd_callp( gd_getDumpedNode('game'), 'get_name' )
+  ```
+
 - `gd_recompileScript(nodeAddr, fileName)`
 >Hot-reloads the Script that's attached to the Node (will affect all nodes who are attached to the same script). The new script must be attached to Cheat Engine in `Table->Add File` menu, its name must be passed to the function
 

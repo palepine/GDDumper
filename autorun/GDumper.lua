@@ -1,148 +1,214 @@
--- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens
+-- This script was created by palepine. Support me: https://www.patreon.com/c/palepine/membership
 -- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code initially.
 -- Source code on github: https://github.com/palepine/GDDumper
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TODOS
-  -- TODO addresslist should include node's children of children
-  -- TODO tree view form with polling
-  -- TODO more offsets for non-GDI objects
+  -- TODO tree view form
   -- TODO doxygen comments
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
   -- TODO: ObjectDB inspection
+  -- TODO: selective dynamic address dump for a node's variants (arrays/dictionaries)
 
--- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// FORWARD DECLARATIONS
-  local GDAPI = {}
+-- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// PRIVATE OBJECT GRAPH
+  local GDD =
+    {
+      API = {},
+      Memory = {},
+      Helpers = {},
+      Utils = {},
+      Structures = {},
+      GUI = {},
+      Types = {},
+      Containers = {},
+      Readers = {},
+      Emitters = {},
+      Preinit = {},
+      Config = {},
+      Strings = {},
+      Root = {},
+      Objects = {},
+      Script = {},
+      Functions = {},
+      Constants = {},
+      Dictionary = {},
+      Array = {},
+      Variants = {},
+      Dumper = {},
+      Modules = {},
+    }
 
-  local getExportTableName
-  local getGodotVersionString
-  
-  local readUTFString
-  local codePointToUTF8
-  local getStringNameStr
-  local UTF8Codepoints
+  local GDAPI = GDD.API
 
-  local getViewport
-  
-  local rootOffset
-  local fieldOffset
-  
-  local checkForGDScript
-  local checkScriptType
-  local checkIfObjectWithChildren
-  local iterateNodeChildrenToStruct
-  local iterateMNodeToAddr
-  local iterateNodeToStruct
-  local getGDResName
-  local checkObjectOffset
-  
-  local getGDFunctionName
-  local getFuncObjectCodeAddr
-  local getFuncObjectConstAddr
-  local getNodeFuncMap
-  local iterateNodeFuncMapToStruct
-  local iterateFuncConstantsToStruct
-  local iterateFuncGlobalsToStruct
-  local disassembleGDFunctionCodeToStruct
-  local checkIfGDFunction
-  local setupCallArgs
-
-  local getNodeConstName
-  local iterateNodeConstToAddr
-  local iterateNodeConstToStruct
-
-  local iterateDictionary
-  local iterateDictionaryToAddr
-  local iterateDictionaryToStruct
-  local iterateArray
-  local iterateArrayToAddr
-  local iterateArrayToStruct
-  local iteratePackedArrayToAddr
-  local iteratePackedArrayToStruct
-  local iterateVectorVariants
-  local iterateVectorVariantsForFields
-  local iterateVectorVariantsForNamedField
-  local iterateVecVarToAddr
-  local iterateVecVarToStruct
-  local getNodeVariantVector
-  local getNodeVariantMap
-  local getVariantByIndex
   local VariantArena
   local GDVariant
-  
-  local getGDTypeName
-
-  local getMainNodeTable
-
-  local makeAddr
-  local makeSymAddr
 
   local stdcall = 0
   local timeout = nil
 
   local GDAOB
   local getStoredOffsetsFromVersion
-  local defineVariantTypeProfile
-
-  local getMainModuleInfo
-  local checkStringNameType
 
   local bGDDebug = false
   local bHardOffsets = false
+
+  local ceDirectory = getCheatEngineDir() or ''
+  local moduleDirectory = [[autorun\GDDumperModules\]]
+  local moduleSpecs =
+    {
+      HardOffsets = { name = 'GDDumperModules.GDHardOffsets', file = 'GDHardOffsets.lua', attachment = 'GDOff' },
+      Signatures = { name = 'GDDumperModules.GDSignatures', file = 'GDSignatures.lua', attachment = 'GDSig' },
+      Types = { name = 'GDDumperModules.GDTypes', file = 'GDTypes.lua', attachment = 'GDT' },
+      FunctionDisassembler = { name = 'GDDumperModules.GDFunctionStructDisassembler', file = 'GDFunctionStructDisassembler.lua', attachment = 'GDFDasm' },
+      NodeMonitor = { name = 'GDDumperModules.GDNodeMonitor', file = 'GDNodeMonitor.lua', attachment = 'GDNM' },
+      StructWalker = { name = 'GDDumperModules.GDStructWalker', file = 'GDStructWalker.lua', localOnly = true },
+    }
+  local portableModuleSpecs =
+    {
+      moduleSpecs.HardOffsets,
+      moduleSpecs.Signatures,
+      moduleSpecs.Types,
+      moduleSpecs.FunctionDisassembler,
+      moduleSpecs.NodeMonitor,
+    }
+
+-- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// LOCAL HELPERS
+
+  local function isValidPointer(addr)
+    local success, result = pcall(readPointer, addr)
+    return success and result ~= nil
+  end
+  GDD.Helpers.isValidPointer = isValidPointer
+
+  local function isInvalidPointer(addr)
+    return not isValidPointer(addr)
+  end
+  GDD.Helpers.isInvalidPointer = isInvalidPointer
+
+  local function isPointerNotNull(addr)
+    return isValidPointer(addr) and readPointer(addr) ~= 0
+  end
+  GDD.Helpers.isPointerNotNull = isPointerNotNull
+
+  local function isNullOrNil(toCheck)
+    return toCheck == nil or toCheck == 0
+  end
+  GDD.Helpers.isNullOrNil = isNullOrNil
+
+  local function isNotNullOrNil(toCheck)
+    return not isNullOrNil(toCheck)
+  end
+  GDD.Helpers.isNotNullOrNil = isNotNullOrNil
+
+  local function getVtable(addr)
+    return readPointer(addr)
+  end
+  GDD.Helpers.getVtable = getVtable
+
+  local function isVtable(VTAddr)
+    if VTAddr == nil or VTAddr == 0 then return false end
+
+    if not GDDEFS._MAIN_MODULE_INFO then
+      GDDEFS._MAIN_MODULE_INFO = GDD.Memory.getMainModuleInfo()
+      GDDEFS._TEXT_SECTIONINFO = GDD.Memory.getSectionBounds('.text')
+      if GDDEFS._TEXT_SECTIONINFO == nil then return false end
+    end
+
+    if not (GDDEFS._MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS._MAIN_MODULE_INFO.moduleEnd) then
+      return false
+    end
+
+    local isInsideSectionRange = GDD.Memory.isInsideSectionRange
+    for i = 0, 3 do
+      local method = readPointer(VTAddr + GDDEFS.PTRSIZE * i)
+      if not isInsideSectionRange(method, GDDEFS._TEXT_SECTIONINFO) then return false end
+    end
+
+    return true
+  end
+  GDD.Helpers.isVtable = isVtable
+
+  local function getVtableValidated(addr)
+    local vtable = readPointer(addr)
+    if not isVtable(vtable) then return nil end
+    return vtable
+  end
+  GDD.Helpers.getVtableValidated = getVtableValidated
+
+  local function isInsideRDataStatic(strAddr)
+    if strAddr == nil or strAddr == 0 then return false end
+
+    local sectionInfo = GDD.Memory.getSectionBounds('.rdata')
+    if sectionInfo == nil then return false end
+    return GDD.Memory.isInsideSectionRange(strAddr, sectionInfo) or false
+  end
+  GDD.Helpers.isInsideRDataStatic = isInsideRDataStatic
+
+  local function alignOffset(offset, alignment)
+    local remaining = offset % alignment
+    if remaining ~= 0 then offset = offset + (alignment - remaining) end
+    return offset
+  end
+  GDD.Helpers.alignOffset = alignOffset
+
+  local function strMul(str, times)
+    return string.rep(str, times)
+  end
+  GDD.Helpers.strMul = strMul
+
+  local function numtohexstr(num)
+    return ('%X'):format(num or -1)
+  end
+  GDD.Helpers.numtohexstr = numtohexstr
+
+  local function getStackDepth()
+    local level = 1
+    while debug.getinfo(level, 'f') do level = level + 1 end
+    return level - 1
+  end
+  GDD.Helpers.getStackDepth = getStackDepth
+
+  local function getDebugPrefix()
+    return strMul('>', getStackDepth()) .. ' '
+  end
+  GDD.Helpers.getDebugPrefix = getDebugPrefix
+
+  local function sendDebugMessage(msg)
+    if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
+      local info = debug.getinfo(2, 'nl')
+      local name = info.name or ' ??? '
+      local currLine = info.currentline or -1
+      print(getDebugPrefix() .. name .. ':' .. currLine .. ' ' .. tostring(msg))
+    end
+  end
+  GDD.Helpers.sendDebugMessage = sendDebugMessage
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// DUMPER CODE
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// CE & UTILS
     -- ///---///--///---///--///---/// POINTER HANDLERS
 
-      --- checks if the value is a valid pointer
-      ---@param addr number
-      ---@return boolean
-      function isValidPointer(addr)
-        local success, result = pcall(readPointer, addr)
-        return success and result ~= nil
-      end
-
-      function isInvalidPointer(addr)
-        return isValidPointer(addr) == false
-      end
-
-      --- checks if the value is a valid pointer and not nullptr
-      ---@param addr number
-      ---@return boolean
-      function isPointerNotNull(addr)
-        return isValidPointer(addr) and readPointer(addr) ~= 0
-      end
-
       --- gets some section info (bounds)
       ---@param sectionName number
       ---@return table
-      local function getSectionBounds(sectionName)
+      function GDD.Memory.getSectionBounds(sectionName)
         local base = getAddress(process)
         if base == 0 or base == nil then
           base = enumModules()[1].Address
         end -- for cases when getAddress fails
-        if not base then
-          return nil
-        end -- if it's still failing, quit
+        if not base then return nil end -- if it's still failing, quit
 
         -- DOS header -> e_lfanew
         local peOffset = readInteger(base + 0x3C)
-        if not peOffset then
-          return nil
-        end
+        if not peOffset then return nil end
 
         local PE = base + peOffset
 
         local signature = readInteger(PE)
-        if signature ~= 0x00004550 then
-          return nil
-        end
+        if signature ~= 0x00004550 then return nil end
 
         -- IMAGE_FILE_HEADER
         local numberOfSections = readSmallInteger(PE + 0x6)
         local sizeOfOptionalHdr = readSmallInteger(PE + 0x14)
 
-        if not numberOfSections or not sizeOfOptionalHdr then
-          return nil
-        end
+        if not numberOfSections or not sizeOfOptionalHdr then return nil end
 
         -- Section table starts after:
         -- 4 bytes PE signature + 20 bytes IMAGE_FILE_HEADER + optional header
@@ -158,9 +224,7 @@
             local virtualSize = readInteger(sec + 0x8)
             local virtualAddress = readInteger(sec + 0xC)
 
-            if not virtualSize or not virtualAddress then
-              return nil
-            end
+            if not virtualSize or not virtualAddress then return nil end
 
             return
             {
@@ -177,66 +241,13 @@
         return nil
       end
 
-      local function isInsideSectionRange(addr, sectionInfo)
+      function GDD.Memory.isInsideSectionRange(addr, sectionInfo)
         if addr == nil or addr == 0 or sectionInfo == nil then
           return false
         end
         if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then
           return true
         end
-      end
-
-      -- check VTable validity for main module
-      ---@param VTAddr number
-      ---@return boolean
-      local function isVtable(VTAddr)
-        if VTAddr == nil or VTAddr == 0 then
-          return false
-        end
-        if not GDDEFS._MAIN_MODULE_INFO then
-          GDDEFS._MAIN_MODULE_INFO = getMainModuleInfo()
-          GDDEFS._TEXT_SECTIONINFO = getSectionBounds(".text")
-          if GDDEFS._TEXT_SECTIONINFO == nil then return false end
-        end
-
-        if GDDEFS._MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < GDDEFS._MAIN_MODULE_INFO.moduleEnd then
-          -- iterate a few pointers and confirm if they are executable
-          local pmethod = readPointer(VTAddr) -- just check the first
-          for i = 0, 3 do
-            local pmethod = readPointer(VTAddr + GDDEFS.PTRSIZE * i)
-            if not isInsideSectionRange(pmethod, GDDEFS._TEXT_SECTIONINFO) then
-              return false
-            end
-          end
-        else -- outside the main module
-          return false
-        end
-
-        return true
-      end
-
-      local function isInsideRDataStatic(strAddr)
-        if strAddr == nil or strAddr == 0 then
-          return false
-        end
-        -- in pck range
-        local sectionInfo = getSectionBounds(".rdata")
-        if sectionInfo == nil then
-          return false
-        end
-        if isInsideSectionRange(strAddr, sectionInfo) then
-          return true
-        end
-        return false
-      end
-
-      -- global
-      function alignOffset(offset, alignment)
-        local remaining = offset % alignment -- get remaining bytes for alignment
-        if remaining ~= 0 then
-          offset = offset + (alignment - remaining)
-        end
-        return offset
       end
 
     -- ///---///--///---///--///---/// MEMRECS
@@ -246,7 +257,7 @@
       ---@param CEType number
       ---@param parent userdata -- to append to
       ---@return userdata
-      local function addMemRecTo(memRecName, gdPtr, CEType, parent, contextTable)
+      function GDD.Utils.addMemRecTo(memRecName, gdPtr, CEType, parent, contextTable)
         local newMemRec = getAddressList().createMemoryRecord()
         local useSymbol = bGDUseSymbols and contextTable
 
@@ -290,22 +301,28 @@
         return newMemRec
       end
 
+      function GDD.Utils.memrecTimeout(memrec, timeoutMS)
+        if memrec == nil or type(memrec) ~= "userdata" then return end
+        if not inMainThread() then
+          return synchronize(GDD.Utils.memrecTimeout, memrec, timeoutMS)
+        end
+
+        timeoutMS = timeoutMS or 50
+        local callback = function(memrec)
+          memrec.Active = false
+        end
+        createTimer( timeoutMS, callback, memrec )
+      end
     -- ///---///--///---///--///---/// MISC UTILS
 
       --- turns off showOnPrint
-      local function fuckoffPrint()
-        GetLuaEngine().cbShowOnPrint.Checked = false
+      function GDD.Utils.disablePrintPopup()
+        synchronize(function()
+          GetLuaEngine().cbShowOnPrint.Checked = false
+        end)
       end
 
-      function isNullOrNil(toCheck)
-        return toCheck == nil or toCheck == 0
-      end
-
-      function isNotNullOrNil(toCheck)
-        return not isNullOrNil(toCheck)
-      end
-
-      function getMainModuleInfo()
+      function GDD.Memory.getMainModuleInfo()
         -- the vtables are stored in some readonly data section, text included too
         local moduleStart = getAddress(process) or 0
         local moduleEnd;
@@ -327,11 +344,11 @@
         }
       end
 
-      local function wrapBrackets(stringToWrap)
+      function GDD.Utils.wrapBrackets(stringToWrap)
         return '['.. (stringToWrap or "") .. "]"
       end
 
-      local function readU32LE(f)
+      function GDD.Utils.readU32LE(f)
         local b = f:read(4)
 
         if not b or #b < 4 then return nil end
@@ -341,7 +358,9 @@
         return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
       end
 
-      local function streamFileToString(fileName)
+      function GDD.Utils.streamFileToString(fileName)
+        if not inMainThread() then return synchronize(GDD.Utils.streamFileToString, fileName) end
+
         local tableFile = findTableFile(fileName)
         if tableFile == nil then return nil end -- error('attached file not found')
         local stringStream = createStringStream()
@@ -353,18 +372,7 @@
         return newScript
       end
 
-      local function getVtable(addr)
-        return readPointer(addr)
-      end
-
-      local function getVtableValidated(addr)
-        -- if isInvalidPointer(addr) then return nil end
-        local vtable = readPointer(addr)
-        if not isVtable(vtable) then return nil end
-        return vtable
-      end
-
-      local function getObjectVMethodByIndex(addr, index)
+      function GDD.Memory.getObjectVMethodByIndex(addr, index)
         if index == nil or index < 0 then return nil end
         local vtable = getVtableValidated(addr)
         if isNullOrNil(vtable) then return nil end
@@ -372,12 +380,9 @@
         return readPointer(vtable + offsetToMethod)
       end
 
-      local function loadScriptFromTable(fileName, arg)
+      function GDD.Utils.loadScriptFromTable(fileName, arg)
         if isNullOrNil(fileName) then error('filename invalid') end
-        local tableFile = findTableFile( fileName )
-        if tableFile == nil then error('no script file found') end
-        local fileStream = tableFile.getData()
-        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
+        local scriptString = GDD.Utils.streamFileToString(fileName)
         if scriptString == nil then error('script not loaded from file') end
         local doScript = loadstring(scriptString)
         if type(doScript) == 'function' then
@@ -387,50 +392,95 @@
         end
       end
 
+      function GDD.Modules.getAttachedSource(attachmentName)
+        if not inMainThread() then
+          return synchronize(GDD.Modules.getAttachedSource, attachmentName)
+        end
+
+        return GDD.Utils.streamFileToString(attachmentName)
+      end
+
+      local function runModuleChunk(chunk, sourceName)
+        local ok, module = pcall(chunk)
+        if not ok then return nil, tostring(module) end
+        if type(module) ~= 'table' then
+          return nil, sourceName .. ' did not return a module table'
+        end
+        return module
+      end
+
+      local function loadLocalModule(fileName)
+        local installedPath = ceDirectory .. moduleDirectory .. fileName
+        local chunk, loadError = loadfile(installedPath)
+        if not chunk then return nil, tostring(loadError) end
+        return runModuleChunk(chunk, installedPath)
+      end
+
+      local function loadAttachedModule(attachmentName)
+        local sourceText = GDD.Modules.getAttachedSource(attachmentName)
+        if not sourceText then
+          return nil, 'table attachment ' .. attachmentName .. ' was not found'
+        end
+
+        local chunk, parseError = load(sourceText, '@' .. attachmentName)
+        if not chunk then return nil, tostring(parseError) end
+        return runModuleChunk(chunk, attachmentName)
+      end
+
+      function GDD.Modules.registerResolver(spec)
+        if spec.localOnly or not spec.attachment then error(spec.name .. ' is not a portable module', 2) end
+
+        package.loaded[spec.name] = nil
+        package.preload[spec.name] = function()
+          -- installed first
+          local module, localError = loadLocalModule(spec.file)
+          if module then return module end
+
+          local attachedModule, attachmentError = loadAttachedModule(spec.attachment)
+          if attachedModule then return attachedModule end
+
+          error( ('Unable to load %s. Local: %s. Attached: %s'):format(spec.name, tostring(localError), tostring(attachmentError)), 2 )
+        end
+      end
+
+      function GDD.Modules.requireFresh(spec)
+        package.loaded[spec.name] = nil
+        local module = require(spec.name)
+        if type(module.install) ~= 'function' then
+          error(spec.name .. ' does not export install(context)', 2)
+        end
+        return module
+      end
+
+      function GDD.Modules.loadOptionalLocal(spec)
+        local installedPath = ceDirectory .. moduleDirectory .. spec.file
+        local file = io.open(installedPath, 'rb')
+        if not file then return nil end
+        file:close()
+
+        local module, loadError = loadLocalModule(spec.file)
+        if not module then
+          error(('Unable to load optional local module %s: %s'):format(spec.name, tostring(loadError)), 2)
+        end
+        if type(module.install) ~= 'function' then
+          error(spec.name .. ' does not export install(context)', 2)
+        end
+        return module
+      end
+
+      for _, spec in ipairs(portableModuleSpecs) do
+        GDD.Modules.registerResolver(spec)
+      end
+
 
     -- ///---///--///---///--///---/// DEBUG
-
-      --- multiplies a string by a number for more neat debug
-      ---@param str string
-      ---@param times number
-      ---@return string
-      local function strMul(str, times)
-        return string.rep(str, times)
-      end
-
-      function numtohexstr(num)
-        return ("%X"):format(num or -1)
-      end
-
-      local function getStackDepth()
-        local level = 1
-        -- kind of expensive, but fair for debug mode
-        while debug.getinfo(level, "f") do
-          level = level + 1
-        end
-        return level - 1
-      end
-
-      local function getDebugPrefix()
-        local depth = getStackDepth()
-        return strMul('>', depth) .. ' '
-      end
-
-      local function sendDebugMessage(msg)
-        if bGDDebug and isNotNullOrNil(msg) and inMainThread() then
-          local info = debug.getinfo(2, "nl") -- previous function, name and currentline
-          local name = info.name or " ??? "
-          local currLine = info.currentline or -1
-          print(getDebugPrefix() .. name .. ":" .. currLine .. " " .. tostring(msg))
-        end
-      end
 
       function GDAPI.getGDSemver()
         if GDDEFS and GDDEFS.FULL_GDVERSION_STRING then
           print(GDDEFS.FULL_GDVERSION_STRING)
-          print(getExportTableName())
+          print(GDD.Preinit.getExportTableName())
         else
-          print((getExportTableName() or "exportnomatch") .. '\n' .. (getGodotVersionString() or "semver not hit"))
+          print((GDD.Preinit.getExportTableName() or "exportnomatch") .. '\n' .. (GDD.Preinit.getGodotVersionString() or "semver not hit"))
         end
       end
 
@@ -460,7 +510,7 @@
         )
       end
 
-      local function requireOffsetsDefined()
+      function GDD.Utils.requireOffsetsDefined()
         if gdOffsetsDefined then
           return true
         end
@@ -469,10 +519,14 @@
         return false
       end
 
+      function GDAPI.gd_getDumper()
+        return GDD
+      end
+
     -- ///---///--///---///--///---/// STRUCTURES
 
       --- deletes ALL structures, constructs a children structure of the viewport
-      local function createVPStructure()
+      function GDD.Structures.createVPStructure()
         -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
 
         -- remove all structures
@@ -488,7 +542,7 @@
 
         local struct = createStructure('GDNODES')
         local structElem, childElem;
-        local mainNodeTable = getMainNodeTable()
+        local mainNodeTable = GDD.Objects.getMainNodeTable()
 
         struct.beginUpdate()
         for i = 0, #mainNodeTable - 1 do
@@ -505,14 +559,14 @@
       end
 
       --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
-      local function createVPStructForm()
-        requireOffsetsDefined()
+      function GDD.Structures.createVPStructForm()
+        GDD.Utils.requireOffsetsDefined()
         -- let's ensure VP is found, it will throw an error otherwise
-        getViewport()
+        GDD.Root.getViewport()
 
         local symbolToChildren = '[[pRoot]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[pRoot]+CHILDREN]'
         local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
-        local childrenStruct = createVPStructure()
+        local childrenStruct = GDD.Structures.createVPStructure()
 
         -- I couldn't find a better way to select a structure inside a StructDissect form
         for i = 0, viewportStructForm.Structures1.Count - 1 do
@@ -525,7 +579,7 @@
       end
 
       --- creates an element in a parent structure
-      local function addStructureElem(parentStructElement, elementName, offset, CEType)
+      function GDD.Structures.addStructureElem(parentStructElement, elementName, offset, CEType)
         local element = parentStructElement.ChildStruct.addElement()
         element.Name = elementName
         element.Offset = offset
@@ -546,7 +600,7 @@
       end
 
       --- for node layout creation
-      local function addLayoutStructElem(parentStructElement, childName, backgroundColor, offset, CEType)
+      function GDD.Structures.addLayoutStructElem(parentStructElement, childName, backgroundColor, offset, CEType)
         parentStructElement.ChildStruct = parentStructElement.ChildStruct and parentStructElement.ChildStruct or createStructure(parentStructElement.parent.Name or 'ChStructure')
         local childStructElement = parentStructElement.ChildStruct.addElement()
         childStructElement.Name = childName
@@ -558,8 +612,8 @@
         return childStructElement
       end
 
-      local function createChildStructElem(parent, label, offset, ceType, structName)
-        local elem = addStructureElem(parent, label, offset, ceType)
+      function GDD.Structures.createChildStructElem(parent, label, offset, ceType, structName)
+        local elem = GDD.Structures.addStructureElem(parent, label, offset, ceType)
         elem.ChildStruct = createStructure(structName)
         return elem
       end
@@ -567,16 +621,14 @@
       --- overriden structure dissector function
       ---@param struct userdata @the newly created struct
       ---@param baseaddr number  @the address form the parent pointer
-      function GDStructureDissect(struct, baseaddr)
-        requireOffsetsDefined()
+      function GDD.Structures.structureDissect(struct, baseaddr)
+        GDD.Utils.requireOffsetsDefined()
 
-        if isNullOrNil(baseaddr) then
-          return false
-        end
+        if isNullOrNil(baseaddr) then return false end
         struct = struct and struct or createStructure('') -- should not happen though?
         struct.beginUpdate()
 
-        if checkForGDScript(baseaddr) and isVtable( getVtable(baseaddr) ) then
+        if GDD.Objects.checkForGDScript(baseaddr) and isVtable( getVtable(baseaddr) ) then
           dumpedDissectorNodes = {} -- redundant?
           -- safe to assume, that's a starting point
           local nodeName = gd_getNodeName(baseaddr)
@@ -589,29 +641,26 @@
           scriptInstStructElem.Offset = GDDEFS.GDSCRIPTINSTANCE
           scriptInstStructElem.VarType = vtPointer
 
-          if checkIfObjectWithChildren(baseaddr) then
+          if GDD.Objects.checkIfObjectWithChildren(baseaddr) then
             local childrenStructElem = struct.addElement()
             childrenStructElem.Name = 'Children'
             childrenStructElem.BackgroundColor = 0xFF0080
             childrenStructElem.Offset = GDDEFS.CHILDREN
             childrenStructElem.VarType = vtPointer
             childrenStructElem.ChildStruct = createStructure('Children')
-            iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
+            GDD.Objects.iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
           end
 
-          iterateNodeToStruct(baseaddr, scriptInstStructElem)
+          GDD.Objects.iterateNodeToStruct(baseaddr, scriptInstStructElem)
 
-        elseif GDDEFS.bDisasmFunc and checkIfGDFunction(baseaddr) then
-          disassembleGDFunctionCodeToStruct(baseaddr, struct)
-
-        elseif checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
+        elseif GDD.Objects.checkIfObjectWithChildren(baseaddr) then -- experimental, creating structs for nonGDScript objects
           local childrenStructElem = struct.addElement()
           childrenStructElem.Name = 'Children'
           childrenStructElem.BackgroundColor = 0xFF0080
           childrenStructElem.Offset = GDDEFS.CHILDREN
           childrenStructElem.VarType = vtPointer
           childrenStructElem.ChildStruct = createStructure('Children')
-          iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
+          GDD.Objects.iterateNodeChildrenToStruct(childrenStructElem, baseaddr)
         else
           -- otherwise just let CE decide, btw the base address must be a fucking hex string?
           struct.autoGuess(numtohexstr(baseaddr), 0x0, 0x500 ) -- 0x500 for researching
@@ -624,7 +673,7 @@
       --- structname lookup that uses the virtual table to guess the type
       ---@param addr integer @address to typeguess
       ---@return string @name; base address isn't returned
-      local function GDStructNameLookup(addr)
+      function GDD.Structures.nameLookup(addr)
         if isInvalidPointer(addr) or not isVtable(getVtable(addr)) then
           return nil
         end
@@ -640,7 +689,7 @@
       --- address lookup, not implemented
       ---@param addr integer @address to typeguess
       ---@return string @name;
-      local function GDAddressLookup(addr)
+      function GDD.Structures.addressLookup(addr)
         return nil
         -- if isInvalidPointer(addr) or not isVtable( getVtable( addr ) ) then
         --     return nil
@@ -669,32 +718,33 @@
       end
 
       function GDAPI.godot_node_enumVariants(nodeAddr)
-        return iterateVectorVariantsForFields(nodeAddr)
+        return GDD.Variants.iterateForFields(nodeAddr)
       end
 
       function GDAPI.gd_node_registerVariantsSelectively(nodeName, variantNameTable)
         local nodeAddr = gd_getDumpedNode( nodeName )
         if isNullOrNil(nodeAddr) then error('node addr not found') end
-        if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then error('only GD targets') end
+        if GDDEFS.MONO and GDD.Objects.checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then error('only GD targets') end
         -- namespace = (namespace and namespace ~= '' and namespace .. '.') or ''
 
+        local iterateForNamedField = GDD.Variants.iterateForNamedField
         for _, fieldName in ipairs(variantNameTable) do
-          local field = iterateVectorVariantsForNamedField(nodeAddr, fieldName)
+          local field = iterateForNamedField(nodeAddr, fieldName)
           if field then registerSymbol( nodeName .. '.' .. field.Name , field.Offset , true ) end
         end
       end
 
       --- register our own structure dissector callback
-      local function enableGDDissect()
+      function GDD.Structures.enableDissect()
         -- override CE's callback
         if GDstructDissectID ~= nil then
           unregisterStructureDissectOverride(GDstructDissectID)
         end
-        GDstructDissectID = registerStructureDissectOverride(GDStructureDissect)
+        GDstructDissectID = registerStructureDissectOverride(GDD.Structures.structureDissect)
       end
 
       --- unregister our structure dissector callback
-      local function disableGDDissect()
+      function GDD.Structures.disableDissect()
         -- restore CE's callback
         if GDstructDissectID ~= nil then
           unregisterStructureDissectOverride(GDstructDissectID)
@@ -702,15 +752,15 @@
         GDstructDissectID = nil;
       end
 
-      local function enableGDStructNameLookup()
+      function GDD.Structures.enableNameLookup()
         -- override CE's lookup
         if GDStructNameLookupID ~= nil then
           unregisterStructureNameLookup(GDStructNameLookupID)
         end
-        GDStructNameLookupID = registerStructureNameLookup(GDStructNameLookup)
+        GDStructNameLookupID = registerStructureNameLookup(GDD.Structures.nameLookup)
       end
 
-      local function disableGDStructNameLookup()
+      function GDD.Structures.disableNameLookup()
         -- restore CE's lookup
         if GDStructNameLookupID ~= nil then
           unregisterStructureNameLookup(GDStructNameLookupID)
@@ -718,15 +768,15 @@
         GDStructNameLookupID = nil;
       end
 
-      local function enableGDAddressLookup()
+      function GDD.Structures.enableAddressLookup()
         -- override CE's lookup
         if GDAddressLookupID ~= nil then
           unregisterAddressLookupCallback(GDAddressLookupID)
         end
-        GDAddressLookupID = registerAddressLookupCallback(GDStructNameLookup)
+        GDAddressLookupID = registerAddressLookupCallback(GDD.Structures.nameLookup)
       end
 
-      local function disableGDAddressLookup()
+      function GDD.Structures.disableAddressLookup()
         -- restore CE's lookup
         if GDAddressLookupID ~= nil then
           unregisterAddressLookupCallback(GDAddressLookupID)
@@ -737,36 +787,36 @@
     -- ///---///--///---///--///---/// GUI
 
       --- toggling dissector override
-      local function GDDissectorSwitch(sender)
+      function GDD.GUI.dissectorSwitch(sender)
         sender.Checked = not sender.Checked
         if sender.Checked then
-          enableGDDissect()
+          GDD.Structures.enableDissect()
         else
-          disableGDDissect()
+          GDD.Structures.disableDissect()
         end
       end
 
-      local function GDStructNameLookupSwitch(sender)
-        requireOffsetsDefined()
+      function GDD.GUI.nameLookupSwitch(sender)
+        GDD.Utils.requireOffsetsDefined()
         sender.Checked = not sender.Checked
         if sender.Checked then
-          enableGDStructNameLookup()
+          GDD.Structures.enableNameLookup()
         else
-          disableGDStructNameLookup()
+          GDD.Structures.disableNameLookup()
         end
       end
 
-      local function GDAddressLookupSwitch(sender)
-        requireOffsetsDefined()
+      function GDD.GUI.addressLookupSwitch(sender)
+        GDD.Utils.requireOffsetsDefined()
         sender.Checked = not sender.Checked
         if sender.Checked then
-          enableGDAddressLookup()
+          GDD.Structures.enableAddressLookup()
         else
-          disableGDAddressLookup()
+          GDD.Structures.disableAddressLookup()
         end
       end
 
-      local function GDDebugSwitch(sender)
+      function GDD.GUI.debugSwitch(sender)
         sender.Checked = not sender.Checked
         if sender.Checked then
           bGDDebug = true
@@ -776,7 +826,7 @@
       end
 
 
-      local function GDStoredOffsetsSwitch(sender)
+      function GDD.GUI.storedOffsetsSwitch(sender)
         sender.Checked = not sender.Checked
         if sender.Checked then
           bHardOffsets = true
@@ -785,7 +835,7 @@
         end
       end
 
-      local function addGDMemrecToTable(sender)
+      function GDD.GUI.addMemrecToTable(sender)
         local addrList = getAddressList()
         local mainMemrec = addrList.createMemoryRecord()
         mainMemrec.Description = "Dumper"
@@ -810,32 +860,23 @@
         dumpMemrec.appendToEntry(mainMemrec)
 
         local supportPalique = addrList.createMemoryRecord()
-        supportPalique.Description = 'Support the development & author: ko-fi.com/vesperpallens'
+        supportPalique.Description = 'Support the development & author: patreon.com/c/palepine/membership'
         supportPalique.Type = vtAutoAssembler
         supportPalique.Color = 0x8F379F
-        supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
+        supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://www.patreon.com/c/palepine/membership")\n[DISABLE]'
       end
 
       -- attaches the script to the table
-      local function appendDumperScript(sender)
-        local cedir = getCheatEngineDir()
-        local dumperPath = cedir .. [[autorun\GDumper.lua]]
-        local offsetPath = cedir .. [[autorun\GDDumperModules\GDHardOffsets.lua]]
-        local sigPath = cedir .. [[autorun\GDDumperModules\GDSignatures.lua]]
-        local disasmPath = cedir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]]
-        local nodemonitor = cedir .. [[autorun\GDDumperModules\GDNodeMonitor.lua]]
-        local types = cedir .. [[autorun\GDDumperModules\GDTypes.lua]]
-        createTableFile("GDumper", dumperPath)
-        createTableFile("GDOff", offsetPath)
-        createTableFile("GDSig", sigPath)
-        createTableFile("GDFDasm", disasmPath)
-        createTableFile("GDT", types)
-        createTableFile("GDNM", nodemonitor)
+      function GDD.GUI.appendDumperScript(sender)
+        createTableFile('GDumper', ceDirectory .. [[autorun\GDumper.lua]])
+        for _, spec in ipairs(portableModuleSpecs) do
+          createTableFile(spec.attachment, ceDirectory .. moduleDirectory .. spec.file)
+        end
         sender.Enabled = false
       end
 
       -- appends the script as a memrec
-      local function appendDumperScriptAsMemrec(sender)
+      function GDD.GUI.appendDumperScriptAsMemrec(sender)
         local cedir = getCheatEngineDir()
         local scriptPath = cedir .. [[autorun\GDumper.lua]]
         
@@ -843,13 +884,13 @@
       end
 
       -- load from attached script
-      local function loadDumperScript(sender)
-        local ok, result = pcall(loadScriptFromTable, "GDumper")
+      function GDD.GUI.loadDumperScript(sender)
+        local ok, result = pcall(GDD.Utils.loadScriptFromTable, "GDumper")
         if ok == false then error('Dumper load failed: '.. result or 'unknown error') end
         if sender then sender.Checked = true end
       end
 
-      local function loadDumperScriptFromFile(sender)
+      function GDD.GUI.loadDumperScriptFromFile(sender)
         local cedir = getCheatEngineDir()
         local scriptPath = cedir .. [[autorun\GDumper.lua]]
         local scriptFile, err = io.open(scriptPath, "r")
@@ -872,7 +913,7 @@
         end
       end
 
-      local function loadGDDumperForm()
+      function GDD.GUI.loadForm()
         local gdform = createFormFromFile(getCheatEngineDir()..[[autorun\gdform\GDForm.FRM]])
         gdform.setDoNotSaveInTable(true)
         -- TODO: setup
@@ -886,6 +927,8 @@
 
       --- creates a menu button in the main menu
       function GDAPI.gd_buildGUI()
+        if not inMainThread() then return synchronize(GDAPI.gd_buildGUI) end
+
         if GDGUIInit then
           return
         end
@@ -915,33 +958,34 @@
           gdMenuItem = createMenuItem(mainMenu)
           gdMenuItem.Caption = menuItemCaption
           mainMenu.Items.add(gdMenuItem)
-          addCustomMenuButtonTo(gdMenuItem, 'Root Struct', createVPStructForm)
-          addCustomMenuButtonTo(gdMenuItem, 'GD Dissect', GDDissectorSwitch)
-          addCustomMenuButtonTo(gdMenuItem, 'Add Template', addGDMemrecToTable)
-          addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDDebugSwitch)
-          local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', appendDumperScript)
+          addCustomMenuButtonTo(gdMenuItem, 'Root Struct', GDD.Structures.createVPStructForm)
+          addCustomMenuButtonTo(gdMenuItem, 'GD Dissect', GDD.GUI.dissectorSwitch)
+          addCustomMenuButtonTo(gdMenuItem, 'Add Template', GDD.GUI.addMemrecToTable)
+          addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDD.GUI.debugSwitch)
+          local menuItem = addCustomMenuButtonTo(gdMenuItem, 'Append Script', GDD.GUI.appendDumperScript)
           -- menuItem.OnEnter = function(sender) if sender.Enabled==false and findTableFile("GDumper")==nil then sender.Enabled=true end end
           
-          -- addCustomMenuButtonTo(gdMenuItem, 'Append as memrec', appendDumperScriptAsMemrec)
-          -- addCustomMenuButtonTo(gdMenuItem, 'Load Script', loadDumperScript)
-          -- addCustomMenuButtonTo(gdMenuItem, 'Stuct name Lookup', GDStructNameLookupSwitch)
-          -- addCustomMenuButtonTo( gdMenuItem, 'Addr Lookup', GDAddressLookupSwitch )
-          addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDStoredOffsetsSwitch)
+          -- addCustomMenuButtonTo(gdMenuItem, 'Append as memrec', GDD.GUI.appendDumperScriptAsMemrec)
+          -- addCustomMenuButtonTo(gdMenuItem, 'Load Script', GDD.GUI.loadDumperScript)
+          -- addCustomMenuButtonTo(gdMenuItem, 'Stuct name Lookup', GDD.GUI.nameLookupSwitch)
+          -- addCustomMenuButtonTo( gdMenuItem, 'Addr Lookup', GDD.GUI.addressLookupSwitch )
+          addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDD.GUI.storedOffsetsSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'API doc' , function() shellExecute("https://github.com/palepine/GDDumper/blob/main/docs/GDUMPER_API.MD") end)
-          addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
-          -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', loadDumperScriptFromFile )
+          addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://www.patreon.com/c/palepine/membership") end)
+          -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', GDD.GUI.loadDumperScriptFromFile )
         end
       end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TYPES/SIZE
 
-    local function isValidVariantType(typeId)
+    function GDD.Types.isValidVariantType(typeId)
       local maxType = GDDEFS.VARIANT_TYPE_PROFILE.enums.VARIANT_MAX
       return type(typeId) == "number" and typeId >= 0 and typeId < maxType
     end
 
-    local function validateVariantStride(vectorPtr, vectorSize, sizeOfVariant)
+    function GDD.Types.validateVariantStride(vectorPtr, vectorSize, sizeOfVariant)
       if vectorSize <= 0 then return false end
+      local isValidVariantType = GDD.Types.isValidVariantType
       for index = 0, vectorSize - 1 do
         local typeId = readInteger(vectorPtr + index * sizeOfVariant)
         if not isValidVariantType(typeId) then return false end
@@ -953,7 +997,7 @@
     --- takes in a vector + its size. Returns an inferred variant size and successBool
     ---@param vectorPtr number
     ---@param vectorSize number
-    local function redefineVariantSizeByVector(vectorPtr, vectorSize)
+    function GDD.Types.redefineVariantSizeByVector(vectorPtr, vectorSize)
       if GDDEFS.SIZEOF_VARIANT then return GDDEFS.SIZEOF_VARIANT, true end
 
       local stdVectorSize = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
@@ -967,7 +1011,7 @@
 
       for _, sizeOfVariant in ipairs( { 0x18, 0x28 } ) do -- 0x18, 0x28, 0x30, 0x40
         -- we do runs with assumtions until one vector passes
-        if validateVariantStride( vectorPtr, vectorSize, sizeOfVariant ) then
+        if GDD.Types.validateVariantStride( vectorPtr, vectorSize, sizeOfVariant ) then
           matches[ #matches + 1 ] = sizeOfVariant -- { sizeOfVariant, count++ }
         end
       end
@@ -988,41 +1032,42 @@
 
     --- returns an adjusted offset to a variant value
     ---@param gdType number
-    local function getVariantValueOffset(gdType)
-      if getGDTypeName(gdType) == 'OBJECT' then return 0x10 end -- objects have 0x10 offset for value, their ID before
+    function GDD.Types.getVariantValueOffset(gdType)
+      if GDD.Types.getGDTypeName(gdType) == 'OBJECT' then return 0x10 end -- objects have 0x10 offset for value, their ID before
       return 0x8
     end
 
     --- takes a godot type. Returns CEType
     ---@param gdType number
-    local function getCETypeFromGD(gdType)
+    function GDD.Types.getCETypeFromGD(gdType)
       if type(gdType) ~= "number" then return vtPointer end
       return GDDEFS.VARIANT_TYPE_PROFILE.ceTypes[gdType] or vtPointer
     end
 
     --- takes in a godot type, returns a godot type name
     ---@param typeInt number
-    function getGDTypeName(typeInt)
+    function GDD.Types.getGDTypeName(typeInt)
       if type(typeInt) ~= "number" then return false; end
       return GDDEFS.VARIANT_TYPE_PROFILE.names[typeInt] or "BEYOND_VARIANT_MAX"
     end
 
     --- takes in a godot type, returns a godot type name
     ---@param typeInt number
-    local function getGDTypeEnumFromName(typeName)
+    function GDD.Types.getGDTypeEnumFromName(typeName)
       if type(typeName) ~= "string" then error("invalid typename") end
       local enum = GDDEFS.VARIANT_TYPE_PROFILE.enums[typeName]
-      if enum == nil then error("getGDTypeEnumFromName: invalid typename " .. typeName) end
+      if enum == nil then error("GDD.Types.getGDTypeEnumFromName: invalid typename " .. typeName) end
       return enum
     end
 
     --- I'm gonna add a 4byte string type
-    local function checkGDStringType()
+    function GDD.Types.checkGDStringType()
 
       local function gd4string_bytestovalue(b1, address)
         local MAX_CHARS_TO_READ = 15000
         local charTable = {}
         local buff = 0;
+        local codePointToUTF8 = GDD.Strings.codePointToUTF8
 
         for i = 0, MAX_CHARS_TO_READ do
           buff = readInteger(address + i * 0x4) or 0x0
@@ -1038,6 +1083,7 @@
       local function gd4string_valuetobytes(str, address)
         error('Writing not implemented until I figure out how to do it properly')
         local idx = 0
+        local UTF8Codepoints = GDD.Strings.UTF8Codepoints
         for codePoint in UTF8Codepoints(str) do
           -- clamping invalid/surrogate range
           if codePoint < 0 or codePoint > 0x10FFFF or codePoint >= 0xD800 and codePoint <= 0xDFFF then
@@ -1303,8 +1349,8 @@
       end
     end
 
-    local function getObjectMeta(objAddr)
-      local method = getObjectVMethodByIndex( objAddr, GDDEFS.GET_TYPE_INDX )
+    function GDD.Types.getObjectMeta(objAddr)
+      local method = GDD.Memory.getObjectVMethodByIndex( objAddr, GDDEFS.GET_TYPE_INDX )
       if isNullOrNil(method) then return nil end
       return executeMethod(0, nil, method, objAddr)
     end
@@ -1312,26 +1358,26 @@
     function GDAPI.getGDObjectName(objAddr)
       -- up until 4.6, the method was StringName* Object::_get_class_namev()
       -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object class name
-      local metaAddr = getObjectMeta(objAddr)
+      local metaAddr = GDD.Types.getObjectMeta(objAddr)
       local className = ''
 
       if isNullOrNil(metaAddr) then return 'null' end
 
       if GDDEFS.MAJOR_VER <= 3 or (GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER < 6) then
-        className = getStringNameStr(readPointer(metaAddr) or 0) or 'nstrn'
+        className = GDD.Strings.getStringNameStr(readPointer(metaAddr) or 0) or 'nstrn'
 
       elseif GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER == 6 then
           -- const GDType *super_type;
           -- StringName name;
-        metaAddr = getObjectMeta(objAddr)
+        metaAddr = GDD.Types.getObjectMeta(objAddr)
         local stringNameAddr = readPointer(metaAddr + GDDEFS.PTRSIZE)
-        className = getStringNameStr(stringNameAddr or 0) or 'nstrn'
+        className = GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
       elseif GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER > 6 then
         -- const GDType *super_type;
         -- mutable InitState init_state = InitState::UNINITIALIZED;
         -- StringName name;
         local stringNameAddr = readPointer( metaAddr + GDDEFS.PTRSIZE * 2 ) -- TODO: use alignment
-        className = getStringNameStr(stringNameAddr or 0) or 'nstrn'
+        className = GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
       end
 
       return className
@@ -1339,7 +1385,7 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS
 
-    local function getNodeChildrenInfo(nodeAddr)
+    function GDD.Containers.getNodeChildrenInfo(nodeAddr)
       if isNullOrNil(nodeAddr) then
         return nil, nil;
       end
@@ -1359,7 +1405,7 @@
       return childrenAddr, childrenSize
     end
 
-    local function getNextMapElement(mapElement)
+    function GDD.Containers.getNextMapElement(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
         return readPointer(mapElement) -- next is at 0x0
       else
@@ -1367,7 +1413,7 @@
       end
     end
 
-    local function getDictElemPairNext(mapElement)
+    function GDD.Containers.getDictElemPairNext(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
         return readPointer(mapElement) -- at 0x0
       else
@@ -1375,15 +1421,15 @@
       end
     end
 
-    local function getDictionarySizeFromVariantPtr(variantPtr)
+    function GDD.Containers.getDictionarySizeFromVariantPtr(variantPtr)
       return readInteger( (readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
     end
 
-    local function isArrayEmptyFromVariantPtr(variantPtr)
+    function GDD.Containers.isArrayEmptyFromVariantPtr(variantPtr)
       return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR) == 0
     end
 
-    local function resolveScriptVariantType(mapElement, runtimeVariantType) -- TODO: remove?
+    function GDD.Containers.resolveScriptVariantType(mapElement, runtimeVariantType) -- TODO: remove?
       if GDDEFS.MAJOR_VER < 4 then return runtimeVariantType end
       -- local scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE)
       -- if scriptType > GDDEFS.MAXTYPE then scriptType = readInteger(mapElement + GDDEFS.VAR_NAMEINDEX_VARTYPE - 0x8) end
@@ -1392,23 +1438,23 @@
       return runtimeVariantType
     end
 
-    local function getVariantNameFromMapElement(mapElement)
+    function GDD.Containers.getVariantNameFromMapElement(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
-        return getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
+        return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
       end
 
-      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
     end
 
-    local function prepareObjectParent(entry, emitter, parent, contextTable)
+    function GDD.Containers.prepareObjectParent(entry, emitter, parent, contextTable)
 
       local shifted
       local ptr = entry.variantPtr
-      local offset = rootOffset(entry, emitter)
+      local offset = GDD.Emitters.rootOffset(entry, emitter)
       local currentParent = parent
       local currentContext = contextTable
 
-      ptr, shifted = checkObjectOffset(ptr)
+      ptr, shifted = GDD.Objects.checkObjectOffset(ptr)
 
       if shifted then
         offset = offset - GDDEFS.PTRSIZE
@@ -1418,8 +1464,8 @@
           if GDDEFS.MAJOR_VER <= 3 then
             symbolOffset = symbolOffset - GDDEFS.PTRSIZE
           end
-          currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, symbolOffset ) )
-          currentContext.symbol = wrapBrackets( makeSymAddr( currentContext.symbol, 0 ) )
+          currentContext.symbol = GDD.Utils.wrapBrackets( GDD.Utils.makeSymAddr( currentContext.symbol, symbolOffset ) )
+          currentContext.symbol = GDD.Utils.wrapBrackets( GDD.Utils.makeSymAddr( currentContext.symbol, 0 ) )
         end
 
         currentContext =
@@ -1438,16 +1484,16 @@
       return currentParent, ptr, offset, currentContext, shifted
     end
 
-    local function getFunctionMapName(mapElement)
+    function GDD.Containers.getFunctionMapName(mapElement)
       if isNullOrNil(mapElement) then return nil end
 
       if GDDEFS.MAJOR_VER >= 4 then
-        return getGDFunctionName(mapElement)
+        return GDD.Functions.getName(mapElement)
       end
-      return getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
     end
 
-    local function findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
+    function GDD.Containers.findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
       if isNullOrNil(mapHead) then return nil end
 
       local mapElement = mapHead
@@ -1464,45 +1510,45 @@
       return nil
     end
 
-    local function getConstMapLookupResult(mapElement)
+    function GDD.Containers.getConstMapLookupResult(mapElement)
       if GDDEFS.MAJOR_VER >= 4 then
         local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT)
-        local offsetToValue = getVariantValueOffset(constType)
-        return getAddress(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT + offsetToValue), getCETypeFromGD(constType)
+        local offsetToValue = GDD.Types.getVariantValueOffset(constType)
+        return getAddress(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT + offsetToValue), GDD.Types.getCETypeFromGD(constType)
       else
         local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT)
-        local offsetToValue = getVariantValueOffset(constType)
-        return getAddress(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT + offsetToValue), getCETypeFromGD(constType)
+        local offsetToValue = GDD.Types.getVariantValueOffset(constType)
+        return getAddress(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT + offsetToValue), GDD.Types.getCETypeFromGD(constType)
       end
     end
 
-    local function getFunctionMapLookupResult(mapElement)
+    function GDD.Containers.getFunctionMapLookupResult(mapElement)
       return readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
     end
 
-    local function createNextConstContainer(currentContainer, index)
+    function GDD.Containers.createNextConstContainer(currentContainer, index)
       if GDDEFS.MAJOR_VER >= 4 then
-        local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
+        local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
         nextElem.ChildStruct = createStructure('ConstNext')
         return nextElem
       end
 
-      local nextElem = addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
+      local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
       nextElem.ChildStruct = createStructure('ConstNext')
       return nextElem
     end
 
-    local function createNextConstSymbol(currentSymbol)
+    function GDD.Containers.createNextConstSymbol(currentSymbol)
       local nextSymbol
       if GDDEFS.MAJOR_VER >= 4 then
-        nextSymbol = wrapBrackets( currentSymbol .. "+0" )
+        nextSymbol = GDD.Utils.wrapBrackets( currentSymbol .. "+0" )
       else --if GDDEFS.MAJOR_VER <= 3 then
-        nextSymbol = wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
+        nextSymbol = GDD.Utils.wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
       end
       return nextSymbol
     end
 
-    local function formatArrayEntry(entry)
+    function GDD.Containers.formatArrayEntry(entry)
       local cloned = {}
       for k, v in pairs(entry) do
           cloned[k] = v
@@ -1511,7 +1557,7 @@
       return cloned
     end
 
-    local function getArrayVectorInfo(arrayAddr)
+    function GDD.Containers.getArrayVectorInfo(arrayAddr)
 
       if isInvalidPointer(arrayAddr) then
         sendDebugMessage('arrayAddr invalid')
@@ -1530,7 +1576,7 @@
         return nil
       end
 
-      -- local variantArrSize, ok = redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
+      -- local variantArrSize, ok = GDD.Types.redefineVariantSizeByVector(arrVectorAddr, arrVectorSize)
       -- if not ok then return nil end
 
       local variantArrSize = GDDEFS.SIZEOF_VARIANT
@@ -1538,7 +1584,7 @@
       return arrVectorAddr, arrVectorSize, variantArrSize
     end
 
-    local function formatDictionaryEntry(entry)
+    function GDD.Containers.formatDictionaryEntry(entry)
       local cloned = {}
       for k, v in pairs(entry) do
         cloned[k] = v
@@ -1547,28 +1593,28 @@
       return cloned
     end
 
-    local function decodeDictionaryKeyName(mapElement)
+    function GDD.Containers.decodeDictionaryKeyName(mapElement)
       local keyType, keyValueAddr
 
       if GDDEFS.MAJOR_VER <= 3 then
         local keyPtr = readPointer(mapElement) -- key is a ptr
         keyType = readInteger(keyPtr + GDDEFS.DICTELEM_KEY_VARIANT) -- variant's 0x0 is type
-        local offsetToValue = getVariantValueOffset(keyType)
+        local offsetToValue = GDD.Types.getVariantValueOffset(keyType)
         keyValueAddr = getAddress(keyPtr + GDDEFS.DICTELEM_KEY_VARIANT + offsetToValue)
       else
         keyType = readInteger(mapElement + GDDEFS.DICTELEM_KEY_VARIANT)
-        local offsetToValue = getVariantValueOffset(keyType)
+        local offsetToValue = GDD.Types.getVariantValueOffset(keyType)
         keyValueAddr = getAddress(mapElement + GDDEFS.DICTELEM_KEY_VARIANT + offsetToValue)
       end
 
-      local keyTypeName = getGDTypeName(keyType)
+      local keyTypeName = GDD.Types.getGDTypeName(keyType)
       local keyName = "UNKNOWN"
 
       if keyTypeName == 'STRING' then -- TODO: handler + stringification implementation?
         -- immediate String
-        keyName = readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
+        keyName = GDD.Strings.readUTFString(readPointer(keyValueAddr)) or "_couldnt_read"
       elseif keyTypeName == 'STRING_NAME' then
-        keyName = getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
+        keyName = GDD.Strings.getStringNameStr(readPointer(keyValueAddr)) or "_couldnt_read"
       elseif keyTypeName == 'FLOAT' then
         keyName = tostring(readDouble(keyValueAddr) or "_couldnt_read") -- in godot 3.x real is 4 byte float or not?
       elseif keyTypeName == 'NODE_PATH' or keyTypeName == 'CALLABLE' then
@@ -1582,7 +1628,7 @@
       return keyType, keyValueAddr, keyName
     end
 
-    local function getDictionaryInfo(dictAddr)
+    function GDD.Containers.getDictionaryInfo(dictAddr)
       if isInvalidPointer(dictAddr) then
         sendDebugMessage('dictAddr isnt pointer')
         return nil
@@ -1614,23 +1660,23 @@
       return dictRoot, dictSize, dictHead, dictTail
     end
 
-    local function createNextDictContainer(currentContainer, index)
+    function GDD.Containers.createNextDictContainer(currentContainer, index)
       if GDDEFS.MAJOR_VER >= 4 then
-        return createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
+        return GDD.Structures.createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
       end
 
-      return createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+      return GDD.Structures.createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
     end
 
-    local function createNextSymbol(currentSymbol)
+    function GDD.Containers.createNextSymbol(currentSymbol)
       if GDDEFS.MAJOR_VER >= 4 then
-        return wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
+        return GDD.Utils.wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
       else--if GDDEFS.MAJOR_VER <= 3 then
-        return wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
+        return GDD.Utils.wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
       end
     end
 
-    local function getPackedArrayInfo(packedArrayAddr)
+    function GDD.Containers.getPackedArrayInfo(packedArrayAddr)
 
       if isInvalidPointer(packedArrayAddr) then
         sendDebugMessage('packedArrayAddr isnt pointer')
@@ -1660,14 +1706,14 @@
       return packedDataArrAddr, packedVectorSize
     end
 
-    local function iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter, contextTable)
+    function GDD.Containers.iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, emitter, contextTable)
 
       sendDebugMessage("Packed Array: " .. packedTypeName .. (" address %x"):format(packedDataArrAddr or -1))
       local handler = GDHandlers.PackedArrayHandlers[packedTypeName] or GDHandlers.PackedArrayHandlers.DEFAULT
       handler(packedDataArrAddr, packedVectorSize, parent, emitter, contextTable)
     end
 
-    local function getContainerFromEmitterAndContext(emitter, nodeContext)
+    function GDD.Containers.getContainerFromEmitterAndContext(emitter, nodeContext)
       if emitter == GDEmitters.StructEmitter then
         return nodeContext.struct
       elseif emitter == GDEmitters.AddrEmitter then
@@ -1675,7 +1721,7 @@
       end
     end
 
-    local function cloneContextWithSymbol(contextTable, newSymbol)
+    function GDD.Containers.cloneContextWithSymbol(contextTable, newSymbol)
       return
       {
         nodeAddr = contextTable.nodeAddr,
@@ -1690,8 +1736,10 @@
     ---@param endElement number
     ---@param mapSize number
     ---@param contextTable table
-    local function getLeftmostMapElem(rootElement, endElement, mapSize, nodeContext, options)
+    function GDD.Containers.getLeftmostMapElem(rootElement, endElement, mapSize, nodeContext, options)
       options = options or {}
+      local wrapBrackets = GDD.Utils.wrapBrackets
+      local addStructureElem = GDD.Structures.addStructureElem
 
       local mapElement = readPointer(rootElement + GDDEFS.MAP_LELEM)
 
@@ -1740,13 +1788,13 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// READERS
 
-    local function readNodeVariantEntry(mapElement, variantVector, variantSize)
+    function GDD.Readers.readNodeVariantEntry(mapElement, variantVector, variantSize)
       -- the vector is stored inside a GDScirptInstance and memberIndices inside the GDScript (as a BP)
       local variantIndex = readInteger(mapElement + GDDEFS.VARIANTMAP_INDEX);
-      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(variantVector, variantIndex, variantSize)
+      local variantPtr, runtimeType, offsetToValue = GDD.Variants.getByIndex(variantVector, variantIndex, variantSize)
 
-      local name = getVariantNameFromMapElement(mapElement);
-      -- local finalType = resolveScriptVariantType(mapElement, runtimeType);
+      local name = GDD.Containers.getVariantNameFromMapElement(mapElement);
+      -- local finalType = GDD.Containers.resolveScriptVariantType(mapElement, runtimeType);
       local finalType = runtimeType
 
       local entry =
@@ -1755,11 +1803,11 @@
         name = name or "UNKNOWN",
         runtimeType = runtimeType,
         typeId = finalType,
-        typeName = getGDTypeName(finalType) or "UNKNOWNTYPE",
+        typeName = GDD.Types.getGDTypeName(finalType) or "UNKNOWNTYPE",
         variantPtr = variantPtr,
         offsetToValue = offsetToValue or 0,
         offset = offsetToValue or 0,
-        ceType = getCETypeFromGD(finalType)
+        ceType = GDD.Types.getCETypeFromGD(finalType)
       }
 
       if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. " type: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
@@ -1767,11 +1815,11 @@
       return entry
     end
 
-    local function readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
-      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(funcConstantVect, variantIndex, variantSize, true)
+    function GDD.Readers.readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
+      local variantPtr, runtimeType, offsetToValue = GDD.Variants.getByIndex(funcConstantVect, variantIndex, variantSize, true)
 
       local finalType = runtimeType
-      local typeName = getGDTypeName(finalType) or "UNKNOWNTYPE"
+      local typeName = GDD.Types.getGDTypeName(finalType) or "UNKNOWNTYPE"
 
       local entry =
       {
@@ -1783,7 +1831,7 @@
         variantPtr = variantPtr,
         offsetToValue = offsetToValue,
         offset = offsetToValue,
-        ceType = getCETypeFromGD(finalType)
+        ceType = GDD.Types.getCETypeFromGD(finalType)
       }
 
       if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
@@ -1791,10 +1839,10 @@
       return entry
     end
 
-    local function readNodeConstEntry(mapElement)
-      local constName = getNodeConstName(mapElement)
+    function GDD.Readers.readNodeConstEntry(mapElement)
+      local constName = GDD.Constants.getName(mapElement)
       local constType = readInteger(mapElement + GDDEFS.CONSTELEM_VALUE_VARIANT)
-      local offsetToValue = GDDEFS.CONSTELEM_VALUE_VARIANT + getVariantValueOffset(constType)
+      local offsetToValue = GDDEFS.CONSTELEM_VALUE_VARIANT + GDD.Types.getVariantValueOffset(constType)
       local constPtr = getAddress(mapElement + offsetToValue)
 
       local entry =
@@ -1803,11 +1851,11 @@
         name = constName or "UNKNOWN_CONST",
         runtimeType = constType,
         typeId = constType,
-        typeName = getGDTypeName(constType) or "UNKNOWNTYPE",
+        typeName = GDD.Types.getGDTypeName(constType) or "UNKNOWNTYPE",
         variantPtr = constPtr,
         offsetToValue = offsetToValue,
         offset = offsetToValue,
-        ceType = getCETypeFromGD(constType)
+        ceType = GDD.Types.getCETypeFromGD(constType)
       }
 
       if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
@@ -1816,8 +1864,8 @@
     end
 
 
-    local function readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
-      local variantPtr, runtimeType, offsetToValue = getVariantByIndex(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
+    function GDD.Readers.readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
+      local variantPtr, runtimeType, offsetToValue = GDD.Variants.getByIndex(arrVectorAddr, varIndex, variantArrSize, bNeedStructOffset)
 
       local entry =
       {
@@ -1825,11 +1873,11 @@
         name = "array[" .. tostring(varIndex) .. "]",
         runtimeType = runtimeType,
         typeId = runtimeType,
-        typeName = getGDTypeName(runtimeType) or "UNKNOWNTYPE",
+        typeName = GDD.Types.getGDTypeName(runtimeType) or "UNKNOWNTYPE",
         variantPtr = variantPtr,
         offsetToValue = offsetToValue or 0,
         offset = offsetToValue,
-        ceType = getCETypeFromGD(runtimeType)
+        ceType = GDD.Types.getCETypeFromGD(runtimeType)
       }
 
       if bGDDebug then sendDebugMessage("name: " .. entry.name .. "\tIndex: " .. entry.index .. "\ttype: " .. entry.typeName .. "\tPtr: " .. numtohexstr(entry.variantPtr) .. "\t Offset: " .. numtohexstr(entry.offsetToValue)) end
@@ -1837,11 +1885,11 @@
       return entry
     end
 
-    local function readDictionaryContainerEntry(mapElement)
+    function GDD.Readers.readDictionaryContainerEntry(mapElement)
 
-      local keyType, keyValueAddr, keyName = decodeDictionaryKeyName(mapElement)
+      local keyType, keyValueAddr, keyName = GDD.Containers.decodeDictionaryKeyName(mapElement)
       local valueType = readInteger(mapElement + GDDEFS.DICTELEM_VALUE_VARIANT)
-      local offsetToValue = GDDEFS.DICTELEM_VALUE_VARIANT + getVariantValueOffset(valueType)
+      local offsetToValue = GDDEFS.DICTELEM_VALUE_VARIANT + GDD.Types.getVariantValueOffset(valueType)
       local valueValuePtr = getAddress(mapElement + offsetToValue)
 
       local entry =
@@ -1850,11 +1898,11 @@
           name = keyName or ("key@" .. numtohexstr(mapElement)),
           runtimeType = valueType,
           typeId = valueType,
-          typeName = getGDTypeName(valueType) or "UNKNOWNTYPE",
+          typeName = GDD.Types.getGDTypeName(valueType) or "UNKNOWNTYPE",
           variantPtr = valueValuePtr,
           offsetToValue = offsetToValue,
           offset = offsetToValue,
-          ceType = getCETypeFromGD(valueType),
+          ceType = GDD.Types.getCETypeFromGD(valueType),
           keyType = keyType,
           keyValueAddr = keyValueAddr
         }
@@ -1873,14 +1921,14 @@
         ---------------------------------------------------------------------------------
         GDEmitters.StructEmitter = {}
 
-          function rootOffset(entry, emitter)
+          function GDD.Emitters.rootOffset(entry, emitter)
             if emitter == GDEmitters.StructEmitter then
               return entry.offsetToValue
             end
             return 0x0
           end
 
-          function fieldOffset(entry, emitter, rel)
+          function GDD.Emitters.fieldOffset(entry, emitter, rel)
             if emitter == GDEmitters.StructEmitter then
               return entry.offsetToValue + rel
             end
@@ -1888,25 +1936,25 @@
           end
 
           function GDEmitters.StructEmitter.leaf(contextTable, parent, label, offset, ceType)
-            return addStructureElem(parent, label, offset, ceType)
+            return GDD.Structures.addStructureElem(parent, label, offset, ceType)
           end
 
           function GDEmitters.StructEmitter.layout(contextTable, parent, label, color, offset, ceType)
-            return addLayoutStructElem(parent, label, color, offset, ceType)
+            return GDD.Structures.addLayoutStructElem(parent, label, color, offset, ceType)
           end
 
           function GDEmitters.StructEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
-            local elem = addStructureElem(parent, label, offset, ceType)
+            local elem = GDD.Structures.addStructureElem(parent, label, offset, ceType)
             elem.ChildStruct = createStructure(childStructName)
             return elem
           end
 
           function GDEmitters.StructEmitter.recurseDictionary(contextTable, parent, dictPtr)
-            iterateDictionaryToStruct(dictPtr, parent, contextTable)
+            GDD.Dictionary.iterateToStruct(dictPtr, parent, contextTable)
           end
 
           function GDEmitters.StructEmitter.recurseArray(contextTable, parent, arrPtr)
-            iterateArrayToStruct(arrPtr, parent, contextTable)
+            GDD.Array.iterateToStruct(arrPtr, parent, contextTable)
           end
 
           function GDEmitters.StructEmitter.recurseNode(contextTable, parent, nodePtr)
@@ -1914,71 +1962,71 @@
           end
 
           function GDEmitters.StructEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
-            iteratePackedArrayToStruct(arrayAddr, typeName, parent, contextTable)
+            GDD.Array.iteratePackedToStruct(arrayAddr, typeName, parent, contextTable)
           end
 
         ---------------------------------------------------------------------------------
 
         GDEmitters.AddrEmitter = {}
 
-          function makeAddr(base, offset)
+          function GDD.Utils.makeAddr(base, offset)
             return (base or 0) + (offset or 0)
           end
 
-          function makeSymAddr(base, offset)
+          function GDD.Utils.makeSymAddr(base, offset)
             return (tostring(base) or '') .. '+' .. (numtohexstr(offset) or '')
           end
 
           function GDEmitters.AddrEmitter.leaf(contextTable, parent, label, offset, ceType)
             local created
             synchronize(function(label, addr, ceType, parent, contextTable)
-              created = addMemRecTo(label, addr, ceType, parent, contextTable)
-            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
+              created = GDD.Utils.addMemRecTo(label, addr, ceType, parent, contextTable)
+            end, label, GDD.Utils.makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
             return created
           end
 
           function GDEmitters.AddrEmitter.layout(contextTable, parent, label, color, offset, ceType)
             local created
             synchronize(function(label, addr, ceType, parent, contextTable)
-              created = addMemRecTo(label, addr, ceType, parent, contextTable)
-            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
+              created = GDD.Utils.addMemRecTo(label, addr, ceType, parent, contextTable)
+            end, label, GDD.Utils.makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
             return created
           end
 
           function GDEmitters.AddrEmitter.branch(contextTable, parent, label, offset, ceType, childStructName)
             local created
             synchronize(function(label, addr, ceType, parent, contextTable)
-              created = addMemRecTo(label, addr, ceType, parent, contextTable)
+              created = GDD.Utils.addMemRecTo(label, addr, ceType, parent, contextTable)
               created.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
-            end, label, makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
+            end, label, GDD.Utils.makeAddr(contextTable.baseAddress, offset), ceType, parent, contextTable)
             return created
           end
 
           function GDEmitters.AddrEmitter.recurseDictionary(contextTable, parent, dictPtr)
-            iterateDictionaryToAddr(dictPtr, parent, contextTable)
+            GDD.Dictionary.iterateToAddr(dictPtr, parent, contextTable)
           end
 
           function GDEmitters.AddrEmitter.recurseArray(contextTable, parent, arrPtr)
-            iterateArrayToAddr(arrPtr, parent, contextTable)
+            GDD.Array.iterateToAddr(arrPtr, parent, contextTable)
           end
 
           function GDEmitters.AddrEmitter.recurseNode(contextTable, parent, nodePtr)
-            iterateMNodeToAddr(nodePtr, parent, contextTable)
+            GDD.Objects.iterateNodeToAddr(nodePtr, parent, contextTable)
           end
 
           function GDEmitters.AddrEmitter.recursePackedArray(contextTable, parent, arrayAddr, typeName)
-            iteratePackedArrayToAddr(arrayAddr, typeName, parent, contextTable)
+            GDD.Array.iteratePackedToAddr(arrayAddr, typeName, parent, contextTable)
           end
 
         ---------------------------------------------------------------------------------
 
-        local function emitStringNameStruct(parent, label, offset, stringFieldLabel, stringType, innerOffset)
-          local outer = addStructureElem(parent, label, offset, vtPointer)
+        function GDD.Emitters.emitStringNameStruct(parent, label, offset, stringFieldLabel, stringType, innerOffset)
+          local outer = GDD.Structures.addStructureElem(parent, label, offset, vtPointer)
           outer.ChildStruct = createStructure("StringName")
 
-          local inner = addStructureElem(outer, label, innerOffset, vtPointer)
+          local inner = GDD.Structures.addStructureElem(outer, label, innerOffset, vtPointer)
           inner.ChildStruct = createStructure("stringy")
-          local stringElem = addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0, stringType)
+          local stringElem = GDD.Structures.addStructureElem(outer.ChildStruct and inner or inner, label .. " string", 0x0, stringType)
 
           if stringType == vtString then
             stringElem.Bytesize = 100
@@ -1987,54 +2035,36 @@
           return outer, inner, stringElem
         end
 
-        local function emitFunctionCodeStruct(funcParent, funcName)
-          return addStructureElem(funcParent, 'Code: ' .. funcName, GDDEFS.FUNC_CODE, vtPointer)
-        end
+        function GDD.Emitters.emitFunctionStructEntry(funcStructElement, funcName)
+          local funcRoot = GDD.Structures.addStructureElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer)
 
-        local function emitFunctionConstantsStruct(funcParent, funcName, funcValueAddr)
-          local constantsElem = createChildStructElem(funcParent, "Constants: " .. funcName, GDDEFS.FUNC_CONST, vtPointer, "GDFConst")
-          local funcConstAddr = readPointer(funcValueAddr + GDDEFS.FUNC_CONST)
-          iterateFuncConstantsToStruct(funcConstAddr, constantsElem)
-          return constantsElem
-        end
+          -- callback is better, guessing isn't realiable for general use
+          funcRoot.OnCreateChild = function(_, funcAddr)
+            if isNullOrNil(funcAddr) then return nil end
 
-        local function emitFunctionGlobalsStruct(funcParent, funcName, funcValueAddr)
-          local globalsElem = createChildStructElem(funcParent, "Globals: " .. funcName, GDDEFS.FUNC_GLOBNAMEPTR, vtPointer, "GDFGlobals")
-          local funcGlobalAddr = readPointer(funcValueAddr + GDDEFS.FUNC_GLOBNAMEPTR)
-          iterateFuncGlobalsToStruct(funcGlobalAddr, globalsElem)
-          return globalsElem
-        end
-
-        local function emitFunctionStructEntry(funcStructElement, mapElement, funcName)
-          local funcRoot
-          if not GDDEFS.bDisasmFunc then -- let's 
-            funcRoot = createChildStructElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer, "GDFunction")
-            local funcValueAddr = readPointer(mapElement + GDDEFS.FUNC_MAPVAL)
-            emitFunctionCodeStruct(funcRoot, funcName)
-            emitFunctionConstantsStruct(funcRoot, funcName, funcValueAddr)
-            emitFunctionGlobalsStruct(funcRoot, funcName, funcValueAddr)
-          else
-            funcRoot = addStructureElem(funcStructElement, "func: " .. funcName, GDDEFS.FUNC_MAPVAL, vtPointer)
+            local funcStruct = createStructure('GDFunction')
+            GDD.Functions.disassembleCodeToStruct(funcAddr, funcStruct)
+            return funcStruct
           end
 
           return funcRoot
         end
 
-        local function advanceFunctionMapElement(mapElement)
+        function GDD.Emitters.advanceFunctionMapElement(mapElement)
           if GDDEFS.MAJOR_VER >= 4 then
             return readPointer(mapElement)
           end
           return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
         end
 
-        local function createNextFunctionContainer(currentContainer, index)
+        function GDD.Emitters.createNextFunctionContainer(currentContainer, index)
           if GDDEFS.MAJOR_VER >= 4 then
-            local nextElem = addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
+            local nextElem = GDD.Structures.addStructureElem(currentContainer, "Next[" .. index .. "]", 0x0, vtPointer)
             nextElem.ChildStruct = createStructure("FuncNext")
             return nextElem
           end
 
-          local nextElem = addStructureElem(currentContainer, "Next", GDDEFS.MAP_NEXTELEM, vtPointer)
+          local nextElem = GDD.Structures.addStructureElem(currentContainer, "Next", GDDEFS.MAP_NEXTELEM, vtPointer)
           nextElem.ChildStruct = createStructure('FuncNext')
           return nextElem
         end
@@ -2044,74 +2074,74 @@
         GDEmitters.PackedStructEmitter = {}
 
           function GDEmitters.PackedStructEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
-            local stringPtrElement = addStructureElem(parent, ('strElem[%d]'):format(elemIndex), offsetToValue, vtPointer)
+            local stringPtrElement = GDD.Structures.addStructureElem(parent, ('strElem[%d]'):format(elemIndex), offsetToValue, vtPointer)
             stringPtrElement.ChildStruct = createStructure('StringItem')
-            addStructureElem(stringPtrElement, 'String', 0x0, vtUnicodeString)
+            GDD.Structures.addStructureElem(stringPtrElement, 'String', 0x0, vtUnicodeString)
           end
 
           function GDEmitters.PackedStructEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType, contextTable)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']', offsetToValue, ceType)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']', offsetToValue, ceType)
           end
 
           function GDEmitters.PackedStructEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
           end
 
           function GDEmitters.PackedStructEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: z', offsetToValue + 0x8, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: x', offsetToValue, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: y', offsetToValue + 0x4, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: z', offsetToValue + 0x8, vtSingle)
           end
 
           function GDEmitters.PackedStructEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: R', offsetToValue, vtSingle)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: G', offsetToValue + 0x4, vtSingle)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: B', offsetToValue + 0x8, vtSingle)
-            addStructureElem(parent, prefixStr .. elemIndex .. ']: A', offsetToValue + 0xC, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: R', offsetToValue, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: G', offsetToValue + 0x4, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: B', offsetToValue + 0x8, vtSingle)
+            GDD.Structures.addStructureElem(parent, prefixStr .. elemIndex .. ']: A', offsetToValue + 0xC, vtSingle)
           end
 
         GDEmitters.PackedAddrEmitter = {}
 
           function GDEmitters.PackedAddrEmitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
             synchronize(function(elemIndex, arrElement, parent, contextTable)
-              addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent, contextTable)
+              GDD.Utils.addMemRecTo('pck_arr[' .. elemIndex .. ']', arrElement, vtString, parent, contextTable)
             end, elemIndex, arrElement, parent, contextTable)
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedScalar(parent, prefixStr, elemIndex, offsetToValue, arrElement, ceType, contextTable)
             synchronize(function(prefixStr, elemIndex, arrElement, ceType, parent, contextTable)
-              addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent, contextTable)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']', arrElement, ceType, parent, contextTable)
             end, prefixStr, elemIndex, arrElement, ceType, parent, contextTable)
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedVec2(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
             synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable)
-              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
-              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
-              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
+              contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
             end, prefixStr, elemIndex, arrElement, parent, contextTable)
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedVec3(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
             synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable)
-              addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
-              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
-              addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
-              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
-              addMemRecTo(prefixStr .. elemIndex .. ']: z', arrElement + 0x8, vtSingle, parent, contextTable)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: x', arrElement, vtSingle, parent, contextTable)
+              contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: y', arrElement + 0x4, vtSingle, parent, contextTable)
+              contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: z', arrElement + 0x8, vtSingle, parent, contextTable)
             end, prefixStr, elemIndex, arrElement, parent, contextTable)
           end
 
           function GDEmitters.PackedAddrEmitter.emitPackedColor(parent, prefixStr, elemIndex, offsetToValue, arrElement, contextTable)
             synchronize(function(prefixStr, elemIndex, arrElement, parent, contextTable)
-              addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent, contextTable)
-              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
-              addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent, contextTable)
-              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
-              addMemRecTo(prefixStr .. elemIndex .. ']: B', arrElement + 0x8, vtSingle, parent, contextTable)
-              contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4)
-              addMemRecTo(prefixStr .. elemIndex .. ']: A', arrElement + 0xC, vtSingle, parent, contextTable)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: R', arrElement, vtSingle, parent, contextTable)
+              contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: G', arrElement + 0x4, vtSingle, parent, contextTable)
+              contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: B', arrElement + 0x8, vtSingle, parent, contextTable)
+              contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4)
+              GDD.Utils.addMemRecTo(prefixStr .. elemIndex .. ']: A', arrElement + 0xC, vtSingle, parent, contextTable)
             end, prefixStr, elemIndex, arrElement, parent, contextTable)
           end
 
@@ -2122,9 +2152,9 @@
 
       GDHandlers.VariantHandlers.DICTIONARY = function(entry, emitter, parent, contextTable)
         sendDebugMessage("DICTIONARY case for name: " .. entry.name .. " address: " .. numtohexstr(entry.variantPtr) .. " offset: " .. numtohexstr(entry.offsetToValue))
-        local dictSize = getDictionarySizeFromVariantPtr(entry.variantPtr)
-        local offsetToValue = rootOffset(entry, emitter)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
+        local dictSize = GDD.Containers.getDictionarySizeFromVariantPtr(entry.variantPtr)
+        local offsetToValue = GDD.Emitters.rootOffset(entry, emitter)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
         if isNullOrNil(dictSize) then
           emitter.leaf(contextTable, parent, "<Dict> (empty): " .. entry.name, offsetToValue, entry.ceType) -- entry.offsetToValue
           return;
@@ -2136,9 +2166,9 @@
 
       GDHandlers.VariantHandlers.ARRAY = function(entry, emitter, parent, contextTable)
         sendDebugMessage("ARRAY case for name: " .. entry.name)
-        local offsetToValue = rootOffset(entry, emitter)
-        if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(entry.offset) ) end
-        if isArrayEmptyFromVariantPtr(entry.variantPtr) then
+        local offsetToValue = GDD.Emitters.rootOffset(entry, emitter)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol .. '+' .. numtohexstr(entry.offset) ) end
+        if GDD.Containers.isArrayEmptyFromVariantPtr(entry.variantPtr) then
           emitter.leaf(contextTable, parent, "<Array> (empty): " .. entry.name, offsetToValue, entry.ceType);
           return;
         end
@@ -2148,7 +2178,7 @@
       end
 
       GDHandlers.VariantHandlers.OBJECT = function(entry, emitter, parent, contextTable)
-        local objectParent, realPtr, realOffset, objectContext = prepareObjectParent(entry, emitter, parent, contextTable)
+        local objectParent, realPtr, realOffset, objectContext = GDD.Containers.prepareObjectParent(entry, emitter, parent, contextTable)
         local objectTypeName = gd_getObjectName(readPointer(realPtr))
         objectTypeName = '<' .. objectTypeName .. '>'
 
@@ -2157,14 +2187,14 @@
         if objectContext.symbol then -- AddrEmitter stores the real addr, so its symbol must advance by the variant field offset
           if emitter == GDEmitters.AddrEmitter then
             if objectContext == contextTable then
-              objectContext = cloneContextWithSymbol( objectContext, wrapBrackets( makeSymAddr( objectContext.symbol, (entry.offsetToValue or entry.offset or 0) ) ) )
+              objectContext = GDD.Containers.cloneContextWithSymbol( objectContext, GDD.Utils.wrapBrackets( GDD.Utils.makeSymAddr( objectContext.symbol, (entry.offsetToValue or entry.offset or 0) ) ) )
             end
           else
-            objectContext.symbol = makeSymAddr(objectContext.symbol, realOffset)
+            objectContext.symbol = GDD.Utils.makeSymAddr(objectContext.symbol, realOffset)
           end
         end
 
-        if checkForGDScript(readPointer(realPtr)) then
+        if GDD.Objects.checkForGDScript(readPointer(realPtr)) then
           if emitter == GDEmitters.StructEmitter then
             local nodeChild = emitter.leaf(objectContext, objectParent, objectTypeName .. ' ' .. entry.name, realOffset, vtPointer)
             nodeChild.BackgroundColor = 0x6C3157
@@ -2182,32 +2212,32 @@
       end
 
       GDHandlers.VariantHandlers.STRING = function(entry, emitter, parent, contextTable)
-        if contextTable.symbol then contextTable.symbol = wrapBrackets( makeSymAddr(contextTable.symbol, entry.offset) ) end
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.wrapBrackets( GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) ) end
 
         if emitter == GDEmitters.StructEmitter then
-          local outer = emitter.branch(contextTable, parent, "<STRING> " .. entry.name, rootOffset(entry, emitter), vtPointer, "String")
+          local outer = emitter.branch(contextTable, parent, "<STRING> " .. entry.name, GDD.Emitters.rootOffset(entry, emitter), vtPointer, "String")
           local inner = emitter.branch(contextTable, outer, "StringData: " .. entry.name, 0x0, vtUnicodeString, "stringy")
         else
-          emitter.leaf(contextTable, parent, "String: " .. entry.name, rootOffset(entry, emitter), vtString)
+          emitter.leaf(contextTable, parent, "String: " .. entry.name, GDD.Emitters.rootOffset(entry, emitter), vtString)
         end
       end
 
       GDHandlers.VariantHandlers.STRING_NAME = function(entry, emitter, parent, contextTable)
         if contextTable.symbol then
-          contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset)
-          contextTable.symbol =  wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+STRING' )
+          contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset)
+          contextTable.symbol =  GDD.Utils.wrapBrackets( GDD.Utils.wrapBrackets( contextTable.symbol ) .. '+STRING' )
         end
 
         local stringNameAddr = readPointer(entry.variantPtr)
-        local stringType, offsetToString = checkStringNameType(stringNameAddr)
+        local stringType, offsetToString = GDD.Strings.checkStringNameType(stringNameAddr)
 
         if emitter == GDEmitters.StructEmitter then
-          local outer = emitter.branch(contextTable, parent, "<STRING_NAME> " .. entry.name, rootOffset(entry, emitter), vtPointer, "StringName")
+          local outer = emitter.branch(contextTable, parent, "<STRING_NAME> " .. entry.name, GDD.Emitters.rootOffset(entry, emitter), vtPointer, "StringName")
           local inner = emitter.branch(contextTable, outer, "StringName: " .. entry.name, offsetToString, vtPointer, "stringy")
           emitter.leaf(contextTable, inner, "String: " .. entry.name, 0x0, stringType)
         else
           if isNullOrNil(stringNameAddr) then
-            emitter.leaf(contextTable, parent, "<STRING_NAME> " .. entry.name, rootOffset(entry, emitter), vtPointer)
+            emitter.leaf(contextTable, parent, "<STRING_NAME> " .. entry.name, GDD.Emitters.rootOffset(entry, emitter), vtPointer)
             return
           end
           
@@ -2226,15 +2256,15 @@
 
       GDHandlers.VariantHandlers.PACKED_STRING_ARRAY = function(entry, emitter, parent, contextTable)
         sendDebugMessage("PackedArray: " .. entry.typeName .. " case for name: " .. entry.name)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
         
         local arrayAddr = readPointer(entry.variantPtr)
-        local offsetToValue = rootOffset(entry, emitter)
+        local offsetToValue = GDD.Emitters.rootOffset(entry, emitter)
         if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
           emitter.leaf(contextTable, parent, "<" .. entry.typeName .. "> " .. ' (empty): ' .. entry.name, offsetToValue, entry.ceType)
         else
           local child = emitter.branch(contextTable, parent, "<" .. entry.typeName .. "> " .. ' ' .. entry.name, offsetToValue, entry.ceType, "P_Array")
-          if contextTable.symbol then contextTable.symbol = wrapBrackets( contextTable.symbol ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol ) end
           emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
         end
       end
@@ -2251,102 +2281,102 @@
 
       GDHandlers.VariantHandlers.COLOR = function(entry, emitter, parent, contextTable)
         local typeName = "Color"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", fieldOffset(entry, emitter, 0x0), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", fieldOffset(entry, emitter, 0x4), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", fieldOffset(entry, emitter, 0x8), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", fieldOffset(entry, emitter, 0xC), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": R", GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": G", GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": B", GDD.Emitters.fieldOffset(entry, emitter, 0x8), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, typeName .. entry.name .. ": A", GDD.Emitters.fieldOffset(entry, emitter, 0xC), vtSingle)
       end
 
       GDHandlers.VariantHandlers.VECTOR2 = function(entry, emitter, parent, contextTable)
         local typeName = "Vec2"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtSingle)
       end
 
       GDHandlers.VariantHandlers.VECTOR2I = function(entry, emitter, parent, contextTable)
         local typeName = "vec2I"
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtDword)
       end
 
       GDHandlers.VariantHandlers.RECT2 = function(entry, emitter, parent, contextTable)
         local typeName = "Rect2"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', GDD.Emitters.fieldOffset(entry, emitter, 0x8), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': h', GDD.Emitters.fieldOffset(entry, emitter, 0xC), vtSingle)
       end
 
       GDHandlers.VariantHandlers.RECT2I = function(entry, emitter, parent, contextTable)
         local typeName = "Rect2I"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', fieldOffset(entry, emitter, 0x8), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': h', fieldOffset(entry, emitter, 0xC), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', GDD.Emitters.fieldOffset(entry, emitter, 0x8), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': h', GDD.Emitters.fieldOffset(entry, emitter, 0xC), vtDword)
       end
 
       GDHandlers.VariantHandlers.VECTOR3 = function(entry, emitter, parent, contextTable)
         local typeName = "Vec3"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', GDD.Emitters.fieldOffset(entry, emitter, 0x8), vtSingle)
       end
 
       GDHandlers.VariantHandlers.VECTOR3I = function(entry, emitter, parent, contextTable)
         local typeName = "Vec3I"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', GDD.Emitters.fieldOffset(entry, emitter, 0x8), vtDword)
       end
 
       GDHandlers.VariantHandlers.VECTOR4 = function(entry, emitter, parent, contextTable)
         local typeName = "Vec4"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtSingle)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', GDD.Emitters.fieldOffset(entry, emitter, 0x8), vtSingle)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', GDD.Emitters.fieldOffset(entry, emitter, 0xC), vtSingle)
       end
 
       GDHandlers.VariantHandlers.VECTOR4I = function(entry, emitter, parent, contextTable)
         local typeName = "Vec4I"
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', fieldOffset(entry, emitter, 0x0), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', fieldOffset(entry, emitter, 0x4), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', fieldOffset(entry, emitter, 0x8), vtDword)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, 0x4) end
-        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', fieldOffset(entry, emitter, 0xC), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': x', GDD.Emitters.fieldOffset(entry, emitter, 0x0), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': y', GDD.Emitters.fieldOffset(entry, emitter, 0x4), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': z', GDD.Emitters.fieldOffset(entry, emitter, 0x8), vtDword)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, 0x4) end
+        emitter.leaf(contextTable, parent, "<" .. typeName .. "> " .. entry.name .. ': w', GDD.Emitters.fieldOffset(entry, emitter, 0xC), vtDword)
       end
 
       GDHandlers.VariantHandlers.DEFAULT = function(entry, emitter, parent, contextTable)
-        if contextTable.symbol then contextTable.symbol = makeSymAddr(contextTable.symbol, entry.offset) end
-        emitter.leaf(contextTable, parent, "<" .. entry.typeName .. ">" .. " " .. entry.name , rootOffset(entry, emitter), entry.ceType)
+        if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
+        emitter.leaf(contextTable, parent, "<" .. entry.typeName .. ">" .. " " .. entry.name , GDD.Emitters.rootOffset(entry, emitter), entry.ceType)
       end
 
     GDHandlers.PackedArrayHandlers = {}
@@ -2358,7 +2388,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * GDDEFS.PTRSIZE
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           if readPointer(arrElement) ~= 0 then
             emitter.emitPackedString(parent, elemIndex, offsetToValue, arrElement, contextTable)
@@ -2373,7 +2403,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * 0x4
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDword, contextTable)
         end
@@ -2386,7 +2416,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * 0x4
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtSingle, contextTable)
         end
@@ -2399,7 +2429,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * GDDEFS.PTRSIZE
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtQword, contextTable)
         end
@@ -2412,7 +2442,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * GDDEFS.PTRSIZE
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtDouble, contextTable)
         end
@@ -2425,7 +2455,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * 0x1
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedScalar(parent, 'pck_arr[', elemIndex, offsetToValue, arrElement, vtByte, contextTable)
         end
@@ -2438,7 +2468,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * 0x8
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedVec2(parent, 'pck_mvec2[', elemIndex, offsetToValue, arrElement, contextTable)
         end
@@ -2451,7 +2481,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * 0xC
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedVec3(parent, 'pck_mvec3[', elemIndex, offsetToValue, arrElement, contextTable)
         end
@@ -2464,7 +2494,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * 0x10
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedColor(parent, 'pck_color[', elemIndex, offsetToValue, arrElement, contextTable)
         end
@@ -2477,7 +2507,7 @@
         for elemIndex = 0, packedVectorSize - 1 do
           local offsetToValue = elemIndex * GDDEFS.PTRSIZE
           local arrElement = getAddress(packedDataArrAddr + offsetToValue)
-          if contextTable.symbol then contextTable.symbol = makeSymAddr( baseSymbol, offsetToValue ) end
+          if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr( baseSymbol, offsetToValue ) end
 
           emitter.emitPackedScalar(parent, '/U/ pck_arr[', elemIndex, offsetToValue, arrElement, vtPointer, contextTable)
         end
@@ -2486,7 +2516,7 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// GD preinit
 
-    local function readGodotPckVersion(pckPath)
+    function GDD.Preinit.readGodotPckVersion(pckPath)
       local file = io.open(pckPath, "rb")
 
       if not file then return nil end
@@ -2499,10 +2529,10 @@
         return nil
       end
 
-      local formatVersion = readU32LE(file)
-      local major = readU32LE(file)
-      local minor = readU32LE(file)
-      local patch = readU32LE(file)
+      local formatVersion = GDD.Utils.readU32LE(file)
+      local major = GDD.Utils.readU32LE(file)
+      local minor = GDD.Utils.readU32LE(file)
+      local patch = GDD.Utils.readU32LE(file)
 
       file:close()
 
@@ -2515,7 +2545,7 @@
       }
     end
 
-    function getExportTableName()
+    function GDD.Preinit.getExportTableName()
       local base = getAddress(process)
 
       -- cases when getAddress fails
@@ -2539,7 +2569,7 @@
       end
     end
 
-    local function getIsCustomBuildVer()
+    function GDD.Preinit.getIsCustomBuildVer()
       local customVerStrAddr = AOBScanModuleUnique(process, "63 75 73 74 6F 6D 5F 62 75 69 6C 64", "-W-X-C") -- custom_build - in most cases it does the trick
       if isNotNullOrNil(customVerStrAddr) then
         return true
@@ -2548,7 +2578,7 @@
       end
     end
 
-    local function getIsMSVC()
+    function GDD.Preinit.getIsMSVC()
       -- Visual C++ Compiler RO
       local customVerStrAddr = AOBScanModuleUnique(process, "3F 41 56 4E 6F 64 65 40 40", "+W-X+C") -- ?AVNode@@
       if isNotNullOrNil(customVerStrAddr) then
@@ -2558,7 +2588,7 @@
       end
     end
 
-    local function getIsMINGW() -- TODO
+    function GDD.Preinit.getIsMINGW() -- TODO
       local customVerStrAddr = AOBScanModuleUnique(process, "DE AD BA BE", "+W-X-C")
       if isNotNullOrNil(customVerStrAddr) then
         return true
@@ -2567,7 +2597,7 @@
       end
     end
 
-    function getGodotVersionString()
+    function GDD.Preinit.getGodotVersionString()
       local reStr = [[Godot\sEngine\s(\(.{4,35}\)\s)?[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?(?:\.(0|[1-9]\d*))?(?:[\.-]((?:dev|alpha|beta|rc|stable)\d*))?(?:[\.+-]((?:[\w\-+\.]*)))?]]
       local fallbackreStr = [[[vV]?(0|[1-9]\d*)(?:\.(0|[1-9]\d*))(?:\.(0|[1-9]\d*))(?:[\.]((?:dev|alpha|beta|rc|stable)\d*))(?:[\.+-]((?:[\w\-+\.]*)))?]]
       local godotVersionStringTable, fallbackGDSemVerTable;
@@ -2606,7 +2636,7 @@
       end
     end
 
-    local function getGodotVersionFromMagic()
+    function GDD.Preinit.getGodotVersionFromMagic()
       local godotMagic = AOBScanModuleUnique(process, "47 44 50 43", "-W-X-C")
       if isNotNullOrNil(godotMagic) then
         local formatVersion = readInteger( godotMagic + 0x4*1 )
@@ -2626,7 +2656,7 @@
         -- local pathList = getFileList(gameDir, exeName..".pck" ) -- names may contain unescaped regex chars
 
         local targetPck = gameDir..exeName..".pck" -- abs path to the pck, if it exists, it will succeed 
-        local version = readGodotPckVersion(targetPck)
+        local version = GDD.Preinit.readGodotPckVersion(targetPck)
         if version then
           return
           {
@@ -2640,7 +2670,7 @@
 
         -- if pathList and next(pathList) then
         --   local pckPath = pathList[1]
-        --   local version = readGodotPckVersion(pckPath)
+        --   local version = GDD.Preinit.readGodotPckVersion(pckPath)
         --   if version then
         --     return
         --     {
@@ -2657,7 +2687,7 @@
     end
 
     --- heuristic to identify whether the process is godot
-    local function godotOnProcessOpened(processid, processhandle, caption)
+    function GDD.Preinit.onProcessOpened(processid, processhandle, caption)
       -- similar to monoscript.lua in implementation
       if GD_OldOnProcessOpened ~= nil then
         GD_OldOnProcessOpened(processid, processhandle, caption)
@@ -2670,7 +2700,7 @@
               thr.Name = 'GDDumper_ProcessMonitorThread'
               targetIsGodot = false
               -- first check via PE -- https://wiki.osdev.org/PE
-              local exportTablename = getExportTableName() or ""
+              local exportTablename = GDD.Preinit.getExportTableName() or ""
               if (exportTablename):match("([gG][oO][Dd][Oo][Tt])") then
                 -- if GDDEFS == nil then GDDEFS = {} end
                 -- GDDEFS.GDEXPORT_TABLE = exportTablename
@@ -2698,11 +2728,11 @@
               -- end
 
               if targetIsGodot then
-                synchronize(gd_buildGUI())
+                synchronize(gd_buildGUI)
 
               elseif targetIsGodot == false and GDGUIInit == true then
                 synchronize(function()
-                  disableGDDissect()
+                  GDD.Structures.disableDissect()
                   local mainMenu = getMainForm().Menu
                   for i = 0, mainMenu.Items.Count - 1 do
                     if mainMenu.Items.Item[i].Caption == 'GDDumper' then
@@ -2722,17 +2752,17 @@
       return nil
     end
 
-    local function godotRegisterPreinit()
+    function GDD.Preinit.register()
       GD_OldOnProcessOpened = MainForm.OnProcessOpened
-      MainForm.OnProcessOpened = godotOnProcessOpened
+      MainForm.OnProcessOpened = GDD.Preinit.onProcessOpened
     end
 
-    local function defineGDVersion()
+    function GDD.Preinit.defineVersion()
 
       local major, minor, patch = 0, 0, 0
       if isNullOrNil(GDDEFS) then GDDEFS = {} end
 
-      local ver = getGodotVersionFromMagic()
+      local ver = GDD.Preinit.getGodotVersionFromMagic()
       local magicFail = true
       if isNotNullOrNil(ver) and next(ver) then
         GDDEFS.VERSION_STRING = tostring(ver.major) .. '.' .. tostring(ver.minor)
@@ -2744,7 +2774,7 @@
       end
 
       if lregexScan and type(lregexScan) == "function" then
-        GDDEFS.FULL_GDVERSION_STRING = getGodotVersionString()
+        GDDEFS.FULL_GDVERSION_STRING = GDD.Preinit.getGodotVersionString()
       end
 
       if magicFail then -- <3 versions w/0 pck and encrypted packages
@@ -2754,13 +2784,13 @@
         if isNullOrNil(major) or isNullOrNil(minor) then error('failed to find Godot Version') end
       end
 
-      local exportTableStr = getExportTableName() or ""
+      local exportTableStr = GDD.Preinit.getExportTableName() or ""
       GDDEFS.DEBUGVER = exportTableStr:match("debug") and true or false
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.IS_STABLE_VER = (exportTableStr):match("stable") and true or false
       
-      -- GDDEFS.CUSTOMVER = getIsCustomBuildVer()
-      GDDEFS.CUSTOMVER = getIsMSVC()
+      -- GDDEFS.CUSTOMVER = GDD.Preinit.getIsCustomBuildVer()
+      GDDEFS.CUSTOMVER = GDD.Preinit.getIsMSVC()
 
       GDDEFS.USES_DOUBLE_REALT = exportTableStr:match("%.double%.") ~= nil
 
@@ -2781,8 +2811,9 @@
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// DEFINE
 
     --- inits the GDDEFS object
-    local function initGDDefs()
+    function GDD.Config.initDefs()
       GDDEFS = {} -- for now let it be reinitialized here
+      GDD.Config.Defs = GDDEFS
 
       GDDEFS.SCRIPT_TYPES =
         {
@@ -2810,7 +2841,7 @@
       GDDEFS.STRING = 0x4+0x4+GDDEFS.PTRSIZE
     end
 
-    local function initGDVersion(config)
+    function GDD.Config.initVersion(config)
       if config == nil then config = {} end
 
       if isNotNullOrNil(config.majorVersion) and isNotNullOrNil(config.minorVersion) and
@@ -2824,13 +2855,13 @@
         GDDEFS.MONO = config.isMonoTarget and config.isMonoTarget or false
         GDDEFS.USES_DOUBLE_REALT = config.usesDoubleRealT
       else
-        defineGDVersion()
+        GDD.Preinit.defineVersion()
         if isNotNullOrNil(config.GDCustomver) then GDDEFS.CUSTOMVER = config.GDCustomver end
       end
     end
 
     --- initializes and assigns offsets
-    local function defineGDOffsets(config)
+    function GDD.Config.defineOffsets(config)
       if config == nil then config = {} end
 
       -- AUTOMATIC START
@@ -2992,7 +3023,7 @@
       -- GDDEFS.GDSCRIPT_SETSRC_INDX = 45
     end
 
-    local function registerGDSymbols()
+    function GDD.Config.registerSymbols()
       registerSymbol('CHILDREN', GDDEFS.CHILDREN, true)
       registerSymbol('OBJ_STRING_NAME', GDDEFS.OBJ_STRING_NAME, true)
       registerSymbol('GDSCRIPTINSTANCE', GDDEFS.GDSCRIPTINSTANCE, true)
@@ -3019,7 +3050,7 @@
     --- reads GD strings (1-4 bytes)
     ---@param strAddress number
     ---@param strSize number
-    function readUTFString(strAddress, strSize)
+    function GDD.Strings.readUTFString(strAddress, strSize)
       assert(type(strAddress) == 'number', "string address should be a number, instead got: " .. type(strAddress));
 
       local MAX_CHARS_TO_READ = 1500 * 2
@@ -3059,7 +3090,7 @@
           if buff == 0 then
             break
           end
-          charTable[#charTable + 1] = codePointToUTF8(buff)
+          charTable[#charTable + 1] = GDD.Strings.codePointToUTF8(buff)
         end
 
       else
@@ -3069,14 +3100,14 @@
           if buff == 0 then
             break
           end
-          charTable[#charTable + 1] = codePointToUTF8(buff)
+          charTable[#charTable + 1] = GDD.Strings.codePointToUTF8(buff)
         end
       end
 
       return table.concat(charTable) or "??" -- '???_UNKNSTR'
     end
 
-    function codePointToUTF8(codePoint)
+    function GDD.Strings.codePointToUTF8(codePoint)
       if (codePoint < 0 or codePoint > 0x10FFFF) or (codePoint >= 0xD800 and codePoint <= 0xDFFF) then
         return '�'
       elseif codePoint <= 0x7F then
@@ -3090,7 +3121,7 @@
       end
     end
 
-    function UTF8Codepoints(str)
+    function GDD.Strings.UTF8Codepoints(str)
       local i, strSize = 1, #str
 
       -- closure
@@ -3179,25 +3210,25 @@
 
     --- reads a string from StringName
     ---@param stringNameAddr number
-    function getStringNameStr(stringNameAddr)
+    function GDD.Strings.getStringNameStr(stringNameAddr)
       if isNullOrNil(stringNameAddr) then return 'NaN_strname' end
       -- before 4.5: int refcount, int staticcount, cname*, name*; cnames are static ascii
       -- 4.5=<: int refcount, int staticcount, name*
       local nameAddr = readPointer( stringNameAddr + 0x8 ) -- 4+4
       if isNotNullOrNil(nameAddr) and isValidPointer(nameAddr) then
         if isInsideRDataStatic(nameAddr) then return readString(nameAddr, 150) end -- cstring
-        return readUTFString(nameAddr)
+        return GDD.Strings.readUTFString(nameAddr)
       end
       nameAddr = readPointer( stringNameAddr + 0x8 + GDDEFS.PTRSIZE ) -- 4+4+ptr
       if isNullOrNil(nameAddr) or isInvalidPointer(nameAddr) then return '??' end
-      return readUTFString(nameAddr)
+      return GDD.Strings.readUTFString(nameAddr)
     end
 
     --- reads a string from StringName
     ---@param stringNameAddr number
     ---@return number @ CEType
     ---@return number @ offset to string
-    function checkStringNameType(stringNameAddr)
+    function GDD.Strings.checkStringNameType(stringNameAddr)
       if isNullOrNil(stringNameAddr) then
         return vtUnicodeString, 0x8 + GDDEFS.PTRSIZE
       end
@@ -3217,7 +3248,7 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// ROOT
 
-    local function tryRegSceneTree()
+    function GDD.Root.tryRegisterSceneTree()
       -- if isNotNullOrNil( readPointer('pSceneTree') ) then return true end
 
       local function resolveRelAddr(aobSignature, offsetToValue, offsetToNextIntr)
@@ -3238,7 +3269,7 @@
         sendDebugMessage("[SceneTree] calling a virtual method if I happen to crash:\tstatic ptr: " .. numtohexstr(resolvedAddr))
         local className = gd_getObjectName(readPointer(resolvedAddr))
         if className == "SceneTree" then
-          sendDebugMessage("[SceneTree] via vtable - success!") --  .. numtohexstr(resolvedAddr) .. " sig: " .. aobSignature 
+          sendDebugMessage("[SceneTree] via vtable - success!") --  .. numtohexstr(resolvedAddr) .. " sig: " .. aobSignature
           registerSymbol('pSceneTree', resolvedAddr, false)
           return true
         else
@@ -3255,7 +3286,7 @@
       return false
     end
 
-    local function setSTtoRootOffset()
+    function GDD.Root.setSceneTreeRootOffset()
       -- if isNotNullOrNil( readPointer('pRoot') ) then return true end
 
       local sceneTree = readPointer('pSceneTree')
@@ -3331,7 +3362,7 @@
 
     --- returns a valid Viewport pointer
     --- @return number
-    function getViewport()
+    function GDD.Root.getViewport()
       local viewport = readPointer("pRoot")
       if isNullOrNil(viewport) then
         print("Viewport pointer is invalid; something's wrong");
@@ -3342,10 +3373,10 @@
 
     --- returns a childrenArrayPtr and its size
     ---@return number
-    local function getVPChildren()
-      local viewport = getViewport()
+    function GDD.Root.getViewportChildren()
+      local viewport = GDD.Root.getViewport()
 
-      local childrenAddr, childrenSize = getNodeChildrenInfo(viewport)
+      local childrenAddr, childrenSize = GDD.Containers.getNodeChildrenInfo(viewport)
 
       if isNullOrNil(childrenSize) then
         sendDebugMessage('ChildSize is invalid')
@@ -3359,9 +3390,10 @@
 
 
     --- returns a node dictionary
-    local function getMainNodeDict()
-      local childrenAddr, childrenSize = getVPChildren()
+    function GDD.Objects.getMainNodeDict()
+      local childrenAddr, childrenSize = GDD.Root.getViewportChildren()
       local nodeDict = {}
+      local getTypeEnum = GDD.Types.getGDTypeEnumFromName
 
       if isNullOrNil(childrenAddr) then return end
 
@@ -3380,7 +3412,7 @@
             NAME = nodeNameStr,
             SCRIPTNAME = gdscriptName,
             PTR = nodePtr,
-            TYPE = getGDTypeEnumFromName("OBJECT"), -- node
+            TYPE = getTypeEnum("OBJECT"), -- node
             MEMREC = 0
           }
       end
@@ -3388,8 +3420,8 @@
     end
 
     --- returns a node table
-    function getMainNodeTable()
-      local childrenAddr, childrenSize = getVPChildren()
+    function GDD.Objects.getMainNodeTable()
+      local childrenAddr, childrenSize = GDD.Root.getViewportChildren()
       if isNullOrNil(childrenAddr) or isNullOrNil(childrenSize) then error('VP Children not valid') end
 
       local nodeTable = {}
@@ -3409,7 +3441,7 @@
 
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
-    local function getNodeGDScriptInstance(nodeAddr)
+    function GDD.Objects.getNodeGDScriptInstance(nodeAddr)
       if isNullOrNil(nodeAddr) then
         return nil
       end
@@ -3423,7 +3455,7 @@
 
     --- gets a Node's GDScriptInstance addr
     ---@param nodeAddr number
-    local function getNodeGDScript(nodeAddr)
+    function GDD.Objects.getNodeGDScript(nodeAddr)
       if isNullOrNil(nodeAddr) then return nil end
 
       local gdScriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
@@ -3448,7 +3480,7 @@
         return 'N??'
       end
 
-      return getStringNameStr(nodeNamePtr)
+      return GDD.Strings.getStringNameStr(nodeNamePtr)
     end
 
     function GDAPI.gd_getNodeNameFromScript(nodeAddr, bWithAbsPath)
@@ -3472,7 +3504,7 @@
       end
 
       -- immediate String
-      local GDScriptName = readUTFString(GDScriptNameAddr)
+      local GDScriptName = GDD.Strings.readUTFString(GDScriptNameAddr)
       if GDScriptName == nil or GDScriptName == '' then
         -- sendDebugMessage('GDScriptName is nil/empty')
         return 'N??'
@@ -3495,7 +3527,7 @@
     ---@param nodeAddr number
     ---@return boolean @ if GD/CSScript attached
     ---@return number @ script type enum
-    function checkForGDScript(nodeAddr)
+    function GDD.Objects.checkForGDScript(nodeAddr)
 
       if isNullOrNil(nodeAddr) then return false end
 
@@ -3509,12 +3541,12 @@
       if isNullOrNil(gdScriptName) then sendDebugMessage(numtohexstr(nodeAddr) .. ' script name absent') return false end
       
       -- more expensive, but stronger assumption
-      if ( readUTFString(gdScriptName) ):sub(1,4) == 'res:' then return true else sendDebugMessage(numtohexstr(nodeAddr) .. ' res:// not matched') return false end
+      if ( GDD.Strings.readUTFString(gdScriptName) ):sub(1,4) == 'res:' then return true else sendDebugMessage(numtohexstr(nodeAddr) .. ' res:// not matched') return false end
 
       return true
     end
 
-    function checkScriptType(nodeAddr)
+    function GDD.Objects.checkScriptType(nodeAddr)
       -- if GDDEFS.MONO == false then return 0 end; -- has to be checked already
 
       if isNullOrNil(nodeAddr) --[[or not isVtable( getVtable(nodeAddr) )]] then
@@ -3540,7 +3572,7 @@
         return 0
       end
 
-      local gdScriptName = readUTFString(gdScriptName)
+      local gdScriptName = GDD.Strings.readUTFString(gdScriptName)
 
       if  (gdScriptName):sub(1,4) == 'res:' then
         if      (gdScriptName):sub(-3) == '.gd' then  return GDDEFS.SCRIPT_TYPES["GD"]
@@ -3552,9 +3584,9 @@
       end
     end
 
-    function checkIfObjectWithChildren(objAddr)
+    function GDD.Objects.checkIfObjectWithChildren(objAddr)
       if isNullOrNil(objAddr) then return false end -- if object itself is valid
-      local objectChildren, childrenSize = getNodeChildrenInfo(objAddr) -- check children & if it's a valid pointer
+      local objectChildren, childrenSize = GDD.Containers.getNodeChildrenInfo(objAddr) -- check children & if it's a valid pointer
       if isNullOrNil(childrenSize) then return false end -- if no children, we don't need it
       local childAddr = readPointer(objectChildren)
       if isNullOrNil(childAddr) or not isVtable( getVtable(childAddr) ) then return false end  -- check the 0th object for vtable
@@ -3564,11 +3596,14 @@
     --- builds a structure layout for a node's children array
     ---@param childrenArrStruct userdata
     ---@param nodeAddr number
-    function iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress)
+    function GDD.Objects.iterateNodeChildrenToStruct(childrenArrStructElem, baseAddress)
 
-      local childrenAddr, childrenSize = getNodeChildrenInfo(baseAddress)
+      local childrenAddr, childrenSize = GDD.Containers.getNodeChildrenInfo(baseAddress)
 
       if isNullOrNil(childrenSize) then return; end
+      local checkForGDScript = GDD.Objects.checkForGDScript
+      local addLayoutStructElem = GDD.Structures.addLayoutStructElem
+      local addStructureElem = GDD.Structures.addStructureElem
 
       for i = 0, (childrenSize - 1) do
         local nodeAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
@@ -3592,7 +3627,7 @@
     --- go over child nodes in the main nodes
     ---@param nodeAddr number
     ---@param parent userdata
-    function iterateMNodeToAddr(nodeAddr, parent, contextTable)
+    function GDD.Objects.iterateNodeToAddr(nodeAddr, parent, contextTable)
       assert(type(nodeAddr) == 'number', "node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(parent) == "userdata", "parent has to exist")
 
@@ -3622,10 +3657,10 @@
       local nodeContext;
       local newNodeSymStr, GDSIsym, variantVectorSym, GDScriptSym, GDScriptConstMapSym
       newNodeSymStr = contextTable.symbol -- should be wrapped outside
-      GDSIsym = wrapBrackets( newNodeSymStr .. '+GDSCRIPTINSTANCE' )
-      variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
-      GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
-      GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )
+      GDSIsym = GDD.Utils.wrapBrackets( newNodeSymStr .. '+GDSCRIPTINSTANCE' )
+      variantVectorSym = GDD.Utils.wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
+      GDScriptSym = GDD.Utils.wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
+      GDScriptConstMapSym = GDD.Utils.wrapBrackets( GDScriptSym .. '+CONST_MAP' )
 
       sendDebugMessage('STEP: Constants for: ' .. tostring(nodeName))
 
@@ -3643,13 +3678,13 @@
         end, parent)
 
         nodeContext = { addr = nodeAddr, name = nodeName, gdname = gdscriptName, memrec = newConstRec, struct = nil, symbol = GDScriptConstMapSym }
-        iterateNodeConstToAddr(nodeContext)
+        GDD.Constants.iterateNodeToAddr(nodeContext)
       end
 
       sendDebugMessage('STEP: VARIANTS for: ' .. tostring(nodeName))
 
       nodeContext = { addr = nodeAddr, name = nodeName, gdname = gdscriptName, memrec = parent, struct = nil, symbol = variantVectorSym }
-      iterateVecVarToAddr(nodeContext)
+      GDD.Variants.iterateToAddr(nodeContext)
 
       return
     end
@@ -3657,7 +3692,7 @@
     --- builds the structure layout for a Node when guessed
     ---@param nodeAddr number
     ---@param scriptInstStructElement userdata
-    function iterateNodeToStruct(nodeAddr, scriptInstStructElement)
+    function GDD.Objects.iterateNodeToStruct(nodeAddr, scriptInstStructElement)
 
       local nodeName = gd_getNodeName(nodeAddr) or 'NIL';
       local scriptName = gd_getNodeNameFromScript(nodeAddr)
@@ -3673,53 +3708,53 @@
 
       local nodeContext;
       local newNodeSymStr = scriptName
-      local GDSIsym = wrapBrackets( wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )
-      local variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
-      local GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
-      local GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )
-      local GDScriptFuncMapSym = wrapBrackets( GDScriptSym .. '+FUNC_MAP' )
+      local GDSIsym = GDD.Utils.wrapBrackets( GDD.Utils.wrapBrackets(newNodeSymStr) .. '+GDSCRIPTINSTANCE' )
+      local variantVectorSym = GDD.Utils.wrapBrackets( GDSIsym .. '+VAR_VECTOR' )
+      local GDScriptSym = GDD.Utils.wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )
+      local GDScriptConstMapSym = GDD.Utils.wrapBrackets( GDScriptSym .. '+CONST_MAP' )
+      local GDScriptFuncMapSym = GDD.Utils.wrapBrackets( GDScriptSym .. '+FUNC_MAP' )
 
-      scriptStructElem = addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer)
+      scriptStructElem = GDD.Structures.addLayoutStructElem(scriptInstStructElement, 'GDScript', --[[0x008080]] nil, GDDEFS.GDSCRIPT_REF, vtPointer)
 
       -- we check if consts, funcs, veriants exist
       if isNotNullOrNil( varVectorAddr ) and isValidPointer( varVectorAddr ) then
-        varVectorStructElem = addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer)
+        varVectorStructElem = GDD.Structures.addLayoutStructElem(scriptInstStructElement, 'Variants', --[[0x000080]] nil, GDDEFS.VAR_VECTOR, vtPointer)
         sendDebugMessage('STEP: VARIANTS for: ' .. tostring(nodeName))
         varVectorStructElem.ChildStruct = createStructure('Vars')
 
         local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = varVectorStructElem, symbol = variantVectorSym }
-        iterateVecVarToStruct(nodeContext)
+        GDD.Variants.iterateToStruct(nodeContext)
       else
         sendDebugMessage('STEP: VARIANTS skipped: nothing to process: ' .. tostring(nodeName))
       end
 
       if isNotNullOrNil(GDDEFS.CONST_MAP) and isNotNullOrNil( constMapAddr ) and isValidPointer( constMapAddr ) then
-        constMapStructElem = addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
+        constMapStructElem = GDD.Structures.addLayoutStructElem(scriptStructElem, 'Consts', --[[0x400000]] nil, GDDEFS.CONST_MAP, vtPointer)
         sendDebugMessage('STEP: CONSTANTS for: ' .. tostring(nodeName))
         constMapStructElem.ChildStruct = createStructure('Consts')
         local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = constMapStructElem, symbol = GDScriptConstMapSym }
-        iterateNodeConstToStruct(nodeContext)
+        GDD.Constants.iterateNodeToStruct(nodeContext)
       else
         sendDebugMessage('STEP: CONSTANTS skipped: nothing to process: ' .. tostring(nodeName))
       end
 
       if isNotNullOrNil(GDDEFS.FUNC_MAP) and isNotNullOrNil( funcMapAddr ) and isValidPointer( funcMapAddr ) then
-        functMapStructElem = addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer)
+        functMapStructElem = GDD.Structures.addLayoutStructElem(scriptStructElem, 'Func', --[[0x400000]] nil, GDDEFS.FUNC_MAP, vtPointer)
         sendDebugMessage('STEP: Functions for: ' .. tostring(nodeName))
         functMapStructElem.ChildStruct = createStructure('Funcs')
         local nodeContext = { addr = nodeAddr, name = nodeName, gdname = scriptName, memrec = nil, struct = functMapStructElem, symbol = GDScriptFuncMapSym }
-        iterateNodeFuncMapToStruct(nodeContext)
+        GDD.Functions.iterateNodeMapToStruct(nodeContext)
       else
         sendDebugMessage('STEP: FUNC skipped: nothing to process: ' .. tostring(nodeName))
       end
 
       if not GDDEFS.MONO then return end
-      if checkScriptType(nodeAddr) ~= GDDEFS.SCRIPT_TYPES["CS"] or GDDEFS.MAJOR_VER < 4 then return end
+      if GDD.Objects.checkScriptType(nodeAddr) ~= GDDEFS.SCRIPT_TYPES["CS"] or GDDEFS.MAJOR_VER < 4 then return end
 
       sendDebugMessage("Node " .. nodeName .. " has csharp script type")
-      local clrPtrElem = createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
-      -- addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
-      local clrDataElem = createChildStructElem(clrPtrElem, "CLRData", 0x0, vtPointer, "CLRData")
+      local clrPtrElem = GDD.Structures.createChildStructElem(scriptInstStructElement, "CLRPtr", GDDEFS.CLR_PTR, vtPointer, "CLRPtr")
+      -- GDD.Structures.addStructureElem(clrPtrElem, "CLRData", 0x0, vtPointer)
+      local clrDataElem = GDD.Structures.createChildStructElem(clrPtrElem, "CLRData", 0x0, vtPointer, "CLRData")
 
       local clrDataAddr = readPointer( readPointer( gdScriptInstanceAddr + GDDEFS.CLR_PTR ) ) or 0x0
       if isNotNullOrNil(clrDataAddr) then
@@ -3732,7 +3767,7 @@
     --- gets a GDScript name, best use to return 1st 3 chars for 'res'
     ---@param nodeAddr number
     ---@param strSize number
-    function getGDResName(nodeAddr, strSize)
+    function GDD.Objects.getResourceName(nodeAddr, strSize)
       assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
       local gdScriptInstance = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
@@ -3754,14 +3789,14 @@
       end
 
       -- it's immediate String
-      return readUTFString(gdScriptName, strSize)
+      return GDD.Strings.readUTFString(gdScriptName, strSize)
     end
 
     -- this monstrosity is used to check for a valid poitner and its vtable
     ---@param objectPtr number -- a ptr to an object or nullptr
     ---@return number -- returns a more valid pointer to an object
     ---@return boolean -- true if the returned pointer was shifted back to get a valid ptr
-    function checkObjectOffset(objectPtr)
+    function GDD.Objects.checkObjectOffset(objectPtr)
 
       local objectAddr = readPointer(objectPtr) -- it's either an obj ptr or zero
 
@@ -3795,14 +3830,14 @@
       assert(type(constName) == 'string', "Constant name has to be a string, instead got: " .. type(constName))
 
       local mapHead = getNodeConstantMap(nodeAddr)
-      return findMapEntryByName(mapHead, constName, getNodeConstName, getConstMapLookupResult, getNextMapElement)
+      return GDD.Containers.findMapEntryByName(mapHead, constName, GDD.Constants.getName, GDD.Containers.getConstMapLookupResult, GDD.Containers.getNextMapElement)
     end
 
     function GDAPI.getNodeChildByGDName(nodeAddr, gdName)
       assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(gdName) == 'string', "Node gdname has to be a string, instead got: " .. type(gdName))
-      assert(checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
-      local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr) -- children should be valid
+      assert(GDD.Objects.checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
+      local childrenAddr, childrenSize = GDD.Containers.getNodeChildrenInfo(nodeAddr) -- children should be valid
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
         if gdName == gd_getNodeNameFromScript(childAddr) then
@@ -3815,8 +3850,8 @@
     function GDAPI.getNodeChildByName(nodeAddr, nodeName)
       assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(nodeName) == 'string', "Node name has to be a string, instead got: " .. type(nodeName))
-      assert(checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
-      local childrenAddr, childrenSize = getNodeChildrenInfo(nodeAddr)
+      assert(GDD.Objects.checkIfObjectWithChildren(nodeAddr), "Node doesn't have children")
+      local childrenAddr, childrenSize = GDD.Containers.getNodeChildrenInfo(nodeAddr)
       for i = 0, (childrenSize - 1) do
         local childAddr = readPointer(childrenAddr + (i * GDDEFS.PTRSIZE))
         if nodeName == gd_getNodeName(childAddr) then
@@ -3828,10 +3863,10 @@
 
     function GDAPI.gd_mono_getObjectFromNode(nodeAddr)
       assert(GDDEFS.MONO, 'Target has to be mono')
-      assert(checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"], 'Node has to use C#')
+      assert(GDD.Objects.checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"], 'Node has to use C#')
 
       if GDDEFS.MAJOR_VER >= 4 then
-        local GDSI = getNodeGDScriptInstance(nodeAddr) or 0x0
+        local GDSI = GDD.Objects.getNodeGDScriptInstance(nodeAddr) or 0x0
         local clrDataPtr = readPointer( GDSI + GDDEFS.CLR_PTR )
         return readPointer( clrDataPtr )
       end
@@ -3844,7 +3879,7 @@
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Script
 
 
-    local function findGDExtensionInterfacePtr()
+    function GDD.Script.findGDExtensionInterfacePtr()
       local function findFuncPointer(aobSignature)
         local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
         if addr == 0 or addr == nil then return false end
@@ -3862,7 +3897,7 @@
       return false
     end
 
-    local function findGDNativeAPIStruct()
+    function GDD.Script.findGDNativeAPIStruct()
       local function findViaRDATA(rdataSignature)
         local addr = AOBScanModuleUnique(process, rdataSignature, '-X-W-C', 1, 4)
         if addr == 0 or addr == nil then
@@ -3900,7 +3935,7 @@
       return false
     end
 
-    local function findMonoGetObject()
+    function GDD.Script.findMonoGetObject()
       local function findFuncPointer(aobSignature)
         local addr = AOBScanModuleUnique(process, aobSignature, '+X-W-C')
         if addr == 0 or addr == nil then return false end
@@ -4110,8 +4145,8 @@
           assert(GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1, "GDExtension Interface is for 4.1+ only")
 
           -- get func ptr
-          if isNullOrNil(GDDEFS.GDXTENSION_GETPROC) then 
-            if not findGDExtensionInterfacePtr() then error('getproc func ptr not found') end
+          if isNullOrNil(GDDEFS.GDXTENSION_GETPROC) then
+            if not GDD.Script.findGDExtensionInterfacePtr() then error('getproc func ptr not found') end
           end
           local getProcAddr = GDDEFS.GDXTENSION_GETPROC
 
@@ -4146,7 +4181,7 @@
 
           -- setup arguments & space
           if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
-            setupCallArgs(VariantArena, GDVariant, argTable)
+            GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
           else 
             error("arg table has to be filled to construct")
           end
@@ -4156,7 +4191,7 @@
           if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
 
           local argListPtr = VariantArena.base + VariantArena.argListOffset
-          local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+          local typeEnum = GDD.Types.getGDTypeEnumFromName(gdtypeStr)
           local argCount = (argTable and #argTable) or 0
           local callError = VariantArena.base + VariantArena.callErrorOffset
 
@@ -4169,7 +4204,7 @@
           assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
           local varCtorPtr = GDExtendedInterface.getGDExtensionFunc('get_variant_from_type_constructor')
           if isNullOrNil(varCtorPtr) then error('get_variant_from_type_constructor func ptr not found') end
-          local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+          local typeEnum = GDD.Types.getGDTypeEnumFromName(gdtypeStr)
           return executeCodeEx(stdcall, timeout, varCtorPtr, typeEnum)
         end
 
@@ -4177,7 +4212,7 @@
           assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
           local varGetConstrPtr = GDExtendedInterface.getGDExtensionFunc('variant_get_ptr_destructor')
           if isNullOrNil(varGetConstrPtr) then error('variant_get_ptr_destructor func ptr not found') end
-          local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+          local typeEnum = GDD.Types.getGDTypeEnumFromName(gdtypeStr)
           return executeCodeEx(stdcall, timeout, varGetConstrPtr, typeEnum)
         end
 
@@ -4185,7 +4220,7 @@
           assert(type(gdtypeStr) == 'string', 'gdtype must be a string, instead got: ' .. type(gdtypeStr))
           local varDestructPtr = GDExtendedInterface.variant_get_ptr_destructor(gdtypeStr)
           if isNullOrNil(varDestructPtr) then error('var destructor func ptr not found') end
-          local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+          local typeEnum = GDD.Types.getGDTypeEnumFromName(gdtypeStr)
           return executeCodeEx(stdcall, timeout, varDestructPtr, typeEnum)
         end
 
@@ -4194,7 +4229,7 @@
           assert(type(constructorID) == 'number', 'constructorid must be a number, instead got: ' .. type(constructorID))
           local varGetConstrPtr = GDExtendedInterface.getGDExtensionFunc('variant_get_ptr_constructor')
           if isNullOrNil(varGetConstrPtr) then error('variant_get_ptr_constructor func ptr not found') end
-          local typeEnum = getGDTypeEnumFromName(gdtypeStr)
+          local typeEnum = GDD.Types.getGDTypeEnumFromName(gdtypeStr)
           return executeCodeEx(stdcall, timeout, varGetConstrPtr, typeEnum, constructorID)
         end
 
@@ -4503,7 +4538,7 @@
         error('not implemented')
       end
 
-    local function resolveGDTokenOffset(gdscriptVtable)
+    function GDD.Script.resolveTokenOffset(gdscriptVtable)
       if isNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX) then sendDebugMessage('[GDReload] reload index not defined - failed') return false end
       -- by having a vtable method, we can assume the source and binary token offset
       local setScriptMethodAddr = readPointer(gdscriptVtable + (GDDEFS.GDSCRIPT_RELOAD_INDX*GDDEFS.PTRSIZE) - GDDEFS.PTRSIZE) -- previous method
@@ -4535,19 +4570,19 @@
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(type(fileName)=='string', 'Script file name has to be a string, instead got: '..type(fileName))
       assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
-      assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
+      assert(GDD.Objects.checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
       -- passing strings won't work, gotta stream the attached files
-      local newScript = streamFileToString(fileName)
+      local newScript = GDD.Utils.streamFileToString(fileName)
       if isNullOrNil(newScript) then error('attached file wasnt found') end
 
       -- get gdscript and its vtable
-      local gdscript = getNodeGDScript(nodeAddr) or 0
+      local gdscript = GDD.Objects.getNodeGDScript(nodeAddr) or 0
       local gdscriptVtable = readPointer(gdscript)
 
       -- figure out the obj offsets
       if isNullOrNil(GDDEFS.GDSCRIPT_SRC) then
-        if not resolveGDTokenOffset(gdscriptVtable) then error('offset hunt heuristic failed') end
+        if not GDD.Script.resolveTokenOffset(gdscriptVtable) then error('offset hunt heuristic failed') end
       end
 
       -- get reload method
@@ -4600,13 +4635,13 @@
 
     function GDAPI.gd_reloadScriptInstance(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
-      assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
+      assert(GDD.Objects.checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
       -- get Node's callp virtual
-      local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX )
+      local callpMethod = GDD.Memory.getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX )
       if isNullOrNil(callpMethod) then error('callp not found') end
 
-      local gdScript = getNodeGDScript(nodeAddr)
+      local gdScript = GDD.Objects.getNodeGDScript(nodeAddr)
       if isNullOrNil(gdScript) then error('gdscript invalid') end -- check it before any allocations
 
       -- construct bound method StringName and an object variant
@@ -4617,7 +4652,7 @@
 
       local int_t = 0
       local argTable = { { type = "NIL", value = nil } }
-      setupCallArgs(VariantArena, GDVariant, argTable)
+      GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
 
       local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- rcx
       local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset } -- r9
@@ -4641,7 +4676,7 @@
 
       -- setting up the arg
       local argTable = { { type = "OBJECT", value = nil, copy = objectVariant } } -- for we manage it
-      setupCallArgs(VariantArena, GDVariant, argTable)
+      GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
 
       writeInteger(err.value, -1)
 
@@ -4666,10 +4701,10 @@
     function GDAPI.gd_revertScript(nodeAddr)
       assert(type(nodeAddr)=='number', 'Node addr has to be a number, instead got: '..type(nodeAddr))
       assert(isNotNullOrNil(GDDEFS.GDSCRIPT_RELOAD_INDX), 'vMethod index has to be defined')
-      assert(checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
+      assert(GDD.Objects.checkForGDScript(nodeAddr), 'Node doesnt have gdscript')
 
       -- get gdscript and its vtable
-      local gdscript = getNodeGDScript(nodeAddr) or 0
+      local gdscript = GDD.Objects.getNodeGDScript(nodeAddr) or 0
       local gdscriptVtable = readPointer(gdscript)
 
       -- get reload method
@@ -4683,29 +4718,29 @@
 
     --- returns a lua string for a map element
     ---@param mapElement number
-    function getGDFunctionName(mapElement)
+    function GDD.Functions.getName(mapElement)
       local mapElementValue = readPointer(mapElement + GDDEFS.PTRSIZE * 2) -- it's after next and prev
       if isNullOrNil(mapElementValue) then
         sendDebugMessage('(hash)mapElementKey invalid');
         return 'F??'
       end
 
-      return getStringNameStr(mapElementValue)
+      return GDD.Strings.getStringNameStr(mapElementValue)
     end
 
-    function getFuncObjectCodeAddr(funcAddr)
+    function GDD.Functions.getCodeAddress(funcAddr)
       assert(type(funcAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcAddr))
       return readPointer(funcAddr + GDDEFS.FUNC_CODE)
     end
 
-    function getFuncObjectConstAddr(funcAddr)
+    function GDD.Functions.getConstantsAddress(funcAddr)
       assert(type(funcAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcAddr))
       return readPointer(funcAddr + GDDEFS.FUNC_CONST)
     end
 
     --- returns a head element, tail element and (hash)Map size
     ---@param nodeAddr number
-    function getNodeFuncMap(nodeContext)
+    function GDD.Functions.getNodeMap(nodeContext)
       assert(type(nodeContext.addr) == 'number', "NodePtr should be a number, instead got: " .. type(nodeContext.addr))
 
       local scriptInstanceAddr = readPointer(nodeContext.addr + GDDEFS.GDSCRIPTINSTANCE)
@@ -4733,7 +4768,7 @@
         if funcStructElement then
           funcStructElement.ChildStruct = createStructure('ConstMapRes')
         end
-        return getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
+        return GDD.Containers.getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
       end
     end
 
@@ -4743,12 +4778,12 @@
     function GDAPI.gd_getFunctionFromNode(nodeAddr, funcName)
       assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(funcName) == 'string', "Func name has to be a string, instead got: " .. type(funcName))
-      assert(checkForGDScript(nodeAddr) == true, "Node addr doesn't have a GDScript" )
+      assert(GDD.Objects.checkForGDScript(nodeAddr) == true, "Node addr doesn't have a GDScript" )
 
       local gdScriptName = gd_getNodeNameFromScript(nodeAddr) or "N??"
       local nodeMapContext = { addr = nodeAddr, name = '', gdname = '', memrec = nil, struct = nil, symbol = funcName or '' }
-      local headElement, tailElement, mapSize, currentContainer = getNodeFuncMap(nodeMapContext)
-      return findMapEntryByName(headElement, funcName, getFunctionMapName, getFunctionMapLookupResult, advanceFunctionMapElement)
+      local headElement, tailElement, mapSize, currentContainer = GDD.Functions.getNodeMap(nodeMapContext)
+      return GDD.Containers.findMapEntryByName(headElement, funcName, GDD.Containers.getFunctionMapName, GDD.Containers.getFunctionMapLookupResult, GDD.Emitters.advanceFunctionMapElement)
     end
 
     --- patch a function's code with the bytes starting at an arbitrary pos
@@ -4760,7 +4795,7 @@
       assert(type(patchToBytes) == 'table', "Patch Bytes have to be a table, instead got: " .. type(patchToBytes))
 
       local position = startPos or 0x0
-      local funcCode = getFuncObjectCodeAddr(funcObjAddr)
+      local funcCode = GDD.Functions.getCodeAddress(funcObjAddr)
       if isNullOrNil(funcCode) then error("function code is invalid") end
 
       for _, opcode in ipairs(patchToBytes) do
@@ -4780,16 +4815,16 @@
       assert(type(value) == 'number', "value has to be a number, instead got: " .. type(value))
       assert(type(CEvalueType) == 'number', "ce value type has to be a number, instead got: " .. type(CEvalueType))
 
-      local funcConstAddr = getFuncObjectConstAddr(funcObjAddr)
+      local funcConstAddr = GDD.Functions.getConstantsAddress(funcObjAddr)
       if isNullOrNil(funcConstAddr) then error("function const addr is invalid") end
 
       local vectorSize = readInteger(funcConstAddr - GDDEFS.SIZE_VECTOR)
 
-      -- local sizeOfVariant, ok = redefineVariantSizeByVector(funcConstAddr, vectorSize)
+      -- local sizeOfVariant, ok = GDD.Types.redefineVariantSizeByVector(funcConstAddr, vectorSize)
       -- if not ok then error("size refedinition failed") end
       local sizeOfVariant = GDDEFS.SIZEOF_VARIANT
 
-      local targetConstAddr = getVariantByIndex(funcConstAddr, constIndex, sizeOfVariant)
+      local targetConstAddr = GDD.Variants.getByIndex(funcConstAddr, constIndex, sizeOfVariant)
 
       -- todo: base it on handlers
       if vtByte then
@@ -4808,24 +4843,28 @@
     --- iterates a function map and adds it to a struct
     ---@param nodeAddr number
     ---@param funcStructElement userdata
-    function iterateNodeFuncMapToStruct(nodeContext)
+    function GDD.Functions.iterateNodeMapToStruct(nodeContext)
       assert(type(nodeContext.addr) == 'number', 'nodeAddr has to be a number, instead got: ' .. type(nodeContext.addr))
 
       local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
-      local headElement, tailElement, mapSize, nodeMapContext = getNodeFuncMap(nodeMapContext)
+      local headElement, tailElement, mapSize, nodeMapContext = GDD.Functions.getNodeMap(nodeMapContext)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
         sendDebugMessage('(hash)map empty?: ' .. " Address " .. numtohexstr(nodeContext.addr))
         return;
       end
       local mapElement = headElement
       local index = 0;
+      local getFunctionMapName = GDD.Containers.getFunctionMapName
+      local emitFunctionStructEntry = GDD.Emitters.emitFunctionStructEntry
+      local advanceFunctionMapElement = GDD.Emitters.advanceFunctionMapElement
+      local createNextFunctionContainer = GDD.Emitters.createNextFunctionContainer
 
       repeat
         -- sendDebugMessage('Looping '.." mapElemAddr: "..numtohexstr(mapElement))
 
         local funcName = getFunctionMapName(mapElement) or "UNKNOWN" -- the layout is similar to constant map's
 
-        emitFunctionStructEntry(nodeMapContext.struct, mapElement, funcName)
+        emitFunctionStructEntry(nodeMapContext.struct, funcName)
 
         index = index + 1
         mapElement = advanceFunctionMapElement(mapElement)
@@ -4837,7 +4876,7 @@
       return
     end
 
-    function iterateFuncConstantsToStruct(funcConstantVect, funcConstantStructElem)
+    function GDD.Functions.iterateConstantsToStruct(funcConstantVect, funcConstantStructElem)
 
       if isNullOrNil(funcConstantVect) then
         sendDebugMessage('func vector invalid')
@@ -4850,10 +4889,11 @@
         return;
       end
 
-      -- local variantSize, ok = redefineVariantSizeByVector(funcConstantVect, vectorSize)
+      -- local variantSize, ok = GDD.Types.redefineVariantSizeByVector(funcConstantVect, vectorSize)
       -- if not ok then sendDebugMessage("Variant resize failed") return end
       local variantSize = GDDEFS.SIZEOF_VARIANT
       local emitter = GDEmitters.StructEmitter
+      local readFunctionConstantEntry = GDD.Readers.readFunctionConstantEntry
 
       for variantIndex = 0, (vectorSize - 1) do
         local entry = readFunctionConstantEntry(funcConstantVect, variantIndex, variantSize)
@@ -4871,7 +4911,7 @@
       return;
     end
 
-    function iterateFuncGlobalsToStruct(funcGlobalVect, funcGlobalNameStructElem)
+    function GDD.Functions.iterateGlobalsToStruct(funcGlobalVect, funcGlobalNameStructElem)
       if isNullOrNil(funcGlobalVect) then
         sendDebugMessage('funcGlobalVect invalid')
         return;
@@ -4883,6 +4923,8 @@
         return;
       end
 
+      local checkStringNameType = GDD.Strings.checkStringNameType
+      local emitStringNameStruct = GDD.Emitters.emitStringNameStruct
       for variantIndex = 0, (vectorSize - 1) do
         local entryOffset = variantIndex * GDDEFS.PTRSIZE
         local label = "GlobName[" .. variantIndex .. "] stringName"
@@ -4899,10 +4941,9 @@
       return;
     end
 
-    function disassembleGDFunctionCodeToStruct(funcAddr, funcStruct)
+    function GDD.Functions.disassembleCodeToStruct(funcAddr, funcStruct)
       assert((type(funcAddr) == 'number') and (funcAddr ~= 0), 'funcAddr has to be a valid pointer, instead got: ' .. type(funcAddr))
 
-      local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE) -- TODO: resolve that with a a helper
       funcStruct.Name = 'ScriptFunc'
       local codeStructElement = funcStruct.addElement()
       codeStructElement.Name = 'FuncCode'
@@ -4916,7 +4957,7 @@
       funcConstantStructElem.VarType = vtPointer
       funcConstantStructElem.ChildStruct = createStructure('GDFConst')
       local funcConstAddr = readPointer(funcAddr + GDDEFS.FUNC_CONST)
-      iterateFuncConstantsToStruct(funcConstAddr, funcConstantStructElem)
+      GDD.Functions.iterateConstantsToStruct(funcConstAddr, funcConstantStructElem)
 
       local funcGlobalNameStructElem = funcStruct.addElement()
       funcGlobalNameStructElem.Name = 'Globals'
@@ -4924,7 +4965,12 @@
       funcGlobalNameStructElem.VarType = vtPointer
       funcGlobalNameStructElem.ChildStruct = createStructure('GDFGlobals')
       local funcGlobalAddr = readPointer(funcAddr + GDDEFS.FUNC_GLOBNAMEPTR)
-      iterateFuncGlobalsToStruct(funcGlobalAddr, funcGlobalNameStructElem)
+      GDD.Functions.iterateGlobalsToStruct(funcGlobalAddr, funcGlobalNameStructElem)
+
+      if not GDDEFS.bDisasmFunc then return end
+
+      local codeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE) -- TODO: resolve that with a helper
+      if isNullOrNil(codeAddr) then return end
 
       local codeInts = {}
       local codeSize, currIndx, currOpcode = 0, 0, 0
@@ -4945,7 +4991,8 @@
       return
     end
 
-    function checkIfGDFunction(funcAddr)
+    -- heuristic to guess GDScript funcs
+    function GDD.Functions.isGDFunction(funcAddr)
       local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, funcCodeLastIdx, lastOpcode
       if GDDEFS.MAJOR_VER <= 3 or GDDEFS.VERSION_STRING == "4.1" then
         funcResStringNameAddr = readPointer(funcAddr) -- StringName source at 0x0;
@@ -4957,7 +5004,7 @@
 
       if isNullOrNil(funcResStringNameAddr) or isNullOrNil(funcStringNameAddr) then return false end
 
-      if not (  getStringNameStr(funcResStringNameAddr)  ):match("res://") then return false end
+      if not (  GDD.Strings.getStringNameStr(funcResStringNameAddr)  ):match("res://") then return false end
 
       -- get code and its size to check the OPCODE_END
       funcCodeAddr = readPointer(funcAddr + GDDEFS.FUNC_CODE)
@@ -4970,7 +5017,7 @@
       return true
     end
 
-    local function findGDVMCallPtr()
+    function GDD.Functions.findVMCallPtr()
       local function resolveVM_RELA(aobSignature, sigByteLength, offsetToNextIntr)
         local function resolveAddress(instructionAddr, sigByteLength, offsetToNextIntr)
           local callInstr = instructionAddr + sigByteLength - 1
@@ -5006,7 +5053,7 @@
 
       local vmCallAddr
       if isNullOrNil(GDDEFS.VM_CALL) then
-        findGDVMCallPtr()
+        GDD.Functions.findVMCallPtr()
         vmCallAddr = GDDEFS.VM_CALL
       else
         vmCallAddr = GDDEFS.VM_CALL
@@ -5016,7 +5063,7 @@
 
       -- setup arguments & space
       if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
-        setupCallArgs(VariantArena, GDVariant, argTable)
+        GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
       end
 
       local int_t = 0
@@ -5069,7 +5116,7 @@
         ]]
     end
 
-    function setupCallArgs(arena, handler, args)
+    function GDD.Functions.setupCallArgs(arena, handler, args)
       arena:init() -- should be calloced already
       arena:reset()
 
@@ -5092,11 +5139,50 @@
       end
     end
 
+    function GDAPI.gd_callp(objectAddr, methodName, argTable)
+      assert(isNotNullOrNil(objectAddr), "Object Addr must be valid")
+      assert(type(methodName) == 'string', "method name must be a string, instead got: " .. type(methodName))
+      assert(argTable == nil or type(argTable) == 'table', "arguments must be a table or nil, instead got: " .. type(argTable))
+
+      local callpMethod = GDD.Memory.getObjectVMethodByIndex(objectAddr, GDDEFS.CALLP_INDX)
+      if isNullOrNil(callpMethod) then error('callp not found') end
+
+      local methodSName = GDI.construct_string_name(methodName)
+      if isNullOrNil(methodSName) then error('string name not constructed') end
+
+      local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
+      writePointer(stringNamePtr, methodSName)
+
+      VariantArena:init()
+      if argTable and #argTable > 0 then
+        GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
+      else
+        VariantArena:reset()
+      end
+
+      local int_t = 0
+      local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset }
+      local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset }
+      local argCount = (argTable and #argTable) or 0
+      local err = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
+      writeInteger(err.value, -1)
+
+      executeCodeEx(stdcall, timeout, callpMethod, buffer, objectAddr, stringNamePtr, args, argCount, err)
+
+      deAlloc(stringNamePtr)
+      GDI.destroy_string_name(methodSName)
+
+      local errVal = readPointer(err.value)
+      if errVal == 0 then return VariantArena.base + VariantArena.returnBufOffset end
+
+      error('Fail, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]))
+    end
+
     function GDAPI.gd_callFunctionFromNode(nodeAddr, funcName, argTable)
       assert(isNotNullOrNil(nodeAddr), "Node Addr must be valid")
       assert(type(funcName) == 'string', "function name must be a string, instead got: " .. type(funcName))
 
-      local gdScriptInstance = getNodeGDScriptInstance(nodeAddr)
+      local gdScriptInstance = GDD.Objects.getNodeGDScriptInstance(nodeAddr)
       if isNullOrNil(gdScriptInstance) then error("Nodes' script instance not found") end
 
       local functionAddr = gd_getFunctionFromNode( nodeAddr, funcName )
@@ -5105,52 +5191,14 @@
       if isNotNullOrNil(GDDEFS.VM_CALL) then
         return GDAPI.executeGDFunction(functionAddr, gdScriptInstance, argTable)
       else
-        -- calling methods via node->callp("functionStringName", args, argc, err)
-        local callpMethod = getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX )
-        if isNullOrNil(callpMethod) then error('callp not found') end
-
-        local gdScript = getNodeGDScript(nodeAddr)
-        if isNullOrNil(gdScript) then error('gdscript invalid') end -- wouldn't make sense
-
-        -- construct bound method StringName
-        local methodSName = GDI.construct_string_name( funcName )
-        if isNullOrNil(methodSName) then error('string name not constructed') end
-        local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
-        writePointer(stringNamePtr, methodSName) -- we need the stringName to be stored in a pointer passed to callp
-
-        -- VariantArg setup
-        if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
-          setupCallArgs(VariantArena, GDVariant, argTable)
-        end
-
-        local int_t = 0
-        local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- rcx
-        local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset } -- r9
-        local argCount = (argTable and #argTable) or 0
-        local err = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
-        writeInteger(err.value, -1)
-
-        local returned = executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err)
-      
-        deAlloc(stringNamePtr)
-        GDI.destroy_string_name(methodSName)
-
-        local errVal = readPointer( err.value )
-
-        -- success
-        if errVal == 0 then return VariantArena.base + VariantArena.returnBufOffset end
-      
-        -- fail
-        error('Fail, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
+        return GDAPI.gd_callp(nodeAddr, funcName, argTable)
       end
     end
-
-    -- TODO: callp API
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
 
     --- returns a head element, tail element and (hash)Map size
-    local function getNodeConstMap(nodeContext)
+    function GDD.Constants.getNodeMap(nodeContext)
       assert(type(nodeContext.addr) == 'number', "NodePtr should be a number, instead got: " .. type(nodeContext.addr))
 
       local scriptInstanceAddr = readPointer(nodeContext.addr + GDDEFS.GDSCRIPTINSTANCE)
@@ -5179,13 +5227,13 @@
         if nodeContext.struct then
           nodeContext.struct.ChildStruct = createStructure('ConstMapRes')
         end
-        return getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
+        return GDD.Containers.getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
       end
     end
 
     --- returns a lua string for const name
     ---@param mapElement number
-    function getNodeConstName(mapElement)
+    function GDD.Constants.getName(mapElement)
 
       local mapElementKey = readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL)
       if isNullOrNil(mapElementKey) then
@@ -5193,14 +5241,14 @@
         return 'C??'
       end
 
-      return getStringNameStr(mapElementKey)
+      return GDD.Strings.getStringNameStr(mapElementKey)
     end
 
     -- iterates over const (hash)map of a node and creates addresses for it
-    function iterateNodeConstToAddr(nodeContext)
+    function GDD.Constants.iterateNodeToAddr(nodeContext)
       assert(type(nodeContext.addr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeContext.addr))
 
-      if not checkForGDScript(nodeContext.addr) then
+      if not GDD.Objects.checkForGDScript(nodeContext.addr) then
         sendDebugMessage("Node " .. nodeContext.name .. " with NO GDScript")
         synchronize(function(parent)
           parent.Destroy()
@@ -5210,7 +5258,7 @@
 
       local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
 
-      local headElement, tailElement, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext)
+      local headElement, tailElement, mapSize, nodeMapContext = GDD.Constants.getNodeMap(nodeMapContext)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
         sendDebugMessage('(hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr))
         synchronize(function(parent)
@@ -5222,10 +5270,13 @@
       local emitter = GDEmitters.AddrEmitter
       local mapElement = headElement
       local currentSymbol = nodeMapContext.symbol
+      local readEntry = GDD.Readers.readNodeConstEntry
+      local getNext = GDD.Containers.getNextMapElement
+      local createNextSymbol = GDD.Containers.createNextConstSymbol
       -- local index = 0;
 
       repeat
-        local entry = readNodeConstEntry(mapElement)
+        local entry = readEntry(mapElement)
         entry.name = "const: " .. entry.name
         local contextTable =
         {
@@ -5237,11 +5288,11 @@
         }
         local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
         handler(entry, emitter, nodeContext.memrec, contextTable)
-        mapElement = getNextMapElement(mapElement)
+        mapElement = getNext(mapElement)
         -- index = index + 1
 
         if mapElement ~= 0 then
-          currentSymbol = createNextConstSymbol(currentSymbol)
+          currentSymbol = createNextSymbol(currentSymbol)
         end
 
       until (mapElement == 0)
@@ -5251,13 +5302,13 @@
     -- iterates over const (hash)map of a node and builds the structure for it
     ---@param nodeAddr number
     ---@param constStructElement userdata
-    function iterateNodeConstToStruct(nodeContext)
+    function GDD.Constants.iterateNodeToStruct(nodeContext)
       assert(type(nodeContext.addr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeContext.addr))
-      if GDDEFS.MONO and (checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
+      if GDDEFS.MONO and (GDD.Objects.checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
       
       local nodeMapContext = { addr = nodeContext.addr, name = nodeContext.name, gdname = nodeContext.gdname, memrec = nodeContext.memrec, struct = nodeContext.struct, symbol = nodeContext.symbol }
 
-      local headElement, _, mapSize, nodeMapContext = getNodeConstMap(nodeMapContext)
+      local headElement, _, mapSize, nodeMapContext = GDD.Constants.getNodeMap(nodeMapContext)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
         sendDebugMessage('(hash)map empty?: ' .. 'Address: ' .. numtohexstr(nodeContext.addr)) return;
       end
@@ -5269,9 +5320,13 @@
       local index = 0;
       local nodeName = gd_getNodeName(nodeMapContext.addr) or "UnknownNode"
       if nodeName == 'N??' then nodeName = gd_getNodeNameFromScript(nodeMapContext.addr) end
+      local readEntry = GDD.Readers.readNodeConstEntry
+      local getNext = GDD.Containers.getNextMapElement
+      local createNextContainer = GDD.Containers.createNextConstContainer
+      local createNextSymbol = GDD.Containers.createNextConstSymbol
 
       repeat
-        local entry = readNodeConstEntry(mapElement)
+        local entry = readEntry(mapElement)
         entry.name = "CONST: " .. entry.name
         local contextTable =
         {
@@ -5284,12 +5339,12 @@
         local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT
         handler(entry, emitter, currentContainer, contextTable)
 
-        mapElement = getNextMapElement(mapElement)
+        mapElement = getNext(mapElement)
         index = index + 1
 
         if mapElement ~= 0 then
-          currentContainer = createNextConstContainer(currentContainer, index)
-          currentSymbol = createNextConstSymbol(currentSymbol)
+          currentContainer = createNextContainer(currentContainer, index)
+          currentSymbol = createNextSymbol(currentSymbol)
         end
 
       until (mapElement == 0)
@@ -5298,17 +5353,20 @@
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Dictionary
 
-    function iterateDictionary(dictHead, parent, emitter, options, contextSeed)
+    function GDD.Dictionary.iterate(dictHead, parent, emitter, options, contextSeed)
 
       options = options or {}
       local mapElement = dictHead
       local currentContainer = parent
       local currentSymbol = contextSeed and contextSeed.symbol
       local index = 0
+      local readEntry = GDD.Readers.readDictionaryContainerEntry
+      local formatEntry = GDD.Containers.formatDictionaryEntry
+      local getNext = GDD.Containers.getDictElemPairNext
 
       repeat
-          local entry = readDictionaryContainerEntry(mapElement)
-          local formatted = formatDictionaryEntry(entry)
+          local entry = readEntry(mapElement)
+          local formatted = formatEntry(entry)
           local contextTable =
           {
             nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
@@ -5320,7 +5378,7 @@
           local handler = GDHandlers.VariantHandlers[formatted.typeName] or GDHandlers.VariantHandlers.DEFAULT
           handler(formatted, emitter, currentContainer, contextTable)
 
-          mapElement = getDictElemPairNext(mapElement)
+          mapElement = getNext(mapElement)
           index = index + 1
 
           if isNotNullOrNil(mapElement) and options.nextContainerFactory then
@@ -5335,57 +5393,59 @@
     --- iterates a dictionary and adds it to a class
     ---@param dictAddr number
     ---@param parent userdata
-    function iterateDictionaryToAddr(dictAddr, parent, contextTable)
+    function GDD.Dictionary.iterateToAddr(dictAddr, parent, contextTable)
       assert(type(dictAddr) == 'number', 'dictAddr has to be a number, instead got: ' .. type(dictAddr))
 
-      local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
+      local dictRoot, dictSize, dictHead, dictTail = GDD.Containers.getDictionaryInfo(dictAddr)
       if isNullOrNil(dictRoot) or isNullOrNil(dictSize) then return end
       
       if GDDEFS.MAJOR_VER <= 3 then
-        contextTable.symbol = wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+DICT_LIST' )
+        contextTable.symbol = GDD.Utils.wrapBrackets( GDD.Utils.wrapBrackets( contextTable.symbol ) .. '+DICT_LIST' )
       end
 
-      contextTable.symbol = wrapBrackets( wrapBrackets( contextTable.symbol ) .. '+DICT_HEAD' )
+      contextTable.symbol = GDD.Utils.wrapBrackets( GDD.Utils.wrapBrackets( contextTable.symbol ) .. '+DICT_HEAD' )
       
-      iterateDictionary(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false, nextContainerFactory = nil, nextSymbolFactory = createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
+      GDD.Dictionary.iterate(dictHead, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false, nextContainerFactory = nil, nextSymbolFactory = GDD.Containers.createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
       return
     end
 
     --- iterates a dictionary and adds it to a struct
     ---@param dictAddr number
     ---@param dictStructElement userdata
-    function iterateDictionaryToStruct(dictAddr, dictStructElement, contextTable)
+    function GDD.Dictionary.iterateToStruct(dictAddr, dictStructElement, contextTable)
 
-      local dictRoot, dictSize, dictHead, dictTail = getDictionaryInfo(dictAddr)
+      local dictRoot, dictSize, dictHead, dictTail = GDD.Containers.getDictionaryInfo(dictAddr)
       if isNullOrNil(dictRoot) then return
       end
       local currentRoot = dictStructElement
 
       if GDDEFS.MAJOR_VER <= 3 then
-        currentRoot = createChildStructElem(currentRoot, 'dictList', GDDEFS.DICT_LIST, vtPointer, 'dictList')
-        contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_LIST' )
+        currentRoot = GDD.Structures.createChildStructElem(currentRoot, 'dictList', GDDEFS.DICT_LIST, vtPointer, 'dictList')
+        contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol .. '+DICT_LIST' )
       end
 
-      local headContainer = createChildStructElem(currentRoot, 'dictHead', GDDEFS.DICT_HEAD, vtPointer, 'dictHead')
-      contextTable.symbol = wrapBrackets( contextTable.symbol .. '+DICT_HEAD' )
+      local headContainer = GDD.Structures.createChildStructElem(currentRoot, 'dictHead', GDDEFS.DICT_HEAD, vtPointer, 'dictHead')
+      contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol .. '+DICT_HEAD' )
 
-      iterateDictionary(dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = createNextDictContainer, nextSymbolFactory = createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
+      GDD.Dictionary.iterate(dictHead, headContainer, GDEmitters.StructEmitter, { bNeedStructOffset = true, nextContainerFactory = GDD.Containers.createNextDictContainer, nextSymbolFactory = GDD.Containers.createNextSymbol }, { nodeAddr = 0, nodeName = "Dictionary", symbol = contextTable.symbol })
       return
     end
 
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Array
 
-    function iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, emitter, options, contextSeed)
+    function GDD.Array.iterate(arrVectorAddr, arrVectorSize, variantArrSize, parent, emitter, options, contextSeed)
       assert(type(arrVectorAddr) == 'number', "arrayAddr has to be a number, instead got: " .. type(arrVectorAddr))
 
       options = options or {}
+      local readEntry = GDD.Readers.readArrayContainerEntry
+      local formatEntry = GDD.Containers.formatArrayEntry
       for varIndex = 0, arrVectorSize - 1 do
-        local entry = readArrayContainerEntry(arrVectorAddr, varIndex, variantArrSize, options.bNeedStructOffset)
+        local entry = readEntry(arrVectorAddr, varIndex, variantArrSize, options.bNeedStructOffset)
         if isNullOrNil(entry.variantPtr) then
           goto continue
         end
-        local formatted = formatArrayEntry(entry)
+        local formatted = formatEntry(entry)
         local contextTable =
         {
           nodeAddr = contextSeed and contextSeed.nodeAddr or 0,
@@ -5403,30 +5463,30 @@
     --- takes in an array address and address owner to append to
     ---@param arrayAddr number
     ---@param parent userdata
-    function iterateArrayToAddr(arrayAddr, parent, contextTable)
+    function GDD.Array.iterateToAddr(arrayAddr, parent, contextTable)
       assert(type(arrayAddr) == 'number', "Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
-      local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
+      local arrVectorAddr, arrVectorSize, variantArrSize = GDD.Containers.getArrayVectorInfo(arrayAddr)
       if isNullOrNil(arrVectorAddr) then return; end
 
-      contextTable.symbol = wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
-      iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })
+      contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
+      GDD.Array.iterate(arrVectorAddr, arrVectorSize, variantArrSize, parent, GDEmitters.AddrEmitter, { bNeedStructOffset = false }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })
       return
     end
 
     --- takes in an array address and struct owner to append to
     ---@param arrayAddr number
     ---@param parent userdata
-    function iterateArrayToStruct(arrayAddr, arrayStructElement, contextTable)
+    function GDD.Array.iterateToStruct(arrayAddr, arrayStructElement, contextTable)
       assert(type(arrayAddr) == 'number', "Array " .. tostring(arrayAddr) .. " has to be a number, instead got: " .. type(arrayAddr))
 
-      local arrVectorAddr, arrVectorSize, variantArrSize = getArrayVectorInfo(arrayAddr)
+      local arrVectorAddr, arrVectorSize, variantArrSize = GDD.Containers.getArrayVectorInfo(arrayAddr)
       if isNullOrNil(arrVectorAddr) then return; end
 
-      arrayStructElement = addStructureElem(arrayStructElement, 'VectorArray', GDDEFS.ARRAY_TOVECTOR, vtPointer)
+      arrayStructElement = GDD.Structures.addStructureElem(arrayStructElement, 'VectorArray', GDDEFS.ARRAY_TOVECTOR, vtPointer)
       arrayStructElement.ChildStruct = createStructure('ArrayData')
-      contextTable.symbol = wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
-      iterateArray(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })
+      contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol .. '+ARRAY_TOVECTOR' )
+      GDD.Array.iterate(arrVectorAddr, arrVectorSize, variantArrSize, arrayStructElement, GDEmitters.StructEmitter, { bNeedStructOffset = true }, { nodeAddr = 0, nodeName = "Array", symbol = contextTable.symbol })
       return
     end
 
@@ -5435,15 +5495,15 @@
     ---@param packedArrayAddr number
     ---@param packedTypeName string
     ---@param parent userdata
-    function iteratePackedArrayToAddr(packedArrayAddr, packedTypeName, parent, contextTable)
+    function GDD.Array.iteratePackedToAddr(packedArrayAddr, packedTypeName, parent, contextTable)
       assert(type(packedArrayAddr) == 'number', "Packed Array has to be a number, instead got: " .. type(packedArrayAddr))
       assert(type(packedTypeName) == 'string', "TypeName has to be a string, instead got: " .. type(packedTypeName))
 
-      local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
+      local packedDataArrAddr, packedVectorSize = GDD.Containers.getPackedArrayInfo(packedArrayAddr)
       if isNullOrNil(packedDataArrAddr) then return end
 
-      contextTable.symbol = wrapBrackets( contextTable.symbol .. '+P_ARRAY_TOARR' )
-      iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, GDEmitters.PackedAddrEmitter, contextTable)
+      contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol .. '+P_ARRAY_TOARR' )
+      GDD.Containers.iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, parent, GDEmitters.PackedAddrEmitter, contextTable)
       return
     end
 
@@ -5451,16 +5511,16 @@
     ---@param packedArrayAddr number
     ---@param packedTypeName string
     ---@param pArrayStructElement userdata
-    function iteratePackedArrayToStruct(packedArrayAddr, packedTypeName, pArrayStructElement, contextTable)
+    function GDD.Array.iteratePackedToStruct(packedArrayAddr, packedTypeName, pArrayStructElement, contextTable)
       assert(type(packedArrayAddr) == 'number', "Packed Array " .. tostring(packedArrayAddr) .. " has to be a number, instead got: " .. type(packedArrayAddr))
       assert(type(packedTypeName) == 'string', "TypeName " .. tostring(packedTypeName) .. " has to be a string, instead got: " .. type(packedTypeName))
 
-      local packedDataArrAddr, packedVectorSize = getPackedArrayInfo(packedArrayAddr)
+      local packedDataArrAddr, packedVectorSize = GDD.Containers.getPackedArrayInfo(packedArrayAddr)
       if isNullOrNil(packedDataArrAddr) then return end
-      pArrayStructElement = addStructureElem(pArrayStructElement, 'PckArray', GDDEFS.P_ARRAY_TOARR, vtPointer)
+      pArrayStructElement = GDD.Structures.addStructureElem(pArrayStructElement, 'PckArray', GDDEFS.P_ARRAY_TOARR, vtPointer)
       pArrayStructElement.ChildStruct = createStructure('PArrayData')
-      contextTable.symbol = wrapBrackets( contextTable.symbol .. '+P_ARRAY_TOARR' )
-      iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, GDEmitters.PackedStructEmitter, contextTable)
+      contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol .. '+P_ARRAY_TOARR' )
+      GDD.Containers.iteratePackedArrayCore(packedDataArrAddr, packedVectorSize, packedTypeName, pArrayStructElement, GDEmitters.PackedStructEmitter, contextTable)
       return
     end
 
@@ -5470,12 +5530,12 @@
     ---@param parent userdata
     ---@param emitter table
     ---@param options table
-    function iterateVectorVariants(nodeContext, emitter, options)
+    function GDD.Variants.iterate(nodeContext, emitter, options)
       assert(type(nodeContext.addr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeContext.addr));
 
       options = options or {}
 
-      if options.requireGDScript and not checkForGDScript(nodeContext.addr) then
+      if options.requireGDScript and not GDD.Objects.checkForGDScript(nodeContext.addr) then
         
         sendDebugMessage("Node has NO GDScript: " .. nodeContext.name)
         if emitter == GDEmitters.AddrEmitter then
@@ -5484,23 +5544,26 @@
         return;
       end
 
-      if GDDEFS.MONO and (checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
+      if GDDEFS.MONO and (GDD.Objects.checkScriptType(nodeContext.addr)==GDDEFS.SCRIPT_TYPES["CS"]) then return; end -- for mono targets
 
-      local headElement, tailElement, mapSize = getNodeVariantMap(nodeContext.addr)
+      local headElement, tailElement, mapSize = GDD.Variants.getNodeMap(nodeContext.addr)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then
         sendDebugMessage('(hash)Map empty?: ' .. nodeContext.name)
         return;
       end
 
-      local variantVector, vectorSize = getNodeVariantVector(nodeContext.addr)
-      -- local variantSize, ok = redefineVariantSizeByVector(variantVector, vectorSize)
+      local variantVector, vectorSize = GDD.Variants.getNodeVector(nodeContext.addr)
+      -- local variantSize, ok = GDD.Types.redefineVariantSizeByVector(variantVector, vectorSize)
       -- if not ok then sendDebugMessage("Variant resize strangely failed") return; end
       local variantSize = GDDEFS.SIZEOF_VARIANT
 
       local mapElement = headElement
+      local readEntry = GDD.Readers.readNodeVariantEntry
+      local getContainer = GDD.Containers.getContainerFromEmitterAndContext
+      local getNext = GDD.Containers.getNextMapElement
 
       repeat
-        local entry = readNodeVariantEntry(mapElement, variantVector, variantSize, options.bNeedStructOffset)
+        local entry = readEntry(mapElement, variantVector, variantSize, options.bNeedStructOffset)
         local contextTable =
         {
           nodeAddr = nodeContext.addr,
@@ -5509,30 +5572,32 @@
           symbol = nodeContext.symbol
         }
         local handler = GDHandlers.VariantHandlers[entry.typeName] or GDHandlers.VariantHandlers.DEFAULT;
-        local parentContainer = getContainerFromEmitterAndContext(emitter, nodeContext)
+        local parentContainer = getContainer(emitter, nodeContext)
         handler(entry, emitter, parentContainer, contextTable);
 
-        mapElement = getNextMapElement(mapElement)
+        mapElement = getNext(mapElement)
       until (mapElement == 0)
 
       return
     end
 
-    function iterateVectorVariantsForFields(nodeAddr)
+    function GDD.Variants.iterateForFields(nodeAddr)
       if isNullOrNil(nodeAddr) then return nil end
-      -- if not checkForGDScript(nodeAddr) then return; end
-      local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
+      -- if not GDD.Objects.checkForGDScript(nodeAddr) then return; end
+      local headElement, tailElement, mapSize = GDD.Variants.getNodeMap(nodeAddr)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then return nil end
 
-      local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
+      local variantVector, vectorSize = GDD.Variants.getNodeVector(nodeAddr)
       local sizeOfVariant = GDDEFS.SIZEOF_VARIANT -- GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
 
       local mapElement = headElement
       local fields = {}
       local index = 0
+      local readEntry = GDD.Readers.readNodeVariantEntry
+      local getNext = GDD.Containers.getNextMapElement
 
       repeat
-        local entry = readNodeVariantEntry(mapElement, variantVector, sizeOfVariant)
+        local entry = readEntry(mapElement, variantVector, sizeOfVariant)
         fields[index] = {}
         -- fields[index].Index = entry.Index
         fields[index].Name = entry.name
@@ -5540,29 +5605,31 @@
         fields[index].Sizeof = sizeOfVariant
         fields[index].Type = entry.typeId
 
-        mapElement = getNextMapElement(mapElement)
+        mapElement = getNext(mapElement)
         index = index+1
       until (mapElement == 0)
 
       return fields
     end
 
-    function iterateVectorVariantsForNamedField(nodeAddr, variantName)
+    function GDD.Variants.iterateForNamedField(nodeAddr, variantName)
       if isNullOrNil(nodeAddr) then return nil end
       if nodeAddr == nil or variantName == '' then return nil end
 
-      local headElement, tailElement, mapSize = getNodeVariantMap(nodeAddr)
+      local headElement, tailElement, mapSize = GDD.Variants.getNodeMap(nodeAddr)
       if isNullOrNil(headElement) or isNullOrNil(mapSize) then return nil end
 
-      local variantVector, vectorSize = getNodeVariantVector(nodeAddr)
+      local variantVector, vectorSize = GDD.Variants.getNodeVector(nodeAddr)
       local sizeOfVariant = GDDEFS.SIZEOF_VARIANT
 
       local mapElement = headElement
       local field = {}
       local index = 0
+      local readEntry = GDD.Readers.readNodeVariantEntry
+      local getNext = GDD.Containers.getNextMapElement
 
       repeat
-        local entry = readNodeVariantEntry(mapElement, variantVector, sizeOfVariant)
+        local entry = readEntry(mapElement, variantVector, sizeOfVariant)
 
         if entry.name == variantName then
           field.Name = entry.name
@@ -5572,36 +5639,36 @@
           return field
         end
 
-        mapElement = getNextMapElement(mapElement)
+        mapElement = getNext(mapElement)
         index = index+1
       until (mapElement == 0)
       return nil
     end
 
     --- nodeAddr and owner to append to
-    function iterateVecVarToAddr(nodeContext)
+    function GDD.Variants.iterateToAddr(nodeContext)
       local options =
       {
         bNeedStructOffset = false,
         requireGDScript = true
       };
-      iterateVectorVariants(nodeContext, GDEmitters.AddrEmitter, options);
+      GDD.Variants.iterate(nodeContext, GDEmitters.AddrEmitter, options);
     end
 
     --- nodeAddr and ownerStruct to append to
-    function iterateVecVarToStruct(nodeContext)
+    function GDD.Variants.iterateToStruct(nodeContext)
         local options =
         {
           bNeedStructOffset = true,
           requireGDScript = false
         }
-        iterateVectorVariants(nodeContext, GDEmitters.StructEmitter, options)
+        GDD.Variants.iterate(nodeContext, GDEmitters.StructEmitter, options)
     end
 
 
     --- returns a vector pointer and its size via
     ---@param nodeAddr number
-    function getNodeVariantVector(nodeAddr)
+    function GDD.Variants.getNodeVector(nodeAddr)
       -- if isNullOrNil(nodeAddr) then return; end
 
       local scriptInstance = readPointer( (nodeAddr or 0) + GDDEFS.GDSCRIPTINSTANCE)
@@ -5618,7 +5685,7 @@
 
     --- returns a VariantData's (hash) map head, tail and size via a nodeAddr
     ---@param nodeAddr number
-    function getNodeVariantMap(nodeAddr)
+    function GDD.Variants.getNodeMap(nodeAddr)
       assert(type(nodeAddr) == 'number', "nodeAddr should be a number, instead got: " .. type(nodeAddr))
 
       local scriptInstanceAddr = readPointer(nodeAddr + GDDEFS.GDSCRIPTINSTANCE)
@@ -5645,7 +5712,7 @@
       if GDDEFS.MAJOR_VER >= 4 then
         return mainElement, endElement, mapSize
       else
-        return getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
+        return GDD.Containers.getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
       end
     end
 
@@ -5654,7 +5721,7 @@
     ---@param index number
     ---@param varSize number
     ---@param bOffsetret boolean
-    function getVariantByIndex(vectorAddr, index, varSize)
+    function GDD.Variants.getByIndex(vectorAddr, index, varSize)
       if vectorAddr == nil then return end
       -- assert(type(vectorAddr) == 'number', "vector addr should be a number, instead got: " .. type(vectorAddr))
       -- assert((type(index) == 'number') and (index >= 0), "index should be a valid number, instead got: " .. type(index))
@@ -5664,7 +5731,7 @@
       -- end
 
       local variantType = readInteger(vectorAddr + varSize * index)
-      local offsetToValue = getVariantValueOffset(variantType)
+      local offsetToValue = GDD.Types.getVariantValueOffset(variantType)
 
       local offset = varSize * index + offsetToValue
       local variantAddr = getAddress(vectorAddr + offset)
@@ -5746,7 +5813,7 @@
       function GDVariant.NIL(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('NIL') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('NIL') )
         writeQword(v + 0x8, 0x0)
         return v
       end
@@ -5754,7 +5821,7 @@
       function GDVariant.BOOL(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('BOOL') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('BOOL') )
         writeByte(v + 0x8, value and 1 or 0)
         return v
       end
@@ -5762,7 +5829,7 @@
       function GDVariant.INT(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('INT') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('INT') )
         writeQword(v + 0x8, value) -- int64_t
         return v
       end
@@ -5770,7 +5837,7 @@
       function GDVariant.FLOAT(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('FLOAT') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('FLOAT') )
         writeDouble(v + 0x8, value)
         return v
       end
@@ -5778,7 +5845,7 @@
       function GDVariant.VECTOR2(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR2') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR2') )
         writeFloat(v + 0x8, value.x)
         writeFloat(v + 0xC, value.y)
         return v
@@ -5787,7 +5854,7 @@
       function GDVariant.VECTOR2I(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR2I') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR2I') )
         writeInteger(v + 0x8, value.x)
         writeInteger(v + 0xC, value.y)
         return v
@@ -5796,7 +5863,7 @@
       function GDVariant.RECT2(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('RECT2') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('RECT2') )
         writeFloat(v + 0x8, value.x)
         writeFloat(v + 0xC, value.y)
         writeFloat(v + 0x10, value.w)
@@ -5807,7 +5874,7 @@
       function GDVariant.RECT2I(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('RECT2I') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('RECT2I') )
         writeInteger(v + 0x8, value.x)
         writeInteger(v + 0xC, value.y)
         writeInteger(v + 0x10, value.w)
@@ -5818,7 +5885,7 @@
       function GDVariant.VECTOR3(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR3') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR3') )
         writeFloat(v + 0x8, value.x)
         writeFloat(v + 0xC, value.y)
         writeFloat(v + 0x10, value.z)
@@ -5828,7 +5895,7 @@
       function GDVariant.VECTOR3I(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR3I') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR3I') )
         writeInteger(v + 0x8, value.x)
         writeInteger(v + 0xC, value.y)
         writeInteger(v + 0x10, value.z)
@@ -5838,7 +5905,7 @@
       function GDVariant.VECTOR4(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR4') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR4') )
         writeFloat(v + 0x8, value.x)
         writeFloat(v + 0xC, value.y)
         writeFloat(v + 0x10, value.z)
@@ -5849,7 +5916,7 @@
       function GDVariant.VECTOR4I(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('VECTOR4I') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR4I') )
         writeInteger(v + 0x8, value.x)
         writeInteger(v + 0xC, value.y)
         writeInteger(v + 0x10, value.z)
@@ -5861,7 +5928,7 @@
         if isValidPointer(copy) then return copy end
         error("not implemented yet")
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('PLANE') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('PLANE') )
         return v
       end
 
@@ -5869,14 +5936,14 @@
         if isValidPointer(copy) then return copy end
         error("not implemented yet")
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('QUATERNION') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('QUATERNION') )
         return v
       end
 
       function GDVariant.COLOR(arena, value, copy)
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('COLOR') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('COLOR') )
         writeFloat(v + 0x8, value.r)
         writeFloat(v + 0xC, value.g)
         writeFloat(v + 0x10, value.b)
@@ -5888,7 +5955,7 @@
         if isValidPointer(copy) then return copy end
         error("not implemented yet")
         local v = arena:allocVariant()
-        writeInteger(v + 0x0, getGDTypeEnumFromName('RID') )
+        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('RID') )
         return v
       end
 
@@ -5897,7 +5964,7 @@
         if isValidPointer(copy) then return copy end
         -- if isNotNullOrNil(value) then error("object value invalid") end
         -- local v = arena:allocVariant()
-        -- writeInteger(v + 0x0, getGDTypeEnumFromName('OBJECT') )
+        -- writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('OBJECT') )
         -- writeInteger(v + 0x8, value.id)
         -- writePointer(v + 0x10, value.obj)
         return GDI.construct_object_variant( value )
@@ -6024,8 +6091,8 @@
       namespace = (namespace and namespace ~= '' and namespace .. '.') or ''
 
       local classFields = {}
-      if GDDEFS.MONO and checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
-        local GDSI = getNodeGDScriptInstance(nodeAddr) or 0x0
+      if GDDEFS.MONO and GDD.Objects.checkScriptType(nodeAddr) == GDDEFS.SCRIPT_TYPES["CS"] then
+        local GDSI = GDD.Objects.getNodeGDScriptInstance(nodeAddr) or 0x0
         local clrDataAddr = readPointer( readPointer( GDSI + GDDEFS.CLR_PTR ) )
         if isNullOrNil(clrDataAddr) then error('clr data invalid') end
         if DataSource.DotNetDataCollector==nil then
@@ -6051,7 +6118,7 @@
     ---@param nodeName string
     function GDAPI.gd_getDumpedNode(nodeName)
       assert(type(nodeName) == "string", 'Node name should be a string, instead got: ' .. type(nodeName))
-      requireOffsetsDefined()
+      GDD.Utils.requireOffsetsDefined()
 
       if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
 
@@ -6063,7 +6130,7 @@
 
     --- prints all gathered nodeNames
     function GDAPI.gd_printDumped()
-      requireOffsetsDefined()
+      GDD.Utils.requireOffsetsDefined()
 
       if (not GD_DUMP_MONITOR_NODES_ABS) or next(GD_DUMP_MONITOR_NODES_ABS) == nil then return; end
       
@@ -6091,7 +6158,7 @@
     function GDAPI.gd_dumpNodeToAddr(parentMemrec, nodeAddr, bDoConstants)
       assert(type(parentMemrec) == "userdata", 'Parent address has to be userdata, instead got: ' .. type(parentMemrec))
       assert(type(nodeAddr) == "number", 'Node address has to be a number, instead got: ' .. type(nodeAddr))
-      requireOffsetsDefined()
+      GDD.Utils.requireOffsetsDefined()
 
       debugPrefix = 1; -- reset debug prefix, don't use that while running Node threads
       dumpedNodes = {}; -- let's start from scratch for single node dumps | there might be race conditions, not a big issue for most cases
@@ -6100,7 +6167,7 @@
       local nodeNameStr = gd_getNodeName(nodeAddr)
       local gdscriptName = gd_getNodeNameFromScript(nodeAddr)
 
-      if not checkForGDScript(nodeAddr) then
+      if not GDD.Objects.checkForGDScript(nodeAddr) then
         -- sendDebugMessage('node '..nodeNameStr..' doesnt have GDScript/Inst')
         return
       end
@@ -6118,10 +6185,10 @@
       local nodeContext;
 
       newNodeSymStr = gdscriptName
-      GDSIsym = wrapBrackets( newNodeSymStr .. '+GDSCRIPTINSTANCE' )                                            -- [[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
-      variantVectorSym = wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
-      GDScriptSym = wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
-      GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
+      GDSIsym = GDD.Utils.wrapBrackets( newNodeSymStr .. '+GDSCRIPTINSTANCE' )                                            -- [[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]
+      variantVectorSym = GDD.Utils.wrapBrackets( GDSIsym .. '+VAR_VECTOR' )                                               -- [[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+VAR_VECTOR]
+      GDScriptSym = GDD.Utils.wrapBrackets( GDSIsym .. '+GDSCRIPT_REF' )                                                  -- [[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]
+      GDScriptConstMapSym = GDD.Utils.wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[nodename+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
 
       if bDoConstants and (GDDEFS.CONST_MAP ~= 0) then
         -- sendDebugMessage('constants for node: '..tostring(nodeNameStr) )
@@ -6137,19 +6204,19 @@
           return newConstRec
         end, parentMemrec)
         nodeContext = { addr = nodeAddr, name = nodeNameStr, gdname = gdscriptName, memrec = newConstRec, struct = nil, symbol = GDScriptConstMapSym }
-        iterateNodeConstToAddr(nodeContext)
+        GDD.Constants.iterateNodeToAddr(nodeContext)
 
       end
       -- sendDebugMessage('variants for node: '..tostring(nodeNameStr) )
 
       nodeContext = { addr = nodeAddr, name = nodeNameStr, gdname = gdscriptName, memrec = parentMemrec, struct = nil, symbol = variantVectorSym }
-      iterateVecVarToAddr(nodeContext)
+      GDD.Variants.iterateToAddr(nodeContext)
       debugPrefix = 1; -- reset debug prefix
     end
 
     --- dumps all the active objects to the Address List
     function GDAPI.gd_dumpAllNodesToAddr(thr)
-      requireOffsetsDefined()
+      GDD.Utils.requireOffsetsDefined()
 
       print('MAIN: DUMP PROCESS STARTED')
       debugPrefix = 1; -- reset debug prefix
@@ -6172,11 +6239,14 @@
         return parentRec
       end)
 
-      local mainNodeDict = getMainNodeDict()
+      local mainNodeDict = GDD.Objects.getMainNodeDict()
 
       local symbolToChildren = '[[pRoot]+CHILDREN]' -- .. '+' .. numtohexstr(GDDEFS.CHILDREN)
       local newNodeSymStr, GDSIsym, variantVectorSym, GDScriptSym, GDScriptConstMapSym
       local nodeContext;
+      local wrapBrackets = GDD.Utils.wrapBrackets
+      local iterateConstants = GDD.Constants.iterateNodeToAddr
+      local iterateVariants = GDD.Variants.iterateToAddr
 
       for key, value in pairs(mainNodeDict) do
         newNodeSymStr = symbolToChildren .. '+' .. numtohexstr(value.index) .. "*" .. numtohexstr(GDDEFS.PTRSIZE) -- [[pRoot]+CHILDREN]+i*ptrsize
@@ -6186,7 +6256,7 @@
         GDScriptConstMapSym = wrapBrackets( GDScriptSym .. '+CONST_MAP' )                                         -- [[[[[[[pRoot]+CHILDREN]+i*ptrsize]+GDSCRIPTINSTANCE]+GDSCRIPT_REF]+CONST_MAP]
 
         value.MEMREC = synchronize(function(value, key, parentRec)
-          local newNodeMemRec = addMemRecTo(key, value.PTR, getCETypeFromGD(value.TYPE), parentRec)
+          local newNodeMemRec = GDD.Utils.addMemRecTo(key, value.PTR, GDD.Types.getCETypeFromGD(value.TYPE), parentRec)
           newNodeMemRec.Options = '[moHideChildren, moAllowManualCollapseAndExpand, moManualExpandCollapse]'
           return newNodeMemRec
         end, value, key, parentRec)
@@ -6206,12 +6276,12 @@
             return newConstRec
           end, value)
           nodeContext = { addr = value.PTR, name = value.NAME, gdname = value.SCRIPTNAME, memrec = newConstRec, struct = nil, symbol = GDScriptConstMapSym }
-          iterateNodeConstToAddr(nodeContext)
+          iterateConstants(nodeContext)
         end
 
         sendDebugMessage('MAIN: loop. STEP: VARIANTS for: ' .. key)
         nodeContext = { addr = value.PTR, name = value.NAME, gdname = value.SCRIPTNAME, memrec = value.MEMREC, struct = nil, symbol = variantVectorSym }
-        iterateVecVarToAddr(nodeContext)
+        iterateVariants(nodeContext)
       end
 
       debugPrefix = 1;
@@ -6221,129 +6291,67 @@
 
     function GDAPI.gd_initDumper(config)
       -- init global
-      initGDDefs()
-
-      local ceDir = getCheatEngineDir() or ''
+      GDD.Config.initDefs()
 
       -- retrieve the offset getted function
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDHardOffsets.lua]] )
-      if ok then
-        getStoredOffsetsFromVersion = result.install( { sendDebugMessage = sendDebugMessage, } )
-      else
-        -- portable, we get a module object
-        getStoredOffsetsFromVersion = loadScriptFromTable( "GDOff" ).install( { sendDebugMessage = sendDebugMessage, } )
-      end
+      getStoredOffsetsFromVersion = GDD.Modules.requireFresh(moduleSpecs.HardOffsets).install(GDD, sendDebugMessage)
 
       -- retrieve the signatures
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDSignatures.lua]] )
-      if ok then
-        GDAOB = result.install( {} )
-      else
-        GDAOB = loadScriptFromTable( "GDSig" ).install( {} )
-      end
+      GDAOB = GDD.Modules.requireFresh(moduleSpecs.Signatures).install(GDD)
 
       -- essential version definition
-      initGDVersion(config)
+      GDD.Config.initVersion(config)
 
       -- define type conversion helpers via module
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDTypes.lua]] )
-      if ok then
-        result.install( {GDDEFS=GDDEFS} )
-      else
-        loadScriptFromTable( "GDT" ).install( {GDDEFS=GDDEFS} )
-      end
+      GDD.Modules.requireFresh(moduleSpecs.Types).install(GDD)
 
       -- build the correct disassembler profile inside the module
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] )
-      local GDFuncDisasm
-      local dependencyContext = 
-        {
-          GDDEFS = GDDEFS,
-          addStructureElem = addStructureElem,
-          addLayoutStructElem = addLayoutStructElem,
-          getGDTypeName = getGDTypeName,
-          iterateFuncConstantsToStruct = iterateFuncConstantsToStruct,
-          iterateFuncGlobalsToStruct = iterateFuncGlobalsToStruct,
-          sendDebugMessage = sendDebugMessage,
-        }
-      if ok then
-        result.install(dependencyContext)
-      else
-        loadScriptFromTable( "GDFDasm" ).install(dependencyContext)
-      end
+      GDD.Modules.requireFresh(moduleSpecs.FunctionDisassembler).install(GDD, sendDebugMessage)
 
       -- initialize structure walker for non-standalone
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDStructWalker.lua]] )
-      local dependencyContext =
-        {
-          GDDEFS = GDDEFS,
-          readUTFString = readUTFString,
-          getStringNameStr = getStringNameStr,
-          sendDebugMessage = sendDebugMessage,
-          getSectionBounds = getSectionBounds,
-          getMainModuleInfo = getMainModuleInfo,
-          tryRegSceneTree = tryRegSceneTree,
-          setSTtoRootOffset = setSTtoRootOffset,
-        }
-      if ok then
-        result.install(dependencyContext)
-      end
+      local structWalker = GDD.Modules.loadOptionalLocal(moduleSpecs.StructWalker)
+      if structWalker then structWalker.install(GDD, sendDebugMessage) end
 
       -- define version and offsets
-      defineGDOffsets(config)
+      GDD.Config.defineOffsets(config)
       gdOffsetsDefined = true
 
       -- register symbols for pointer resolution
-      registerGDSymbols()
+      GDD.Config.registerSymbols()
 
       -- try finding SceneTree and Viewport/Window
-      if tryRegSceneTree() and setSTtoRootOffset() then registerSymbol('pRoot', '[pSceneTree]+oSTtoRoot', false) end
+      if GDD.Root.tryRegisterSceneTree() and GDD.Root.setSceneTreeRootOffset() then registerSymbol('pRoot', '[pSceneTree]+oSTtoRoot', false) end
 
       -- check if UTF32LE string type reged, otherwise define it
-      checkGDStringType()
+      GDD.Types.checkGDStringType()
 
       -- disable show on print
-      fuckoffPrint()
+      GDD.Utils.disablePrintPopup()
 
       -- exposing relevant API
       if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1 then
-        if findGDExtensionInterfacePtr() then GDI.Extension = GDExtendedInterface end
+        if GDD.Script.findGDExtensionInterfacePtr() then GDI.Extension = GDExtendedInterface end
       end
       if GDDEFS.MAJOR_VER == 3 then -- doesn't exist in 2.x
-        if findGDNativeAPIStruct() then GDI.GDNative = GDNativeInterface end
+        if GDD.Script.findGDNativeAPIStruct() then GDI.GDNative = GDNativeInterface end
       end
 
       -- find GDScriptFunctions::call()
-      if not findGDVMCallPtr() then sendDebugMessage('[VM_CALL] lookup failed.') end
+      if not GDD.Functions.findVMCallPtr() then sendDebugMessage('[VM_CALL] lookup failed.') end
 
       -- find mono get object
       if GDDEFS.MONO and GDDEFS.MAJOR_VER < 4 then 
-        if not findMonoGetObject() then sendDebugMessage('[MONO_GETOBJ] lookup failed.') end
+        if not GDD.Script.findMonoGetObject() then sendDebugMessage('[MONO_GETOBJ] lookup failed.') end
       end
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDNodeMonitor.lua]] )
-      local dependencyContext =
-        {
-          GDDEFS = GDDEFS,
-          readUTFString = readUTFString,
-          getGDTypeEnumFromName = getGDTypeEnumFromName,
-          getMainModuleInfo = getMainModuleInfo,
-          getSectionBounds = getSectionBounds,
-          gd_getNodeNameFromScript = GDAPI.gd_getNodeNameFromScript
-        }
-
-      if ok then
-        result.install(dependencyContext)
-      else
-        loadScriptFromTable( "GDNM" ).install(dependencyContext)
-      end
+      GDD.Modules.requireFresh(moduleSpecs.NodeMonitor).install(GDD)
 
       -- it will spin from now on
       GDDEFS.Monitor:init()
 
     end
-    godotRegisterPreinit()
+    GDD.Preinit.register()
 
     if (getCEVersion() < 7.7) then ShowMessage('Please update CE to 7.7 or newer') end
 
@@ -6371,6 +6379,7 @@
   gd_revertScript = GDAPI.gd_revertScript
   gd_reloadScriptInstance = GDAPI.gd_reloadScriptInstance
   gd_executeFunction = GDAPI.executeGDFunction
+  gd_callp = GDAPI.gd_callp
   gd_callFunctionFromNode = GDAPI.gd_callFunctionFromNode
   gd_patchFunction = GDAPI.gd_patchFunction
   gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode

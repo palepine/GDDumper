@@ -2,7 +2,7 @@ local Module = {}
 
 -- TODO: shared helpers/globals
 
-function Module.install(contextTable)
+function Module.install(GDD)
 
   return
     {
