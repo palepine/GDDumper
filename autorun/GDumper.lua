@@ -2813,6 +2813,7 @@
     --- inits the GDDEFS object
     function GDD.Config.initDefs()
       GDDEFS = {} -- for now let it be reinitialized here
+      GDD.Config.Defs = GDDEFS
 
       GDDEFS.SCRIPT_TYPES =
         {
@@ -6292,44 +6293,23 @@
       GDD.Config.initDefs()
 
       -- retrieve the offset getted function
-      getStoredOffsetsFromVersion = GDD.Modules.requireFresh(moduleSpecs.HardOffsets).install({ sendDebugMessage = sendDebugMessage, })
+      getStoredOffsetsFromVersion = GDD.Modules.requireFresh(moduleSpecs.HardOffsets).install(GDD, sendDebugMessage)
 
       -- retrieve the signatures
-      GDAOB = GDD.Modules.requireFresh(moduleSpecs.Signatures).install({})
+      GDAOB = GDD.Modules.requireFresh(moduleSpecs.Signatures).install(GDD)
 
       -- essential version definition
       GDD.Config.initVersion(config)
 
       -- define type conversion helpers via module
-      GDD.Modules.requireFresh(moduleSpecs.Types).install({ GDDEFS = GDDEFS })
+      GDD.Modules.requireFresh(moduleSpecs.Types).install(GDD)
 
       -- build the correct disassembler profile inside the module
-      local dependencyContext = 
-        {
-          GDDEFS = GDDEFS,
-          addStructureElem = GDD.Structures.addStructureElem,
-          addLayoutStructElem = GDD.Structures.addLayoutStructElem,
-          getGDTypeName = GDD.Types.getGDTypeName,
-          iterateFuncConstantsToStruct = GDD.Functions.iterateConstantsToStruct,
-          iterateFuncGlobalsToStruct = GDD.Functions.iterateGlobalsToStruct,
-          sendDebugMessage = sendDebugMessage,
-        }
-      GDD.Modules.requireFresh(moduleSpecs.FunctionDisassembler).install(dependencyContext)
+      GDD.Modules.requireFresh(moduleSpecs.FunctionDisassembler).install(GDD, sendDebugMessage)
 
       -- initialize structure walker for non-standalone
       local structWalker = GDD.Modules.loadOptionalLocal(moduleSpecs.StructWalker)
-      local dependencyContext =
-        {
-          GDDEFS = GDDEFS,
-          readUTFString = GDD.Strings.readUTFString,
-          getStringNameStr = GDD.Strings.getStringNameStr,
-          sendDebugMessage = sendDebugMessage,
-          getSectionBounds = GDD.Memory.getSectionBounds,
-          getMainModuleInfo = GDD.Memory.getMainModuleInfo,
-          tryRegSceneTree = GDD.Root.tryRegisterSceneTree,
-          setSTtoRootOffset = GDD.Root.setSceneTreeRootOffset,
-        }
-      if structWalker then structWalker.install(dependencyContext) end
+      if structWalker then structWalker.install(GDD, sendDebugMessage) end
 
       -- define version and offsets
       GDD.Config.defineOffsets(config)
@@ -6364,16 +6344,7 @@
       end
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
-      local dependencyContext =
-        {
-          GDDEFS = GDDEFS,
-          readUTFString = GDD.Strings.readUTFString,
-          getGDTypeEnumFromName = GDD.Types.getGDTypeEnumFromName,
-          getMainModuleInfo = GDD.Memory.getMainModuleInfo,
-          getSectionBounds = GDD.Memory.getSectionBounds,
-          gd_getNodeNameFromScript = GDAPI.gd_getNodeNameFromScript
-        }
-      GDD.Modules.requireFresh(moduleSpecs.NodeMonitor).install(dependencyContext)
+      GDD.Modules.requireFresh(moduleSpecs.NodeMonitor).install(GDD)
 
       -- it will spin from now on
       GDDEFS.Monitor:init()

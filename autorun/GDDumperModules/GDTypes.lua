@@ -5,8 +5,8 @@ local Module =
 
 local LATEST_SEMVER_SUPPORTED = "4.7" -- Update me to the latest supported version when support is provided
 
-function Module.install(contextTable)
-  local GDDEFS = contextTable.GDDEFS
+function Module.install(GDD)
+  local GDDEFS = GDD.Config.Defs
 
   function Module.Profile.installVersionFallback(tab, lastVersion)
     local metatable = 

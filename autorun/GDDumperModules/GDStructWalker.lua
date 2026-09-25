@@ -60,7 +60,7 @@ local function nextAlignedOffset(offset, alignment)
   return offset
 end
 
-function Module.install(contextTable)
+function Module.install(GDD, sendDebugMessage)
   -- TODO: extract certain code to functions
 
   local Walker =
@@ -74,15 +74,14 @@ function Module.install(contextTable)
       Public = {},
     }
 
-  local GDDEFS = contextTable.GDDEFS
-  local getMainModuleInfo = contextTable.getMainModuleInfo
-  local getSectionBounds = contextTable.getSectionBounds
-  local sendDebugMessage = contextTable.sendDebugMessage
-  local getStringNameStr = contextTable.getStringNameStr
-  local readUTFString = contextTable.readUTFString
+  local GDDEFS = GDD.Config.Defs
+  local getMainModuleInfo = GDD.Memory.getMainModuleInfo
+  local getSectionBounds = GDD.Memory.getSectionBounds
+  local getStringNameStr = GDD.Strings.getStringNameStr
+  local readUTFString = GDD.Strings.readUTFString
 
-  local tryRegSceneTree = contextTable.tryRegSceneTree
-  local setSTtoRootOffset = contextTable.setSTtoRootOffset
+  local tryRegSceneTree = GDD.Root.tryRegisterSceneTree
+  local setSTtoRootOffset = GDD.Root.setSceneTreeRootOffset
 
   local MAIN_MODULE_INFO = getMainModuleInfo()
   local TEXT_SECTION_INFO = getSectionBounds(".text")

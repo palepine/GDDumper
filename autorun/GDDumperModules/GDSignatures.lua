@@ -1,6 +1,6 @@
 local Module = {}
 
-function Module.install(contextTable)
+function Module.install(GDD)
 
   local SceneTreeAOB = {}
     table.insert(SceneTreeAOB, { sig = "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?", toRel = 3 } )

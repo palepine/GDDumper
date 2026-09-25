@@ -21,10 +21,10 @@ local OffsetProfiles = Module.Profiles
   OffsetProfiles[1] = {}
 -- MAJOR DECLATIONS END
 
-function Module.install(contextTable)
+function Module.install(GDD, sendDebugMessage)
 
+  local GDDEFS = GDD.Config.Defs
   local PTRSIZE = targetIs64Bit() and 0x8 or 0x4
-  local sendDebugMessage = contextTable.sendDebugMessage
   -- OFFSET DEFINITION
     OffsetProfiles[4][7] =
       {

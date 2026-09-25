@@ -7,16 +7,16 @@ https://antumce.github.io/CE_LDoc/classes/Event.html
 https://antumce.github.io/CE_LDoc/classes/CriticalSection.html
 ]]
 
-function Module.install(contextTable)
+function Module.install(GDD)
 
   -- todo: watch visited dictionaries/arrays?
-  local readUTFString = contextTable.readUTFString
-  local getGDTypeEnumFromName = contextTable.getGDTypeEnumFromName
-  local getMainModuleInfo = contextTable.getMainModuleInfo
-  local getSectionBounds = contextTable.getSectionBounds
-  local gd_getNodeNameFromScript = contextTable.gd_getNodeNameFromScript
+  local readUTFString = GDD.Strings.readUTFString
+  local getGDTypeEnumFromName = GDD.Types.getGDTypeEnumFromName
+  local getMainModuleInfo = GDD.Memory.getMainModuleInfo
+  local getSectionBounds = GDD.Memory.getSectionBounds
+  local gd_getNodeNameFromScript = GDD.API.gd_getNodeNameFromScript
 
-  local GDDEFS = contextTable.GDDEFS
+  local GDDEFS = GDD.Config.Defs
   -- to avoid table access overhead
   local SCRIPT_INSTANCE = GDDEFS.GDSCRIPTINSTANCE
   local SCRIPTREF = GDDEFS.GDSCRIPT_REF

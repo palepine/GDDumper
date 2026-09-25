@@ -8,12 +8,11 @@ local function numtohexstr(num)
   return ('%X'):format(num or -1)
 end
 
-function Module.install(contextTable)
-  local GDDEFS = contextTable.GDDEFS
-  local addStructureElem = contextTable.addStructureElem
-  local addLayoutStructElem = contextTable.addLayoutStructElem
-  local getGDTypeName = contextTable.getGDTypeName
-  local sendDebugMessage = contextTable.sendDebugMessage
+function Module.install(GDD, sendDebugMessage)
+  local GDDEFS = GDD.Config.Defs
+  local addStructureElem = GDD.Structures.addStructureElem
+  local addLayoutStructElem = GDD.Structures.addLayoutStructElem
+  local getGDTypeName = GDD.Types.getGDTypeName
   local GDF =
     {
       Profile = {},
