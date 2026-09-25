@@ -1,4 +1,4 @@
--- This script was created by palepine. Support me: https://ko-fi.com/vesperpallens
+-- This script was created by palepine. Support me: https://www.patreon.com/c/palepine/membership
 -- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code initially.
 -- Source code on github: https://github.com/palepine/GDDumper
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TODOS
@@ -860,10 +860,10 @@
         dumpMemrec.appendToEntry(mainMemrec)
 
         local supportPalique = addrList.createMemoryRecord()
-        supportPalique.Description = 'Support the development & author: ko-fi.com/vesperpallens'
+        supportPalique.Description = 'Support the development & author: patreon.com/c/palepine/membership'
         supportPalique.Type = vtAutoAssembler
         supportPalique.Color = 0x8F379F
-        supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://ko-fi.com/vesperpallens")\n[DISABLE]'
+        supportPalique.Script = '{$lua}\n[ENABLE]\nshellExecute("https://www.patreon.com/c/palepine/membership")\n[DISABLE]'
       end
 
       -- attaches the script to the table
@@ -971,7 +971,7 @@
           -- addCustomMenuButtonTo( gdMenuItem, 'Addr Lookup', GDD.GUI.addressLookupSwitch )
           addCustomMenuButtonTo(gdMenuItem, 'Use stored offsets', GDD.GUI.storedOffsetsSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'API doc' , function() shellExecute("https://github.com/palepine/GDDumper/blob/main/docs/GDUMPER_API.MD") end)
-          addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://ko-fi.com/vesperpallens") end)
+          addCustomMenuButtonTo(gdMenuItem, 'Support development', function() shellExecute("https://www.patreon.com/c/palepine/membership") end)
           -- addCustomMenuButtonTo( gdMenuItem, 'Reload from file', GDD.GUI.loadDumperScriptFromFile )
         end
       end
