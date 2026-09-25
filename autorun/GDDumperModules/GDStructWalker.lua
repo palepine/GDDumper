@@ -1,7 +1,7 @@
 local Module = {}
 -- That's a debug module which's optional and used only to guess offsets to be recorded in the hardoffset module, at least for stable engine versions
 -- obviously enough, for this to work, the root 
--- the probing implementation is likely to provide report false results for it's based on scoring
+-- the probing implementation is likely to report false results for it's based on scoring
 
 local function isNullOrNil(toCheck)
   return toCheck == nil or toCheck == 0
@@ -63,6 +63,17 @@ end
 function Module.install(contextTable)
   -- TODO: extract certain code to functions
 
+  local Walker =
+    {
+      Helpers = {},
+      Evidence = {},
+      Assume = {},
+      Probe = {},
+      Validation = {},
+      Orchestration = {},
+      Public = {},
+    }
+
   local GDDEFS = contextTable.GDDEFS
   local getMainModuleInfo = contextTable.getMainModuleInfo
   local getSectionBounds = contextTable.getSectionBounds
@@ -101,14 +112,14 @@ function Module.install(contextTable)
 
   -- HELPERS
     
-    local function isInsideSectionRange(addr, sectionInfo)
+    function Walker.Helpers.isInsideSectionRange(addr, sectionInfo)
       if addr == nil or addr == 0 then return false end
       if addr > sectionInfo.startAddress and sectionInfo.endAddress > addr then return true end
     end
 
-    local function isBSSData(addr)
+    function Walker.Helpers.isBSSData(addr)
       if isNullOrNil(addr) then return false end
-      if isInsideSectionRange(addr, BSS_SECTION_INFO) then
+      if Walker.Helpers.isInsideSectionRange(addr, BSS_SECTION_INFO) then
         return true
       end
       return false
@@ -120,6 +131,7 @@ function Module.install(contextTable)
       if MAIN_MODULE_INFO.moduleStart < VTAddr and VTAddr < MAIN_MODULE_INFO.moduleEnd then
         -- iterate a few pointers and confirm if they are executable
         local pmethod = readPointer(VTAddr) -- just check the first
+        local isInsideSectionRange = Walker.Helpers.isInsideSectionRange
         for i = 0, 3 do
           local pmethod = readPointer(VTAddr + GDDEFS.PTRSIZE * i)
           if not isInsideSectionRange(pmethod, TEXT_SECTION_INFO) then
@@ -141,7 +153,7 @@ function Module.install(contextTable)
     end
 
 
-    local function getMainNodeTable()
+    function Walker.Helpers.getMainNodeTable()
       local childrenAddr = readPointer( viewport + assumedOffsets.CHILDREN )
       local childrenSize
       if GDDEFS.MAJOR_VER >= 4 then
@@ -160,13 +172,14 @@ function Module.install(contextTable)
       return nodeTable
     end
 
-    local function isValidVariantType(typeId)
+    function Walker.Helpers.isValidVariantType(typeId)
       local maxType = GDDEFS.VARIANT_TYPE_PROFILE.enums.VARIANT_MAX
       return type(typeId) == "number" and typeId >= 0 and typeId < maxType
     end
 
-    local function validateVariantStride(vectorAddr, vectorSize)
+    function Walker.Helpers.validateVariantStride(vectorAddr, vectorSize)
       if vectorSize <= 0 then return false end
+      local isValidVariantType = Walker.Helpers.isValidVariantType
       for index = 0, vectorSize - 1 do
         local typeId = readInteger(vectorAddr + index * sizeOfVariant)
         if not isValidVariantType(typeId) then return false end
@@ -174,13 +187,13 @@ function Module.install(contextTable)
       return true
     end
 
-    local function makeIsPassableVariantValue( currentElem, offsetToType )
+    function Walker.Helpers.makeIsPassableVariantValue( currentElem, offsetToType )
       -- closure factory
       local hits = 0 -- let's catch 2, ok?
 
       return function(currentElem, offsetToType) -- closure
         local variantType = readInteger(currentElem + offsetToType)
-        if not isValidVariantType(variantType) then return false end
+        if not Walker.Helpers.isValidVariantType(variantType) then return false end
 
         local typeName = GDDEFS.VARIANT_TYPE_PROFILE.names[variantType]
         local offsetToValue = (typeName == 'OBJECT') and 0x10 or 0x8
@@ -207,7 +220,7 @@ function Module.install(contextTable)
       end -- closure end
     end
 
-    local function checkIfGDFunction( funcAddr, HMFuncSNameAddr )
+    function Walker.Helpers.checkIfGDFunction( funcAddr, HMFuncSNameAddr )
       local funcStringNameAddr, funcResStringNameAddr, funcCodeAddr, funcCodeLastIdx, lastOpcode
       if GDDEFS.MAJOR_VER <= 3 or GDDEFS.VERSION_STRING == "4.1" then
         funcResStringNameAddr = readPointer(funcAddr) -- StringName source at 0x0;
@@ -225,7 +238,7 @@ function Module.install(contextTable)
       return true
     end
 
-    local function reportFailedOffsets()
+    function Walker.Helpers.reportFailedOffsets()
       if not assumedOffsets.CHILDREN then sendDebugMessage('[WALK] CHILDREN - FAIL') end
       if not assumedOffsets.OBJ_STRING_NAME then sendDebugMessage('[WALK] OBJ STRINGNAME - FAIL') end
 
@@ -246,7 +259,7 @@ function Module.install(contextTable)
 
     end
 
-    local function getNodeChildrenInfo(nodeAddr)
+    function Walker.Helpers.getNodeChildrenInfo(nodeAddr)
       local childrenAddr = readPointer(nodeAddr + assumedOffsets.CHILDREN)
       if isNullOrNil(childrenAddr) then return nil, nil; end
 
@@ -260,7 +273,7 @@ function Module.install(contextTable)
       return childrenAddr, childrenSize
     end
 
-    local function offsetCount()
+    function Walker.Helpers.offsetCount()
       local count = 0
 
       for _, value in pairs(assumedOffsets) do
@@ -270,7 +283,7 @@ function Module.install(contextTable)
       return count
     end
 
-    local function allOffsetsResolved()
+    function Walker.Helpers.allOffsetsResolved()
       if not assumedOffsets.CHILDREN then return false end
       if not assumedOffsets.OBJ_STRING_NAME then return false end
       if not assumedOffsets.SCRIPT_INSTANCE then return false end
@@ -292,7 +305,7 @@ function Module.install(contextTable)
       return true
     end
 
-    local function makeNodeSample(nodeAddr)
+    function Walker.Helpers.makeNodeSample(nodeAddr)
       -- add node addr, script instance and script ref
       local sample = { nodeAddr = nodeAddr, }
 
@@ -308,11 +321,11 @@ function Module.install(contextTable)
       return sample
     end
 
-    local function clearAssumedOffsets()
+    function Walker.Helpers.clearAssumedOffsets()
       for key in pairs(assumedOffsets) do assumedOffsets[key] = nil end
     end
 
-    local function formatOffsets()
+    function Walker.Helpers.formatOffsets()
       return
         ("\nCHILDREN: 0x%X\n" ..
         "OBJ_STRING_NAME: 0x%X\n" ..
@@ -344,11 +357,11 @@ function Module.install(contextTable)
         )
     end
 
-    local function printCurrentOffsets()
-      sendDebugMessage( formatOffsets() )
+    function Walker.Helpers.printCurrentOffsets()
+      sendDebugMessage( Walker.Helpers.formatOffsets() )
     end
 
-    local function resolveRootSymbol()
+    function Walker.Helpers.resolveRootSymbol()
       -- we need it for root checks
       if GDDEFS.MAJOR_VER >= 4 then
 
@@ -395,14 +408,14 @@ function Module.install(contextTable)
 
     local evidence = {}
 
-    local function makeCandidate(offset, score, extra)
+    function Walker.Helpers.makeCandidate(offset, score, extra)
       local candidate = extra or {}
       candidate.offset = offset
       candidate.score = score or 1
       return candidate
     end
 
-    local function evidenceKey(candidate)
+    function Walker.Evidence.evidenceKey(candidate)
       local key = numtohexstr(candidate.offset)
 
       if candidate.sizeOffset then
@@ -412,12 +425,12 @@ function Module.install(contextTable)
       return key
     end
 
-    local function recordCandidate(category, candidate, sample)
+    function Walker.Evidence.recordCandidate(category, candidate, sample)
       if not candidate or not candidate.offset then return end
 
       evidence[category] = evidence[category] or {}
 
-      local key = evidenceKey(candidate)
+      local key = Walker.Evidence.evidenceKey(candidate)
       local entry = evidence[category][key]
 
       if not entry then
@@ -445,7 +458,7 @@ function Module.install(contextTable)
       end
     end
 
-    local function countTableEntries(values)
+    function Walker.Helpers.countTableEntries(values)
       local count = 0
       for _ in pairs(values or {}) do
         count = count + 1
@@ -453,11 +466,12 @@ function Module.install(contextTable)
       return count
     end
 
-    local function chooseBestCandidate(category, options)
+    function Walker.Evidence.chooseBestCandidate(category, options)
       options = options or {}
 
       local best
       local candidates = evidence[category] or {}
+      local countTableEntries = Walker.Helpers.countTableEntries
 
       for _, entry in pairs(candidates) do
         local scriptHits = countTableEntries(entry.scripts)
@@ -478,11 +492,12 @@ function Module.install(contextTable)
       return best and best.candidate or nil
     end
 
-    local function collectNodeSamples(rootNodes)
+    function Walker.Evidence.collectNodeSamples(rootNodes)
       local queue = {}
       local queueIndex = 1
       local visited = {}
       local samples = {}
+      local getNodeChildrenInfo = Walker.Helpers.getNodeChildrenInfo
 
       -- root children first
       for _, nodeAddr in ipairs(rootNodes) do
@@ -527,7 +542,7 @@ function Module.install(contextTable)
       return samples
     end
 
-    local function enrichScriptSamples(nodeSamples)
+    function Walker.Evidence.enrichScriptSamples(nodeSamples)
       local seenScripts = {}
       local uniqueScriptCount = 0
 
@@ -561,7 +576,7 @@ function Module.install(contextTable)
       return nodeSamples
     end
 
-    local function splitSamples(samples)
+    function Walker.Evidence.splitSamples(samples)
       local training = {}
       local holdout = {}
 
@@ -576,11 +591,11 @@ function Module.install(contextTable)
       return training, holdout
     end
 
-    local function clearEvidence()
+    function Walker.Evidence.clearEvidence()
       evidence = {}
     end
 
-    local function candidateConflictsWithCommittedMap(candidate, category)
+    function Walker.Evidence.candidateConflictsWithCommittedMap(candidate, category)
       if category ~= "VARIANT_MAP" and candidate.offset == assumedOffsets.VARIANT_MAP then
         return true
       end
@@ -596,9 +611,11 @@ function Module.install(contextTable)
       return false
     end
 
-    local function recordFilteredCandidates(category, candidates, sample)
+    function Walker.Evidence.recordFilteredCandidates(category, candidates, sample)
+      local conflicts = Walker.Evidence.candidateConflictsWithCommittedMap
+      local recordCandidate = Walker.Evidence.recordCandidate
       for _, candidate in ipairs(candidates or {}) do
-        if candidateConflictsWithCommittedMap(candidate, category) then
+        if conflicts(candidate, category) then
           goto continue
         end
 
@@ -611,7 +628,7 @@ function Module.install(contextTable)
   -- EVIDENCE-BASED HELPERS END
 
   -- CHILDREN START
-    local function assumeChildrenOffset()
+    function Walker.Assume.childrenOffset()
       local CHILDREN;
       local childrenSize, childrenAddr, nodeAddr;
       local found = false
@@ -655,7 +672,7 @@ function Module.install(contextTable)
   -- CHILDREN END
 
   -- OBJ NAME START
-    local function assumeObjNameOffset()
+    function Walker.Assume.objectNameOffset()
       local OBJ_STRING_NAME, nodenameAddr;
       local found = false
 
@@ -687,7 +704,7 @@ function Module.install(contextTable)
   -- OBJ NAME END
 
   -- SCRIPT INSTANCE START
-    local function assumeScriptInstanceOffset(nodeAddr)
+    function Walker.Assume.scriptInstanceOffset(nodeAddr)
       if assumedOffsets.SCRIPT_INSTANCE then return assumedOffsets.SCRIPT_INSTANCE end
       if isNullOrNil(nodeAddr) then return end
 
@@ -736,7 +753,7 @@ function Module.install(contextTable)
 
   -- VARIANT VECTOR START
 
-    local function assumeVariantVector(nodeAddr)
+    function Walker.Assume.variantVector(nodeAddr)
       if assumedOffsets.VARIANT_VECTOR then return assumedOffsets.VARIANT_VECTOR end
       if not assumedOffsets.VARIANT_MAP then return end
 
@@ -761,14 +778,14 @@ function Module.install(contextTable)
         VARIANT_VECTOR = i * GDDEFS.PTRSIZE
 
         vectorAddr = readPointer( scriptInst + VARIANT_VECTOR )
-        if isNullOrNil(vectorAddr) or not isValidVariantType( readInteger(vectorAddr) ) then goto continue end
+        if isNullOrNil(vectorAddr) or not Walker.Helpers.isValidVariantType( readInteger(vectorAddr) ) then goto continue end
 
         local sizeFound = false
         -- validate the vector size and vectot itself via the size
         for j=1, 5 do
           VARIANT_VECTOR_SIZE = j * 4
           local vectorSize = readInteger( vectorAddr - VARIANT_VECTOR_SIZE )
-          if isNotNullOrNil(vectorSize) and vectorSize < 2000 and vectorMapSize == vectorSize and validateVariantStride(vectorAddr, vectorSize) then
+          if isNotNullOrNil(vectorSize) and vectorSize < 2000 and vectorMapSize == vectorSize and Walker.Helpers.validateVariantStride(vectorAddr, vectorSize) then
             sizeFound= true
             break
           end
@@ -793,7 +810,7 @@ function Module.install(contextTable)
 
     end
 
-    local function probeVariantVectorCandidates(sample, mapCandidate)
+    function Walker.Probe.variantVectorCandidates(sample, mapCandidate)
       local results = {}
 
       if not mapCandidate then return results end
@@ -812,11 +829,11 @@ function Module.install(contextTable)
           if isNullOrNil(vectorSize) then goto size_continue end
           if vectorSize > 2000 then goto size_continue end
           if vectorSize ~= mapCandidate.mapSize then goto size_continue end
-          if not validateVariantStride(vectorAddr, vectorSize) then
+          if not Walker.Helpers.validateVariantStride(vectorAddr, vectorSize) then
             goto size_continue
           end
 
-          table.insert( results, makeCandidate( vectorOffset, 5, { sizeOffset=sizeOffset, vectorAddr=vectorAddr, vectorSize=vectorSize, mapOffset=mapCandidate.offset, } ) )
+          table.insert( results, Walker.Helpers.makeCandidate( vectorOffset, 5, { sizeOffset=sizeOffset, vectorAddr=vectorAddr, vectorSize=vectorSize, mapOffset=mapCandidate.offset, } ) )
 
           ::size_continue::
         end
@@ -831,7 +848,7 @@ function Module.install(contextTable)
 
   -- SCRIPT NAME START
 
-    local function assumeScriptNameOffset(scriptAddr)
+    function Walker.Assume.scriptNameOffset(scriptAddr)
       if assumedOffsets.SCRIPT_NAME then return assumedOffsets.SCRIPT_NAME end
       local SCRIPT_NAME, scriptnameAddr;
       local found = false
@@ -859,7 +876,7 @@ function Module.install(contextTable)
 
     end
 
-    local function probeScriptNameCandidates( sample )
+    function Walker.Probe.scriptNameCandidates( sample )
       local results = {}
 
       for i=1, (0x300 / GDDEFS.PTRSIZE) do
@@ -869,7 +886,7 @@ function Module.install(contextTable)
         if isNullOrNil(stringAddr) then goto continue end
         if readUTFString(stringAddr, 4) ~= "res:" then goto continue end
 
-        table.insert(results, makeCandidate(offset, 5))
+        table.insert(results, Walker.Helpers.makeCandidate(offset, 5))
 
         ::continue::
       end
@@ -881,7 +898,7 @@ function Module.install(contextTable)
 
   -- VARIANT MAP START
 
-    local function assumeVariantMapOffset(scriptAddr)
+    function Walker.Assume.variantMapOffset(scriptAddr)
       if assumedOffsets.VARIANT_MAP then return assumedOffsets.VARIANT_MAP end
       local VARIANT_MAP, VARIANT_MAP_SIZE
       local endmapAddr, leftAddr, rightAddr, color, elementIndex;
@@ -918,7 +935,7 @@ function Module.install(contextTable)
             isNullOrNil(hashAddr) or
             isNullOrNil(headAddr) or
             tailAddr == nil or -- can be 1-sized
-            isNullOrNil(capacity) or 
+            isNullOrNil(capacity) or
             isNullOrNil(mapSize) or
             mapSize > 2000 then
               goto continue
@@ -975,7 +992,7 @@ function Module.install(contextTable)
           local endmapAddr =  readPointer( scriptAddr + VARIANT_MAP + GDDEFS.PTRSIZE )
           local mapSize =     readInteger( scriptAddr + VARIANT_MAP + GDDEFS.PTRSIZE * 2 )
           if isNullOrNil(mapAddr) or
-            not isBSSData(endmapAddr) or 
+            not Walker.Helpers.isBSSData(endmapAddr) or
             isNullOrNil(mapSize) or
             mapSize > 2000 then
               goto continue
@@ -990,9 +1007,9 @@ function Module.install(contextTable)
           local left =     readPointer( ptrBase + GDDEFS.PTRSIZE * 1 )
           local parent =   readPointer( ptrBase + GDDEFS.PTRSIZE * 2 )
           if color ~= 1 or
-            isNullOrNil( right ) or isInvalidPointer( right ) or not isBSSData( right ) or
+            isNullOrNil( right ) or isInvalidPointer( right ) or not Walker.Helpers.isBSSData( right ) or
             isNullOrNil( left ) or isInvalidPointer( left ) or
-            isNullOrNil( parent ) or isInvalidPointer( parent ) or not isBSSData( parent ) then
+            isNullOrNil( parent ) or isInvalidPointer( parent ) or not Walker.Helpers.isBSSData( parent ) then
               goto continue
           end
 
@@ -1039,7 +1056,7 @@ function Module.install(contextTable)
 
     end
 
-    local function probeVariantMapCandidates(sample)
+    function Walker.Probe.variantMapCandidates(sample)
       local results = {}
       local scriptAddr = sample.scriptAddr
 
@@ -1090,7 +1107,7 @@ function Module.install(contextTable)
           -- HashMap object's beginning.
           local reportedOffset = candidateOffset + GDDEFS.PTRSIZE * 2
 
-          table.insert(results, makeCandidate(reportedOffset, score,
+          table.insert(results, Walker.Helpers.makeCandidate(reportedOffset, score,
           {
             mapSize = mapSize,
             mapSizeAddress = scriptAddr + candidateOffset + GDDEFS.PTRSIZE * 4 + 0x4,
@@ -1113,7 +1130,7 @@ function Module.install(contextTable)
           local mapSize = readInteger(scriptAddr + candidateOffset + GDDEFS.PTRSIZE * 2)
 
           if isNullOrNil(mapAddr) then goto continue end
-          if not isBSSData(endmapAddr) then goto continue end
+          if not Walker.Helpers.isBSSData(endmapAddr) then goto continue end
           if isNullOrNil(mapSize) then goto continue end
           if mapSize > 2000 then goto continue end
 
@@ -1126,12 +1143,12 @@ function Module.install(contextTable)
           if rootColor ~= 1 then goto continue end
           if isNullOrNil(rootRight) then goto continue end
           if isInvalidPointer(rootRight) then goto continue end
-          if not isBSSData(rootRight) then goto continue end
+          if not Walker.Helpers.isBSSData(rootRight) then goto continue end
           if isNullOrNil(rootLeft) then goto continue end
           if isInvalidPointer(rootLeft) then goto continue end
           if isNullOrNil(rootParent) then goto continue end
           if isInvalidPointer(rootParent) then goto continue end
-          if not isBSSData(rootParent) then goto continue end
+          if not Walker.Helpers.isBSSData(rootParent) then goto continue end
 
           local elementBase = rootLeft
           local elementPtrBase = elementBase + alignOffset(0x4, GDDEFS.PTRSIZE)
@@ -1166,7 +1183,7 @@ function Module.install(contextTable)
 
           if firstIndex == 0 then score = score + 2 end
 
-          table.insert(results, makeCandidate(candidateOffset, score,
+          table.insert(results, Walker.Helpers.makeCandidate(candidateOffset, score,
           {
             mapSize = mapSize,
             mapSizeAddress = scriptAddr + candidateOffset + GDDEFS.PTRSIZE * 2,
@@ -1188,7 +1205,7 @@ function Module.install(contextTable)
 
   -- CONST MAP START
 
-    local function assumeConstMapOffset(scriptAddr)
+    function Walker.Assume.constMapOffset(scriptAddr)
       if assumedOffsets.CONST_MAP then return assumedOffsets.CONST_MAP end
       local CONST_MAP
       -- local endmapAddr, leftAddr, rightAddr, color, elementIndex;
@@ -1224,8 +1241,8 @@ function Module.install(contextTable)
             isNullOrNil(hashAddr) or
             isNullOrNil(headAddr) or
             tailAddr == nil or -- can be 1-sized
-            isNullOrNil(capacity) or 
-            isNullOrNil(mapSize) or 
+            isNullOrNil(capacity) or
+            isNullOrNil(mapSize) or
             mapSize > 2000 then
               goto continue
           end
@@ -1235,9 +1252,9 @@ function Module.install(contextTable)
           local nameAddr =    readPointer( headAddr + GDDEFS.PTRSIZE * 2 )
           local variantType = readInteger( headAddr + GDDEFS.PTRSIZE * 3 )
           if isNullOrNil(nextAddr) or isInvalidPointer( nextAddr ) or
-            isNotNullOrNil(prevAddr) or 
+            isNotNullOrNil(prevAddr) or
             isNullOrNil(nameAddr) or isInvalidPointer( nameAddr ) or
-            not isValidVariantType(variantType) then
+            not Walker.Helpers.isValidVariantType(variantType) then
               goto continue
           end
 
@@ -1250,7 +1267,7 @@ function Module.install(contextTable)
           -- walk the hashmap; ugly
           local typeHit = false
           local currentElem = headAddr
-          local isPassableVariantValue = makeIsPassableVariantValue()
+          local isPassableVariantValue = Walker.Helpers.makeIsPassableVariantValue()
 
           repeat
             if isPassableVariantValue(currentElem, GDDEFS.PTRSIZE * 3) then
@@ -1297,7 +1314,7 @@ function Module.install(contextTable)
           local endmapAddr =  readPointer( scriptAddr + CONST_MAP + GDDEFS.PTRSIZE )
           local mapSize =     readInteger( scriptAddr + CONST_MAP + GDDEFS.PTRSIZE * 2 )
           if isNullOrNil(mapAddr) or
-            not isBSSData(endmapAddr) or 
+            not Walker.Helpers.isBSSData(endmapAddr) or
             isNullOrNil(mapSize) or
             mapSize > 2000 then
               goto continue
@@ -1311,9 +1328,9 @@ function Module.install(contextTable)
           local left =       readPointer( ptrBase + GDDEFS.PTRSIZE * 1 )
           local parent =     readPointer( ptrBase + GDDEFS.PTRSIZE * 2 )
           if color ~= 1 or
-            isNullOrNil( right ) or isInvalidPointer( right ) or not isBSSData( right ) or
+            isNullOrNil( right ) or isInvalidPointer( right ) or not Walker.Helpers.isBSSData( right ) or
             isNullOrNil( left ) or isInvalidPointer( left ) or
-            isNullOrNil( parent ) or isInvalidPointer( parent ) or not isBSSData( parent ) then
+            isNullOrNil( parent ) or isInvalidPointer( parent ) or not Walker.Helpers.isBSSData( parent ) then
               goto continue
           end
           local mapElement = readPointer( ptrBase + GDDEFS.PTRSIZE * 1 ) -- to get leftmost
@@ -1336,7 +1353,7 @@ function Module.install(contextTable)
             isNullOrNil( _next ) or isInvalidPointer( _next ) or
             isNullOrNil( _prev ) or isInvalidPointer( _prev ) or
             isNullOrNil( sName ) or isInvalidPointer( sName ) or
-            not isValidVariantType(elType) then
+            not Walker.Helpers.isValidVariantType(elType) then
               goto continue
           end
 
@@ -1347,7 +1364,7 @@ function Module.install(contextTable)
 
           -- walk the hashmap; ugly
           local typeHit = false
-          local isPassableVariantValue = makeIsPassableVariantValue()
+          local isPassableVariantValue = Walker.Helpers.makeIsPassableVariantValue()
 
           -- get leftmost
           while readPointer(mapElement + GDDEFS.MAP_LELEM) ~= endmapAddr do
@@ -1384,7 +1401,7 @@ function Module.install(contextTable)
 
     end
 
-    local function probeConstMapCandidates(sample)
+    function Walker.Probe.constMapCandidates(sample)
       local results = {}
       local scriptAddr = sample.scriptAddr
 
@@ -1419,7 +1436,7 @@ function Module.install(contextTable)
           if isNotNullOrNil(prevAddr) then goto continue end
           if isNullOrNil(nameAddr) then goto continue end
           if isInvalidPointer(nameAddr) then goto continue end
-          if not isValidVariantType(variantType) then goto continue end
+          if not Walker.Helpers.isValidVariantType(variantType) then goto continue end
           if mapSize > 1 and isNullOrNil(nextAddr) then goto continue end
 
           if isNotNullOrNil(nextAddr) and isInvalidPointer(nextAddr) then goto continue end
@@ -1446,7 +1463,7 @@ function Module.install(contextTable)
 
             if currentName and currentName ~= "" then validNames = validNames + 1 end
 
-            if isValidVariantType(currentType) then validValues = validValues + 1 end
+            if Walker.Helpers.isValidVariantType(currentType) then validValues = validValues + 1 end
 
             currentElem = readPointer(currentElem)
           end
@@ -1464,7 +1481,7 @@ function Module.install(contextTable)
           -- GDDumper expects the head pointer offset.
           local reportedOffset = candidateOffset + GDDEFS.PTRSIZE * 2
 
-          table.insert(results, makeCandidate(reportedOffset, score,
+          table.insert(results, Walker.Helpers.makeCandidate(reportedOffset, score,
           {
             mapSize = mapSize,
             mapObjectOffset = candidateOffset,
@@ -1486,7 +1503,7 @@ function Module.install(contextTable)
           local endmapAddr = readPointer(scriptAddr + candidateOffset + GDDEFS.PTRSIZE)
           local mapSize = readInteger(scriptAddr + candidateOffset + GDDEFS.PTRSIZE * 2)
           if isNullOrNil(mapAddr) then goto continue end
-          if not isBSSData(endmapAddr) then goto continue end
+          if not Walker.Helpers.isBSSData(endmapAddr) then goto continue end
           if isNullOrNil(mapSize) then goto continue end
           if mapSize > 2000 then goto continue end
 
@@ -1498,12 +1515,12 @@ function Module.install(contextTable)
           if rootColor ~= 1 then goto continue end
           if isNullOrNil(rootRight) then goto continue end
           if isInvalidPointer(rootRight) then goto continue end
-          if not isBSSData(rootRight) then goto continue end
+          if not Walker.Helpers.isBSSData(rootRight) then goto continue end
           if isNullOrNil(rootLeft) then goto continue end
           if isInvalidPointer(rootLeft) then goto continue end
           if isNullOrNil(rootParent) then goto continue end
           if isInvalidPointer(rootParent) then goto continue end
-          if not isBSSData(rootParent) then goto continue end
+          if not Walker.Helpers.isBSSData(rootParent) then goto continue end
 
           local elementPtrBase = rootLeft + alignOffset(0x4, GDDEFS.PTRSIZE)
           local elementColor = readInteger(rootLeft)
@@ -1527,7 +1544,7 @@ function Module.install(contextTable)
           if isInvalidPointer(previousElement) then goto continue end
           if isNullOrNil(nameAddr) then goto continue end
           if isInvalidPointer(nameAddr) then goto continue end
-          if not isValidVariantType(variantType) then goto continue end
+          if not Walker.Helpers.isValidVariantType(variantType) then goto continue end
 
           local mapElement = rootLeft
           local visited = {}
@@ -1557,7 +1574,7 @@ function Module.install(contextTable)
             local currentName = getStringNameStr(currentNameAddr)
             local currentType = readInteger(currentPtrBase + GDDEFS.PTRSIZE * 6)
             if currentName and currentName ~= "" then validNames = validNames + 1 end
-            if isValidVariantType(currentType) then validValues = validValues + 1 end
+            if Walker.Helpers.isValidVariantType(currentType) then validValues = validValues + 1 end
             mapElement = readPointer(currentPtrBase + GDDEFS.PTRSIZE * 3)
 
           end
@@ -1572,7 +1589,7 @@ function Module.install(contextTable)
 
           if walked == mapSize then score = score + 2 end
 
-          table.insert(results, makeCandidate(candidateOffset, score,
+          table.insert(results, Walker.Helpers.makeCandidate(candidateOffset, score,
           {
             mapSize = mapSize,
             mapSizeOffset = candidateOffset + GDDEFS.PTRSIZE * 2,
@@ -1600,7 +1617,7 @@ function Module.install(contextTable)
 
   -- FUNC MAP START
 
-    local function assumeFuncMapOffset(scriptAddr)
+    function Walker.Assume.functionMapOffset(scriptAddr)
       if assumedOffsets.FUNC_MAP then return assumedOffsets.FUNC_MAP end
       local FUNC_MAP
       local found = false
@@ -1635,8 +1652,8 @@ function Module.install(contextTable)
             isNullOrNil(hashAddr) or isInvalidPointer( hashAddr ) or
             isNullOrNil(headAddr) or isInvalidPointer( headAddr ) or
             tailAddr == nil or -- can be 1-sized
-            isNullOrNil(capacity) or 
-            isNullOrNil(mapSize) or 
+            isNullOrNil(capacity) or
+            isNullOrNil(mapSize) or
             mapSize > 2000 then
               goto continue
           end
@@ -1646,10 +1663,10 @@ function Module.install(contextTable)
           local nameAddr =     readPointer( headAddr + GDDEFS.PTRSIZE * 2 )
           local funcAddr =     readPointer( headAddr + GDDEFS.PTRSIZE * 3 )
           if isNullOrNil(nextAddr) or isInvalidPointer( nextAddr ) or
-            isNotNullOrNil(prevAddr) or 
+            isNotNullOrNil(prevAddr) or
             isNullOrNil(nameAddr) or isInvalidPointer( nameAddr ) or
             isNullOrNil(funcAddr) or isInvalidPointer( funcAddr ) or
-            not checkIfGDFunction(funcAddr, nameAddr) then
+            not Walker.Helpers.checkIfGDFunction(funcAddr, nameAddr) then
               goto continue
           end
 
@@ -1686,7 +1703,7 @@ function Module.install(contextTable)
           local endmapAddr =  readPointer( scriptAddr + FUNC_MAP + GDDEFS.PTRSIZE )
           local mapSize =     readInteger( scriptAddr + FUNC_MAP + GDDEFS.PTRSIZE * 2 )
           if isNullOrNil(mapAddr) or
-            not isBSSData(endmapAddr) or 
+            not Walker.Helpers.isBSSData(endmapAddr) or
             isNullOrNil(mapSize) or
             mapSize > 2000 then
               goto continue
@@ -1701,9 +1718,9 @@ function Module.install(contextTable)
           local left =     readPointer( ptrBase + GDDEFS.PTRSIZE * 1 )
           local parent =   readPointer( ptrBase + GDDEFS.PTRSIZE * 2 )
           if color ~= 1 or
-            isNullOrNil( right ) or isInvalidPointer( right ) or not isBSSData( right ) or
+            isNullOrNil( right ) or isInvalidPointer( right ) or not Walker.Helpers.isBSSData( right ) or
             isNullOrNil( left ) or isInvalidPointer( left ) or
-            isNullOrNil( parent ) or isInvalidPointer( parent ) or not isBSSData( parent ) then
+            isNullOrNil( parent ) or isInvalidPointer( parent ) or not Walker.Helpers.isBSSData( parent ) then
               goto continue
           end
 
@@ -1726,7 +1743,7 @@ function Module.install(contextTable)
             isNullOrNil( _next ) or isInvalidPointer( _next ) or
             isNullOrNil( _prev ) or isInvalidPointer( _prev ) or
             isNullOrNil( sName ) or isInvalidPointer( sName ) or
-            isNullOrNil(funcAddr) or not checkIfGDFunction(funcAddr) then
+            isNullOrNil(funcAddr) or not Walker.Helpers.checkIfGDFunction(funcAddr) then
               goto continue
           end
 
@@ -1746,7 +1763,7 @@ function Module.install(contextTable)
 
     end
 
-    local function probeFuncMapCandidates(sample)
+    function Walker.Probe.functionMapCandidates(sample)
       local results = {}
       local scriptAddr = sample.scriptAddr
 
@@ -1804,7 +1821,7 @@ function Module.install(contextTable)
             local name = getStringNameStr(nameAddr)
             if name and name ~= "" then validNames = validNames + 1 end
 
-            if checkIfGDFunction(funcAddr, nameAddr) then validFunctions = validFunctions + 1 end
+            if Walker.Helpers.checkIfGDFunction(funcAddr, nameAddr) then validFunctions = validFunctions + 1 end
 
             currentElem = readPointer(currentElem)
           end
@@ -1823,7 +1840,7 @@ function Module.install(contextTable)
 
           local reportedOffset = candidateOffset + GDDEFS.PTRSIZE * 2
 
-          table.insert(results, makeCandidate(reportedOffset, score,
+          table.insert(results, Walker.Helpers.makeCandidate(reportedOffset, score,
           {
             mapSize = mapSize,
             mapObjectOffset = candidateOffset,
@@ -1849,7 +1866,7 @@ function Module.install(contextTable)
           local mapSize = readInteger(scriptAddr + candidateOffset + GDDEFS.PTRSIZE * 2)
           if isNullOrNil(mapAddr) then goto continue end
           if isInvalidPointer(mapAddr) then goto continue end
-          if not isBSSData(endmapAddr) then goto continue end
+          if not Walker.Helpers.isBSSData(endmapAddr) then goto continue end
           if isNullOrNil(mapSize) then goto continue end
           if mapSize > 2000 then goto continue end
           if mapSize == 0 then goto continue end
@@ -1862,12 +1879,12 @@ function Module.install(contextTable)
           if rootColor ~= 1 then goto continue end
           if isNullOrNil(rootRight) then goto continue end
           if isInvalidPointer(rootRight) then goto continue end
-          if not isBSSData(rootRight) then goto continue end
+          if not Walker.Helpers.isBSSData(rootRight) then goto continue end
           if isNullOrNil(rootLeft) then goto continue end
           if isInvalidPointer(rootLeft) then goto continue end
           if isNullOrNil(rootParent) then goto continue end
           if isInvalidPointer(rootParent) then goto continue end
-          if not isBSSData(rootParent) then goto continue end
+          if not Walker.Helpers.isBSSData(rootParent) then goto continue end
           local mapElement = rootLeft
           local visited = {}
 
@@ -1922,7 +1939,7 @@ function Module.install(contextTable)
             local name = getStringNameStr(nameAddr)
             if name and name ~= "" then validNames = validNames + 1 end
 
-            if checkIfGDFunction(funcAddr) then validFunctions = validFunctions + 1 end
+            if Walker.Helpers.checkIfGDFunction(funcAddr) then validFunctions = validFunctions + 1 end
 
             mapElement = nextElement
           end
@@ -1939,7 +1956,7 @@ function Module.install(contextTable)
 
           if walked == mapSize then score = score + 2 end
 
-          table.insert(results, makeCandidate(candidateOffset, score,
+          table.insert(results, Walker.Helpers.makeCandidate(candidateOffset, score,
           {
             mapSize = mapSize,
             mapSizeOffset = candidateOffset + GDDEFS.PTRSIZE * 2,
@@ -1969,7 +1986,7 @@ function Module.install(contextTable)
 
   -- FUNC STRUCT START
 
-    local function hasValidGDFuncOffsetOrder()
+    function Walker.Validation.hasValidFunctionOffsetOrder()
       if not assumedOffsets.FUNC_CODE then return false end
       if not assumedOffsets.FUNC_CONST then return false end
       if not assumedOffsets.FUNC_GLOBALS then return false end
@@ -1981,7 +1998,7 @@ function Module.install(contextTable)
       return assumedOffsets.FUNC_CONST < assumedOffsets.FUNC_GLOBALS and assumedOffsets.FUNC_GLOBALS < assumedOffsets.FUNC_CODE
     end
 
-    local function collectGDFunctionAddresses(scriptAddr)
+    function Walker.Validation.collectFunctionAddresses(scriptAddr)
       local results = {}
       local visited = {}
       local maxFunctions = 64
@@ -2054,7 +2071,7 @@ function Module.install(contextTable)
       return results
     end
 
-    local function getVectorSize(vectorAddr)
+    function Walker.Helpers.getVectorSize(vectorAddr)
       if isNullOrNil(vectorAddr) then return nil end
       if isInvalidPointer(vectorAddr) then return nil end
       if not assumedOffsets.VARIANT_VECTOR_SIZE then return nil end
@@ -2067,8 +2084,8 @@ function Module.install(contextTable)
       return size
     end
 
-    local function validateFunctionCodeVector(vectorAddr, opcodeContext)
-      local size = getVectorSize(vectorAddr)
+    function Walker.Validation.functionCodeVector(vectorAddr, opcodeContext)
+      local size = Walker.Helpers.getVectorSize(vectorAddr)
 
       if not size or size < 1 then return false end
 
@@ -2080,8 +2097,8 @@ function Module.install(contextTable)
       return true
     end
 
-    local function validateFunctionConstVector(vectorAddr)
-      local size = getVectorSize(vectorAddr)
+    function Walker.Validation.functionConstVector(vectorAddr)
+      local size = Walker.Helpers.getVectorSize(vectorAddr)
 
       if not size or size < 1 then return false end
 
@@ -2091,14 +2108,14 @@ function Module.install(contextTable)
         local variantAddr = vectorAddr + i * sizeOfVariant
         local variantType = readInteger(variantAddr)
 
-        if not isValidVariantType(variantType) then return false end
+        if not Walker.Helpers.isValidVariantType(variantType) then return false end
       end
 
       return true
     end
 
-    local function validateFunctionGlobalVector(vectorAddr)
-      local size = getVectorSize(vectorAddr)
+    function Walker.Validation.functionGlobalVector(vectorAddr)
+      local size = Walker.Helpers.getVectorSize(vectorAddr)
 
       if not size or size < 1 then return false end
 
@@ -2118,7 +2135,7 @@ function Module.install(contextTable)
       return true
     end
 
-    local function findFunctionVectorOffset(funcAddrs, validator, excludedOffsets)
+    function Walker.Validation.findFunctionVectorOffset(funcAddrs, validator, excludedOffsets)
       local bestOffset
       local bestHits = 0
       local scanEnd = 0x280
@@ -2148,21 +2165,21 @@ function Module.install(contextTable)
       return bestOffset
     end
 
-    local function assumeGDFuncOffset(scriptAddr)
-      if hasValidGDFuncOffsetOrder() then return true end
+    function Walker.Assume.functionOffsets(scriptAddr)
+      if Walker.Validation.hasValidFunctionOffsetOrder() then return true end
 
       if not assumedOffsets.FUNC_MAP then return false end
       if not assumedOffsets.VARIANT_VECTOR_SIZE then return false end
       if not GDFunc then return false end
 
-      local funcAddrs = collectGDFunctionAddresses(scriptAddr)
+      local funcAddrs = Walker.Validation.collectFunctionAddresses(scriptAddr)
 
       if #funcAddrs == 0 then return false end
 
       local excluded = {}
 
       if not assumedOffsets.FUNC_CODE then
-        assumedOffsets.FUNC_CODE = findFunctionVectorOffset( funcAddrs, function(vectorAddr) return validateFunctionCodeVector(vectorAddr, GDFunc.CurrentDisassembler) end )
+        assumedOffsets.FUNC_CODE = Walker.Validation.findFunctionVectorOffset( funcAddrs, function(vectorAddr) return Walker.Validation.functionCodeVector(vectorAddr, GDFunc.CurrentDisassembler) end )
 
         if assumedOffsets.FUNC_CODE then
           excluded[assumedOffsets.FUNC_CODE] = true
@@ -2177,7 +2194,7 @@ function Module.install(contextTable)
       if not assumedOffsets.FUNC_CODE then return false end
 
       if not assumedOffsets.FUNC_CONST then
-        assumedOffsets.FUNC_CONST = findFunctionVectorOffset( funcAddrs, validateFunctionConstVector, excluded )
+        assumedOffsets.FUNC_CONST = Walker.Validation.findFunctionVectorOffset( funcAddrs, Walker.Validation.functionConstVector, excluded )
 
         if assumedOffsets.FUNC_CONST then
           excluded[assumedOffsets.FUNC_CONST] = true
@@ -2188,9 +2205,9 @@ function Module.install(contextTable)
       end
 
       if not assumedOffsets.FUNC_GLOBALS then
-        assumedOffsets.FUNC_GLOBALS = findFunctionVectorOffset( funcAddrs, validateFunctionGlobalVector, excluded )
+        assumedOffsets.FUNC_GLOBALS = Walker.Validation.findFunctionVectorOffset( funcAddrs, Walker.Validation.functionGlobalVector, excluded )
 
-        if assumedOffsets.FUNC_GLOBALS and not hasValidGDFuncOffsetOrder() then
+        if assumedOffsets.FUNC_GLOBALS and not Walker.Validation.hasValidFunctionOffsetOrder() then
           assumedOffsets.FUNC_GLOBALS = nil
         end
 
@@ -2199,112 +2216,113 @@ function Module.install(contextTable)
         end
       end
 
-      return hasValidGDFuncOffsetOrder()
+      return Walker.Validation.hasValidFunctionOffsetOrder()
     end
 
   -- FUNC STRUCT END
 
-  local function assumeSampleOffsets(sample)
+  function Walker.Assume.sampleOffsets(sample)
     local nodeAddr = sample.nodeAddr
 
     if not assumedOffsets.SCRIPT_INSTANCE then
-      assumeScriptInstanceOffset(nodeAddr)
+      Walker.Assume.scriptInstanceOffset(nodeAddr)
     end
 
-    sample = makeNodeSample(nodeAddr)
+    sample = Walker.Helpers.makeNodeSample(nodeAddr)
 
     if isNullOrNil(sample.scriptAddr) then return end
 
-    assumeScriptNameOffset(sample.scriptAddr)
+    Walker.Assume.scriptNameOffset(sample.scriptAddr)
 
     if not assumedOffsets.SCRIPT_NAME then return end
     if GDDEFS.MONO then return end
 
     if GDDEFS.MAJOR_VER >= 4 then
-      assumeVariantMapOffset(sample.scriptAddr)
+      Walker.Assume.variantMapOffset(sample.scriptAddr)
 
       if assumedOffsets.VARIANT_MAP then
-        assumeVariantVector(nodeAddr) -- we have means to validate the vector with map size
-        assumeConstMapOffset(sample.scriptAddr) -- we have a starting point for constants
+        Walker.Assume.variantVector(nodeAddr) -- we have means to validate the vector with map size
+        Walker.Assume.constMapOffset(sample.scriptAddr) -- we have a starting point for constants
       end
 
-      assumeFuncMapOffset(sample.scriptAddr) -- reliable, seems to work fine without enforcing var-func boundaries for const map
+      Walker.Assume.functionMapOffset(sample.scriptAddr) -- reliable, seems to work fine without enforcing var-func boundaries for const map
 
       if assumedOffsets.FUNC_MAP and assumedOffsets.VARIANT_VECTOR_SIZE then
-        assumeGDFuncOffset(sample.scriptAddr)
+        Walker.Assume.functionOffsets(sample.scriptAddr)
       end
       return
     end
 
     -- 3.x
-    assumeFuncMapOffset(sample.scriptAddr)
+    Walker.Assume.functionMapOffset(sample.scriptAddr)
 
     if not assumedOffsets.FUNC_MAP then return end
-    assumeVariantMapOffset(sample.scriptAddr) -- func map is in-between the const and variant maps
-    assumeConstMapOffset(sample.scriptAddr) -- this makes the assumption more reliable
+    Walker.Assume.variantMapOffset(sample.scriptAddr) -- func map is in-between the const and variant maps
+    Walker.Assume.constMapOffset(sample.scriptAddr) -- this makes the assumption more reliable
 
     if assumedOffsets.VARIANT_MAP then
-      assumeVariantVector(nodeAddr)
+      Walker.Assume.variantVector(nodeAddr)
     end
 
     if assumedOffsets.FUNC_MAP and assumedOffsets.VARIANT_VECTOR_SIZE then
-      assumeGDFuncOffset(sample.scriptAddr)
+      Walker.Assume.functionOffsets(sample.scriptAddr)
     end
   end
 
-  local function assumeNodeOffsetsDeep()
-    clearAssumedOffsets()
+  function Walker.Assume.nodeOffsetsDeep()
+    Walker.Helpers.clearAssumedOffsets()
 
-    if not assumeChildrenOffset() then
-      reportFailedOffsets()
+    if not Walker.Assume.childrenOffset() then
+      Walker.Helpers.reportFailedOffsets()
       return false
     end
 
-    assumeObjNameOffset()
+    Walker.Assume.objectNameOffset()
 
     -- collect samples for continuous gdscript analysis
-    local rootNodes = getMainNodeTable()
-    local nodeSamples = collectNodeSamples(rootNodes)
+    local rootNodes = Walker.Helpers.getMainNodeTable()
+    local nodeSamples = Walker.Evidence.collectNodeSamples(rootNodes)
 
     local maxPasses = 4
 
     for pass = 1, maxPasses do
-      local before = offsetCount()
+      local before = Walker.Helpers.offsetCount()
 
       for _, sample in ipairs(nodeSamples) do
-        assumeSampleOffsets(sample)
+        Walker.Assume.sampleOffsets(sample)
 
         -- if collected all, stop
-        if allOffsetsResolved() then
-          reportFailedOffsets()
+        if Walker.Helpers.allOffsetsResolved() then
+          Walker.Helpers.reportFailedOffsets()
           return true
         end
       end
 
-      local after = offsetCount()
+      local after = Walker.Helpers.offsetCount()
 
       -- No milestone was discovered during this pass.
       if after == before then break end
     end
 
-    reportFailedOffsets()
-    return allOffsetsResolved()
+    Walker.Helpers.reportFailedOffsets()
+    return Walker.Helpers.allOffsetsResolved()
   end
 
   -- EVIDENCE ORCHESTRATION START
     -- refactored from assumption logic with ai; allegedly inferior precision, but let it be for now
 
-    local function recordCandidates(category, candidates, sample)
+    function Walker.Evidence.recordCandidates(category, candidates, sample)
+      local recordCandidate = Walker.Evidence.recordCandidate
       for _, candidate in ipairs(candidates or {}) do
         recordCandidate(category, candidate, sample)
       end
     end
 
-    local function collectUniqueScriptSamples(nodeSamples)
+    function Walker.Evidence.collectUniqueScriptSamples(nodeSamples)
       local samples = {}
       local seenScripts = {}
 
-      enrichScriptSamples(nodeSamples)
+      Walker.Evidence.enrichScriptSamples(nodeSamples)
 
       for _, sample in ipairs(nodeSamples) do
         if isNullOrNil(sample.scriptAddr) then goto continue end
@@ -2323,15 +2341,16 @@ function Module.install(contextTable)
       return samples
     end
 
-    local function resolveStrongNodeOffsets()
-      if not assumeChildrenOffset() then return false end
-      if not assumeObjNameOffset() then return false end
+    function Walker.Validation.resolveStrongNodeOffsets()
+      if not Walker.Assume.childrenOffset() then return false end
+      if not Walker.Assume.objectNameOffset() then return false end
       return true
     end
 
-    local function resolveStrongScriptInstanceOffsets(nodeSamples)
+    function Walker.Validation.resolveStrongScriptInstanceOffsets(nodeSamples)
+      local scriptInstanceOffset = Walker.Assume.scriptInstanceOffset
       for _, sample in ipairs(nodeSamples) do
-        if assumeScriptInstanceOffset(sample.nodeAddr) then
+        if scriptInstanceOffset(sample.nodeAddr) then
           return true
         end
       end
@@ -2339,7 +2358,7 @@ function Module.install(contextTable)
       return false
     end
 
-    local function validateProbedSample(sample)
+    function Walker.Validation.probedSample(sample)
       if isNullOrNil(sample.scriptAddr) then return false end
       if isNullOrNil(sample.scriptInst) then return false end
 
@@ -2357,22 +2376,23 @@ function Module.install(contextTable)
         if isNullOrNil(vectorSize) then return false end
 
         if vectorSize > 2000 then return false end
-        if not validateVariantStride(vectorAddr, vectorSize) then return false end
+        if not Walker.Helpers.validateVariantStride(vectorAddr, vectorSize) then return false end
       end
 
       return true
     end
 
-    local function verifyProbedOffsets(holdoutSamples)
+    function Walker.Validation.probedOffsets(holdoutSamples)
       local passed = 0
       local tested = 0
+      local validateSample = Walker.Validation.probedSample
 
       for _, sample in ipairs(holdoutSamples) do
         if isNullOrNil(sample.scriptAddr) then goto continue end
 
         tested = tested + 1
 
-        if validateProbedSample(sample) then passed = passed + 1 end
+        if validateSample(sample) then passed = passed + 1 end
 
         ::continue::
       end
@@ -2389,18 +2409,19 @@ function Module.install(contextTable)
       return ratio >= 0.75
     end
 
-    local function probeAndCommitCategory( category, assumedName, samples, probeFunction, options )
+    function Walker.Probe.commitCategory( category, assumedName, samples, probeFunction, options )
+      local recordCandidates = Walker.Evidence.recordFilteredCandidates
       for _, sample in ipairs(samples) do
         if isNullOrNil(sample.scriptAddr) then goto continue end
 
         local candidates = probeFunction(sample)
-        -- recordCandidates(category, candidates, sample)
-        recordFilteredCandidates(category, candidates, sample)
+        -- Walker.Evidence.recordCandidates(category, candidates, sample)
+        recordCandidates(category, candidates, sample)
 
         ::continue::
       end
 
-      local best = chooseBestCandidate(category, options)
+      local best = Walker.Evidence.chooseBestCandidate(category, options)
 
       if not best then return nil end
 
@@ -2411,12 +2432,14 @@ function Module.install(contextTable)
       return best
     end
 
-    local function probeVariantPairCandidates(sample)
+    function Walker.Probe.variantPairCandidates(sample)
       local results = {}
-      local mapCandidates = probeVariantMapCandidates(sample)
+      local mapCandidates = Walker.Probe.variantMapCandidates(sample)
+      local getVectorCandidates = Walker.Probe.variantVectorCandidates
+      local makeCandidate = Walker.Helpers.makeCandidate
 
       for _, mapCandidate in ipairs(mapCandidates) do
-        local vectorCandidates = probeVariantVectorCandidates(sample, mapCandidate)
+        local vectorCandidates = getVectorCandidates(sample, mapCandidate)
 
         for _, vectorCandidate in ipairs(vectorCandidates) do
 
@@ -2440,18 +2463,20 @@ function Module.install(contextTable)
       return results
     end
 
-    local function probeAndCommitVariantPair(samples)
+    function Walker.Probe.commitVariantPair(samples)
+      local pairCandidates = Walker.Probe.variantPairCandidates
+      local recordCandidates = Walker.Evidence.recordCandidates
       for _, sample in ipairs(samples) do
         if isNullOrNil(sample.scriptAddr) then goto continue end
         if isNullOrNil(sample.scriptInst) then goto continue end
 
-        local candidates = probeVariantPairCandidates(sample)
+        local candidates = pairCandidates(sample)
         recordCandidates("VARIANT_PAIR", candidates, sample)
 
         ::continue::
       end
 
-      local best = chooseBestCandidate("VARIANT_PAIR")
+      local best = Walker.Evidence.chooseBestCandidate("VARIANT_PAIR")
 
       if not best then return false end
 
@@ -2464,35 +2489,35 @@ function Module.install(contextTable)
       return true
     end
 
-    local function probeNodeOffsetsMilestone()
-      clearEvidence()
-      clearAssumedOffsets()
+    function Walker.Probe.nodeOffsetsMilestone()
+      Walker.Evidence.clearEvidence()
+      Walker.Helpers.clearAssumedOffsets()
 
-      if not resolveStrongNodeOffsets() then
-        reportFailedOffsets()
+      if not Walker.Validation.resolveStrongNodeOffsets() then
+        Walker.Helpers.reportFailedOffsets()
         return false
       end
 
-      local rootNodes = getMainNodeTable()
-      local nodeSamples = collectNodeSamples(rootNodes)
+      local rootNodes = Walker.Helpers.getMainNodeTable()
+      local nodeSamples = Walker.Evidence.collectNodeSamples(rootNodes)
 
       if #nodeSamples == 0 then
-        reportFailedOffsets()
+        Walker.Helpers.reportFailedOffsets()
         return false
       end
 
-      if not resolveStrongScriptInstanceOffsets(nodeSamples) then
-        reportFailedOffsets()
+      if not Walker.Validation.resolveStrongScriptInstanceOffsets(nodeSamples) then
+        Walker.Helpers.reportFailedOffsets()
         return false
       end
 
-      local scriptSamples = collectUniqueScriptSamples(nodeSamples)
-      local trainingSamples, holdoutSamples = splitSamples(scriptSamples)
+      local scriptSamples = Walker.Evidence.collectUniqueScriptSamples(nodeSamples)
+      local trainingSamples, holdoutSamples = Walker.Evidence.splitSamples(scriptSamples)
 
-      local scriptName = probeAndCommitCategory( "SCRIPT_NAME", "SCRIPT_NAME", trainingSamples, probeScriptNameCandidates, { requiredHits=2, requiredScripts=2, requiredScore=8, } )
+      local scriptName = Walker.Probe.commitCategory( "SCRIPT_NAME", "SCRIPT_NAME", trainingSamples, Walker.Probe.scriptNameCandidates, { requiredHits=2, requiredScripts=2, requiredScore=8, } )
 
       if not scriptName then
-        reportFailedOffsets()
+        Walker.Helpers.reportFailedOffsets()
         return false
       end
 
@@ -2501,49 +2526,49 @@ function Module.install(contextTable)
       end
 
       if GDDEFS.MAJOR_VER >= 4 then
-        probeAndCommitVariantPair(trainingSamples)
+        Walker.Probe.commitVariantPair(trainingSamples)
 
         if assumedOffsets.VARIANT_MAP then
-          probeAndCommitCategory( "CONST_MAP", "CONST_MAP", trainingSamples, probeConstMapCandidates )
+          Walker.Probe.commitCategory( "CONST_MAP", "CONST_MAP", trainingSamples, Walker.Probe.constMapCandidates )
         end
 
-        probeAndCommitCategory( "FUNC_MAP", "FUNC_MAP", trainingSamples, probeFuncMapCandidates )
+        Walker.Probe.commitCategory( "FUNC_MAP", "FUNC_MAP", trainingSamples, Walker.Probe.functionMapCandidates )
       else
-        probeAndCommitCategory( "FUNC_MAP", "FUNC_MAP", trainingSamples, probeFuncMapCandidates )
+        Walker.Probe.commitCategory( "FUNC_MAP", "FUNC_MAP", trainingSamples, Walker.Probe.functionMapCandidates )
 
         if assumedOffsets.FUNC_MAP then
-          probeAndCommitVariantPair(trainingSamples)
+          Walker.Probe.commitVariantPair(trainingSamples)
         end
 
         if assumedOffsets.FUNC_MAP then
-          probeAndCommitCategory( "CONST_MAP", "CONST_MAP", trainingSamples, probeConstMapCandidates )
+          Walker.Probe.commitCategory( "CONST_MAP", "CONST_MAP", trainingSamples, Walker.Probe.constMapCandidates )
         end
       end
 
-      local verified = verifyProbedOffsets(holdoutSamples)
+      local verified = Walker.Validation.probedOffsets(holdoutSamples)
 
-      reportFailedOffsets()
+      Walker.Helpers.reportFailedOffsets()
       return verified
     end
 
   -- EVIDENCE ORCHESTRATION END
 
-  local function printAssumedOffsets()
+  function Walker.Public.printAssumedOffsets()
     if isNullOrNil(viewport) then
-      if not resolveRootSymbol() then return {} end
+      if not Walker.Helpers.resolveRootSymbol() then return {} end
     end
-    assumeNodeOffsetsDeep()
-    printCurrentOffsets()
+    Walker.Assume.nodeOffsetsDeep()
+    Walker.Helpers.printCurrentOffsets()
 
     return assumedOffsets
   end
 
-  local function printProbedOffsets()
+  function Walker.Public.printProbedOffsets()
     if isNullOrNil(viewport) then
-      if not resolveRootSymbol() then return {} end
+      if not Walker.Helpers.resolveRootSymbol() then return {} end
     end
-    probeNodeOffsetsMilestone()
-    printCurrentOffsets()
+    Walker.Probe.nodeOffsetsMilestone()
+    Walker.Helpers.printCurrentOffsets()
 
     return assumedOffsets
   end
@@ -2572,8 +2597,8 @@ function Module.install(contextTable)
     end
   end
 
-  gd_assumeOffsets = printAssumedOffsets
-  gd_probeOffsets = printProbedOffsets
+  gd_assumeOffsets = Walker.Public.printAssumedOffsets
+  gd_probeOffsets = Walker.Public.printProbedOffsets
 
   return
     {

@@ -1,4 +1,8 @@
-local Module = {}
+local Module =
+{
+  Profiles = {},
+  Resolver = {},
+}
 
 local function alignOffset(offset, alignment)
   local remaining = offset % alignment -- get remaining bytes for alignment
@@ -8,7 +12,7 @@ local function alignOffset(offset, alignment)
   return offset
 end
 
-local OffsetProfiles = {}
+local OffsetProfiles = Module.Profiles
 -- MAJOR DECLATIONS
   -- OffsetProfiles[5] = {}
   OffsetProfiles[4] = {}
@@ -1339,7 +1343,7 @@ function Module.install(contextTable)
   -- OFFSET DEFINITION END
 
   -- HELPERS START
-    local function copyTable(source)
+    function Module.Resolver.copyTable(source)
       local copy = {}
       if not source then return copy end
 
@@ -1348,7 +1352,7 @@ function Module.install(contextTable)
       return copy
     end
 
-    local function getAssumed(offsets)
+    function Module.Resolver.getAssumed(offsets)
       offsets = offsets or {}
       if gd_assumeOffsets and type(gd_assumeOffsets) == 'function' then
         print('ASSUMING OFFSETS FALLBACK FOR AN UNRECORDED VERSION/RELEASE')
@@ -1375,7 +1379,7 @@ function Module.install(contextTable)
       error( "No recorded version found, report here: https://github.com/palepine/GDDumper/issues" )
     end
 
-    local function applyDefaults(offsets, profile)
+    function Module.Resolver.applyDefaults(offsets, profile)
       if not profile.default then
         sendDebugMessage('No default values...')
         return
@@ -1387,12 +1391,12 @@ function Module.install(contextTable)
       return offsets
     end
 
-    local function applyModifier(offsets, modifier, opName)
+    function Module.Resolver.applyModifier(offsets, modifier, opName)
       if not modifier then return offsets end
 
       if modifier.fallback then
         sendDebugMessage('Fallback case for: ' .. (opName or ''))
-        local assumed = getAssumed(offsets)
+        local assumed = Module.Resolver.getAssumed(offsets)
         if assumed == nil then error(opName .. " offsets are not defined and assumption failed") end
         return assumed
       end
@@ -1414,7 +1418,7 @@ function Module.install(contextTable)
       return offsets
     end
 
-    local function getArchitectureOffsets(minorProfile, architecture)
+    function Module.Resolver.getArchitectureOffsets(minorProfile, architecture)
 
       local arcitectureProfile = minorProfile[ architecture ]
       if not arcitectureProfile then
@@ -1423,20 +1427,20 @@ function Module.install(contextTable)
       end
       if arcitectureProfile.fallback then
         sendDebugMessage('Architecture doesnt have offsets, fallback')
-        return getAssumed( {} )
+        return Module.Resolver.getAssumed( {} )
       end
 
-      return copyTable( arcitectureProfile )
+      return Module.Resolver.copyTable( arcitectureProfile )
     end
 
-    local function getStoredOffsets(version)
+    function Module.Resolver.getStoredOffsets(version)
       local offsets = {}
 
       -- get major and check
       local majorTable = OffsetProfiles[version.major]
       if majorTable == nil then
         sendDebugMessage('Major profile table not found, fallback')
-        offsets = getAssumed( {} )
+        offsets = Module.Resolver.getAssumed( {} )
         return offsets
       end
 
@@ -1444,7 +1448,7 @@ function Module.install(contextTable)
       local minorTable = majorTable[version.minor]
       if minorTable == nil then
         sendDebugMessage('Minor profile table not found, fallback')
-        offsets = getAssumed( {} )
+        offsets = Module.Resolver.getAssumed( {} )
         return offsets
       end
 
@@ -1453,28 +1457,28 @@ function Module.install(contextTable)
 
       -- get architecture-specific offsets
       local architecture = version.x64 and "x64" or "x86"
-      local offsets = getArchitectureOffsets(release_profile, architecture)
+      local offsets = Module.Resolver.getArchitectureOffsets(release_profile, architecture)
 
       if offsets == nil then
         sendDebugMessage('Offsets not found, fallback')
-        offsets = getAssumed( {} )
+        offsets = Module.Resolver.getAssumed( {} )
         if offsets == nil then error("No offsets for requested architecture") end
       end
 
       -- defaults
-      offsets = applyDefaults( offsets, minorTable )
+      offsets = Module.Resolver.applyDefaults( offsets, minorTable )
 
       -- modifiers applied sequentially
-      if version.debug then offsets =       applyModifier( offsets, release_profile.debug, "debug" ) end
-      if version.tools then offsets =       applyModifier( offsets, release_profile.tools, "tools" ) end
-      if version.usesDouble then offsets =  applyModifier( offsets, release_profile.usesDouble, "usesDouble" ) end
+      if version.debug then offsets =       Module.Resolver.applyModifier( offsets, release_profile.debug, "debug" ) end
+      if version.tools then offsets =       Module.Resolver.applyModifier( offsets, release_profile.tools, "tools" ) end
+      if version.usesDouble then offsets =  Module.Resolver.applyModifier( offsets, release_profile.usesDouble, "usesDouble" ) end
 
       return offsets
     end
 
   -- HELPERS END
 
-  local function getStoredOffsetsFromVersion(major, minor, patch)
+  function Module.Resolver.getStoredOffsetsFromVersion(major, minor, patch)
     local version =
     {
       major = major,
@@ -1485,12 +1489,12 @@ function Module.install(contextTable)
       tools = GDDEFS.CUSTOMVER,
       usesDouble = GDDEFS.USES_DOUBLE_REALT,
     }
-    local offsets = getStoredOffsets(version)
+    local offsets = Module.Resolver.getStoredOffsets(version)
 
     return offsets
   end
 
-  return getStoredOffsetsFromVersion
+  return Module.Resolver.getStoredOffsetsFromVersion
 end
 
 return Module -- exporting

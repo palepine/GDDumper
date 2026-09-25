@@ -4,15 +4,22 @@ local LATEST_SEMVER_SUPPORTED = "4.7" -- Update me to the latest supported versi
 
 local GD_FUNC_DISASM_COLOR = 0x451630 --0x808040
 
+local function numtohexstr(num)
+  return ('%X'):format(num or -1)
+end
+
 function Module.install(contextTable)
   local GDDEFS = contextTable.GDDEFS
   local addStructureElem = contextTable.addStructureElem
   local addLayoutStructElem = contextTable.addLayoutStructElem
   local getGDTypeName = contextTable.getGDTypeName
   local sendDebugMessage = contextTable.sendDebugMessage
-  local GDF = {}
+  local GDF =
+    {
+      Profile = {},
+    }
 
-  local function installVersionFallback(tab, lastVersion)
+  function GDF.Profile.installVersionFallback(tab, lastVersion)
     local metatable = 
       {
         __index = function(table, version)
@@ -44,9 +51,9 @@ function Module.install(contextTable)
     end
   end
 
-  local function defineGDFunctionEnums()
+  function GDF.Profile.defineGDFunctionEnums()
 
-    local function buildReverseTable(tab)
+    function GDF.Profile.buildReverseTable(tab)
       local reversedTable = {}
       for i, v in ipairs(tab) do
         reversedTable[v] = i - 1
@@ -54,7 +61,7 @@ function Module.install(contextTable)
       return reversedTable
     end
 
-    local function cloneArray(tabl)
+    function GDF.Profile.cloneArray(tabl)
       local result = {}
       for i, val in ipairs(tabl) do
         result[i] = val
@@ -62,49 +69,49 @@ function Module.install(contextTable)
       return result
     end
 
-    local function insertValueBefore(list, anchor, valueToInsert)
+    function GDF.Profile.insertValueBefore(list, anchor, valueToInsert)
       for i, val in ipairs(list) do
         if val == anchor then
           table.insert(list, i, valueToInsert)
           return
         end
       end
-      error("insertValueBefore: anchor not found: " .. tostring(anchor))
+      error("GDF.Profile.insertValueBefore: anchor not found: " .. tostring(anchor))
     end
 
-    local function insertValueAfter(list, anchor, valueToInsert)
+    function GDF.Profile.insertValueAfter(list, anchor, valueToInsert)
       for i, val in ipairs(list) do
         if val == anchor then
           table.insert(list, i + 1, valueToInsert)
           return
         end
       end
-      error("insertValueAfter: anchor not found: " .. tostring(anchor))
+      error("GDF.Profile.insertValueAfter: anchor not found: " .. tostring(anchor))
     end
 
-    local function removeValue(list, valueToRemove)
+    function GDF.Profile.removeValue(list, valueToRemove)
       for i, v in ipairs(list) do
         if v == valueToRemove then
           table.remove(list, i)
           return
         end
       end
-      error("removeValue: value not found: " .. tostring(valueToRemove))
+      error("GDF.Profile.removeValue: value not found: " .. tostring(valueToRemove))
     end
 
-    local function applyPatchOnList(list, patch)
+    function GDF.Profile.applyPatchOnList(list, patch)
       if patch.kind == "insertValueBefore" then
-        insertValueBefore(list, patch.anchor, patch.value)
+        GDF.Profile.insertValueBefore(list, patch.anchor, patch.value)
       elseif patch.kind == "insertValueAfter" then
-        insertValueAfter(list, patch.anchor, patch.value)
+        GDF.Profile.insertValueAfter(list, patch.anchor, patch.value)
       elseif patch.kind == "removeValue" then
-        removeValue(list, patch.value)
+        GDF.Profile.removeValue(list, patch.value)
       else
         error("Unknown patch kind: " .. tostring(patch.kind))
       end
     end
 
-    local function prepareProfileSpec(version, bVisited)
+    function GDF.Profile.prepareProfileSpec(version, bVisited)
       local spec = GDF.ProfileSpecs[version]
       if not spec then
         error("Unknown version: " .. tostring(version))
@@ -124,23 +131,23 @@ function Module.install(contextTable)
       }
 
       if spec.base then
-        local parent = prepareProfileSpec(spec.base, bVisited)
-        resolvedProfileSpec.orderedOpcodes = cloneArray(parent.orderedOpcodes)
+        local parent = GDF.Profile.prepareProfileSpec(spec.base, bVisited)
+        resolvedProfileSpec.orderedOpcodes = GDF.Profile.cloneArray(parent.orderedOpcodes)
 
         if spec.patches then
           for _, patch in ipairs(spec.patches) do
-            applyPatchOnList(resolvedProfileSpec.orderedOpcodes, patch)
+            GDF.Profile.applyPatchOnList(resolvedProfileSpec.orderedOpcodes, patch)
           end
         end
       else
-        resolvedProfileSpec.orderedOpcodes = cloneArray(spec.orderedOpcodes or {})
+        resolvedProfileSpec.orderedOpcodes = GDF.Profile.cloneArray(spec.orderedOpcodes or {})
       end
 
       return resolvedProfileSpec
     end
 
-    local function createProfileFromVersion(version)
-      local resolvedProfileSpec = prepareProfileSpec(version)
+    function GDF.Profile.createProfileFromVersion(version)
+      local resolvedProfileSpec = GDF.Profile.prepareProfileSpec(version)
       local decoder = GDF.Decoders[resolvedProfileSpec.decoderName]
 
       if not decoder then
@@ -151,7 +158,7 @@ function Module.install(contextTable)
       {
         version = version,
         decoder = decoder,
-        orderedOpcodes = cloneArray(resolvedProfileSpec.orderedOpcodes),
+        orderedOpcodes = GDF.Profile.cloneArray(resolvedProfileSpec.orderedOpcodes),
         OPHandlerDefFromOPEnum = {},
         OPEnumFromInternalOPID = {},
         opNameFromOPEnum = {}
@@ -193,6 +200,9 @@ function Module.install(contextTable)
       end
 
       function newDisassembler:disassembleBytecode(codeInts, codeStructElement, instrPointer)
+        local profile = self.profile
+        local resolveHandler = profile.decoder.resolveOPHandlerDefFromProfile
+        local codeCount = #codeInts
         local disasmContext =
         {
           opcodeName = '',
@@ -200,17 +210,17 @@ function Module.install(contextTable)
           instrPointer = 1,
           codeInts = codeInts,
           opcodeEnumRaw = nil,
-          profile = self.profile
+          profile = profile
         }
 
-        while disasmContext.instrPointer <= #disasmContext.codeInts do
+        while disasmContext.instrPointer <= codeCount do
 
           disasmContext.opcodeEnumRaw = disasmContext.codeInts[disasmContext.instrPointer]
           if disasmContext.opcodeEnumRaw == nil then
             break
           end
 
-          local opcodeHandlerDef = self.profile.decoder.resolveOPHandlerDefFromProfile(self.profile, disasmContext.opcodeEnumRaw)
+          local opcodeHandlerDef = resolveHandler(profile, disasmContext.opcodeEnumRaw)
             if not opcodeHandlerDef then
               sendDebugMessage('handler not retrieved opcode: ' .. (disasmContext.opcodeEnumRaw or -1) .. (" | hex: %x"):format(disasmContext.opcodeEnumRaw or -1))
             end
@@ -3375,7 +3385,7 @@ function Module.install(contextTable)
         }
 
       for version, _ in pairs(GDF.ProfileSpecs) do
-        GDF.CompiledProfiles[version] = createProfileFromVersion(version)
+        GDF.CompiledProfiles[version] = GDF.Profile.createProfileFromVersion(version)
       end
 
       if GDDEFS.VERSION_STRING then
@@ -4422,10 +4432,10 @@ function Module.install(contextTable)
         if GDDEFS.MAJOR_VER == 2 then table.remove(GDF.OPERATOR_NAME, 12) end -- lazy but whatever; removing "OP_POSITIVE"
 
       for version, _ in pairs(GDF.ProfileSpecs) do
-        GDF.CompiledProfiles[version] = createProfileFromVersion(version)
+        GDF.CompiledProfiles[version] = GDF.Profile.createProfileFromVersion(version)
       end
 
-      installVersionFallback( GDF.CompiledProfiles, LATEST_SEMVER_SUPPORTED )
+      GDF.Profile.installVersionFallback( GDF.CompiledProfiles, LATEST_SEMVER_SUPPORTED )
 
       if GDDEFS.VERSION_STRING then
         GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion(GDDEFS.VERSION_STRING)
@@ -4436,7 +4446,7 @@ function Module.install(contextTable)
 
   -- main script will access via global
   GDFunc = GDF
-  defineGDFunctionEnums()
+  GDF.Profile.defineGDFunctionEnums()
 
   GDFunc.FUNC_OPCODE_END = GDFunc.CurrentDisassembler:getOPEnumFromInternalOPID(GDFunc.OP.OPCODE_END)
   GDDEFS.bDisasmFunc = true -- whether to disasm functions, on by default
