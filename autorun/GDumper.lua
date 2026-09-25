@@ -288,6 +288,10 @@
 
       function GDD.Utils.memrecTimeout(memrec, timeoutMS)
         if memrec == nil or type(memrec) ~= "userdata" then return end
+        if not inMainThread() then
+          return synchronize(GDD.Utils.memrecTimeout, memrec, timeoutMS)
+        end
+
         timeoutMS = timeoutMS or 50
         local callback = function(memrec)
           memrec.Active = false
@@ -338,6 +342,8 @@
       end
 
       function GDD.Utils.streamFileToString(fileName)
+        if not inMainThread() then return synchronize(GDD.Utils.streamFileToString, fileName) end
+
         local tableFile = findTableFile(fileName)
         if tableFile == nil then return nil end -- error('attached file not found')
         local stringStream = createStringStream()
@@ -359,10 +365,7 @@
 
       function GDD.Utils.loadScriptFromTable(fileName, arg)
         if isNullOrNil(fileName) then error('filename invalid') end
-        local tableFile = findTableFile( fileName )
-        if tableFile == nil then error('no script file found') end
-        local fileStream = tableFile.getData()
-        local scriptString = readStringLocal(fileStream.Memory, fileStream.Size)
+        local scriptString = GDD.Utils.streamFileToString(fileName)
         if scriptString == nil then error('script not loaded from file') end
         local doScript = loadstring(scriptString)
         if type(doScript) == 'function' then
@@ -906,6 +909,8 @@
 
       --- creates a menu button in the main menu
       function GDAPI.gd_buildGUI()
+        if not inMainThread() then return synchronize(GDAPI.gd_buildGUI) end
+
         if GDGUIInit then
           return
         end
@@ -2723,7 +2728,7 @@
               -- end
 
               if targetIsGodot then
-                synchronize(gd_buildGUI())
+                synchronize(gd_buildGUI)
 
               elseif targetIsGodot == false and GDGUIInit == true then
                 synchronize(function()
