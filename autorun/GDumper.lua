@@ -5139,6 +5139,45 @@
       end
     end
 
+    function GDAPI.gd_callp(objectAddr, methodName, argTable)
+      assert(isNotNullOrNil(objectAddr), "Object Addr must be valid")
+      assert(type(methodName) == 'string', "method name must be a string, instead got: " .. type(methodName))
+      assert(argTable == nil or type(argTable) == 'table', "arguments must be a table or nil, instead got: " .. type(argTable))
+
+      local callpMethod = GDD.Memory.getObjectVMethodByIndex(objectAddr, GDDEFS.CALLP_INDX)
+      if isNullOrNil(callpMethod) then error('callp not found') end
+
+      local methodSName = GDI.construct_string_name(methodName)
+      if isNullOrNil(methodSName) then error('string name not constructed') end
+
+      local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
+      writePointer(stringNamePtr, methodSName)
+
+      VariantArena:init()
+      if argTable and #argTable > 0 then
+        GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
+      else
+        VariantArena:reset()
+      end
+
+      local int_t = 0
+      local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset }
+      local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset }
+      local argCount = (argTable and #argTable) or 0
+      local err = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
+      writeInteger(err.value, -1)
+
+      executeCodeEx(stdcall, timeout, callpMethod, buffer, objectAddr, stringNamePtr, args, argCount, err)
+
+      deAlloc(stringNamePtr)
+      GDI.destroy_string_name(methodSName)
+
+      local errVal = readPointer(err.value)
+      if errVal == 0 then return VariantArena.base + VariantArena.returnBufOffset end
+
+      error('Fail, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]))
+    end
+
     function GDAPI.gd_callFunctionFromNode(nodeAddr, funcName, argTable)
       assert(isNotNullOrNil(nodeAddr), "Node Addr must be valid")
       assert(type(funcName) == 'string', "function name must be a string, instead got: " .. type(funcName))
@@ -5152,47 +5191,9 @@
       if isNotNullOrNil(GDDEFS.VM_CALL) then
         return GDAPI.executeGDFunction(functionAddr, gdScriptInstance, argTable)
       else
-        -- calling methods via node->callp("functionStringName", args, argc, err)
-        local callpMethod = GDD.Memory.getObjectVMethodByIndex(nodeAddr, GDDEFS.CALLP_INDX )
-        if isNullOrNil(callpMethod) then error('callp not found') end
-
-        local gdScript = GDD.Objects.getNodeGDScript(nodeAddr)
-        if isNullOrNil(gdScript) then error('gdscript invalid') end -- wouldn't make sense
-
-        -- construct bound method StringName
-        local methodSName = GDI.construct_string_name( funcName )
-        if isNullOrNil(methodSName) then error('string name not constructed') end
-        local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
-        writePointer(stringNamePtr, methodSName) -- we need the stringName to be stored in a pointer passed to callp
-
-        -- VariantArg setup
-        if isNotNullOrNil(argTable) and type(argTable) == "table" and isNotNullOrNil(#argTable) then
-          GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
-        end
-
-        local int_t = 0
-        local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- rcx
-        local args = { type = int_t, value = VariantArena.base + VariantArena.argListOffset } -- r9
-        local argCount = (argTable and #argTable) or 0
-        local err = { type = int_t, value = VariantArena.base + VariantArena.callErrorOffset }
-        writeInteger(err.value, -1)
-
-        local returned = executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err)
-      
-        deAlloc(stringNamePtr)
-        GDI.destroy_string_name(methodSName)
-
-        local errVal = readPointer( err.value )
-
-        -- success
-        if errVal == 0 then return VariantArena.base + VariantArena.returnBufOffset end
-      
-        -- fail
-        error('Fail, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
+        return GDAPI.gd_callp(nodeAddr, funcName, argTable)
       end
     end
-
-    -- TODO: callp API
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// Const
 
@@ -6378,6 +6379,7 @@
   gd_revertScript = GDAPI.gd_revertScript
   gd_reloadScriptInstance = GDAPI.gd_reloadScriptInstance
   gd_executeFunction = GDAPI.executeGDFunction
+  gd_callp = GDAPI.gd_callp
   gd_callFunctionFromNode = GDAPI.gd_callFunctionFromNode
   gd_patchFunction = GDAPI.gd_patchFunction
   gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode
