@@ -33,6 +33,7 @@
       Array = {},
       Variants = {},
       Dumper = {},
+      Modules = {},
     }
 
   local GDAPI = GDD.API
@@ -48,6 +49,26 @@
 
   local bGDDebug = false
   local bHardOffsets = false
+
+  local ceDirectory = getCheatEngineDir() or ''
+  local moduleDirectory = [[autorun\GDDumperModules\]]
+  local moduleSpecs =
+    {
+      HardOffsets = { name = 'GDDumperModules.GDHardOffsets', file = 'GDHardOffsets.lua', attachment = 'GDOff' },
+      Signatures = { name = 'GDDumperModules.GDSignatures', file = 'GDSignatures.lua', attachment = 'GDSig' },
+      Types = { name = 'GDDumperModules.GDTypes', file = 'GDTypes.lua', attachment = 'GDT' },
+      FunctionDisassembler = { name = 'GDDumperModules.GDFunctionStructDisassembler', file = 'GDFunctionStructDisassembler.lua', attachment = 'GDFDasm' },
+      NodeMonitor = { name = 'GDDumperModules.GDNodeMonitor', file = 'GDNodeMonitor.lua', attachment = 'GDNM' },
+      StructWalker = { name = 'GDDumperModules.GDStructWalker', file = 'GDStructWalker.lua', localOnly = true },
+    }
+  local portableModuleSpecs =
+    {
+      moduleSpecs.HardOffsets,
+      moduleSpecs.Signatures,
+      moduleSpecs.Types,
+      moduleSpecs.FunctionDisassembler,
+      moduleSpecs.NodeMonitor,
+    }
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// LOCAL HELPERS
 
@@ -349,6 +370,86 @@
         else
           error('script not parsed')
         end
+      end
+
+      function GDD.Modules.getAttachedSource(attachmentName)
+        if not inMainThread() then
+          return synchronize(GDD.Modules.getAttachedSource, attachmentName)
+        end
+
+        return GDD.Utils.streamFileToString(attachmentName)
+      end
+
+      local function runModuleChunk(chunk, sourceName)
+        local ok, module = pcall(chunk)
+        if not ok then return nil, tostring(module) end
+        if type(module) ~= 'table' then
+          return nil, sourceName .. ' did not return a module table'
+        end
+        return module
+      end
+
+      local function loadLocalModule(fileName)
+        local installedPath = ceDirectory .. moduleDirectory .. fileName
+        local chunk, loadError = loadfile(installedPath)
+        if not chunk then return nil, tostring(loadError) end
+        return runModuleChunk(chunk, installedPath)
+      end
+
+      local function loadAttachedModule(attachmentName)
+        local sourceText = GDD.Modules.getAttachedSource(attachmentName)
+        if not sourceText then
+          return nil, 'table attachment ' .. attachmentName .. ' was not found'
+        end
+
+        local chunk, parseError = load(sourceText, '@' .. attachmentName)
+        if not chunk then return nil, tostring(parseError) end
+        return runModuleChunk(chunk, attachmentName)
+      end
+
+      function GDD.Modules.registerResolver(spec)
+        if spec.localOnly or not spec.attachment then error(spec.name .. ' is not a portable module', 2) end
+
+        package.loaded[spec.name] = nil
+        package.preload[spec.name] = function()
+          -- installed first
+          local module, localError = loadLocalModule(spec.file)
+          if module then return module end
+
+          local attachedModule, attachmentError = loadAttachedModule(spec.attachment)
+          if attachedModule then return attachedModule end
+
+          error( ('Unable to load %s. Local: %s. Attached: %s'):format(spec.name, tostring(localError), tostring(attachmentError)), 2 )
+        end
+      end
+
+      function GDD.Modules.requireFresh(spec)
+        package.loaded[spec.name] = nil
+        local module = require(spec.name)
+        if type(module.install) ~= 'function' then
+          error(spec.name .. ' does not export install(context)', 2)
+        end
+        return module
+      end
+
+      function GDD.Modules.loadOptionalLocal(spec)
+        local installedPath = ceDirectory .. moduleDirectory .. spec.file
+        local file = io.open(installedPath, 'rb')
+        if not file then return nil end
+        file:close()
+
+        local module, loadError = loadLocalModule(spec.file)
+        if not module then
+          error(('Unable to load optional local module %s: %s'):format(spec.name, tostring(loadError)), 2)
+        end
+        if type(module.install) ~= 'function' then
+          error(spec.name .. ' does not export install(context)', 2)
+        end
+        return module
+      end
+
+      for _, spec in ipairs(portableModuleSpecs) do
+        GDD.Modules.registerResolver(spec)
       end
 
 
@@ -746,19 +847,10 @@
 
       -- attaches the script to the table
       function GDD.GUI.appendDumperScript(sender)
-        local cedir = getCheatEngineDir()
-        local dumperPath = cedir .. [[autorun\GDumper.lua]]
-        local offsetPath = cedir .. [[autorun\GDDumperModules\GDHardOffsets.lua]]
-        local sigPath = cedir .. [[autorun\GDDumperModules\GDSignatures.lua]]
-        local disasmPath = cedir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]]
-        local nodemonitor = cedir .. [[autorun\GDDumperModules\GDNodeMonitor.lua]]
-        local types = cedir .. [[autorun\GDDumperModules\GDTypes.lua]]
-        createTableFile("GDumper", dumperPath)
-        createTableFile("GDOff", offsetPath)
-        createTableFile("GDSig", sigPath)
-        createTableFile("GDFDasm", disasmPath)
-        createTableFile("GDT", types)
-        createTableFile("GDNM", nodemonitor)
+        createTableFile('GDumper', ceDirectory .. [[autorun\GDumper.lua]])
+        for _, spec in ipairs(portableModuleSpecs) do
+          createTableFile(spec.attachment, ceDirectory .. moduleDirectory .. spec.file)
+        end
         sender.Enabled = false
       end
 
@@ -6189,39 +6281,19 @@
       -- init global
       GDD.Config.initDefs()
 
-      local ceDir = getCheatEngineDir() or ''
-
       -- retrieve the offset getted function
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDHardOffsets.lua]] )
-      if ok then
-        getStoredOffsetsFromVersion = result.install( { sendDebugMessage = sendDebugMessage, } )
-      else
-        -- portable, we get a module object
-        getStoredOffsetsFromVersion = GDD.Utils.loadScriptFromTable( "GDOff" ).install( { sendDebugMessage = sendDebugMessage, } )
-      end
+      getStoredOffsetsFromVersion = GDD.Modules.requireFresh(moduleSpecs.HardOffsets).install({ sendDebugMessage = sendDebugMessage, })
 
       -- retrieve the signatures
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDSignatures.lua]] )
-      if ok then
-        GDAOB = result.install( {} )
-      else
-        GDAOB = GDD.Utils.loadScriptFromTable( "GDSig" ).install( {} )
-      end
+      GDAOB = GDD.Modules.requireFresh(moduleSpecs.Signatures).install({})
 
       -- essential version definition
       GDD.Config.initVersion(config)
 
       -- define type conversion helpers via module
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDTypes.lua]] )
-      if ok then
-        result.install( {GDDEFS=GDDEFS} )
-      else
-        GDD.Utils.loadScriptFromTable( "GDT" ).install( {GDDEFS=GDDEFS} )
-      end
+      GDD.Modules.requireFresh(moduleSpecs.Types).install({ GDDEFS = GDDEFS })
 
       -- build the correct disassembler profile inside the module
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDFunctionStructDisassembler.lua]] )
-      local GDFuncDisasm
       local dependencyContext = 
         {
           GDDEFS = GDDEFS,
@@ -6232,14 +6304,10 @@
           iterateFuncGlobalsToStruct = GDD.Functions.iterateGlobalsToStruct,
           sendDebugMessage = sendDebugMessage,
         }
-      if ok then
-        result.install(dependencyContext)
-      else
-        GDD.Utils.loadScriptFromTable( "GDFDasm" ).install(dependencyContext)
-      end
+      GDD.Modules.requireFresh(moduleSpecs.FunctionDisassembler).install(dependencyContext)
 
       -- initialize structure walker for non-standalone
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDStructWalker.lua]] )
+      local structWalker = GDD.Modules.loadOptionalLocal(moduleSpecs.StructWalker)
       local dependencyContext =
         {
           GDDEFS = GDDEFS,
@@ -6251,9 +6319,7 @@
           tryRegSceneTree = GDD.Root.tryRegisterSceneTree,
           setSTtoRootOffset = GDD.Root.setSceneTreeRootOffset,
         }
-      if ok then
-        result.install(dependencyContext)
-      end
+      if structWalker then structWalker.install(dependencyContext) end
 
       -- define version and offsets
       GDD.Config.defineOffsets(config)
@@ -6288,7 +6354,6 @@
       end
 
       -- this guy will monitor threads and register them, isn't quite optimized non-intrusive solution
-      local ok, result = pcall( dofile, ceDir .. [[autorun\GDDumperModules\GDNodeMonitor.lua]] )
       local dependencyContext =
         {
           GDDEFS = GDDEFS,
@@ -6298,12 +6363,7 @@
           getSectionBounds = GDD.Memory.getSectionBounds,
           gd_getNodeNameFromScript = GDAPI.gd_getNodeNameFromScript
         }
-
-      if ok then
-        result.install(dependencyContext)
-      else
-        GDD.Utils.loadScriptFromTable( "GDNM" ).install(dependencyContext)
-      end
+      GDD.Modules.requireFresh(moduleSpecs.NodeMonitor).install(dependencyContext)
 
       -- it will spin from now on
       GDDEFS.Monitor:init()
