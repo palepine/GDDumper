@@ -7,7 +7,6 @@
   -- TODO: explore how timeconsuming would it be to pull off what gdsdecomp does with token streams for runtime decompilation and runtime re-compilation
   -- TODO: ObjectDB inspection
   -- TODO: selective dynamic address dump for a node's variants (arrays/dictionaries)
-  -- TODO: remove function guessing in favor of callbacks when building node structures
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// PRIVATE OBJECT GRAPH
   local GDD =
