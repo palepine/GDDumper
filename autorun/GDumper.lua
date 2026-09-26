@@ -1,6 +1,23 @@
--- This script was created by palepine. Support me: https://www.patreon.com/c/palepine/membership
--- I'd like to thank cfemen for some basic insights about the godot engine which saved me from reading much of the Godot Engine source code initially.
--- Source code on github: https://github.com/palepine/GDDumper
+--[[
+  Cheat Engine Godot Dumper — Copyright (C) 2026 palepine
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+]]
+
+
+-- support me: https://www.patreon.com/c/palepine/membership
+
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// TODOS
   -- TODO tree view form
   -- TODO doxygen comments
@@ -6385,12 +6402,13 @@
   gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode
   gd_getNodeConstPtr = GDAPI.getNodeConstPtr
   gd_patchFunctionConst = GDAPI.gd_patchFunctionConst
-
+  
   -- misc
   gd_buildGUI = GDAPI.gd_buildGUI  
   gd_printDumped = GDAPI.gd_printDumped
   gd_reportConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
+  gd_getDumper = GDAPI.gd_getDumper
   gd_assumeOffsets = nil -- GDStructWalker.lua
   gd_probeOffsets = nil -- GDStructWalker.lua
   gd_subscribeToRun = nil -- GDNodeMonitor.lua

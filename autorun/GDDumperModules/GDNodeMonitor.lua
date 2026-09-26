@@ -1,3 +1,20 @@
+--[[
+  Cheat Engine Godot Dumper — Copyright (C) 2026 palepine
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+]]
+
 local Module = {}
 -- the implementations here trade readability/SoC for a potential performance boost (~6 times)
 
@@ -36,6 +53,8 @@ function Module.install(GDD)
   -- GDDEFS.SIZEOF_VARIANT = variantSize
 
   local BUDGET_CHECK_MASK = 0x3F -- 63 to check every 64 iteration
+  local VISIT_REJECTED = 1
+  local VISIT_COMPLETE = 2
 
   local eOBJECT = getGDTypeEnumFromName('OBJECT')
   local eDICTIONARY = getGDTypeEnumFromName('DICTIONARY')
@@ -289,7 +308,7 @@ function Module.install(GDD)
 
     local function handleObjectForNodes( objAddr, dumpContext)
       if dumpContext:shouldStop() then return end
-      processNodeForNodes( objAddr, dumpContext )
+      processNodeForNodes( objAddr, dumpContext, false )
     end
 
   -- ITERATORS
@@ -336,11 +355,11 @@ function Module.install(GDD)
       if dumpContext:shouldStop() then return end
       for i = 0, (size - 1) do
         local childAddr = readPointer(childrenAddr + (i * PTRSIZE))
-        processNodeForNodes(childAddr, dumpContext)
+        processNodeForNodes(childAddr, dumpContext, true)
       end
     end
 
-    function processNodeForNodes(nodeAddr, dumpContext)
+    function processNodeForNodes(nodeAddr, dumpContext, isTreeNode)
       if dumpContext:shouldStop() then return end
       if nodeAddr == nil or nodeAddr == 0 then return false end
 
@@ -351,7 +370,7 @@ function Module.install(GDD)
             scriptAddr,
             gdScriptNameAddr,
             childrenAddr,
-            size = dumpContext:VisitNode(nodeAddr)
+            size = dumpContext:VisitNode(nodeAddr, isTreeNode)
       if not ok then return end
 
       if MONOUSED and checkIfCSScript( gdScriptNameAddr ) == eCSScript then
@@ -435,26 +454,50 @@ function Module.install(GDD)
           thread = thr,
         }
 
-      function dumpContext:VisitNode(addr)
+      function dumpContext:VisitNode(addr, isTreeNode)
         if addr == nil or addr == 0 then return false end
-        GDDEFS.Monitor:nodeCountInc() -- how many nodes we have seen
-        if self.visited[addr] then return false end
-        self.visited[addr] = true
+
+        local visitState = self.visited[addr]
+        if visitState == VISIT_COMPLETE or (visitState == VISIT_REJECTED and not isTreeNode) then return false end
+        if visitState == nil then GDDEFS.Monitor:nodeCountInc() end -- how many objects we have seen
+
+        local childrenAddr, size
+        if isTreeNode then -- scene tree roots & child array entries have to be considered regardless
+          childrenAddr = readPointer( addr + CHILDREN )
+          if MAJORVER >= 4 then
+            size = readInteger( addr + CHILDREN - CHILDREN_SIZE )
+          else
+            size = readInteger( (childrenAddr or 0) - CHILDREN_SIZE ) or 0
+          end
+        end
 
         local scriptInstanceAddr = readPointer( addr + SCRIPT_INSTANCE )
-        if scriptInstanceAddr == nil or scriptInstanceAddr == 0 then return false end
+        if scriptInstanceAddr == nil or scriptInstanceAddr == 0 then
+          self.visited[addr] = isTreeNode and VISIT_COMPLETE or VISIT_REJECTED
+          if isTreeNode then return true, nil, nil, nil, nil, childrenAddr, size end
+          return false
+        end
+
         local vectorAddr = readPointer( scriptInstanceAddr + VARIANT_VECTOR )
         local scriptAddr = readPointer( scriptInstanceAddr + SCRIPTREF )
-        if scriptAddr == nil or scriptAddr == 0 then return false end
+        if scriptAddr == nil or scriptAddr == 0 then
+          self.visited[addr] = isTreeNode and VISIT_COMPLETE or VISIT_REJECTED
+          if isTreeNode then return true, scriptInstanceAddr, nil, nil, nil, childrenAddr, size end
+          return false
+        end
+
         local gdScriptNameAddr = readPointer( scriptAddr + GDSCRIPTNAME )
 
-        local childrenAddr = readPointer( addr + CHILDREN )
-        local size
-        if MAJORVER >= 4 then
-          size = readInteger( addr + CHILDREN - CHILDREN_SIZE )
-        else
-          size = readInteger( (childrenAddr or 0) - CHILDREN_SIZE ) or 0
+        if not isTreeNode then
+          childrenAddr = readPointer( addr + CHILDREN )
+          if MAJORVER >= 4 then
+            size = readInteger( addr + CHILDREN - CHILDREN_SIZE )
+          else
+            size = readInteger( (childrenAddr or 0) - CHILDREN_SIZE ) or 0
+          end
         end
+
+        self.visited[addr] = VISIT_COMPLETE
 
         if gdScriptNameAddr ~= nil and gdScriptNameAddr ~= 0 then
           table.insert(self.dumped, addr)
@@ -488,7 +531,7 @@ function Module.install(GDD)
       if mainNodeDict == nil or mainNodeDict == 0 then return end
 
       for _, value in ipairs(mainNodeDict) do
-        processNodeForNodes(value, dumpContext)
+        processNodeForNodes(value, dumpContext, true)
       end
 
       GD_DUMP_MONITOR_NODES, GD_DUMP_MONITOR_NODES_ABS = cloneArrayAsMap(dumpContext.dumped)

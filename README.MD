@@ -49,4 +49,4 @@ I'd appreciate any help/ideas with features I haven't implemented or that can be
 Feel free to open new issues if the script doesn't support some engine versions
 
 ## License
-This project is released under the MIT License. See [LICENSE](LICENSE) for details.
+This project is released under the GNU General Public License v3.0. See [LICENSE](LICENSE) for details.
