@@ -4821,6 +4821,29 @@
       end
     end
 
+    --- returns a function constant value ptr and its CE type
+    ---@param funcObjAddr number
+    ---@param constIndex number @0-based constant index
+    function GDAPI.gd_getFunctionConstPtr(funcObjAddr, constIndex)
+      assert(type(funcObjAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcObjAddr))
+      assert(type(constIndex) == 'number', "Const index must be a number, instead got: " .. type(constIndex))
+      assert(constIndex >= 0 and constIndex % 1 == 0, "Const index must be a non-negative integer")
+
+      local funcConstAddr = GDD.Functions.getConstantsAddress(funcObjAddr)
+      if isNullOrNil(funcConstAddr) then error("function const addr is invalid") end
+
+      local vectorSize = readInteger(funcConstAddr - GDDEFS.SIZE_VECTOR)
+      if vectorSize == nil or vectorSize < 0 then error("function const vector size is invalid") end
+      if constIndex >= vectorSize then
+        error( ("Const index %d is out of bounds (size: %d)"):format( constIndex, vectorSize ) )
+      end
+
+      local constAddr, variantType = GDD.Variants.getByIndex(funcConstAddr, constIndex, GDDEFS.SIZEOF_VARIANT)
+      if isNullOrNil(constAddr) or variantType == nil then error("function const is invalid") end
+
+      return constAddr, GDD.Types.getCETypeFromGD(variantType)
+    end
+
     --- patch a function's constant with a value
     ---@param funcObjAddr number
     ---@param constIndex number@0-based position to start patching from
@@ -4832,25 +4855,16 @@
       assert(type(value) == 'number', "value has to be a number, instead got: " .. type(value))
       assert(type(CEvalueType) == 'number', "ce value type has to be a number, instead got: " .. type(CEvalueType))
 
-      local funcConstAddr = GDD.Functions.getConstantsAddress(funcObjAddr)
-      if isNullOrNil(funcConstAddr) then error("function const addr is invalid") end
-
-      local vectorSize = readInteger(funcConstAddr - GDDEFS.SIZE_VECTOR)
-
-      -- local sizeOfVariant, ok = GDD.Types.redefineVariantSizeByVector(funcConstAddr, vectorSize)
-      -- if not ok then error("size refedinition failed") end
-      local sizeOfVariant = GDDEFS.SIZEOF_VARIANT
-
-      local targetConstAddr = GDD.Variants.getByIndex(funcConstAddr, constIndex, sizeOfVariant)
+      local targetConstAddr = GDAPI.gd_getFunctionConstPtr(funcObjAddr, constIndex)
 
       -- todo: base it on handlers
-      if vtByte then
+      if CEvalueType == vtByte then
         writeByte(targetConstAddr, value)
-      elseif vtDword then
+      elseif CEvalueType == vtDword then
         writeInteger(targetConstAddr, value, true)
-      elseif vtDouble then
+      elseif CEvalueType == vtDouble then
         writeDouble(targetConstAddr, value)
-      elseif vtQword then
+      elseif CEvalueType == vtQword then
         writeQword(targetConstAddr, value)
       else
         error("yet unhandled type")
@@ -6401,6 +6415,7 @@
   gd_patchFunction = GDAPI.gd_patchFunction
   gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode
   gd_getNodeConstPtr = GDAPI.getNodeConstPtr
+  gd_getFunctionConstPtr = GDAPI.gd_getFunctionConstPtr
   gd_patchFunctionConst = GDAPI.gd_patchFunctionConst
   
   -- misc
