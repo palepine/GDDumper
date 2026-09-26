@@ -110,6 +110,18 @@ For the moment being, the doc isn't complete and features only most useful funct
   gd_run_subscribeRecompileScript('scripts.player', 'modified_player.gd')
   ```
 
+- `gd_run_subscribeRevertScript( gdScriptName, memrec )`
+> reverts a GDScript as soon as the Node Monitor finds a node using it
+
+  > Notes:
+  >1) The subscription removes itself after the script is reverted successfully
+  >2) If reverting fails, it remains subscribed and can be removed with `gd_run_unsubscribe`
+  >3) If a memrec is passed, it is activated after the revert; an address-bearing group header receives the matching node address
+
+  ```lua
+  gd_run_subscribeRevertScript('scripts.player')
+  ```
+
 ## Script
 
 - `gd_patchFunction( funcObjAddr, patchToBytes, startPos )`
