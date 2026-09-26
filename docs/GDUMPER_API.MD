@@ -98,6 +98,18 @@ For the moment being, the doc isn't complete and features only most useful funct
   gd_run_subscribeRegisterNodeSelectively( 'Globals' , { 'currentScene' } ) -- only currentScene will be registered
   ```
 
+- `gd_run_subscribeRecompileScript( gdScriptName, fileName, memrec )`
+> hot-reloads a GDScript as soon as the Node Monitor finds a node using it
+
+  > Notes:
+  >1) The subscription removes itself after the script is recompiled successfully
+  >2) If recompilation fails, it remains subscribed and can be removed with `gd_run_unsubscribe`
+  >3) If a memrec is passed, it is activated after successful recompilation; an address-bearing group header receives the matching node address
+
+  ```lua
+  gd_run_subscribeRecompileScript('scripts.player', 'modified_player.gd')
+  ```
+
 ## Script
 
 - `gd_patchFunction( funcObjAddr, patchToBytes, startPos )`
