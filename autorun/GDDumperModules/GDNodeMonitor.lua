@@ -33,6 +33,7 @@ function Module.install(GDD)
   local getSectionBounds = GDD.Memory.getSectionBounds
   local gd_getNodeNameFromScript = GDD.API.gd_getNodeNameFromScript
   local gd_recompileScript = GDD.API.gd_recompileScript
+  local gd_revertScript = GDD.API.gd_revertScript
 
   local GDDEFS = GDD.Config.Defs
   -- to avoid table access overhead
@@ -669,6 +670,31 @@ function Module.install(GDD)
       if nodeAddr == nil or nodeAddr == 0 then return end
 
       gd_recompileScript(nodeAddr, fileName)
+
+      if memrec ~= nil and memrec.getClassName and memrec.getClassName() == 'TMemoryRecord' then
+        synchronize(function()
+          if memrec.IsAddressGroupHeader then memrec.Address = string.format('%X', nodeAddr) end
+          memrec.Active = true
+        end)
+      end
+
+      GDDEFS.Monitor:offRunFinished(subId)
+    end)
+
+    return subId
+  end
+
+  function gd_run_subscribeRevertScript(gdScriptName, memrec)
+    if type(gdScriptName) ~= 'string' or gdScriptName == '' then error('gdscript name expected') end
+
+    local subName = 'revert_' .. gdScriptName
+    local subId
+
+    subId = GDDEFS.Monitor:onRunFinished(subName, function(event)
+      local nodeAddr = findNodeByScriptName(event, gdScriptName)
+      if nodeAddr == nil or nodeAddr == 0 then return end
+
+      gd_revertScript(nodeAddr)
 
       if memrec ~= nil and memrec.getClassName and memrec.getClassName() == 'TMemoryRecord' then
         synchronize(function()
