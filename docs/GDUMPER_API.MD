@@ -137,6 +137,14 @@ For the moment being, the doc isn't complete and features only most useful funct
 - `gd_getFunctionFromNode( nodeAddr, funcName )`
 > gets the func from the respective node via its name (example above)
 
+- `gd_getFunctionConstPtr( funcObjAddr, constIndex )`
+> returns the runtime address and CE value type of a function constant at the given zero-based index
+
+  ```lua
+  local funcAddr = gd_getFunctionFromNode( gd_getDumpedNode('Global'), '_process' )
+  local constAddr, ceType = gd_getFunctionConstPtr( funcAddr, 0 )
+  ```
+
 - `gd_callFunctionFromNode( nodeAddr, funcName, argTable )`
 >Invokes a user-defined script function for the respective node. Note: not every Variant type is implemented
 
