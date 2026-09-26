@@ -32,6 +32,7 @@ function Module.install(GDD)
   local getMainModuleInfo = GDD.Memory.getMainModuleInfo
   local getSectionBounds = GDD.Memory.getSectionBounds
   local gd_getNodeNameFromScript = GDD.API.gd_getNodeNameFromScript
+  local gd_recompileScript = GDD.API.gd_recompileScript
 
   local GDDEFS = GDD.Config.Defs
   -- to avoid table access overhead
@@ -581,6 +582,26 @@ function Module.install(GDD)
     return GDDEFS.NODE_SUBS[subName]
   end
 
+  local function findNodeByScriptName(event, scriptName)
+    local nodeAddr = event.nodesAbs[scriptName]
+    if nodeAddr == nil or nodeAddr == 0 then nodeAddr = event.nodes[scriptName] end
+    if nodeAddr ~= nil and nodeAddr ~= 0 then return nodeAddr end
+
+    local normalizedName = scriptName:gsub('\\', '/')
+    local resourceName = normalizedName:gsub('^res://', '')
+    local shortName = resourceName:match('([^/]+)$') or resourceName
+    shortName = shortName:gsub('%.[^.]+$', '')
+
+    local resourcePath
+    if normalizedName:find('/', 1, true) then
+      resourcePath = resourceName:gsub('%.[^.]+$', ''):gsub('/', '.')
+      nodeAddr = event.nodesAbs[resourcePath]
+      if nodeAddr ~= nil and nodeAddr ~= 0 then return nodeAddr end
+    end
+
+    return event.nodes[shortName]
+  end
+
   function gd_run_subscribeRegisterNode(nodeName, memrec)
     if type(nodeName) ~= 'string' or nodeName == '' then error("node name expected") end
 
@@ -631,6 +652,32 @@ function Module.install(GDD)
 
         GDDEFS.Monitor:offRunFinished(subId)
       end
+    end)
+
+    return subId
+  end
+
+  function gd_run_subscribeRecompileScript(gdScriptName, fileName, memrec)
+    if type(gdScriptName) ~= 'string' or gdScriptName == '' then error('gdscript name expected') end
+    if type(fileName) ~= 'string' or fileName == '' then error('script file name expected') end
+
+    local subName = 'reload_' .. gdScriptName
+    local subId
+
+    subId = GDDEFS.Monitor:onRunFinished(subName, function(event)
+      local nodeAddr = findNodeByScriptName(event, gdScriptName)
+      if nodeAddr == nil or nodeAddr == 0 then return end
+
+      gd_recompileScript(nodeAddr, fileName)
+
+      if memrec ~= nil and memrec.getClassName and memrec.getClassName() == 'TMemoryRecord' then
+        synchronize(function()
+          if memrec.IsAddressGroupHeader then memrec.Address = string.format('%X', nodeAddr) end
+          memrec.Active = true
+        end)
+      end
+
+      GDDEFS.Monitor:offRunFinished(subId)
     end)
 
     return subId
