@@ -6385,12 +6385,13 @@
   gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode
   gd_getNodeConstPtr = GDAPI.getNodeConstPtr
   gd_patchFunctionConst = GDAPI.gd_patchFunctionConst
-
+  
   -- misc
   gd_buildGUI = GDAPI.gd_buildGUI  
   gd_printDumped = GDAPI.gd_printDumped
   gd_reportConfig = GDAPI.printGDConfig
   gd_getSemver = GDAPI.getGDSemver
+  gd_getDumper = GDAPI.gd_getDumper
   gd_assumeOffsets = nil -- GDStructWalker.lua
   gd_probeOffsets = nil -- GDStructWalker.lua
   gd_subscribeToRun = nil -- GDNodeMonitor.lua
