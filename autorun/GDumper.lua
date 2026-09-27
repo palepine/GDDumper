@@ -2852,7 +2852,7 @@
       end -- for auto offsetdef and ptr arithmetics
 
       local scriptErrors = { [22] = "in use error", [43] = "parse error", [2] = "handler script error", [36] = "compilation error", [1] = "handler warning", }
-      local callErrors = { [1] = "invalid method", [2] = "invalid argument", [3] = "too many args", [4] = "too few args", [5] = "instance is null", [6] = "method not const", }
+      local callErrors = { [1] = "invalid method", [2] = "invalid argument", [3] = "too many args", [4] = "too few args", [5] = "instance is null", [6] = "method not const", [-1] = "NOT SET"}
       GDDEFS.SCRIPT_ERRORS = scriptErrors
       GDDEFS.CALL_ERRORS = callErrors
       GDDEFS.STRING = 0x4+0x4+GDDEFS.PTRSIZE
@@ -4136,14 +4136,7 @@
             local objDestor = GDNative:getFuncFromIndex(GDNative, 570)
             if isNullOrNil(objDestor) then error('godot_variant_destroy func ptr not found') end
 
-            -- allocating target memory
-            local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
-            if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-            writePointer(objAlloc, ptr)
-
-            -- destroy
-            executeCodeEx(stdcall, timeout, objDestor, objAlloc)
-            deAlloc(objAlloc)
+            executeCodeEx(stdcall, timeout, objDestor, ptr)
           end
 
           function GDNativeInterface.godot_alloc( bytes )
@@ -4544,9 +4537,9 @@
 
       function GDI.destroy_variant( ptr )
         if GDDEFS.MAJOR_VER <= 3 then
-          error('not implemented')
+          GDNativeInterface.godot_variant_destroy( ptr )
         else
-          error('not implemented')
+          GDExtendedInterface.destroy_object_variant( ptr )
         end
         if ptr then GDI.constructed[ptr] = nil end
       end
@@ -4669,6 +4662,7 @@
 
       local int_t = 0
       local argTable = { { type = "NIL", value = nil } }
+      VariantArena:prepareCall()
       GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
 
       local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- rcx
@@ -4679,10 +4673,12 @@
 
       -- We cheat here with    node->set_script( Variant(TYPE::NIL) );     to avoid   if (get_script() == p_script) return;   but we lose the state
       executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err)
+      VariantArena:markReturnValueActive()
 
       -- error checking, the object state should allegedly be fine
-      local errVal = readPointer( err.value )
+      local errVal = readInteger( err.value )
       if errVal ~= 0 then
+        VariantArena:discardReturnValue()
         GDI.destroy_string_name( methodSName )
         deAlloc(stringNamePtr)
         error('resetting the script failed, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
@@ -4693,21 +4689,24 @@
 
       -- setting up the arg
       local argTable = { { type = "OBJECT", value = nil, copy = objectVariant } } -- for we manage it
+      VariantArena:prepareCall()
       GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
 
       writeInteger(err.value, -1)
 
       -- hotreload the SI of a node
       executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
+      VariantArena:markReturnValueActive()
       
       deAlloc(stringNamePtr)
       GDI.destroy_string_name(methodSName)
       GDI.destroy_object_variant(objectVariant)
 
-      local errVal = readPointer( err.value )
+      local errVal = readInteger( err.value )
+      VariantArena:discardReturnValue()
 
       -- success
-      if errVal == 0 then return readPointer( err.value ) end
+      if errVal == 0 then return errVal end
       
       -- fail
       error('hotreloading GDSI failed, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
@@ -5080,7 +5079,7 @@
       -- so far the calling conventions match seamlessly
 
       -- we need the dummy stack even when no arguments
-      if not VariantArena:init() then error("'stack' space isn't alloced") end
+      VariantArena:prepareCall()
 
       local vmCallAddr
       if isNullOrNil(GDDEFS.VM_CALL) then
@@ -5118,6 +5117,7 @@
       local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
 
       if GDDEFS.VM_CALL_HEAVY then
+        VariantArena:markReturnValueActive()
         return VariantArena.base + VariantArena.returnBufOffset, true
       end
 
@@ -5184,7 +5184,7 @@
       local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
       writePointer(stringNamePtr, methodSName)
 
-      VariantArena:init()
+      VariantArena:prepareCall()
       if argTable and #argTable > 0 then
         GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
       else
@@ -5199,13 +5199,15 @@
       writeInteger(err.value, -1)
 
       executeCodeEx(stdcall, timeout, callpMethod, buffer, objectAddr, stringNamePtr, args, argCount, err)
+      VariantArena:markReturnValueActive()
 
       deAlloc(stringNamePtr)
       GDI.destroy_string_name(methodSName)
 
-      local errVal = readPointer(err.value)
+      local errVal = readInteger(err.value)
       if errVal == 0 then return VariantArena.base + VariantArena.returnBufOffset end
 
+      VariantArena:discardReturnValue()
       error('Fail, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]))
     end
 
@@ -5791,6 +5793,7 @@
         -- end padd
         
         inited = false,
+        returnValueActive = false,
       }
 
       function VariantArena:init()
@@ -5805,6 +5808,32 @@
 
       function VariantArena:reset()
         self.cursor = self.scratchStart
+      end
+
+      function VariantArena:clearRegion(offset, size)
+        for currentOffset = 0, size - GDDEFS.PTRSIZE, GDDEFS.PTRSIZE do
+          writePointer(self.base + offset + currentOffset, 0)
+        end
+      end
+
+      function VariantArena:discardReturnValue()
+        if self.returnValueActive then
+          GDI.destroy_variant(self.base + self.returnBufOffset)
+          self.returnValueActive = false
+        end
+        self:clearRegion(self.returnBufOffset, self.variantSize)
+      end
+
+      function VariantArena:prepareCall()
+        self:init()
+        self:discardReturnValue()
+        self:clearRegion(self.excptOffset, self.variantSize)
+        self:clearRegion(self.callErrorOffset, 0x10)
+        self:reset()
+      end
+
+      function VariantArena:markReturnValueActive()
+        self.returnValueActive = true
       end
 
       function VariantArena:align(alignment)
