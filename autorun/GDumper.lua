@@ -2567,7 +2567,9 @@
 
       -- cases when getAddress fails
       if isNullOrNil(base) then
-        base = enumModules()[1].Address
+        local loadedModules = enumModules()
+        if not loadedModules or #loadedModules == 0 then return nil end
+        base = loadedModules[1].Address
       end
 
       -- first check via PE -- https://wiki.osdev.org/PE
@@ -2703,75 +2705,103 @@
 
     end
 
-    --- heuristic to identify whether the process is godot
-    function GDD.Preinit.onProcessOpened(processid, processhandle, caption)
-      -- similar to monoscript.lua in implementation
-      if GD_OldOnProcessOpened ~= nil then
-        GD_OldOnProcessOpened(processid, processhandle, caption)
+    local function isUsableProcessId(processId)
+      return type(processId) == 'number' and processId > 0 and processId ~= 0xFFFFFFFF and processId ~= 0xFFFFFFFE
+    end
+
+    function GDD.Preinit.removeGUI()
+      if not inMainThread() then return synchronize(GDD.Preinit.removeGUI) end
+      if not GDGUIInit then return end
+
+      GDD.Structures.disableDissect()
+      local mainMenu = getMainForm().Menu
+      for i = 0, mainMenu.Items.Count - 1 do
+        if mainMenu.Items.Item[i].Caption == 'GDDumper' then
+          mainMenu.Items.Item[i].Destroy()
+          break
+        end
       end
+      GDGUIInit = false
+      MainForm.setCaption('Cheat Engine')
+    end
 
-      if godot_ProcessMonitorThread == nil then
-          godot_ProcessMonitorThread = createThread
-          (
-            function(thr)
-              thr.Name = 'GDDumper_ProcessMonitorThread'
-              targetIsGodot = false
-              -- first check via PE -- https://wiki.osdev.org/PE
-              local exportTablename = GDD.Preinit.getExportTableName() or ""
-              if (exportTablename):match("([gG][oO][Dd][Oo][Tt])") then
-                -- if GDDEFS == nil then GDDEFS = {} end
-                -- GDDEFS.GDEXPORT_TABLE = exportTablename
-                targetIsGodot = true;
-              end
+    --- heuristic to identify whether the currently attached process is Godot
+    function GDD.Preinit.couldBeGodot(processId)
+      if getOpenedProcessID() ~= processId then return false end
 
-              -- secondly, check if there's a package file, many apps do
-              if not targetIsGodot then
-                local pathToExe = enumModules()[1].PathToFile
-                local gameDir, exeName = extractFilePath(pathToExe), string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
-                local pathList = getFileList(gameDir, exeName..".pck" ) -- TODO: regex chars will invalidate the mask
+      local exportTableName = GDD.Preinit.getExportTableName() or ''
+      if getOpenedProcessID() ~= processId then return false end
+      if exportTableName:lower():find('godot', 1, true) then return true end
 
-                if pathList and next(pathList) then
-                  targetIsGodot = true;
-                end
-              end
+      local loadedModules = enumModules()
+      if getOpenedProcessID() ~= processId or not loadedModules or #loadedModules == 0 then return false end
 
-              -- -- via powershell, which also isn't reliable and slow
-              -- if not targetIsGodot then
-              --     local out, code = runCommand("cmd.exe", { "/c", ([[powershell -NoProfile -Command "(Get-Item '%s').VersionInfo.FileDescription"]]):format(pathToExe) })
-              --     if code ~= 0 then targetIsGodot = false
-              --     else
-              --         if (out or ""):match("([gG][oO][Dd][Oo][Tt])") then targetIsGodot = true; end
-              --     end
-              -- end
+      local pathToExe = loadedModules[1].PathToFile
+      if type(pathToExe) ~= 'string' or pathToExe == '' then return false end
 
-              if targetIsGodot then
-                synchronize(gd_buildGUI)
+      local gameDir = extractFilePath(pathToExe)
+      local exeName = extractFileName(pathToExe):match('(.+)%.exe$')
+      if not exeName then return false end
 
-              elseif targetIsGodot == false and GDGUIInit == true then
-                synchronize(function()
-                  GDD.Structures.disableDissect()
-                  local mainMenu = getMainForm().Menu
-                  for i = 0, mainMenu.Items.Count - 1 do
-                    if mainMenu.Items.Item[i].Caption == 'GDDumper' then
-                      mainMenu.Items.Item[i].Destroy()
-                      break
-                    end
-                  end
-                  GDGUIInit = false
-                  MainForm.setCaption("Cheat Engine")
-                end)
-              end
-            end
-          )
-          godot_ProcessMonitorThread = nil
-      end
+      return GDD.Preinit.readGodotPckVersion(gameDir .. exeName .. '.pck') ~= nil
+    end
 
-      return nil
+    --- spawn a detached detector, valid only for a generation
+    function GDD.Preinit.detectGodotProcess(processId, hookState, generation)
+      createThread(function(detectionThread)
+        detectionThread.Name = 'Godot detecting'
+
+        local detected, isGodot = pcall(GDD.Preinit.couldBeGodot, processId)
+        if not detected then
+          isGodot = false
+        end
+
+        if hookState.generation ~= generation or getOpenedProcessID() ~= processId then return end
+
+        synchronize(function()
+          if hookState.generation ~= generation or getOpenedProcessID() ~= processId then return end
+          targetIsGodot = isGodot
+          if isGodot then gd_buildGUI() end
+        end)
+      end)
+    end
+
+    --- process-open callback
+    function GDD.Preinit.onProcessOpened(processId, processHandle, caption, hookState)
+      hookState.generation = (hookState.generation or 0) + 1
+      local generation = hookState.generation
+
+      targetIsGodot = false
+      GDD.Preinit.removeGUI()
+
+      if not isUsableProcessId(processId) then return end
+      GDD.Preinit.detectGodotProcess(processId, hookState, generation)
     end
 
     function GDD.Preinit.register()
-      GD_OldOnProcessOpened = MainForm.OnProcessOpened
-      MainForm.OnProcessOpened = GDD.Preinit.onProcessOpened
+      if not inMainThread() then return synchronize(GDD.Preinit.register) end
+
+      local hookState = package.loaded['GDDumper.processOpenedHook']
+      if not hookState then
+        hookState = { generation = 0 }
+        package.loaded['GDDumper.processOpenedHook'] = hookState
+      end
+
+      hookState.callback = function(processId, processHandle, caption)
+        GDD.Preinit.onProcessOpened(processId, processHandle, caption, hookState)
+      end
+
+      if not hookState.installed then
+        local previousHandler = MainForm.OnProcessOpened
+        MainForm.OnProcessOpened = function(processId, processHandle, caption)
+          if previousHandler then previousHandler(processId, processHandle, caption) end
+          if hookState.callback then hookState.callback(processId, processHandle, caption) end
+        end
+        hookState.installed = true
+      end
+
+      local processId = getOpenedProcessID()
+      if isUsableProcessId(processId) then hookState.callback(processId, nil, nil) end
     end
 
     function GDD.Preinit.defineVersion()
