@@ -5145,6 +5145,7 @@
       _rax =  { type = int_t, value = VariantArena.base } -- lastArgument
 
       local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
+      VariantArena:releaseConstructedArguments()
 
       if GDDEFS.VM_CALL_HEAVY then
         VariantArena:markReturnValueActive()
@@ -5230,6 +5231,7 @@
 
       executeCodeEx(stdcall, timeout, callpMethod, buffer, objectAddr, stringNamePtr, args, argCount, err)
       VariantArena:markReturnValueActive()
+      VariantArena:releaseConstructedArguments()
 
       deAlloc(stringNamePtr)
       GDI.destroy_string_name(methodSName)
@@ -5824,6 +5826,7 @@
         
         inited = false,
         returnValueActive = false,
+        constructedArguments = {},
       }
 
       function VariantArena:init()
@@ -5856,6 +5859,7 @@
 
       function VariantArena:prepareCall()
         self:init()
+        self:releaseConstructedArguments()
         self:discardReturnValue()
         self:clearRegion(self.excptOffset, self.variantSize)
         self:clearRegion(self.callErrorOffset, 0x10)
@@ -5864,6 +5868,17 @@
 
       function VariantArena:markReturnValueActive()
         self.returnValueActive = true
+      end
+
+      function VariantArena:trackConstructedArgument(ptr)
+        self.constructedArguments[#self.constructedArguments + 1] = ptr
+      end
+
+      function VariantArena:releaseConstructedArguments()
+        for i = #self.constructedArguments, 1, -1 do
+          GDI.destroy_variant(self.constructedArguments[i])
+          self.constructedArguments[i] = nil
+        end
       end
 
       function VariantArena:align(alignment)
@@ -5898,6 +5913,122 @@
       end
 
     GDVariant = {}
+
+      local function writeVariantReal(address, value, fieldName)
+        assert(type(value) == 'number', fieldName .. ' must be a number')
+        if GDDEFS.USES_DOUBLE_REALT then
+          writeDouble(address, value)
+        else
+          writeFloat(address, value)
+        end
+      end
+
+      local function getVariantRealSize()
+        return GDDEFS.USES_DOUBLE_REALT and 8 or 4
+      end
+
+      local function allocNativeReals(arena, typeName, values)
+        local realSize = getVariantRealSize()
+        local ptr = arena:alloc(#values * realSize, realSize)
+        for i, value in ipairs(values) do
+          writeVariantReal(ptr + ((i - 1) * realSize), value, typeName .. '[' .. i .. ']')
+        end
+        return ptr
+      end
+
+      local godot3VariantConstructors =
+      {
+        TRANSFORM2D = 518,
+        AABB = 521,
+        BASIS = 522,
+        TRANSFORM3D = 523,
+        NODE_PATH = 525,
+        RID = 526,
+      }
+
+      local function constructNativeVariant(arena, typeName, nativeValue)
+        local constructor
+        if GDDEFS.MAJOR_VER <= 3 then
+          local constructorIndex = godot3VariantConstructors[typeName]
+          assert(constructorIndex, typeName .. ' construction is unavailable in Godot 3.x')
+          constructor = GDNative:getFuncFromIndex(GDNative, constructorIndex)
+        else
+          constructor = GDExtendedInterface.get_variant_from_type_constructor(typeName)
+        end
+        assert(isNotNullOrNil(constructor), typeName .. ' Variant constructor not found')
+
+        local variant = arena:allocVariant()
+        executeCodeEx(stdcall, timeout, constructor, variant, nativeValue)
+        arena:trackConstructedArgument(variant)
+        return variant
+      end
+
+      local function getVectorValues(value, keys, fieldName)
+        assert(type(value) == 'table', fieldName .. ' must be a table')
+        local values = {}
+        for i, key in ipairs(keys) do
+          local component = value[key]
+          assert(type(component) == 'number', fieldName .. '.' .. key .. ' must be a number')
+          values[i] = component
+        end
+        return values
+      end
+
+      local function appendValues(destination, source)
+        for _, value in ipairs(source) do
+          destination[#destination + 1] = value
+        end
+      end
+
+      local function constructNodePathVariant(arena, value)
+        assert(type(value) == 'string', 'NODE_PATH must be a string')
+
+        local cString = allocateMemory(#value + 1)
+        assert(isNotNullOrNil(cString), 'NODE_PATH string allocation failed')
+        if not writeString(cString, value) then
+          deAlloc(cString)
+          error('NODE_PATH string mapping failed')
+        end
+
+        local stringValue = arena:alloc(GDDEFS.PTRSIZE, GDDEFS.PTRSIZE)
+        local nodePathValue = arena:alloc(GDDEFS.PTRSIZE, GDDEFS.PTRSIZE)
+        local variant
+
+        if GDDEFS.MAJOR_VER <= 3 then
+          local stringConstructor = GDNative:getFuncFromIndex(GDNative, 574)
+          local stringParseUtf8 = GDNative:getFuncFromIndex(GDNative, 679)
+          local stringDestructor = GDNative:getFuncFromIndex(GDNative, 721)
+          local nodePathConstructor = GDNative:getFuncFromIndex(GDNative, 381)
+          local nodePathDestructor = GDNative:getFuncFromIndex(GDNative, 383)
+
+          executeCodeEx(stdcall, timeout, stringConstructor, stringValue)
+          executeCodeEx(stdcall, timeout, stringParseUtf8, stringValue, cString)
+          executeCodeEx(stdcall, timeout, nodePathConstructor, nodePathValue, stringValue)
+          variant = constructNativeVariant(arena, 'NODE_PATH', nodePathValue)
+          executeCodeEx(stdcall, timeout, nodePathDestructor, nodePathValue)
+          executeCodeEx(stdcall, timeout, stringDestructor, stringValue)
+        else
+          local stringConstructor = GDExtendedInterface.getGDExtensionFunc('string_new_with_utf8_chars')
+          local stringDestructor = GDExtendedInterface.variant_get_ptr_destructor('STRING')
+          local nodePathConstructor = GDExtendedInterface.variant_get_ptr_constructor('NODE_PATH', 2)
+          local nodePathDestructor = GDExtendedInterface.variant_get_ptr_destructor('NODE_PATH')
+          assert(isNotNullOrNil(stringConstructor), 'String constructor not found')
+          assert(isNotNullOrNil(stringDestructor), 'String destructor not found')
+          assert(isNotNullOrNil(nodePathConstructor), 'NodePath(String) constructor not found')
+          assert(isNotNullOrNil(nodePathDestructor), 'NodePath destructor not found')
+
+          executeCodeEx(stdcall, timeout, stringConstructor, stringValue, cString)
+          local constructorArguments = arena:alloc(GDDEFS.PTRSIZE, GDDEFS.PTRSIZE)
+          writePointer(constructorArguments, stringValue)
+          executeCodeEx(stdcall, timeout, nodePathConstructor, nodePathValue, constructorArguments)
+          variant = constructNativeVariant(arena, 'NODE_PATH', nodePathValue)
+          executeCodeEx(stdcall, timeout, nodePathDestructor, nodePathValue)
+          executeCodeEx(stdcall, timeout, stringDestructor, stringValue)
+        end
+
+        deAlloc(cString)
+        return variant
+      end
 
       -- non-managed
       function GDVariant.NIL(arena, value, copy)
@@ -5936,8 +6067,9 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR2') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'VECTOR2.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'VECTOR2.y')
         return v
       end
 
@@ -5954,10 +6086,11 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('RECT2') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
-        writeFloat(v + 0x10, value.w)
-        writeFloat(v + 0x14, value.h)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'RECT2.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'RECT2.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.w, 'RECT2.w')
+        writeVariantReal(v + 0x8 + realSize * 3, value.h, 'RECT2.h')
         return v
       end
 
@@ -5976,9 +6109,10 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR3') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
-        writeFloat(v + 0x10, value.z)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'VECTOR3.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'VECTOR3.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'VECTOR3.z')
         return v
       end
 
@@ -5996,10 +6130,11 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR4') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
-        writeFloat(v + 0x10, value.z)
-        writeFloat(v + 0x14, value.w)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'VECTOR4.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'VECTOR4.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'VECTOR4.z')
+        writeVariantReal(v + 0x8 + realSize * 3, value.w, 'VECTOR4.w')
         return v
       end
 
@@ -6016,17 +6151,25 @@
 
       function GDVariant.PLANE(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('PLANE') )
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'PLANE.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'PLANE.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'PLANE.z')
+        writeVariantReal(v + 0x8 + realSize * 3, value.d, 'PLANE.d')
         return v
       end
 
       function GDVariant.QUATERNION(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('QUATERNION') )
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'QUATERNION.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'QUATERNION.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'QUATERNION.z')
+        writeVariantReal(v + 0x8 + realSize * 3, value.w, 'QUATERNION.w')
         return v
       end
 
@@ -6043,10 +6186,11 @@
 
       function GDVariant.RID(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
-        local v = arena:allocVariant()
-        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('RID') )
-        return v
+        local rawValue = type(value) == 'table' and value.raw or value
+        assert(type(rawValue) == 'number', 'RID must be its raw native word or { raw = value }')
+        local nativeValue = arena:alloc(8, 8)
+        writeQword(nativeValue, rawValue)
+        return constructNativeVariant(arena, 'RID', nativeValue)
       end
 
       -- managed
@@ -6073,8 +6217,7 @@
 
       function GDVariant.NODE_PATH(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error('not implemented yet')
-        return 
+        return constructNodePathVariant(arena, value)
       end
 
       function GDVariant.CALLABLE(arena, value, copy)
@@ -6149,27 +6292,61 @@
 
       function GDVariant.TRANSFORM2D(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'TRANSFORM2D must be a table')
+        local values = {}
+        if type(value.x) == 'table' then
+          appendValues(values, getVectorValues(value.x, {'x', 'y'}, 'TRANSFORM2D.x'))
+          appendValues(values, getVectorValues(value.y, {'x', 'y'}, 'TRANSFORM2D.y'))
+          appendValues(values, getVectorValues(value.origin, {'x', 'y'}, 'TRANSFORM2D.origin'))
+        else
+          values = getVectorValues(value, {'xx', 'xy', 'yx', 'yy', 'ox', 'oy'}, 'TRANSFORM2D')
+        end
+        return constructNativeVariant(arena, 'TRANSFORM2D', allocNativeReals(arena, 'TRANSFORM2D', values))
       end
 
       function GDVariant.AABB(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'AABB must be a table')
+        local values = {}
+        appendValues(values, getVectorValues(value.position, {'x', 'y', 'z'}, 'AABB.position'))
+        appendValues(values, getVectorValues(value.size, {'x', 'y', 'z'}, 'AABB.size'))
+        return constructNativeVariant(arena, 'AABB', allocNativeReals(arena, 'AABB', values))
       end
 
       function GDVariant.BASIS(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'BASIS must be a table')
+        local rows = value.rows or {value.x, value.y, value.z}
+        local values = {}
+        for i = 1, 3 do
+          appendValues(values, getVectorValues(rows[i], {'x', 'y', 'z'}, 'BASIS.rows[' .. i .. ']'))
+        end
+        return constructNativeVariant(arena, 'BASIS', allocNativeReals(arena, 'BASIS', values))
       end
 
       function GDVariant.TRANSFORM3D(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'TRANSFORM3D must be a table')
+        local basis = value.basis or value
+        local rows = basis.rows or {basis.x, basis.y, basis.z}
+        local values = {}
+        for i = 1, 3 do
+          appendValues(values, getVectorValues(rows[i], {'x', 'y', 'z'}, 'TRANSFORM3D.basis.rows[' .. i .. ']'))
+        end
+        appendValues(values, getVectorValues(value.origin, {'x', 'y', 'z'}, 'TRANSFORM3D.origin'))
+        return constructNativeVariant(arena, 'TRANSFORM3D', allocNativeReals(arena, 'TRANSFORM3D', values))
       end
 
       function GDVariant.PROJECTION(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(GDDEFS.MAJOR_VER >= 4, 'PROJECTION does not exist in Godot 3.x')
+        assert(type(value) == 'table', 'PROJECTION must be a table')
+        local columns = value.columns or {value.x, value.y, value.z, value.w}
+        local values = {}
+        for i = 1, 4 do
+          appendValues(values, getVectorValues(columns[i], {'x', 'y', 'z', 'w'}, 'PROJECTION.columns[' .. i .. ']'))
+        end
+        return constructNativeVariant(arena, 'PROJECTION', allocNativeReals(arena, 'PROJECTION', values))
       end
 
 
