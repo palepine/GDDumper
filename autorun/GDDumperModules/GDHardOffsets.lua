@@ -95,7 +95,19 @@ function Module.install(GDD, sendDebugMessage)
 
             tools =
             {
-              fallback = true,
+              -- fallback = true,
+              add =
+              {
+                -- Godot Engine 4.7.0 
+                -- godot.windows.template_release.x86_64.exe
+                VPChildren = 0x48,
+                VPObjStringName = 0x48,
+                NodeGDScriptName = 0x48,
+                GDScriptFunctionMap = 0x48,
+                GDScriptConstantMap = 0x48,
+                GDScriptVariantNameHM = 0x48,
+                GDScriptRealoadIndex = 2, -- 47?
+              }
             },
 
             usesDouble =
