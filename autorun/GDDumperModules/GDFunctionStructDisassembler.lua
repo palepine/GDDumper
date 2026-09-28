@@ -17,8 +17,6 @@
 
 local Module = {}
 
-local LATEST_SEMVER_SUPPORTED = "4.7" -- Update me to the latest supported version when support is provided
-
 local GD_FUNC_DISASM_COLOR = 0x451630 --0x808040
 
 local function numtohexstr(num)
@@ -35,13 +33,13 @@ function Module.install(GDD, sendDebugMessage)
       Profile = {},
     }
 
-  function GDF.Profile.installVersionFallback(tab, lastVersion)
+  function GDF.Profile.installVersionFallback(tab)
     local metatable = 
       {
         __index = function(table, version)
-          local fallback = rawget(table, lastVersion)
+          local fallback, fallbackVersion = GDD.Runtime:findNearestKnownVersion(table, version)
           if fallback then
-            print( ("[GDFunc] Version %s is not defined, do that; falling back to %s") :format( tostring(version), tostring(lastVersion) ) )
+            print( ("[GDFunc] Version %s is not defined, do that; falling back within the same major to %s") :format( tostring(version), tostring(fallbackVersion) ) )
           end
           return fallback
         end
@@ -3404,6 +3402,8 @@ function Module.install(GDD, sendDebugMessage)
         GDF.CompiledProfiles[version] = GDF.Profile.createProfileFromVersion(version)
       end
 
+      GDF.Profile.installVersionFallback(GDF.CompiledProfiles)
+
       if GDDEFS.VERSION_STRING then
         GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion(GDDEFS.VERSION_STRING)
       end
@@ -4451,7 +4451,7 @@ function Module.install(GDD, sendDebugMessage)
         GDF.CompiledProfiles[version] = GDF.Profile.createProfileFromVersion(version)
       end
 
-      GDF.Profile.installVersionFallback( GDF.CompiledProfiles, LATEST_SEMVER_SUPPORTED )
+      GDF.Profile.installVersionFallback(GDF.CompiledProfiles)
 
       if GDDEFS.VERSION_STRING then
         GDF.CurrentDisassembler = GDF.createDisassemblerFromVersion(GDDEFS.VERSION_STRING)

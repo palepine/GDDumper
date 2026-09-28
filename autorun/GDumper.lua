@@ -73,6 +73,7 @@
     {
       HardOffsets = { name = 'GDDumperModules.GDHardOffsets', file = 'GDHardOffsets.lua', attachment = 'GDOff' },
       Signatures = { name = 'GDDumperModules.GDSignatures', file = 'GDSignatures.lua', attachment = 'GDSig' },
+      Versioning = { name = 'GDDumperModules.GDVersioning', file = 'GDVersioning.lua', attachment = 'GDVer' },
       Types = { name = 'GDDumperModules.GDTypes', file = 'GDTypes.lua', attachment = 'GDT' },
       FunctionDisassembler = { name = 'GDDumperModules.GDFunctionStructDisassembler', file = 'GDFunctionStructDisassembler.lua', attachment = 'GDFDasm' },
       NodeMonitor = { name = 'GDDumperModules.GDNodeMonitor', file = 'GDNodeMonitor.lua', attachment = 'GDNM' },
@@ -82,6 +83,7 @@
     {
       moduleSpecs.HardOffsets,
       moduleSpecs.Signatures,
+      moduleSpecs.Versioning,
       moduleSpecs.Types,
       moduleSpecs.FunctionDisassembler,
       moduleSpecs.NodeMonitor,
@@ -1077,6 +1079,15 @@
       return enum
     end
 
+    --- returns whether the active Variant type profile defines a Godot type
+    ---@param typeName string
+    ---@return boolean
+    function GDD.Types.hasType(typeName)
+      if type(typeName) ~= 'string' then return false end
+      local profile = GDDEFS and GDDEFS.VARIANT_TYPE_PROFILE
+      return profile ~= nil and profile.enums[typeName] ~= nil
+    end
+
     --- I'm gonna add a 4byte string type
     function GDD.Types.checkGDStringType()
 
@@ -1373,77 +1384,250 @@
     end
 
     function GDAPI.getGDObjectName(objAddr)
-      -- up until 4.6, the method was StringName* Object::_get_class_namev()
-      -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object class name
-      local metaAddr = GDD.Types.getObjectMeta(objAddr)
-      local className = ''
-
-      if isNullOrNil(metaAddr) then return 'null' end
-
-      if GDDEFS.MAJOR_VER <= 3 or (GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER < 6) then
-        className = GDD.Strings.getStringNameStr(readPointer(metaAddr) or 0) or 'nstrn'
-
-      elseif GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER == 6 then
-          -- const GDType *super_type;
-          -- StringName name;
-        metaAddr = GDD.Types.getObjectMeta(objAddr)
-        local stringNameAddr = readPointer(metaAddr + GDDEFS.PTRSIZE)
-        className = GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
-      elseif GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER > 6 then
-        -- const GDType *super_type;
-        -- mutable InitState init_state = InitState::UNINITIALIZED;
-        -- StringName name;
-        local stringNameAddr = readPointer( metaAddr + GDDEFS.PTRSIZE * 2 ) -- TODO: use alignment
-        className = GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
-      end
-
-      return className
+      local objects = GDD.Runtime and GDD.Runtime.implementation.objects
+      assert(objects and objects.getObjectName, 'version object implementation is not bound')
+      return objects.getObjectName(objAddr)
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS
 
+    local VersionImplementations =
+      {
+        containers = {},
+        objects = {},
+      }
+
+    VersionImplementations.containers.legacyTree =
+      {
+        getNodeChildrenInfo = function(nodeAddr)
+          if isNullOrNil(nodeAddr) then return nil, nil end
+          local childrenAddr = readPointer(nodeAddr + GDDEFS.CHILDREN)
+          if isNullOrNil(childrenAddr) then return nil, nil end
+          return childrenAddr, readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
+        end,
+
+        getNextMapElement = function(mapElement)
+          return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
+        end,
+
+        getDictElemPairNext = function(mapElement)
+          return readPointer((mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
+        end,
+      }
+
+    VersionImplementations.containers.modernHash =
+      {
+        getNodeChildrenInfo = function(nodeAddr)
+          if isNullOrNil(nodeAddr) then return nil, nil end
+          local childrenAddr = readPointer(nodeAddr + GDDEFS.CHILDREN)
+          if isNullOrNil(childrenAddr) then return nil, nil end
+          return childrenAddr, readInteger(nodeAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE)
+        end,
+
+        getNextMapElement = function(mapElement)
+          return readPointer(mapElement)
+        end,
+
+        getDictElemPairNext = function(mapElement)
+          return readPointer(mapElement)
+        end,
+      }
+
+    local legacyContainers = VersionImplementations.containers.legacyTree
+    local modernContainers = VersionImplementations.containers.modernHash
+
+    legacyContainers.getVariantNameFromMapElement = function(mapElement)
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+    end
+
+    modernContainers.getVariantNameFromMapElement = function(mapElement)
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
+    end
+
+    legacyContainers.getFunctionMapName = function(mapElement)
+      if isNullOrNil(mapElement) then return nil end
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+    end
+
+    modernContainers.getFunctionMapName = function(mapElement)
+      if isNullOrNil(mapElement) then return nil end
+      return GDD.Functions.getName(mapElement)
+    end
+
+    legacyContainers.createNextConstContainer = function(currentContainer, index)
+      local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
+      nextElem.ChildStruct = createStructure('ConstNext')
+      return nextElem
+    end
+
+    modernContainers.createNextConstContainer = function(currentContainer, index)
+      local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', 0, vtPointer)
+      nextElem.ChildStruct = createStructure('ConstNext')
+      return nextElem
+    end
+
+    legacyContainers.createNextConstSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+MAP_NEXTELEM')
+    end
+
+    modernContainers.createNextConstSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+0')
+    end
+
+    local function readDictionaryInfo(dictAddr, dictRoot)
+      local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
+      if isNullOrNil(dictSize) then
+        sendDebugMessage('dictSize isnt valid')
+        return nil
+      end
+
+      local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
+      if isNullOrNil(dictHead) then
+        sendDebugMessage('dictHead isnt valid')
+        return nil
+      end
+
+      return dictRoot, dictSize, dictHead, readPointer(dictRoot + GDDEFS.DICT_TAIL)
+    end
+
+    legacyContainers.getDictionaryInfo = function(dictAddr)
+      if isInvalidPointer(dictAddr) then
+        sendDebugMessage('dictAddr isnt pointer')
+        return nil
+      end
+      local dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
+      if isNullOrNil(dictRoot) then
+        sendDebugMessage('dictRoot isnt valid')
+        return nil
+      end
+      return readDictionaryInfo(dictAddr, dictRoot)
+    end
+
+    modernContainers.getDictionaryInfo = function(dictAddr)
+      if isInvalidPointer(dictAddr) then
+        sendDebugMessage('dictAddr isnt pointer')
+        return nil
+      end
+      return readDictionaryInfo(dictAddr, dictAddr)
+    end
+
+    legacyContainers.createNextDictContainer = function(currentContainer)
+      return GDD.Structures.createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+    end
+
+    modernContainers.createNextDictContainer = function(currentContainer)
+      return GDD.Structures.createChildStructElem(currentContainer, 'Next', 0, vtPointer, 'DictNext')
+    end
+
+    legacyContainers.createNextSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT))
+    end
+
+    modernContainers.createNextSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+' .. numtohexstr(0))
+    end
+
+    legacyContainers.normalizeMapHead = function(mainElement, endElement, mapSize)
+      return GDD.Containers.getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
+    end
+
+    modernContainers.normalizeMapHead = function(mainElement, endElement, mapSize)
+      return mainElement, endElement, mapSize
+    end
+
+    local function readObjectNameAtMetadataOffset(objAddr, metadataOffset)
+      local metaAddr = GDD.Types.getObjectMeta(objAddr)
+      if isNullOrNil(metaAddr) then return 'null' end
+      local stringNameAddr = readPointer(metaAddr + metadataOffset)
+      return GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
+    end
+
+    VersionImplementations.objects.stringName =
+      {
+        getObjectName = function(objAddr)
+          return readObjectNameAtMetadataOffset(objAddr, 0)
+        end,
+      }
+
+    VersionImplementations.objects.gdTypeV1 =
+      {
+        getObjectName = function(objAddr)
+          -- const GDType *super_type; StringName name;
+          return readObjectNameAtMetadataOffset(objAddr, GDDEFS.PTRSIZE)
+        end,
+      }
+
+    VersionImplementations.objects.gdTypeV2 =
+      {
+        getObjectName = function(objAddr)
+          -- const GDType *super_type; InitState init_state; StringName name;
+          return readObjectNameAtMetadataOffset(objAddr, GDDEFS.PTRSIZE * 2)
+        end,
+      }
+
+    local ContainerImplementationContract =
+      {
+        'getNodeChildrenInfo',
+        'getNextMapElement',
+        'getDictElemPairNext',
+        'getVariantNameFromMapElement',
+        'getFunctionMapName',
+        'createNextConstContainer',
+        'createNextConstSymbol',
+        'getDictionaryInfo',
+        'createNextDictContainer',
+        'createNextSymbol',
+        'normalizeMapHead',
+      }
+
+    local ObjectImplementationContract = { 'getObjectName' }
+
+    -- did we forget to implement something?
+    local function validateImplementation(name, implementation, contract)
+      assert( type(implementation) == 'table', name .. ' implementation is unavailable' )
+      for _, methodName in ipairs(contract) do
+        assert( type( implementation[methodName] ) == 'function', name .. ' implementation is missing ' .. methodName )
+      end
+    end
+
+    function GDD.Config.bindVersionImplementations()
+      local runtime = GDD.Runtime
+      assert( runtime and runtime.capabilities, 'version runtime is not initialized' )
+
+      local containerFamily = runtime.capabilities.containerFamily
+      local containers = VersionImplementations.containers[containerFamily]
+      validateImplementation( 'container ' .. tostring(containerFamily), containers, ContainerImplementationContract )
+
+      local objectLayout = runtime.capabilities.objectMetadataLayout
+      local objects = VersionImplementations.objects[objectLayout]
+      validateImplementation( 'object metadata ' .. tostring(objectLayout), objects, ObjectImplementationContract )
+
+      runtime.implementation.containers = containers
+      runtime.implementation.objects = objects
+
+      for _, methodName in ipairs(ContainerImplementationContract) do
+        GDD.Containers[methodName] = containers[methodName]
+      end
+    end
+
     function GDD.Containers.getNodeChildrenInfo(nodeAddr)
-      if isNullOrNil(nodeAddr) then
-        return nil, nil;
-      end
-
-      local childrenAddr = readPointer((nodeAddr or 0) + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
-      if isNullOrNil(childrenAddr) then
-        return nil, nil;
-      end
-
-      local childrenSize;
-      if GDDEFS.MAJOR_VER >= 4 then
-        childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-      else
-        childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
-      end
-
-      return childrenAddr, childrenSize
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getNextMapElement(mapElement)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return readPointer(mapElement) -- next is at 0x0
-      else
-        return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
-      end
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getDictElemPairNext(mapElement)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return readPointer(mapElement) -- at 0x0
-      else
-        return readPointer( (mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
-      end
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getDictionarySizeFromVariantPtr(variantPtr)
-      return readInteger( (readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
+      return readInteger( (readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE )
     end
 
     function GDD.Containers.isArrayEmptyFromVariantPtr(variantPtr)
-      return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR) == 0
+      return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR ) == 0
     end
 
     function GDD.Containers.resolveScriptVariantType(mapElement, runtimeVariantType) -- TODO: remove?
@@ -1456,11 +1640,7 @@
     end
 
     function GDD.Containers.getVariantNameFromMapElement(mapElement)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
-      end
-
-      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.prepareObjectParent(entry, emitter, parent, contextTable)
@@ -1502,12 +1682,7 @@
     end
 
     function GDD.Containers.getFunctionMapName(mapElement)
-      if isNullOrNil(mapElement) then return nil end
-
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Functions.getName(mapElement)
-      end
-      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
@@ -1544,25 +1719,11 @@
     end
 
     function GDD.Containers.createNextConstContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER >= 4 then
-        local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
-        nextElem.ChildStruct = createStructure('ConstNext')
-        return nextElem
-      end
-
-      local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
-      nextElem.ChildStruct = createStructure('ConstNext')
-      return nextElem
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.createNextConstSymbol(currentSymbol)
-      local nextSymbol
-      if GDDEFS.MAJOR_VER >= 4 then
-        nextSymbol = GDD.Utils.wrapBrackets( currentSymbol .. "+0" )
-      else --if GDDEFS.MAJOR_VER <= 3 then
-        nextSymbol = GDD.Utils.wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
-      end
-      return nextSymbol
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.formatArrayEntry(entry)
@@ -1646,51 +1807,15 @@
     end
 
     function GDD.Containers.getDictionaryInfo(dictAddr)
-      if isInvalidPointer(dictAddr) then
-        sendDebugMessage('dictAddr isnt pointer')
-        return nil
-      end
-
-      local dictRoot = dictAddr
-      if GDDEFS.MAJOR_VER <= 3 then
-        dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
-        if isNullOrNil(dictRoot) then
-          sendDebugMessage('dictRoot isnt valid')
-          return nil
-        end
-      end
-
-      local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
-      if isNullOrNil(dictSize) then
-        sendDebugMessage('dictSize isnt valid')
-        return nil
-      end
-
-      local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
-      if isNullOrNil(dictHead) then
-        sendDebugMessage('dictHead isnt valid')
-        return nil
-      end
-
-      local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
-
-      return dictRoot, dictSize, dictHead, dictTail
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.createNextDictContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Structures.createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
-      end
-
-      return GDD.Structures.createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.createNextSymbol(currentSymbol)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Utils.wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
-      else--if GDDEFS.MAJOR_VER <= 3 then
-        return GDD.Utils.wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
-      end
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getPackedArrayInfo(packedArrayAddr)
@@ -2861,6 +2986,7 @@
     function GDD.Config.initDefs()
       GDDEFS = {} -- for now let it be reinitialized here
       GDD.Config.Defs = GDDEFS
+      GDD.Runtime = nil
 
       GDDEFS.SCRIPT_TYPES =
         {
@@ -2913,7 +3039,8 @@
 
       -- AUTOMATIC START
       if (bHardOffsets or config.useHardcoded) then
-        local offsets = getStoredOffsetsFromVersion(GDDEFS.MAJOR_VER, GDDEFS.MINOR_VER, GDDEFS.PATCH_VER)
+        local target = GDD.Runtime.target
+        local offsets = getStoredOffsetsFromVersion(target.major, target.minor, target.patch)
         GDDEFS.GET_TYPE_INDX = offsets.GET_TYPE_INDX or GDDEFS.GET_TYPE_INDX
         GDDEFS.CALLP_INDX = offsets.CALLP_INDX or GDDEFS.CALLP_INDX
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex or GDDEFS.GDSCRIPT_RELOAD_INDX
@@ -2958,7 +3085,6 @@
               GDDEFS.GET_TYPE_INDX = 10
             end
         elseif GDDEFS.MAJOR_VER <= 3 then
-          GDDEFS.MAJOR_VER = 3
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
@@ -5774,11 +5900,7 @@
         return;
       end
 
-      if GDDEFS.MAJOR_VER >= 4 then
-        return mainElement, endElement, mapSize
-      else
-        return GDD.Containers.getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
-      end
+      return GDD.Runtime.implementation.containers.normalizeMapHead(mainElement, endElement, mapSize)
     end
 
     --- returns a pointer to the variant's value and its type for a sanity check
@@ -6339,7 +6461,7 @@
 
       function GDVariant.PROJECTION(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        assert(GDDEFS.MAJOR_VER >= 4, 'PROJECTION does not exist in Godot 3.x')
+        assert(GDD.Types.hasType('PROJECTION'), 'PROJECTION is unavailable in the active Variant type profile')
         assert(type(value) == 'table', 'PROJECTION must be a table')
         local columns = value.columns or {value.x, value.y, value.z, value.w}
         local values = {}
@@ -6569,6 +6691,9 @@
       -- essential version definition
       GDD.Config.initVersion(config)
 
+      -- define target descriptor and version capabilities
+      GDD.Modules.requireFresh(moduleSpecs.Versioning).install(GDD, sendDebugMessage)
+
       -- define type conversion helpers via module
       GDD.Modules.requireFresh(moduleSpecs.Types).install(GDD)
 
@@ -6583,6 +6708,9 @@
       GDD.Config.defineOffsets(config)
       gdOffsetsDefined = true
 
+      -- compile version-dependent algorithms into their public method slots
+      GDD.Config.bindVersionImplementations()
+
       -- register symbols for pointer resolution
       GDD.Config.registerSymbols()
 
@@ -6596,11 +6724,13 @@
       GDD.Utils.disablePrintPopup()
 
       -- exposing relevant API
-      if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1 then
+      local engineInterface = GDD.Runtime.capabilities.engineInterface
+      if engineInterface == 'gdextension' then
         if GDD.Script.findGDExtensionInterfacePtr() then GDI.Extension = GDExtendedInterface end
-      end
-      if GDDEFS.MAJOR_VER == 3 then -- doesn't exist in 2.x
+        GDD.Runtime.implementation.engineInterface = GDI.Extension
+      elseif engineInterface == 'gdnative' then
         if GDD.Script.findGDNativeAPIStruct() then GDI.GDNative = GDNativeInterface end
+        GDD.Runtime.implementation.engineInterface = GDI.GDNative
       end
 
       -- find GDScriptFunctions::call()
