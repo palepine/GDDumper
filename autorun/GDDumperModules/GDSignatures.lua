@@ -21,6 +21,7 @@ function Module.install(GDD)
 
   local SceneTreeAOB = {}
     table.insert(SceneTreeAOB, { sig = "48 39 1D ? ? ? ? 75 07 4C 89 35 ? ? ? ? 66 0F 6F 05 ? ? ? ? 4?", toRel = 3 } )
+    table.insert(SceneTreeAOB, { sig = "4C 89 35 ? ? ? ? 66 0F 6F 0D ? ? ? ? 48 8D 3D", toRel = 3 } )
     table.insert(SceneTreeAOB, { sig = "48 83 3D ? ? ? ? 00 0F 84 ? ? ? ? 0F 28 05 ? ? ? ? 4?", toRel = 3 } )
     table.insert(SceneTreeAOB, { sig = "4C 39 ? ? ? ? ? 75 07 ? 89 35 ? ? ? ? 66 0F 6F 05", toRel = 3 } )    
     table.insert(SceneTreeAOB, { sig = "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00", toRel = 3 } )
