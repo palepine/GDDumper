@@ -202,7 +202,7 @@ Validate/add signatures for:
 
 ### GDExtension
 
-- AOB-signatures for `gdextension_get_proc_address(const char *p_name)` in `GDDumperModules/GDSignatures.lua` to enable 4.x+ GDExtended Interface
+- AOB-signatures for `gdextension_get_proc_address(const char *p_name)` (prologue) in `GDDumperModules/GDSignatures.lua` to enable 4.x+ GDExtended Interface
 - If a new major changes this ABI, a new `engineInterface` capability has to be introduced for compatibility
 - GDNative for 3.x is reliable
 
