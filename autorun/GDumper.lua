@@ -697,6 +697,11 @@
           return nil
         end
 
+        local runtime = GDD.Runtime
+        if not runtime or not runtime.implementation or not runtime.implementation.objects then
+          return nil
+        end
+
         local result = gd_getObjectName(addr)
         if result == nil or result == '??' then
           return nil
@@ -6694,6 +6699,9 @@
       -- define target descriptor and version capabilities
       GDD.Modules.requireFresh(moduleSpecs.Versioning).install(GDD, sendDebugMessage)
 
+      -- bind it
+      GDD.Config.bindVersionImplementations()
+
       -- define type conversion helpers via module
       GDD.Modules.requireFresh(moduleSpecs.Types).install(GDD)
 
@@ -6707,9 +6715,6 @@
       -- define version and offsets
       GDD.Config.defineOffsets(config)
       gdOffsetsDefined = true
-
-      -- compile version-dependent algorithms into their public method slots
-      GDD.Config.bindVersionImplementations()
 
       -- register symbols for pointer resolution
       GDD.Config.registerSymbols()
