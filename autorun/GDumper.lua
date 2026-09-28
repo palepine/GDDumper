@@ -66,6 +66,7 @@
 
   local bGDDebug = false
   local bHardOffsets = false
+  local bGDUseSymbols = false
 
   local ceDirectory = getCheatEngineDir() or ''
   local moduleDirectory = [[autorun\GDDumperModules\]]
@@ -4007,7 +4008,7 @@
       assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(constName) == 'string', "Constant name has to be a string, instead got: " .. type(constName))
 
-      local mapHead = getNodeConstantMap(nodeAddr)
+      local mapHead = GDD.Constants.getNodeMap({ addr = nodeAddr })
       return GDD.Containers.findMapEntryByName(mapHead, constName, GDD.Constants.getName, GDD.Containers.getConstMapLookupResult, GDD.Containers.getNextMapElement)
     end
 
@@ -4942,8 +4943,8 @@
       if GDDEFS.MAJOR_VER >= 4 then
         return mainElement, lastElement, mapSize, nodeContext
       else
-        if funcStructElement then
-          funcStructElement.ChildStruct = createStructure('ConstMapRes')
+        if nodeContext.struct then
+          nodeContext.struct.ChildStruct = createStructure('FuncMapRes')
         end
         return GDD.Containers.getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
       end
