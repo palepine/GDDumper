@@ -86,7 +86,8 @@ function Module.install(GDD)
     table.insert(RootAOB, "48 8B 8B ? ? ? ? BA ? ? ? ? 48 83 C4 ? 5B 5E 5F 5D 41 5C E9 ? ? ? ? 0F 1F 40")
 
   local GDExtensionAOB = {}
-
+   
+    table.insert(GDExtensionAOB, "48 89 5C 24 ? 55 48 8B EC 48 83 EC 50 48 8B D1 45 33 C0 48 8D 4D ? E8" ) -- 4.7
     table.insert(GDExtensionAOB, "53 48 83 EC ? 45 31 C0 48 89 CA 48 8D 4C 24 ? E8 ? ? ? ? 48 8D 4C 24 ? E8" ) -- 4.6
     table.insert(GDExtensionAOB, "40 53 48 83 EC ? 48 8B D1 45 33 C0 48 8D ? 24 ? E8 ? ? ? ? 48 8D ? 24 ? E8" ) -- 4.6, 4.3 4.1, just a swapped encoding
     table.insert(GDExtensionAOB, "56 53 48 83 EC ? 45 31 C0 48 8D ? 24 ? 48 89 CA 48 89 F1 E8 ? ? ? ? 48 89 F1 E8" ) -- 4.5 4.4
@@ -103,6 +104,8 @@ function Module.install(GDD)
     table.insert(GDNativeAOB, "4C 8D 15 ? ? ? ? 48 89 84 24 ? ? ? ? 48 8D 05" )
 
   local GDVMCallAOB = {}
+
+    table.insert(GDVMCallAOB, { isheavy = false,  sig = "48 C7 44 24 30 00 00 00 00    48 8B D7 48 89 44 24 28   8B 84 24 ? ? ? ?   89 44 24 20 E8", sigsize = 29 }) -- 4.7 ret 64>
     table.insert(GDVMCallAOB, { isheavy = true,  sig = "4C 89 ? 24 28 89 44 24 20 4C 8B 8C 24 ? ? ? ? 48 89 F9 49 89 E8 E8", sigsize = 24 }) -- 4.6 ret 64<
     table.insert(GDVMCallAOB, { isheavy = false, sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize = 28 }) -- 4.6 ret 64>
     table.insert(GDVMCallAOB, { isheavy = false, sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 34 }) -- 4.5
