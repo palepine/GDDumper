@@ -583,22 +583,29 @@ function Module.install(GDD)
     return GDDEFS.NODE_SUBS[subName]
   end
 
+  local function getStableScriptLookupKeys(scriptName)
+    local normalizedName = scriptName:gsub('\\', '/')
+    local stableName = normalizedName:match('^(.-%.tscn)::') or normalizedName
+    local isEmbeddedSceneScript = stableName ~= normalizedName
+    local resourceName = stableName:gsub('^res://', '')
+    local shortName = resourceName:match('([^/]+)$') or resourceName
+
+    if not isEmbeddedSceneScript and not shortName:lower():match('%.tscn$') then
+      shortName = shortName:gsub('%.[^.]+$', '')
+      resourceName = resourceName:gsub('%.[^.]+$', '')
+    end
+
+    return shortName, resourceName:gsub('/', '.')
+  end
+
   local function findNodeByScriptName(event, scriptName)
     local nodeAddr = event.nodesAbs[scriptName]
     if nodeAddr == nil or nodeAddr == 0 then nodeAddr = event.nodes[scriptName] end
     if nodeAddr ~= nil and nodeAddr ~= 0 then return nodeAddr end
 
-    local normalizedName = scriptName:gsub('\\', '/')
-    local resourceName = normalizedName:gsub('^res://', '')
-    local shortName = resourceName:match('([^/]+)$') or resourceName
-    shortName = shortName:gsub('%.[^.]+$', '')
-
-    local resourcePath
-    if normalizedName:find('/', 1, true) then
-      resourcePath = resourceName:gsub('%.[^.]+$', ''):gsub('/', '.')
-      nodeAddr = event.nodesAbs[resourcePath]
-      if nodeAddr ~= nil and nodeAddr ~= 0 then return nodeAddr end
-    end
+    local shortName, resourcePath = getStableScriptLookupKeys(scriptName)
+    nodeAddr = event.nodesAbs[resourcePath]
+    if nodeAddr ~= nil and nodeAddr ~= 0 then return nodeAddr end
 
     return event.nodes[shortName]
   end

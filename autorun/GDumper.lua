@@ -3688,14 +3688,25 @@
         -- sendDebugMessage('GDScriptName is nil/empty')
         return 'N??'
       end
-      local scriptMatch = GDScriptName:match("([^/]+)%.[^.]+$") --"([^/]+)%.gd$"
+
+      local normalizedPath = GDScriptName:gsub('\\', '/')
+      local stablePath = normalizedPath:match('^(.-%.tscn)::') or normalizedPath
+      local isSceneScript = stablePath ~= normalizedPath or stablePath:lower():match('%.tscn$') ~= nil
+      local fileName = stablePath:match('([^/]+)$')
+      local scriptMatch = fileName
+      if scriptMatch and not isSceneScript then
+        scriptMatch = scriptMatch:gsub('%.[^.]+$', '')
+      end
+
       if scriptMatch == nil then
         -- sendDebugMessage('GDScriptName is nil/empty')
         return 'N??'
       end
 
       if bWithAbsPath then
-        local parsedPath = GDScriptName:gsub("^res://", ""):gsub("%.[^.]+$", ""):gsub("/", ".") -- catch only res://(.*).ext with dots instead of /
+        local parsedPath = stablePath:gsub('^res://', '')
+        if not isSceneScript then parsedPath = parsedPath:gsub('%.[^.]+$', '') end
+        parsedPath = parsedPath:gsub('/', '.')
         return scriptMatch, parsedPath
       end
 
