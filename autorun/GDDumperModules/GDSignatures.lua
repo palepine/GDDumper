@@ -27,6 +27,7 @@ function Module.install(GDD)
     table.insert(SceneTreeAOB, { sig = "48 83 3D ? ? ? ? 00 48 C7 86 ? ? ? ? 00 00 00 00", toRel = 3 } )
     table.insert(SceneTreeAOB, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 48 8B 37 4?", toRel = 3 } )
     table.insert(SceneTreeAOB, { sig = "48 83 3D ? ? ? ? 00 75 07 4C 89 35 ? ? ? ? 0F 28 05", toRel = 3 } )
+    table.insert(SceneTreeAOB, { sig = "48 83 3D ? ? ? ? ? 48 C7 83 ? ? ? ? ? ? ? ? C6 83 ? ? ? ? ? 48 89 83 ? ? ? ? 48 89 83 ? ? ? ? 75 07 48 89 1D", toRel = 3 } )
     table.insert(SceneTreeAOB, { sig = "48 8B 15 ? ? ? ? 48 85 D2 74 ? 4C 8B 26", toRel = 3 } )
     table.insert(SceneTreeAOB, { sig = "48 C7 05 ? ? ? ? 00 00 00 00 E9 ? ? ? ? 85 C0", toRel = 3 } )
     table.insert(SceneTreeAOB, { sig = "48 8B 05 ? ? ? ? 48 85 C0 0F 11 85 ? ? ? ? 49 0F ? ? 48 89 05", toRel = 3 } ) -- 4.3
@@ -110,6 +111,7 @@ function Module.install(GDD)
     table.insert(GDVMCallAOB, { isheavy = false, sig = "48 89 44 24 ? 89 44 24 68 48 8D 44 24 ? 48 89 44 24 28 C7 44 24 20 ? ? ? ? E8", sigsize = 28 }) -- 4.6 ret 64>
     table.insert(GDVMCallAOB, { isheavy = false, sig = "48 8B 84 24 ? ? ? ?     48 C7 44 24 30 00 00 00 00    48 89 44 24 28 8B 84 24 ? ? ? ? 89 44 24 20 E8", sigsize = 34 }) -- 4.5
     table.insert(GDVMCallAOB, { isheavy = true,  sig = "4C 89 7C 24 28 89 44 24 20 48 89 ? >48 89 ? >48 89 ? E8", sigsize = 19 }) -- 4.5 ret 64<
+    table.insert(GDVMCallAOB, { isheavy = true,  sig = "4C 89 6C 24 28 4D 89 E1 8B 84 24 ? ? ? ? 48 89 4C 24 30 49 89 F8 48 89 F1 89 44 24 20 E8", sigsize = 31 }) -- 4.5 ret 64<
     table.insert(GDVMCallAOB, { isheavy = true, sig = "4C 89 74 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.4
     table.insert(GDVMCallAOB, { isheavy = false, sig = "4C 89 64 24 28 89 44 24 20 48 89 D9 49 89 F9 49 89 F0 E8", sigsize = 19 }) -- 4.3
     table.insert(GDVMCallAOB, { isheavy = true, sig = "4C 89 64 24 28 89 44 24 20 4C 8B 8C 24 ? ? 00 00 48 89 D9 49 89 F0 E8", sigsize = 22 }) -- 4.3
