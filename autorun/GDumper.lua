@@ -545,57 +545,60 @@
 
     -- ///---///--///---///--///---/// STRUCTURES
 
-      --- deletes ALL structures, constructs a children structure of the viewport
+      --- create a struct form for a node when its pointer element is opened
+      ---@param nodeAddr number
+      ---@return userdata|nil
+      function GDD.Structures.createNodeStructure(nodeAddr)
+        if isNullOrNil(nodeAddr) or not isVtable(getVtable(nodeAddr)) then return nil end
+
+        local nodeStruct = createStructure('GDNode')
+        GDD.Structures.structureDissect(nodeStruct, nodeAddr)
+        return nodeStruct
+      end
+
+      --- attach lazy node layout creation to a pointer structure element
+      ---@param element userdata
+      ---@return userdata
+      function GDD.Structures.registerNodeChildCallback(element)
+        element.OnCreateChild = function(_, nodeAddr)
+          return GDD.Structures.createNodeStructure(nodeAddr)
+        end
+        return element
+      end
+
+      --- construct a struct containing the root's direct children
       function GDD.Structures.createVPStructure()
         -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
 
-        -- remove all structures
-        -- structure.miClear if you want a confirmation
-        while getStructureCount() > 0 do -- getStructure(n).Name, getStructure(n).Destroy()
-          getStructure(0).Destroy()
-        end
-
-        -- Structure class related functions:
-        -- getStructureCount(): Returns the number of Global structures. (Global structures are the visible structures)
-        -- getStructure(index): Returns the Structure object at the given index
-        -- createStructure(name): Returns an empty structure object (Not yet added to the Global list. Call structure.addToGlobalStructureList manually)
-
-        local struct = createStructure('GDNODES')
-        local structElem, childElem;
         local mainNodeTable = GDD.Objects.getMainNodeTable()
+        local struct = createStructure('GD Root Children')
 
         struct.beginUpdate()
         for i = 0, #mainNodeTable - 1 do
-          structElem = struct.addElement()
+          local nodeAddr = mainNodeTable[i + 1]
+          local structElem = struct.addElement()
           structElem.BackgroundColor = 0x6C3157
-          structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
+          structElem.Offset = i * GDDEFS.PTRSIZE
           structElem.VarType = vtPointer
-          structElem.Name = gd_getNodeName(mainNodeTable[i + 1])
+          structElem.Name = gd_getNodeName(nodeAddr)
+          GDD.Structures.registerNodeChildCallback(structElem)
         end
         struct.endUpdate()
-        struct.addToGlobalStructureList() -- so we can use it
 
         return struct
       end
 
-      --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
+      --- opens a struct form for the viewport's children
       function GDD.Structures.createVPStructForm()
+        if not inMainThread() then return synchronize(GDD.Structures.createVPStructForm) end
         GDD.Utils.requireOffsetsDefined()
-        -- let's ensure VP is found, it will throw an error otherwise
         GDD.Root.getViewport()
 
         local symbolToChildren = '[[pRoot]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[pRoot]+CHILDREN]'
-        local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
         local childrenStruct = GDD.Structures.createVPStructure()
-
-        -- I couldn't find a better way to select a structure inside a StructDissect form
-        for i = 0, viewportStructForm.Structures1.Count - 1 do
-          local menuItem = viewportStructForm.Structures1.Item[i]
-          if menuItem.Caption == 'GDNODES' then
-            menuItem.doClick()
-          end
-        end
-
+        local viewportStructForm = createStructureForm()
+        viewportStructForm.Column[0].AddressText = symbolToChildren
+        viewportStructForm.MainStruct = childrenStruct
       end
 
       --- creates an element in a parent structure
@@ -983,7 +986,7 @@
           gdMenuItem = createMenuItem(mainMenu)
           gdMenuItem.Caption = menuItemCaption
           mainMenu.Items.add(gdMenuItem)
-          addCustomMenuButtonTo(gdMenuItem, 'Root Struct', GDD.Structures.createVPStructForm)
+          addCustomMenuButtonTo(gdMenuItem, 'Dissect Root', GDD.Structures.createVPStructForm)
           addCustomMenuButtonTo(gdMenuItem, 'GD Dissect', GDD.GUI.dissectorSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Add Template', GDD.GUI.addMemrecToTable)
           addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDD.GUI.debugSwitch)
@@ -3807,9 +3810,11 @@
         -- sendDebugMessage("Checking GDScript for "..nodeName)
 
         if checkForGDScript(nodeAddr) then
-          addLayoutStructElem(childrenArrStructElem, objectTypeName .. ' cNode: ' .. nodeName, 0x6C3157, (i * GDDEFS.PTRSIZE), vtPointer)
+          local childElement = addLayoutStructElem(childrenArrStructElem, objectTypeName .. ' cNode: ' .. nodeName, 0x6C3157, (i * GDDEFS.PTRSIZE), vtPointer)
+          GDD.Structures.registerNodeChildCallback(childElement)
         else
-          addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE), vtPointer)
+          local childElement = addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE), vtPointer)
+          GDD.Structures.registerNodeChildCallback(childElement)
         end
       end
     end
