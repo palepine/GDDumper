@@ -20,18 +20,16 @@ local Module =
   Profile = {},
 }
 
-local LATEST_SEMVER_SUPPORTED = "4.7" -- Update me to the latest supported version when support is provided
-
 function Module.install(GDD)
   local GDDEFS = GDD.Config.Defs
 
-  function Module.Profile.installVersionFallback(tab, lastVersion)
+  function Module.Profile.installVersionFallback(tab)
     local metatable = 
       {
         __index = function(table, version)
-          local fallback = rawget(table, lastVersion)
+          local fallback, fallbackVersion = GDD.Runtime:findNearestKnownVersion(table, version)
           if fallback then
-            print( ("[TYPES] Version %s is not defined, do that; falling back to %s") :format( tostring(version), tostring(lastVersion) ) )
+            print( ("[TYPES] Version %s is not defined, do that; falling back within the same major to %s") :format( tostring(version), tostring(fallbackVersion) ) )
           end
           return fallback
         end
@@ -281,7 +279,7 @@ function Module.install(GDD)
         ["4.7"] = { base = "4.6", patches = {} },
       }
 
-    Module.Profile.installVersionFallback( specs, LATEST_SEMVER_SUPPORTED )
+    Module.Profile.installVersionFallback(specs)
 
     local version = GDDEFS.VERSION_STRING
     local resolved = Module.Profile.prepareProfileSpec(version, specs)

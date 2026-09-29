@@ -66,6 +66,7 @@
 
   local bGDDebug = false
   local bHardOffsets = false
+  local bGDUseSymbols = false
 
   local ceDirectory = getCheatEngineDir() or ''
   local moduleDirectory = [[autorun\GDDumperModules\]]
@@ -73,6 +74,7 @@
     {
       HardOffsets = { name = 'GDDumperModules.GDHardOffsets', file = 'GDHardOffsets.lua', attachment = 'GDOff' },
       Signatures = { name = 'GDDumperModules.GDSignatures', file = 'GDSignatures.lua', attachment = 'GDSig' },
+      Versioning = { name = 'GDDumperModules.GDVersioning', file = 'GDVersioning.lua', attachment = 'GDVer' },
       Types = { name = 'GDDumperModules.GDTypes', file = 'GDTypes.lua', attachment = 'GDT' },
       FunctionDisassembler = { name = 'GDDumperModules.GDFunctionStructDisassembler', file = 'GDFunctionStructDisassembler.lua', attachment = 'GDFDasm' },
       NodeMonitor = { name = 'GDDumperModules.GDNodeMonitor', file = 'GDNodeMonitor.lua', attachment = 'GDNM' },
@@ -82,6 +84,7 @@
     {
       moduleSpecs.HardOffsets,
       moduleSpecs.Signatures,
+      moduleSpecs.Versioning,
       moduleSpecs.Types,
       moduleSpecs.FunctionDisassembler,
       moduleSpecs.NodeMonitor,
@@ -542,57 +545,60 @@
 
     -- ///---///--///---///--///---/// STRUCTURES
 
-      --- deletes ALL structures, constructs a children structure of the viewport
+      --- create a struct form for a node when its pointer element is opened
+      ---@param nodeAddr number
+      ---@return userdata|nil
+      function GDD.Structures.createNodeStructure(nodeAddr)
+        if isNullOrNil(nodeAddr) or not isVtable(getVtable(nodeAddr)) then return nil end
+
+        local nodeStruct = createStructure('GDNode')
+        GDD.Structures.structureDissect(nodeStruct, nodeAddr)
+        return nodeStruct
+      end
+
+      --- attach lazy node layout creation to a pointer structure element
+      ---@param element userdata
+      ---@return userdata
+      function GDD.Structures.registerNodeChildCallback(element)
+        element.OnCreateChild = function(_, nodeAddr)
+          return GDD.Structures.createNodeStructure(nodeAddr)
+        end
+        return element
+      end
+
+      --- construct a struct containing the root's direct children
       function GDD.Structures.createVPStructure()
         -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
 
-        -- remove all structures
-        -- structure.miClear if you want a confirmation
-        while getStructureCount() > 0 do -- getStructure(n).Name, getStructure(n).Destroy()
-          getStructure(0).Destroy()
-        end
-
-        -- Structure class related functions:
-        -- getStructureCount(): Returns the number of Global structures. (Global structures are the visible structures)
-        -- getStructure(index): Returns the Structure object at the given index
-        -- createStructure(name): Returns an empty structure object (Not yet added to the Global list. Call structure.addToGlobalStructureList manually)
-
-        local struct = createStructure('GDNODES')
-        local structElem, childElem;
         local mainNodeTable = GDD.Objects.getMainNodeTable()
+        local struct = createStructure('GD Root Children')
 
         struct.beginUpdate()
         for i = 0, #mainNodeTable - 1 do
-          structElem = struct.addElement()
+          local nodeAddr = mainNodeTable[i + 1]
+          local structElem = struct.addElement()
           structElem.BackgroundColor = 0x6C3157
-          structElem.Offset = i * GDDEFS.PTRSIZE -- GDDEFS.PTRSIZE
+          structElem.Offset = i * GDDEFS.PTRSIZE
           structElem.VarType = vtPointer
-          structElem.Name = gd_getNodeName(mainNodeTable[i + 1])
+          structElem.Name = gd_getNodeName(nodeAddr)
+          GDD.Structures.registerNodeChildCallback(structElem)
         end
         struct.endUpdate()
-        struct.addToGlobalStructureList() -- so we can use it
 
         return struct
       end
 
-      --- when called, creates a CE structure form window for the viewport and selects a newly-created GNODES structure
+      --- opens a struct form for the viewport's children
       function GDD.Structures.createVPStructForm()
+        if not inMainThread() then return synchronize(GDD.Structures.createVPStructForm) end
         GDD.Utils.requireOffsetsDefined()
-        -- let's ensure VP is found, it will throw an error otherwise
         GDD.Root.getViewport()
 
         local symbolToChildren = '[[pRoot]+' .. numtohexstr(GDDEFS.CHILDREN) .. ']' -- '[[pRoot]+CHILDREN]'
-        local viewportStructForm = createStructureForm(symbolToChildren, 'VP', 'Viewport')
         local childrenStruct = GDD.Structures.createVPStructure()
-
-        -- I couldn't find a better way to select a structure inside a StructDissect form
-        for i = 0, viewportStructForm.Structures1.Count - 1 do
-          local menuItem = viewportStructForm.Structures1.Item[i]
-          if menuItem.Caption == 'GDNODES' then
-            menuItem.doClick()
-          end
-        end
-
+        local viewportStructForm = createStructureForm()
+        viewportStructForm.Column[0].AddressText = symbolToChildren
+        viewportStructForm.MainStruct = childrenStruct
       end
 
       --- creates an element in a parent structure
@@ -692,6 +698,11 @@
       ---@return string @name; base address isn't returned
       function GDD.Structures.nameLookup(addr)
         if isInvalidPointer(addr) or not isVtable(getVtable(addr)) then
+          return nil
+        end
+
+        local runtime = GDD.Runtime
+        if not runtime or not runtime.implementation or not runtime.implementation.objects then
           return nil
         end
 
@@ -975,7 +986,7 @@
           gdMenuItem = createMenuItem(mainMenu)
           gdMenuItem.Caption = menuItemCaption
           mainMenu.Items.add(gdMenuItem)
-          addCustomMenuButtonTo(gdMenuItem, 'Root Struct', GDD.Structures.createVPStructForm)
+          addCustomMenuButtonTo(gdMenuItem, 'Dissect Root', GDD.Structures.createVPStructForm)
           addCustomMenuButtonTo(gdMenuItem, 'GD Dissect', GDD.GUI.dissectorSwitch)
           addCustomMenuButtonTo(gdMenuItem, 'Add Template', GDD.GUI.addMemrecToTable)
           addCustomMenuButtonTo(gdMenuItem, 'Debug Mode', GDD.GUI.debugSwitch)
@@ -1075,6 +1086,15 @@
       local enum = GDDEFS.VARIANT_TYPE_PROFILE.enums[typeName]
       if enum == nil then error("GDD.Types.getGDTypeEnumFromName: invalid typename " .. typeName) end
       return enum
+    end
+
+    --- returns whether the active Variant type profile defines a Godot type
+    ---@param typeName string
+    ---@return boolean
+    function GDD.Types.hasType(typeName)
+      if type(typeName) ~= 'string' then return false end
+      local profile = GDDEFS and GDDEFS.VARIANT_TYPE_PROFILE
+      return profile ~= nil and profile.enums[typeName] ~= nil
     end
 
     --- I'm gonna add a 4byte string type
@@ -1373,77 +1393,250 @@
     end
 
     function GDAPI.getGDObjectName(objAddr)
-      -- up until 4.6, the method was StringName* Object::_get_class_namev()
-      -- in 4.6 it's GDType& Object::_get_typev(); GDType being a struct whose 2nd member is StringName with the object class name
-      local metaAddr = GDD.Types.getObjectMeta(objAddr)
-      local className = ''
-
-      if isNullOrNil(metaAddr) then return 'null' end
-
-      if GDDEFS.MAJOR_VER <= 3 or (GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER < 6) then
-        className = GDD.Strings.getStringNameStr(readPointer(metaAddr) or 0) or 'nstrn'
-
-      elseif GDDEFS.MAJOR_VER == 4 and GDDEFS.MINOR_VER == 6 then
-          -- const GDType *super_type;
-          -- StringName name;
-        metaAddr = GDD.Types.getObjectMeta(objAddr)
-        local stringNameAddr = readPointer(metaAddr + GDDEFS.PTRSIZE)
-        className = GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
-      elseif GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER > 6 then
-        -- const GDType *super_type;
-        -- mutable InitState init_state = InitState::UNINITIALIZED;
-        -- StringName name;
-        local stringNameAddr = readPointer( metaAddr + GDDEFS.PTRSIZE * 2 ) -- TODO: use alignment
-        className = GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
-      end
-
-      return className
+      local objects = GDD.Runtime and GDD.Runtime.implementation.objects
+      assert(objects and objects.getObjectName, 'version object implementation is not bound')
+      return objects.getObjectName(objAddr)
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// HELPERS
 
+    local VersionImplementations =
+      {
+        containers = {},
+        objects = {},
+      }
+
+    VersionImplementations.containers.legacyTree =
+      {
+        getNodeChildrenInfo = function(nodeAddr)
+          if isNullOrNil(nodeAddr) then return nil, nil end
+          local childrenAddr = readPointer(nodeAddr + GDDEFS.CHILDREN)
+          if isNullOrNil(childrenAddr) then return nil, nil end
+          return childrenAddr, readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
+        end,
+
+        getNextMapElement = function(mapElement)
+          return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
+        end,
+
+        getDictElemPairNext = function(mapElement)
+          return readPointer((mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
+        end,
+      }
+
+    VersionImplementations.containers.modernHash =
+      {
+        getNodeChildrenInfo = function(nodeAddr)
+          if isNullOrNil(nodeAddr) then return nil, nil end
+          local childrenAddr = readPointer(nodeAddr + GDDEFS.CHILDREN)
+          if isNullOrNil(childrenAddr) then return nil, nil end
+          return childrenAddr, readInteger(nodeAddr + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE)
+        end,
+
+        getNextMapElement = function(mapElement)
+          return readPointer(mapElement)
+        end,
+
+        getDictElemPairNext = function(mapElement)
+          return readPointer(mapElement)
+        end,
+      }
+
+    local legacyContainers = VersionImplementations.containers.legacyTree
+    local modernContainers = VersionImplementations.containers.modernHash
+
+    legacyContainers.getVariantNameFromMapElement = function(mapElement)
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+    end
+
+    modernContainers.getVariantNameFromMapElement = function(mapElement)
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
+    end
+
+    legacyContainers.getFunctionMapName = function(mapElement)
+      if isNullOrNil(mapElement) then return nil end
+      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+    end
+
+    modernContainers.getFunctionMapName = function(mapElement)
+      if isNullOrNil(mapElement) then return nil end
+      return GDD.Functions.getName(mapElement)
+    end
+
+    legacyContainers.createNextConstContainer = function(currentContainer, index)
+      local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
+      nextElem.ChildStruct = createStructure('ConstNext')
+      return nextElem
+    end
+
+    modernContainers.createNextConstContainer = function(currentContainer, index)
+      local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', 0, vtPointer)
+      nextElem.ChildStruct = createStructure('ConstNext')
+      return nextElem
+    end
+
+    legacyContainers.createNextConstSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+MAP_NEXTELEM')
+    end
+
+    modernContainers.createNextConstSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+0')
+    end
+
+    local function readDictionaryInfo(dictAddr, dictRoot)
+      local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
+      if isNullOrNil(dictSize) then
+        sendDebugMessage('dictSize isnt valid')
+        return nil
+      end
+
+      local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
+      if isNullOrNil(dictHead) then
+        sendDebugMessage('dictHead isnt valid')
+        return nil
+      end
+
+      return dictRoot, dictSize, dictHead, readPointer(dictRoot + GDDEFS.DICT_TAIL)
+    end
+
+    legacyContainers.getDictionaryInfo = function(dictAddr)
+      if isInvalidPointer(dictAddr) then
+        sendDebugMessage('dictAddr isnt pointer')
+        return nil
+      end
+      local dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
+      if isNullOrNil(dictRoot) then
+        sendDebugMessage('dictRoot isnt valid')
+        return nil
+      end
+      return readDictionaryInfo(dictAddr, dictRoot)
+    end
+
+    modernContainers.getDictionaryInfo = function(dictAddr)
+      if isInvalidPointer(dictAddr) then
+        sendDebugMessage('dictAddr isnt pointer')
+        return nil
+      end
+      return readDictionaryInfo(dictAddr, dictAddr)
+    end
+
+    legacyContainers.createNextDictContainer = function(currentContainer)
+      return GDD.Structures.createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+    end
+
+    modernContainers.createNextDictContainer = function(currentContainer)
+      return GDD.Structures.createChildStructElem(currentContainer, 'Next', 0, vtPointer, 'DictNext')
+    end
+
+    legacyContainers.createNextSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT))
+    end
+
+    modernContainers.createNextSymbol = function(currentSymbol)
+      return GDD.Utils.wrapBrackets(currentSymbol .. '+' .. numtohexstr(0))
+    end
+
+    legacyContainers.normalizeMapHead = function(mainElement, endElement, mapSize)
+      return GDD.Containers.getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
+    end
+
+    modernContainers.normalizeMapHead = function(mainElement, endElement, mapSize)
+      return mainElement, endElement, mapSize
+    end
+
+    local function readObjectNameAtMetadataOffset(objAddr, metadataOffset)
+      local metaAddr = GDD.Types.getObjectMeta(objAddr)
+      if isNullOrNil(metaAddr) then return 'null' end
+      local stringNameAddr = readPointer(metaAddr + metadataOffset)
+      return GDD.Strings.getStringNameStr(stringNameAddr or 0) or 'nstrn'
+    end
+
+    VersionImplementations.objects.stringName =
+      {
+        getObjectName = function(objAddr)
+          return readObjectNameAtMetadataOffset(objAddr, 0)
+        end,
+      }
+
+    VersionImplementations.objects.gdTypeV1 =
+      {
+        getObjectName = function(objAddr)
+          -- const GDType *super_type; StringName name;
+          return readObjectNameAtMetadataOffset(objAddr, GDDEFS.PTRSIZE)
+        end,
+      }
+
+    VersionImplementations.objects.gdTypeV2 =
+      {
+        getObjectName = function(objAddr)
+          -- const GDType *super_type; InitState init_state; StringName name;
+          return readObjectNameAtMetadataOffset(objAddr, GDDEFS.PTRSIZE * 2)
+        end,
+      }
+
+    local ContainerImplementationContract =
+      {
+        'getNodeChildrenInfo',
+        'getNextMapElement',
+        'getDictElemPairNext',
+        'getVariantNameFromMapElement',
+        'getFunctionMapName',
+        'createNextConstContainer',
+        'createNextConstSymbol',
+        'getDictionaryInfo',
+        'createNextDictContainer',
+        'createNextSymbol',
+        'normalizeMapHead',
+      }
+
+    local ObjectImplementationContract = { 'getObjectName' }
+
+    -- did we forget to implement something?
+    local function validateImplementation(name, implementation, contract)
+      assert( type(implementation) == 'table', name .. ' implementation is unavailable' )
+      for _, methodName in ipairs(contract) do
+        assert( type( implementation[methodName] ) == 'function', name .. ' implementation is missing ' .. methodName )
+      end
+    end
+
+    function GDD.Config.bindVersionImplementations()
+      local runtime = GDD.Runtime
+      assert( runtime and runtime.capabilities, 'version runtime is not initialized' )
+
+      local containerFamily = runtime.capabilities.containerFamily
+      local containers = VersionImplementations.containers[containerFamily]
+      validateImplementation( 'container ' .. tostring(containerFamily), containers, ContainerImplementationContract )
+
+      local objectLayout = runtime.capabilities.objectMetadataLayout
+      local objects = VersionImplementations.objects[objectLayout]
+      validateImplementation( 'object metadata ' .. tostring(objectLayout), objects, ObjectImplementationContract )
+
+      runtime.implementation.containers = containers
+      runtime.implementation.objects = objects
+
+      for _, methodName in ipairs(ContainerImplementationContract) do
+        GDD.Containers[methodName] = containers[methodName]
+      end
+    end
+
     function GDD.Containers.getNodeChildrenInfo(nodeAddr)
-      if isNullOrNil(nodeAddr) then
-        return nil, nil;
-      end
-
-      local childrenAddr = readPointer((nodeAddr or 0) + GDDEFS.CHILDREN) -- viewport has an array of all main ingame Nodes, those Nodes can contain further nodes
-      if isNullOrNil(childrenAddr) then
-        return nil, nil;
-      end
-
-      local childrenSize;
-      if GDDEFS.MAJOR_VER >= 4 then
-        childrenSize = readInteger( (nodeAddr or 0) + GDDEFS.CHILDREN - GDDEFS.CHILDREN_SIZE) -- size is 8 bytes behind
-      else
-        childrenSize = readInteger(childrenAddr - GDDEFS.CHILDREN_SIZE)
-      end
-
-      return childrenAddr, childrenSize
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getNextMapElement(mapElement)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return readPointer(mapElement) -- next is at 0x0
-      else
-        return readPointer(mapElement + GDDEFS.MAP_NEXTELEM)
-      end
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getDictElemPairNext(mapElement)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return readPointer(mapElement) -- at 0x0
-      else
-        return readPointer( (mapElement or 0) + GDDEFS.DICTELEM_PAIR_NEXT)
-      end
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getDictionarySizeFromVariantPtr(variantPtr)
-      return readInteger( (readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE)
+      return readInteger( (readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE )
     end
 
     function GDD.Containers.isArrayEmptyFromVariantPtr(variantPtr)
-      return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR) == 0
+      return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR ) == 0
     end
 
     function GDD.Containers.resolveScriptVariantType(mapElement, runtimeVariantType) -- TODO: remove?
@@ -1456,11 +1649,7 @@
     end
 
     function GDD.Containers.getVariantNameFromMapElement(mapElement)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.CONSTELEM_KEYVAL))
-      end
-
-      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.prepareObjectParent(entry, emitter, parent, contextTable)
@@ -1502,12 +1691,7 @@
     end
 
     function GDD.Containers.getFunctionMapName(mapElement)
-      if isNullOrNil(mapElement) then return nil end
-
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Functions.getName(mapElement)
-      end
-      return GDD.Strings.getStringNameStr(readPointer(mapElement + GDDEFS.MAP_KEY))
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.findMapEntryByName(mapHead, targetName, getNameFn, getResultCallback, goAdvanceCallback)
@@ -1544,25 +1728,11 @@
     end
 
     function GDD.Containers.createNextConstContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER >= 4 then
-        local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', 0x0, vtPointer)
-        nextElem.ChildStruct = createStructure('ConstNext')
-        return nextElem
-      end
-
-      local nextElem = GDD.Structures.addStructureElem(currentContainer, 'Next[' .. index .. ']', GDDEFS.MAP_NEXTELEM, vtPointer)
-      nextElem.ChildStruct = createStructure('ConstNext')
-      return nextElem
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.createNextConstSymbol(currentSymbol)
-      local nextSymbol
-      if GDDEFS.MAJOR_VER >= 4 then
-        nextSymbol = GDD.Utils.wrapBrackets( currentSymbol .. "+0" )
-      else --if GDDEFS.MAJOR_VER <= 3 then
-        nextSymbol = GDD.Utils.wrapBrackets( currentSymbol .. "+MAP_NEXTELEM" )
-      end
-      return nextSymbol
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.formatArrayEntry(entry)
@@ -1646,51 +1816,15 @@
     end
 
     function GDD.Containers.getDictionaryInfo(dictAddr)
-      if isInvalidPointer(dictAddr) then
-        sendDebugMessage('dictAddr isnt pointer')
-        return nil
-      end
-
-      local dictRoot = dictAddr
-      if GDDEFS.MAJOR_VER <= 3 then
-        dictRoot = readPointer(dictAddr + GDDEFS.DICT_LIST)
-        if isNullOrNil(dictRoot) then
-          sendDebugMessage('dictRoot isnt valid')
-          return nil
-        end
-      end
-
-      local dictSize = readInteger(dictAddr + GDDEFS.DICT_SIZE)
-      if isNullOrNil(dictSize) then
-        sendDebugMessage('dictSize isnt valid')
-        return nil
-      end
-
-      local dictHead = readPointer(dictRoot + GDDEFS.DICT_HEAD)
-      if isNullOrNil(dictHead) then
-        sendDebugMessage('dictHead isnt valid')
-        return nil
-      end
-
-      local dictTail = readPointer(dictRoot + GDDEFS.DICT_TAIL)
-
-      return dictRoot, dictSize, dictHead, dictTail
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.createNextDictContainer(currentContainer, index)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Structures.createChildStructElem(currentContainer, 'Next', 0x0, vtPointer, 'DictNext')
-      end
-
-      return GDD.Structures.createChildStructElem(currentContainer, 'Next', GDDEFS.DICTELEM_PAIR_NEXT, vtPointer, 'DictNext')
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.createNextSymbol(currentSymbol)
-      if GDDEFS.MAJOR_VER >= 4 then
-        return GDD.Utils.wrapBrackets( currentSymbol .. '+' .. numtohexstr(0x0) )
-      else--if GDDEFS.MAJOR_VER <= 3 then
-        return GDD.Utils.wrapBrackets( currentSymbol .. '+' .. numtohexstr(GDDEFS.DICTELEM_PAIR_NEXT) )
-      end
+      error('version container implementation is not bound')
     end
 
     function GDD.Containers.getPackedArrayInfo(packedArrayAddr)
@@ -2567,7 +2701,9 @@
 
       -- cases when getAddress fails
       if isNullOrNil(base) then
-        base = enumModules()[1].Address
+        local loadedModules = enumModules()
+        if not loadedModules or #loadedModules == 0 then return nil end
+        base = loadedModules[1].Address
       end
 
       -- first check via PE -- https://wiki.osdev.org/PE
@@ -2703,75 +2839,103 @@
 
     end
 
-    --- heuristic to identify whether the process is godot
-    function GDD.Preinit.onProcessOpened(processid, processhandle, caption)
-      -- similar to monoscript.lua in implementation
-      if GD_OldOnProcessOpened ~= nil then
-        GD_OldOnProcessOpened(processid, processhandle, caption)
+    local function isUsableProcessId(processId)
+      return type(processId) == 'number' and processId > 0 and processId ~= 0xFFFFFFFF and processId ~= 0xFFFFFFFE
+    end
+
+    function GDD.Preinit.removeGUI()
+      if not inMainThread() then return synchronize(GDD.Preinit.removeGUI) end
+      if not GDGUIInit then return end
+
+      GDD.Structures.disableDissect()
+      local mainMenu = getMainForm().Menu
+      for i = 0, mainMenu.Items.Count - 1 do
+        if mainMenu.Items.Item[i].Caption == 'GDDumper' then
+          mainMenu.Items.Item[i].Destroy()
+          break
+        end
       end
+      GDGUIInit = false
+      MainForm.setCaption('Cheat Engine')
+    end
 
-      if godot_ProcessMonitorThread == nil then
-          godot_ProcessMonitorThread = createThread
-          (
-            function(thr)
-              thr.Name = 'GDDumper_ProcessMonitorThread'
-              targetIsGodot = false
-              -- first check via PE -- https://wiki.osdev.org/PE
-              local exportTablename = GDD.Preinit.getExportTableName() or ""
-              if (exportTablename):match("([gG][oO][Dd][Oo][Tt])") then
-                -- if GDDEFS == nil then GDDEFS = {} end
-                -- GDDEFS.GDEXPORT_TABLE = exportTablename
-                targetIsGodot = true;
-              end
+    --- heuristic to identify whether the currently attached process is Godot
+    function GDD.Preinit.couldBeGodot(processId)
+      if getOpenedProcessID() ~= processId then return false end
 
-              -- secondly, check if there's a package file, many apps do
-              if not targetIsGodot then
-                local pathToExe = enumModules()[1].PathToFile
-                local gameDir, exeName = extractFilePath(pathToExe), string.match(extractFileName(pathToExe), "([^/]+)%.exe$")
-                local pathList = getFileList(gameDir, exeName..".pck" ) -- TODO: regex chars will invalidate the mask
+      local exportTableName = GDD.Preinit.getExportTableName() or ''
+      if getOpenedProcessID() ~= processId then return false end
+      if exportTableName:lower():find('godot', 1, true) then return true end
 
-                if pathList and next(pathList) then
-                  targetIsGodot = true;
-                end
-              end
+      local loadedModules = enumModules()
+      if getOpenedProcessID() ~= processId or not loadedModules or #loadedModules == 0 then return false end
 
-              -- -- via powershell, which also isn't reliable and slow
-              -- if not targetIsGodot then
-              --     local out, code = runCommand("cmd.exe", { "/c", ([[powershell -NoProfile -Command "(Get-Item '%s').VersionInfo.FileDescription"]]):format(pathToExe) })
-              --     if code ~= 0 then targetIsGodot = false
-              --     else
-              --         if (out or ""):match("([gG][oO][Dd][Oo][Tt])") then targetIsGodot = true; end
-              --     end
-              -- end
+      local pathToExe = loadedModules[1].PathToFile
+      if type(pathToExe) ~= 'string' or pathToExe == '' then return false end
 
-              if targetIsGodot then
-                synchronize(gd_buildGUI)
+      local gameDir = extractFilePath(pathToExe)
+      local exeName = extractFileName(pathToExe):match('(.+)%.exe$')
+      if not exeName then return false end
 
-              elseif targetIsGodot == false and GDGUIInit == true then
-                synchronize(function()
-                  GDD.Structures.disableDissect()
-                  local mainMenu = getMainForm().Menu
-                  for i = 0, mainMenu.Items.Count - 1 do
-                    if mainMenu.Items.Item[i].Caption == 'GDDumper' then
-                      mainMenu.Items.Item[i].Destroy()
-                      break
-                    end
-                  end
-                  GDGUIInit = false
-                  MainForm.setCaption("Cheat Engine")
-                end)
-              end
-            end
-          )
-          godot_ProcessMonitorThread = nil
-      end
+      return GDD.Preinit.readGodotPckVersion(gameDir .. exeName .. '.pck') ~= nil
+    end
 
-      return nil
+    --- spawn a detached detector, valid only for a generation
+    function GDD.Preinit.detectGodotProcess(processId, hookState, generation)
+      createThread(function(detectionThread)
+        detectionThread.Name = 'Godot detecting'
+
+        local detected, isGodot = pcall(GDD.Preinit.couldBeGodot, processId)
+        if not detected then
+          isGodot = false
+        end
+
+        if hookState.generation ~= generation or getOpenedProcessID() ~= processId then return end
+
+        synchronize(function()
+          if hookState.generation ~= generation or getOpenedProcessID() ~= processId then return end
+          targetIsGodot = isGodot
+          if isGodot then gd_buildGUI() end
+        end)
+      end)
+    end
+
+    --- process-open callback
+    function GDD.Preinit.onProcessOpened(processId, processHandle, caption, hookState)
+      hookState.generation = (hookState.generation or 0) + 1
+      local generation = hookState.generation
+
+      targetIsGodot = false
+      GDD.Preinit.removeGUI()
+
+      if not isUsableProcessId(processId) then return end
+      GDD.Preinit.detectGodotProcess(processId, hookState, generation)
     end
 
     function GDD.Preinit.register()
-      GD_OldOnProcessOpened = MainForm.OnProcessOpened
-      MainForm.OnProcessOpened = GDD.Preinit.onProcessOpened
+      if not inMainThread() then return synchronize(GDD.Preinit.register) end
+
+      local hookState = package.loaded['GDDumper.processOpenedHook']
+      if not hookState then
+        hookState = { generation = 0 }
+        package.loaded['GDDumper.processOpenedHook'] = hookState
+      end
+
+      hookState.callback = function(processId, processHandle, caption)
+        GDD.Preinit.onProcessOpened(processId, processHandle, caption, hookState)
+      end
+
+      if not hookState.installed then
+        local previousHandler = MainForm.OnProcessOpened
+        MainForm.OnProcessOpened = function(processId, processHandle, caption)
+          if previousHandler then previousHandler(processId, processHandle, caption) end
+          if hookState.callback then hookState.callback(processId, processHandle, caption) end
+        end
+        hookState.installed = true
+      end
+
+      local processId = getOpenedProcessID()
+      if isUsableProcessId(processId) then hookState.callback(processId, nil, nil) end
     end
 
     function GDD.Preinit.defineVersion()
@@ -2831,6 +2995,7 @@
     function GDD.Config.initDefs()
       GDDEFS = {} -- for now let it be reinitialized here
       GDD.Config.Defs = GDDEFS
+      GDD.Runtime = nil
 
       GDDEFS.SCRIPT_TYPES =
         {
@@ -2852,7 +3017,7 @@
       end -- for auto offsetdef and ptr arithmetics
 
       local scriptErrors = { [22] = "in use error", [43] = "parse error", [2] = "handler script error", [36] = "compilation error", [1] = "handler warning", }
-      local callErrors = { [1] = "invalid method", [2] = "invalid argument", [3] = "too many args", [4] = "too few args", [5] = "instance is null", [6] = "method not const", }
+      local callErrors = { [1] = "invalid method", [2] = "invalid argument", [3] = "too many args", [4] = "too few args", [5] = "instance is null", [6] = "method not const", [-1] = "NOT SET"}
       GDDEFS.SCRIPT_ERRORS = scriptErrors
       GDDEFS.CALL_ERRORS = callErrors
       GDDEFS.STRING = 0x4+0x4+GDDEFS.PTRSIZE
@@ -2883,7 +3048,8 @@
 
       -- AUTOMATIC START
       if (bHardOffsets or config.useHardcoded) then
-        local offsets = getStoredOffsetsFromVersion(GDDEFS.MAJOR_VER, GDDEFS.MINOR_VER, GDDEFS.PATCH_VER)
+        local target = GDD.Runtime.target
+        local offsets = getStoredOffsetsFromVersion(target.major, target.minor, target.patch)
         GDDEFS.GET_TYPE_INDX = offsets.GET_TYPE_INDX or GDDEFS.GET_TYPE_INDX
         GDDEFS.CALLP_INDX = offsets.CALLP_INDX or GDDEFS.CALLP_INDX
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex or GDDEFS.GDSCRIPT_RELOAD_INDX
@@ -2928,7 +3094,6 @@
               GDDEFS.GET_TYPE_INDX = 10
             end
         elseif GDDEFS.MAJOR_VER <= 3 then
-          GDDEFS.MAJOR_VER = 3
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
@@ -3526,14 +3691,25 @@
         -- sendDebugMessage('GDScriptName is nil/empty')
         return 'N??'
       end
-      local scriptMatch = GDScriptName:match("([^/]+)%.[^.]+$") --"([^/]+)%.gd$"
+
+      local normalizedPath = GDScriptName:gsub('\\', '/')
+      local stablePath = normalizedPath:match('^(.-%.tscn)::') or normalizedPath
+      local isSceneScript = stablePath ~= normalizedPath or stablePath:lower():match('%.tscn$') ~= nil
+      local fileName = stablePath:match('([^/]+)$')
+      local scriptMatch = fileName
+      if scriptMatch and not isSceneScript then
+        scriptMatch = scriptMatch:gsub('%.[^.]+$', '')
+      end
+
       if scriptMatch == nil then
         -- sendDebugMessage('GDScriptName is nil/empty')
         return 'N??'
       end
 
       if bWithAbsPath then
-        local parsedPath = GDScriptName:gsub("^res://", ""):gsub("%.[^.]+$", ""):gsub("/", ".") -- catch only res://(.*).ext with dots instead of /
+        local parsedPath = stablePath:gsub('^res://', '')
+        if not isSceneScript then parsedPath = parsedPath:gsub('%.[^.]+$', '') end
+        parsedPath = parsedPath:gsub('/', '.')
         return scriptMatch, parsedPath
       end
 
@@ -3634,9 +3810,11 @@
         -- sendDebugMessage("Checking GDScript for "..nodeName)
 
         if checkForGDScript(nodeAddr) then
-          addLayoutStructElem(childrenArrStructElem, objectTypeName .. ' cNode: ' .. nodeName, 0x6C3157, (i * GDDEFS.PTRSIZE), vtPointer)
+          local childElement = addLayoutStructElem(childrenArrStructElem, objectTypeName .. ' cNode: ' .. nodeName, 0x6C3157, (i * GDDEFS.PTRSIZE), vtPointer)
+          GDD.Structures.registerNodeChildCallback(childElement)
         else
-          addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE), vtPointer)
+          local childElement = addStructureElem(childrenArrStructElem, objectTypeName .. ' cObj: ' .. nodeName, (i * GDDEFS.PTRSIZE), vtPointer)
+          GDD.Structures.registerNodeChildCallback(childElement)
         end
       end
     end
@@ -3846,7 +4024,7 @@
       assert(type(nodeAddr) == 'number', "Node addr has to be a number, instead got: " .. type(nodeAddr))
       assert(type(constName) == 'string', "Constant name has to be a string, instead got: " .. type(constName))
 
-      local mapHead = getNodeConstantMap(nodeAddr)
+      local mapHead = GDD.Constants.getNodeMap({ addr = nodeAddr })
       return GDD.Containers.findMapEntryByName(mapHead, constName, GDD.Constants.getName, GDD.Containers.getConstMapLookupResult, GDD.Containers.getNextMapElement)
     end
 
@@ -4136,14 +4314,7 @@
             local objDestor = GDNative:getFuncFromIndex(GDNative, 570)
             if isNullOrNil(objDestor) then error('godot_variant_destroy func ptr not found') end
 
-            -- allocating target memory
-            local objAlloc = allocateMemory(GDDEFS.PTRSIZE)
-            if isNullOrNil(objAlloc) then error('mem_alloc failed to allocate') end
-            writePointer(objAlloc, ptr)
-
-            -- destroy
-            executeCodeEx(stdcall, timeout, objDestor, objAlloc)
-            deAlloc(objAlloc)
+            executeCodeEx(stdcall, timeout, objDestor, ptr)
           end
 
           function GDNativeInterface.godot_alloc( bytes )
@@ -4544,9 +4715,9 @@
 
       function GDI.destroy_variant( ptr )
         if GDDEFS.MAJOR_VER <= 3 then
-          error('not implemented')
+          GDNativeInterface.godot_variant_destroy( ptr )
         else
-          error('not implemented')
+          GDExtendedInterface.destroy_object_variant( ptr )
         end
         if ptr then GDI.constructed[ptr] = nil end
       end
@@ -4669,6 +4840,7 @@
 
       local int_t = 0
       local argTable = { { type = "NIL", value = nil } }
+      VariantArena:prepareCall()
       GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
 
       local buffer = { type = int_t, value = VariantArena.base + VariantArena.returnBufOffset } -- rcx
@@ -4679,10 +4851,12 @@
 
       -- We cheat here with    node->set_script( Variant(TYPE::NIL) );     to avoid   if (get_script() == p_script) return;   but we lose the state
       executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err)
+      VariantArena:markReturnValueActive()
 
       -- error checking, the object state should allegedly be fine
-      local errVal = readPointer( err.value )
+      local errVal = readInteger( err.value )
       if errVal ~= 0 then
+        VariantArena:discardReturnValue()
         GDI.destroy_string_name( methodSName )
         deAlloc(stringNamePtr)
         error('resetting the script failed, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
@@ -4693,21 +4867,24 @@
 
       -- setting up the arg
       local argTable = { { type = "OBJECT", value = nil, copy = objectVariant } } -- for we manage it
+      VariantArena:prepareCall()
       GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
 
       writeInteger(err.value, -1)
 
       -- hotreload the SI of a node
       executeCodeEx(stdcall, timeout, callpMethod,    buffer, nodeAddr, stringNamePtr, args, argCount, err) -- node->callp("set_script", args, argc, err) // Object::set_script(const Variant &p_script)
+      VariantArena:markReturnValueActive()
       
       deAlloc(stringNamePtr)
       GDI.destroy_string_name(methodSName)
       GDI.destroy_object_variant(objectVariant)
 
-      local errVal = readPointer( err.value )
+      local errVal = readInteger( err.value )
+      VariantArena:discardReturnValue()
 
       -- success
-      if errVal == 0 then return readPointer( err.value ) end
+      if errVal == 0 then return errVal end
       
       -- fail
       error('hotreloading GDSI failed, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]) )
@@ -4782,8 +4959,8 @@
       if GDDEFS.MAJOR_VER >= 4 then
         return mainElement, lastElement, mapSize, nodeContext
       else
-        if funcStructElement then
-          funcStructElement.ChildStruct = createStructure('ConstMapRes')
+        if nodeContext.struct then
+          nodeContext.struct.ChildStruct = createStructure('FuncMapRes')
         end
         return GDD.Containers.getLeftmostMapElem(mainElement, lastElement, mapSize, nodeContext)
       end
@@ -4821,6 +4998,29 @@
       end
     end
 
+    --- returns a function constant value ptr and its CE type
+    ---@param funcObjAddr number
+    ---@param constIndex number @0-based constant index
+    function GDAPI.gd_getFunctionConstPtr(funcObjAddr, constIndex)
+      assert(type(funcObjAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcObjAddr))
+      assert(type(constIndex) == 'number', "Const index must be a number, instead got: " .. type(constIndex))
+      assert(constIndex >= 0 and constIndex % 1 == 0, "Const index must be a non-negative integer")
+
+      local funcConstAddr = GDD.Functions.getConstantsAddress(funcObjAddr)
+      if isNullOrNil(funcConstAddr) then error("function const addr is invalid") end
+
+      local vectorSize = readInteger(funcConstAddr - GDDEFS.SIZE_VECTOR)
+      if vectorSize == nil or vectorSize < 0 then error("function const vector size is invalid") end
+      if constIndex >= vectorSize then
+        error( ("Const index %d is out of bounds (size: %d)"):format( constIndex, vectorSize ) )
+      end
+
+      local constAddr, variantType = GDD.Variants.getByIndex(funcConstAddr, constIndex, GDDEFS.SIZEOF_VARIANT)
+      if isNullOrNil(constAddr) or variantType == nil then error("function const is invalid") end
+
+      return constAddr, GDD.Types.getCETypeFromGD(variantType)
+    end
+
     --- patch a function's constant with a value
     ---@param funcObjAddr number
     ---@param constIndex number@0-based position to start patching from
@@ -4832,25 +5032,16 @@
       assert(type(value) == 'number', "value has to be a number, instead got: " .. type(value))
       assert(type(CEvalueType) == 'number', "ce value type has to be a number, instead got: " .. type(CEvalueType))
 
-      local funcConstAddr = GDD.Functions.getConstantsAddress(funcObjAddr)
-      if isNullOrNil(funcConstAddr) then error("function const addr is invalid") end
-
-      local vectorSize = readInteger(funcConstAddr - GDDEFS.SIZE_VECTOR)
-
-      -- local sizeOfVariant, ok = GDD.Types.redefineVariantSizeByVector(funcConstAddr, vectorSize)
-      -- if not ok then error("size refedinition failed") end
-      local sizeOfVariant = GDDEFS.SIZEOF_VARIANT
-
-      local targetConstAddr = GDD.Variants.getByIndex(funcConstAddr, constIndex, sizeOfVariant)
+      local targetConstAddr = GDAPI.gd_getFunctionConstPtr(funcObjAddr, constIndex)
 
       -- todo: base it on handlers
-      if vtByte then
+      if CEvalueType == vtByte then
         writeByte(targetConstAddr, value)
-      elseif vtDword then
+      elseif CEvalueType == vtDword then
         writeInteger(targetConstAddr, value, true)
-      elseif vtDouble then
+      elseif CEvalueType == vtDouble then
         writeDouble(targetConstAddr, value)
-      elseif vtQword then
+      elseif CEvalueType == vtQword then
         writeQword(targetConstAddr, value)
       else
         error("yet unhandled type")
@@ -5066,7 +5257,7 @@
       -- so far the calling conventions match seamlessly
 
       -- we need the dummy stack even when no arguments
-      if not VariantArena:init() then error("'stack' space isn't alloced") end
+      VariantArena:prepareCall()
 
       local vmCallAddr
       if isNullOrNil(GDDEFS.VM_CALL) then
@@ -5102,8 +5293,10 @@
       _rax =  { type = int_t, value = VariantArena.base } -- lastArgument
 
       local returned = executeCodeEx(stdcall, timeout, vmCallAddr, _rcx, _rdx, _r8, _r9, _st1, _st2, _st3, _rax)
+      VariantArena:releaseConstructedArguments()
 
       if GDDEFS.VM_CALL_HEAVY then
+        VariantArena:markReturnValueActive()
         return VariantArena.base + VariantArena.returnBufOffset, true
       end
 
@@ -5170,7 +5363,7 @@
       local stringNamePtr = allocateMemory(GDDEFS.PTRSIZE)
       writePointer(stringNamePtr, methodSName)
 
-      VariantArena:init()
+      VariantArena:prepareCall()
       if argTable and #argTable > 0 then
         GDD.Functions.setupCallArgs(VariantArena, GDVariant, argTable)
       else
@@ -5185,13 +5378,16 @@
       writeInteger(err.value, -1)
 
       executeCodeEx(stdcall, timeout, callpMethod, buffer, objectAddr, stringNamePtr, args, argCount, err)
+      VariantArena:markReturnValueActive()
+      VariantArena:releaseConstructedArguments()
 
       deAlloc(stringNamePtr)
       GDI.destroy_string_name(methodSName)
 
-      local errVal = readPointer(err.value)
+      local errVal = readInteger(err.value)
       if errVal == 0 then return VariantArena.base + VariantArena.returnBufOffset end
 
+      VariantArena:discardReturnValue()
       error('Fail, err: ' .. tostring(GDDEFS.CALL_ERRORS[errVal]))
     end
 
@@ -5726,11 +5922,7 @@
         return;
       end
 
-      if GDDEFS.MAJOR_VER >= 4 then
-        return mainElement, endElement, mapSize
-      else
-        return GDD.Containers.getLeftmostMapElem(mainElement, endElement, mapSize, { silentLeftWalk = true })
-      end
+      return GDD.Runtime.implementation.containers.normalizeMapHead(mainElement, endElement, mapSize)
     end
 
     --- returns a pointer to the variant's value and its type for a sanity check
@@ -5777,6 +5969,8 @@
         -- end padd
         
         inited = false,
+        returnValueActive = false,
+        constructedArguments = {},
       }
 
       function VariantArena:init()
@@ -5791,6 +5985,44 @@
 
       function VariantArena:reset()
         self.cursor = self.scratchStart
+      end
+
+      function VariantArena:clearRegion(offset, size)
+        for currentOffset = 0, size - GDDEFS.PTRSIZE, GDDEFS.PTRSIZE do
+          writePointer(self.base + offset + currentOffset, 0)
+        end
+      end
+
+      function VariantArena:discardReturnValue()
+        if self.returnValueActive then
+          GDI.destroy_variant(self.base + self.returnBufOffset)
+          self.returnValueActive = false
+        end
+        self:clearRegion(self.returnBufOffset, self.variantSize)
+      end
+
+      function VariantArena:prepareCall()
+        self:init()
+        self:releaseConstructedArguments()
+        self:discardReturnValue()
+        self:clearRegion(self.excptOffset, self.variantSize)
+        self:clearRegion(self.callErrorOffset, 0x10)
+        self:reset()
+      end
+
+      function VariantArena:markReturnValueActive()
+        self.returnValueActive = true
+      end
+
+      function VariantArena:trackConstructedArgument(ptr)
+        self.constructedArguments[#self.constructedArguments + 1] = ptr
+      end
+
+      function VariantArena:releaseConstructedArguments()
+        for i = #self.constructedArguments, 1, -1 do
+          GDI.destroy_variant(self.constructedArguments[i])
+          self.constructedArguments[i] = nil
+        end
       end
 
       function VariantArena:align(alignment)
@@ -5825,6 +6057,122 @@
       end
 
     GDVariant = {}
+
+      local function writeVariantReal(address, value, fieldName)
+        assert(type(value) == 'number', fieldName .. ' must be a number')
+        if GDDEFS.USES_DOUBLE_REALT then
+          writeDouble(address, value)
+        else
+          writeFloat(address, value)
+        end
+      end
+
+      local function getVariantRealSize()
+        return GDDEFS.USES_DOUBLE_REALT and 8 or 4
+      end
+
+      local function allocNativeReals(arena, typeName, values)
+        local realSize = getVariantRealSize()
+        local ptr = arena:alloc(#values * realSize, realSize)
+        for i, value in ipairs(values) do
+          writeVariantReal(ptr + ((i - 1) * realSize), value, typeName .. '[' .. i .. ']')
+        end
+        return ptr
+      end
+
+      local godot3VariantConstructors =
+      {
+        TRANSFORM2D = 518,
+        AABB = 521,
+        BASIS = 522,
+        TRANSFORM3D = 523,
+        NODE_PATH = 525,
+        RID = 526,
+      }
+
+      local function constructNativeVariant(arena, typeName, nativeValue)
+        local constructor
+        if GDDEFS.MAJOR_VER <= 3 then
+          local constructorIndex = godot3VariantConstructors[typeName]
+          assert(constructorIndex, typeName .. ' construction is unavailable in Godot 3.x')
+          constructor = GDNative:getFuncFromIndex(GDNative, constructorIndex)
+        else
+          constructor = GDExtendedInterface.get_variant_from_type_constructor(typeName)
+        end
+        assert(isNotNullOrNil(constructor), typeName .. ' Variant constructor not found')
+
+        local variant = arena:allocVariant()
+        executeCodeEx(stdcall, timeout, constructor, variant, nativeValue)
+        arena:trackConstructedArgument(variant)
+        return variant
+      end
+
+      local function getVectorValues(value, keys, fieldName)
+        assert(type(value) == 'table', fieldName .. ' must be a table')
+        local values = {}
+        for i, key in ipairs(keys) do
+          local component = value[key]
+          assert(type(component) == 'number', fieldName .. '.' .. key .. ' must be a number')
+          values[i] = component
+        end
+        return values
+      end
+
+      local function appendValues(destination, source)
+        for _, value in ipairs(source) do
+          destination[#destination + 1] = value
+        end
+      end
+
+      local function constructNodePathVariant(arena, value)
+        assert(type(value) == 'string', 'NODE_PATH must be a string')
+
+        local cString = allocateMemory(#value + 1)
+        assert(isNotNullOrNil(cString), 'NODE_PATH string allocation failed')
+        if not writeString(cString, value) then
+          deAlloc(cString)
+          error('NODE_PATH string mapping failed')
+        end
+
+        local stringValue = arena:alloc(GDDEFS.PTRSIZE, GDDEFS.PTRSIZE)
+        local nodePathValue = arena:alloc(GDDEFS.PTRSIZE, GDDEFS.PTRSIZE)
+        local variant
+
+        if GDDEFS.MAJOR_VER <= 3 then
+          local stringConstructor = GDNative:getFuncFromIndex(GDNative, 574)
+          local stringParseUtf8 = GDNative:getFuncFromIndex(GDNative, 679)
+          local stringDestructor = GDNative:getFuncFromIndex(GDNative, 721)
+          local nodePathConstructor = GDNative:getFuncFromIndex(GDNative, 381)
+          local nodePathDestructor = GDNative:getFuncFromIndex(GDNative, 383)
+
+          executeCodeEx(stdcall, timeout, stringConstructor, stringValue)
+          executeCodeEx(stdcall, timeout, stringParseUtf8, stringValue, cString)
+          executeCodeEx(stdcall, timeout, nodePathConstructor, nodePathValue, stringValue)
+          variant = constructNativeVariant(arena, 'NODE_PATH', nodePathValue)
+          executeCodeEx(stdcall, timeout, nodePathDestructor, nodePathValue)
+          executeCodeEx(stdcall, timeout, stringDestructor, stringValue)
+        else
+          local stringConstructor = GDExtendedInterface.getGDExtensionFunc('string_new_with_utf8_chars')
+          local stringDestructor = GDExtendedInterface.variant_get_ptr_destructor('STRING')
+          local nodePathConstructor = GDExtendedInterface.variant_get_ptr_constructor('NODE_PATH', 2)
+          local nodePathDestructor = GDExtendedInterface.variant_get_ptr_destructor('NODE_PATH')
+          assert(isNotNullOrNil(stringConstructor), 'String constructor not found')
+          assert(isNotNullOrNil(stringDestructor), 'String destructor not found')
+          assert(isNotNullOrNil(nodePathConstructor), 'NodePath(String) constructor not found')
+          assert(isNotNullOrNil(nodePathDestructor), 'NodePath destructor not found')
+
+          executeCodeEx(stdcall, timeout, stringConstructor, stringValue, cString)
+          local constructorArguments = arena:alloc(GDDEFS.PTRSIZE, GDDEFS.PTRSIZE)
+          writePointer(constructorArguments, stringValue)
+          executeCodeEx(stdcall, timeout, nodePathConstructor, nodePathValue, constructorArguments)
+          variant = constructNativeVariant(arena, 'NODE_PATH', nodePathValue)
+          executeCodeEx(stdcall, timeout, nodePathDestructor, nodePathValue)
+          executeCodeEx(stdcall, timeout, stringDestructor, stringValue)
+        end
+
+        deAlloc(cString)
+        return variant
+      end
 
       -- non-managed
       function GDVariant.NIL(arena, value, copy)
@@ -5863,8 +6211,9 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR2') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'VECTOR2.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'VECTOR2.y')
         return v
       end
 
@@ -5881,10 +6230,11 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('RECT2') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
-        writeFloat(v + 0x10, value.w)
-        writeFloat(v + 0x14, value.h)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'RECT2.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'RECT2.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.w, 'RECT2.w')
+        writeVariantReal(v + 0x8 + realSize * 3, value.h, 'RECT2.h')
         return v
       end
 
@@ -5903,9 +6253,10 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR3') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
-        writeFloat(v + 0x10, value.z)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'VECTOR3.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'VECTOR3.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'VECTOR3.z')
         return v
       end
 
@@ -5923,10 +6274,11 @@
         if isValidPointer(copy) then return copy end
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('VECTOR4') )
-        writeFloat(v + 0x8, value.x)
-        writeFloat(v + 0xC, value.y)
-        writeFloat(v + 0x10, value.z)
-        writeFloat(v + 0x14, value.w)
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'VECTOR4.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'VECTOR4.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'VECTOR4.z')
+        writeVariantReal(v + 0x8 + realSize * 3, value.w, 'VECTOR4.w')
         return v
       end
 
@@ -5943,17 +6295,25 @@
 
       function GDVariant.PLANE(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('PLANE') )
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'PLANE.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'PLANE.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'PLANE.z')
+        writeVariantReal(v + 0x8 + realSize * 3, value.d, 'PLANE.d')
         return v
       end
 
       function GDVariant.QUATERNION(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
         local v = arena:allocVariant()
         writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('QUATERNION') )
+        local realSize = getVariantRealSize()
+        writeVariantReal(v + 0x8, value.x, 'QUATERNION.x')
+        writeVariantReal(v + 0x8 + realSize, value.y, 'QUATERNION.y')
+        writeVariantReal(v + 0x8 + realSize * 2, value.z, 'QUATERNION.z')
+        writeVariantReal(v + 0x8 + realSize * 3, value.w, 'QUATERNION.w')
         return v
       end
 
@@ -5970,10 +6330,11 @@
 
       function GDVariant.RID(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
-        local v = arena:allocVariant()
-        writeInteger(v + 0x0, GDD.Types.getGDTypeEnumFromName('RID') )
-        return v
+        local rawValue = type(value) == 'table' and value.raw or value
+        assert(type(rawValue) == 'number', 'RID must be its raw native word or { raw = value }')
+        local nativeValue = arena:alloc(8, 8)
+        writeQword(nativeValue, rawValue)
+        return constructNativeVariant(arena, 'RID', nativeValue)
       end
 
       -- managed
@@ -6000,8 +6361,7 @@
 
       function GDVariant.NODE_PATH(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error('not implemented yet')
-        return 
+        return constructNodePathVariant(arena, value)
       end
 
       function GDVariant.CALLABLE(arena, value, copy)
@@ -6076,27 +6436,61 @@
 
       function GDVariant.TRANSFORM2D(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'TRANSFORM2D must be a table')
+        local values = {}
+        if type(value.x) == 'table' then
+          appendValues(values, getVectorValues(value.x, {'x', 'y'}, 'TRANSFORM2D.x'))
+          appendValues(values, getVectorValues(value.y, {'x', 'y'}, 'TRANSFORM2D.y'))
+          appendValues(values, getVectorValues(value.origin, {'x', 'y'}, 'TRANSFORM2D.origin'))
+        else
+          values = getVectorValues(value, {'xx', 'xy', 'yx', 'yy', 'ox', 'oy'}, 'TRANSFORM2D')
+        end
+        return constructNativeVariant(arena, 'TRANSFORM2D', allocNativeReals(arena, 'TRANSFORM2D', values))
       end
 
       function GDVariant.AABB(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'AABB must be a table')
+        local values = {}
+        appendValues(values, getVectorValues(value.position, {'x', 'y', 'z'}, 'AABB.position'))
+        appendValues(values, getVectorValues(value.size, {'x', 'y', 'z'}, 'AABB.size'))
+        return constructNativeVariant(arena, 'AABB', allocNativeReals(arena, 'AABB', values))
       end
 
       function GDVariant.BASIS(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'BASIS must be a table')
+        local rows = value.rows or {value.x, value.y, value.z}
+        local values = {}
+        for i = 1, 3 do
+          appendValues(values, getVectorValues(rows[i], {'x', 'y', 'z'}, 'BASIS.rows[' .. i .. ']'))
+        end
+        return constructNativeVariant(arena, 'BASIS', allocNativeReals(arena, 'BASIS', values))
       end
 
       function GDVariant.TRANSFORM3D(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(type(value) == 'table', 'TRANSFORM3D must be a table')
+        local basis = value.basis or value
+        local rows = basis.rows or {basis.x, basis.y, basis.z}
+        local values = {}
+        for i = 1, 3 do
+          appendValues(values, getVectorValues(rows[i], {'x', 'y', 'z'}, 'TRANSFORM3D.basis.rows[' .. i .. ']'))
+        end
+        appendValues(values, getVectorValues(value.origin, {'x', 'y', 'z'}, 'TRANSFORM3D.origin'))
+        return constructNativeVariant(arena, 'TRANSFORM3D', allocNativeReals(arena, 'TRANSFORM3D', values))
       end
 
       function GDVariant.PROJECTION(arena, value, copy)
         if isValidPointer(copy) then return copy end
-        error("not implemented yet")
+        assert(GDD.Types.hasType('PROJECTION'), 'PROJECTION is unavailable in the active Variant type profile')
+        assert(type(value) == 'table', 'PROJECTION must be a table')
+        local columns = value.columns or {value.x, value.y, value.z, value.w}
+        local values = {}
+        for i = 1, 4 do
+          appendValues(values, getVectorValues(columns[i], {'x', 'y', 'z', 'w'}, 'PROJECTION.columns[' .. i .. ']'))
+        end
+        return constructNativeVariant(arena, 'PROJECTION', allocNativeReals(arena, 'PROJECTION', values))
       end
 
 
@@ -6319,6 +6713,12 @@
       -- essential version definition
       GDD.Config.initVersion(config)
 
+      -- define target descriptor and version capabilities
+      GDD.Modules.requireFresh(moduleSpecs.Versioning).install(GDD, sendDebugMessage)
+
+      -- bind it
+      GDD.Config.bindVersionImplementations()
+
       -- define type conversion helpers via module
       GDD.Modules.requireFresh(moduleSpecs.Types).install(GDD)
 
@@ -6346,11 +6746,13 @@
       GDD.Utils.disablePrintPopup()
 
       -- exposing relevant API
-      if GDDEFS.MAJOR_VER >= 4 and GDDEFS.MINOR_VER >= 1 then
+      local engineInterface = GDD.Runtime.capabilities.engineInterface
+      if engineInterface == 'gdextension' then
         if GDD.Script.findGDExtensionInterfacePtr() then GDI.Extension = GDExtendedInterface end
-      end
-      if GDDEFS.MAJOR_VER == 3 then -- doesn't exist in 2.x
+        GDD.Runtime.implementation.engineInterface = GDI.Extension
+      elseif engineInterface == 'gdnative' then
         if GDD.Script.findGDNativeAPIStruct() then GDI.GDNative = GDNativeInterface end
+        GDD.Runtime.implementation.engineInterface = GDI.GDNative
       end
 
       -- find GDScriptFunctions::call()
@@ -6401,6 +6803,7 @@
   gd_patchFunction = GDAPI.gd_patchFunction
   gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode
   gd_getNodeConstPtr = GDAPI.getNodeConstPtr
+  gd_getFunctionConstPtr = GDAPI.gd_getFunctionConstPtr
   gd_patchFunctionConst = GDAPI.gd_patchFunctionConst
   
   -- misc
