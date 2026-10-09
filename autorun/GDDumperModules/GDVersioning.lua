@@ -173,7 +173,10 @@ local function defineProfiles()
   base
     └─ godot4
         └─ godot4_1_plus
-              └─ godot4_6
+              └─ godot4_5_plus
+                    ├─ godot4_5
+                    ├─ godot4_6
+                    └─ godot4_7
   ]]
 
   resolver:register(
@@ -251,6 +254,13 @@ local function defineProfiles()
         stringEncoding = 'utf32',
         bytecodeFamily = 'modern',
       },
+      layouts =
+      {
+        -- Godot 4.0-4.4 HashMap stores its allocator as a member before the element/hash pointers
+        -- CowData only stores refcount + size
+        dictionaryHashMapHasAllocatorMember = true,
+        cowDataHasCapacity = false,
+      },
     }
   )
 
@@ -299,8 +309,38 @@ local function defineProfiles()
 
   resolver:register(
     {
-      id = 'godot4_6',
+      id = 'godot4_5_plus',
       extends = 'godot4_1_plus',
+      priority = 26,
+      match = { min = {4, 5, 0}, max = {4, 999999, 999999} },
+      supported = false,
+      layouts =
+      {
+        -- HashMap switched its allocator from data member to an empty private base
+        -- removing one pointer-sized slot from the layout
+        dictionaryHashMapHasAllocatorMember = false,
+      },
+    }
+  )
+
+  resolver:register(
+    {
+      id = 'godot4_5',
+      extends = 'godot4_5_plus',
+      priority = 40,
+      match = { major = 4, minor = 5 },
+      supported = true,
+      capabilities =
+      {
+        objectMetadataLayout = 'stringName',
+      },
+    }
+  )
+
+  resolver:register(
+    {
+      id = 'godot4_6',
+      extends = 'godot4_5_plus',
       priority = 40,
       match = { major = 4, minor = 6 },
       supported = true,
@@ -308,19 +348,28 @@ local function defineProfiles()
       {
         objectMetadataLayout = 'gdTypeV1',
       },
+      layouts =
+      {
+        -- CowData gained an explicit capacity field in Godot 4.6
+        cowDataHasCapacity = true,
+      },
     }
   )
 
   resolver:register(
     {
       id = 'godot4_7',
-      extends = 'godot4_1_plus',
+      extends = 'godot4_5_plus',
       priority = 40,
       match = { major = 4, minor = 7 },
       supported = true,
       capabilities =
       {
         objectMetadataLayout = 'gdTypeV2',
+      },
+      layouts =
+      {
+        cowDataHasCapacity = true,
       },
     }
   )

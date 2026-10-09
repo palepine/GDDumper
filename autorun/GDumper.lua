@@ -3082,7 +3082,8 @@
         if GDDEFS.MAJOR_VER >= 4 then
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x28
           -- GDDEFS.VAR_NAMEINDEX_VARTYPE = config.offsetVariantMapVarType or 0x48
-          GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x8
+          local defaultVectorSizeOffset = (GDD.Runtime.layouts.cowDataHasCapacity and GDDEFS.PTRSIZE == 0x8) and 0x10 or 0x8
+          GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or defaultVectorSizeOffset
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE + 0x20)
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
           -- for Object vtable 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
@@ -3120,15 +3121,15 @@
           GDDEFS.P_ARRAY_TOARR = GDDEFS.PTRSIZE + alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE -- 0x18
 
         -- DICTIONARY
-          -- int refcount, ptr*, (ptr*), elements**, hashes*, head*, tail*, capacity, size
-          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*2 -- 0x28
-          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*3 -- 0x30
-          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE*2 + GDDEFS.PTRSIZE*4 + 0x4 -- 0x3C
-          if GDDEFS.MINOR_VER >= 6 then
-            GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD - GDDEFS.PTRSIZE -- 0x20, GDDEFS.PTRSIZE*1 after refcount instead of 2
-            GDDEFS.DICT_TAIL = GDDEFS.DICT_HEAD - GDDEFS.PTRSIZE -- 0x28
-            GDDEFS.DICT_SIZE = GDDEFS.DICT_HEAD - GDDEFS.PTRSIZE -- 0x34
-          end
+          -- DictionaryPrivate: refcount, read_only*, HashMap
+          -- Godot 4.0-4.4 HashMap has an allocator member before elements**
+          -- 4.5+ uses an empty private base and removes that pointer-sized slot
+          local dictionaryMapOffset = alignOffset(4, GDDEFS.PTRSIZE) + GDDEFS.PTRSIZE
+          local allocatorMemberSize = GDD.Runtime.layouts.dictionaryHashMapHasAllocatorMember and GDDEFS.PTRSIZE or 0
+          local dictionaryHashFields = dictionaryMapOffset + allocatorMemberSize
+          GDDEFS.DICT_HEAD = GDDEFS.DICT_HEAD or dictionaryHashFields + GDDEFS.PTRSIZE*2
+          GDDEFS.DICT_TAIL = GDDEFS.DICT_TAIL or dictionaryHashFields + GDDEFS.PTRSIZE*3
+          GDDEFS.DICT_SIZE = GDDEFS.DICT_SIZE or dictionaryHashFields + GDDEFS.PTRSIZE*4 + 0x4
 
           -- next*, prev*, key_variant, value_variant
           GDDEFS.DICTELEM_KEY_VARIANT = GDDEFS.PTRSIZE*2 -- 0x10, seems aligned well
