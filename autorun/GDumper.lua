@@ -568,6 +568,32 @@
         return element
       end
 
+      --- assign an event handler for a struct element
+      ---@param element userdata
+      ---@param childStructName string
+      ---@param contextTable table
+      ---@param populate function
+      ---@return userdata
+      function GDD.Structures.registerVariantContainerCallback(element, childStructName, contextTable, populate)
+        local savedContext = {}
+        for key, value in pairs(contextTable or {}) do savedContext[key] = value end
+        savedContext.symbol = savedContext.symbol or ''
+
+        element.OnCreateChild = function(_, containerAddr)
+          if isNullOrNil(containerAddr) or isInvalidPointer(containerAddr) then return nil end
+
+          local childStruct = createStructure(childStructName)
+          local parentProxy = { ChildStruct = childStruct }
+          local callbackContext = {}
+          for key, value in pairs(savedContext) do callbackContext[key] = value end
+
+          populate(containerAddr, parentProxy, callbackContext)
+          return childStruct
+        end
+
+        return element
+      end
+
       --- construct a struct containing the root's direct children
       function GDD.Structures.createVPStructure()
         -- https://wiki.cheatengine.org/index.php?title=Help_File:Script_engine#structure
@@ -1410,11 +1436,15 @@
     end
 
     function GDD.Containers.getDictionarySizeFromVariantPtr(variantPtr)
-      return readInteger( (readPointer(variantPtr) or 0) + GDDEFS.DICT_SIZE )
+      local dictAddr = readPointer(variantPtr)
+      if isNullOrNil(dictAddr) or isInvalidPointer(dictAddr) then return nil end
+      return readInteger(dictAddr + GDDEFS.DICT_SIZE)
     end
 
     function GDD.Containers.isArrayEmptyFromVariantPtr(variantPtr)
-      return readPointer( (readPointer(variantPtr) or 0) + GDDEFS.ARRAY_TOVECTOR ) == 0
+      local arrayAddr = readPointer(variantPtr)
+      if isNullOrNil(arrayAddr) or isInvalidPointer(arrayAddr) then return true end
+      return isNullOrNil(readPointer(arrayAddr + GDDEFS.ARRAY_TOVECTOR))
     end
 
     function GDD.Containers.resolveScriptVariantType(mapElement, runtimeVariantType) -- TODO: remove?
@@ -2084,9 +2114,19 @@
         local dictSize = GDD.Containers.getDictionarySizeFromVariantPtr(entry.variantPtr)
         local offsetToValue = GDD.Emitters.rootOffset(entry, emitter)
         if contextTable.symbol then contextTable.symbol = GDD.Utils.makeSymAddr(contextTable.symbol, entry.offset) end
-        if isNullOrNil(dictSize) then
+        if isNullOrNil(dictSize) or dictSize <= 0 then
           emitter.leaf(contextTable, parent, "<Dict> (empty): " .. entry.name, offsetToValue, entry.ceType) -- entry.offsetToValue
           return;
+        end
+
+        if emitter == GDEmitters.StructEmitter then
+          local child = emitter.leaf(contextTable, parent, "<Dict> " .. entry.name, offsetToValue, entry.ceType)
+          GDD.Structures.registerVariantContainerCallback(child, "Dict", contextTable,
+            function(dictAddr, callbackParent, callbackContext)
+              GDD.Dictionary.iterateToStruct(dictAddr, callbackParent, callbackContext)
+            end
+          )
+          return
         end
 
         local child = emitter.branch(contextTable, parent, "<Dict> " .. entry.name, offsetToValue, entry.ceType, "Dict")
@@ -2100,6 +2140,16 @@
         if GDD.Containers.isArrayEmptyFromVariantPtr(entry.variantPtr) then
           emitter.leaf(contextTable, parent, "<Array> (empty): " .. entry.name, offsetToValue, entry.ceType);
           return;
+        end
+
+        if emitter == GDEmitters.StructEmitter then
+          local child = emitter.leaf(contextTable, parent, "<Array>: " .. entry.name, offsetToValue, entry.ceType)
+          GDD.Structures.registerVariantContainerCallback(child, "Array", contextTable,
+            function(arrayAddr, callbackParent, callbackContext)
+              GDD.Array.iterateToStruct(arrayAddr, callbackParent, callbackContext)
+            end
+          )
+          return
         end
 
         local child = emitter.branch(contextTable, parent, "<Array>: " .. entry.name, offsetToValue, entry.ceType, "Array");
@@ -2189,9 +2239,20 @@
         
         local arrayAddr = readPointer(entry.variantPtr)
         local offsetToValue = GDD.Emitters.rootOffset(entry, emitter)
-        if readPointer(arrayAddr + GDDEFS.P_ARRAY_TOARR) == 0 then
-          emitter.leaf(contextTable, parent, "<" .. entry.typeName .. "> " .. ' (empty): ' .. entry.name, offsetToValue, entry.ceType)
+        if isNullOrNil(arrayAddr) or isInvalidPointer(arrayAddr) or isNullOrNil( readPointer( arrayAddr + GDDEFS.P_ARRAY_TOARR ) ) then
+          emitter.leaf( contextTable, parent, "<" .. entry.typeName .. "> " .. ' (empty): ' .. entry.name, offsetToValue, entry.ceType )
         else
+          if emitter == GDEmitters.StructEmitter then
+            local child = emitter.leaf( contextTable, parent, "<" .. entry.typeName .. ">  " .. entry.name, offsetToValue, entry.ceType )
+            if contextTable.symbol then contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol ) end
+            GDD.Structures.registerVariantContainerCallback( child, "P_Array", contextTable,
+              function(packedArrayAddr, callbackParent, callbackContext)
+                GDD.Array.iteratePackedToStruct( packedArrayAddr, entry.typeName, callbackParent, callbackContext )
+              end
+            )
+            return
+          end
+
           local child = emitter.branch(contextTable, parent, "<" .. entry.typeName .. "> " .. ' ' .. entry.name, offsetToValue, entry.ceType, "P_Array")
           if contextTable.symbol then contextTable.symbol = GDD.Utils.wrapBrackets( contextTable.symbol ) end
           emitter.recursePackedArray(contextTable, child, arrayAddr, entry.typeName)
