@@ -395,6 +395,7 @@ function Module.install(GDD, sendDebugMessage)
     debug = GDDEFS.DEBUGVER == true,
     mono = GDDEFS.MONO == true,
     custom = GDDEFS.CUSTOMVER == true,
+    isMSVC = GDDEFS.IS_MSVC == true,
     usesDouble = GDDEFS.USES_DOUBLE_REALT == true,
   }
 

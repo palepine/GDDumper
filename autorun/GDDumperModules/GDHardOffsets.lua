@@ -93,7 +93,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               -- fallback = true,
               add =
@@ -183,7 +183,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               -- fallback = true,
               set =
@@ -261,7 +261,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               -- fallback = true,
               set =
@@ -345,7 +345,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               add =
               {
@@ -425,7 +425,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               add =
               {
@@ -502,7 +502,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               add =
               {
@@ -579,7 +579,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               add =
               {
@@ -673,7 +673,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               add =
               {
@@ -751,7 +751,7 @@ function Module.install(GDD, sendDebugMessage)
               }
             },
 
-            tools =
+            msvc =
             {
               fallback = true,
             },
@@ -1420,10 +1420,11 @@ function Module.install(GDD, sendDebugMessage)
       return offsets
     end
 
-    function Module.Resolver.applyModifier(offsets, modifier, opName)
+    function Module.Resolver.applyModifier(offsets, modifier, opName, skipFallback)
       if not modifier then return offsets end
 
       if modifier.fallback then
+        if skipFallback then return offsets end
         sendDebugMessage('Fallback case for: ' .. (opName or ''))
         local assumed = Module.Resolver.getAssumed(offsets)
         if assumed == nil then error(opName .. " offsets are not defined and assumption failed") end
@@ -1498,16 +1499,34 @@ function Module.install(GDD, sendDebugMessage)
       offsets = Module.Resolver.applyDefaults( offsets, minorTable )
 
       -- modifiers applied sequentially
-      if version.debug then offsets =       Module.Resolver.applyModifier( offsets, release_profile.debug, "debug" ) end
-      if version.tools then offsets =       Module.Resolver.applyModifier( offsets, release_profile.tools, "tools" ) end
-      if version.usesDouble then offsets =  Module.Resolver.applyModifier( offsets, release_profile.usesDouble, "usesDouble" ) end
+      local skipFallback = version.skipModifierFallback == true
+      if version.debug then offsets =       Module.Resolver.applyModifier( offsets, release_profile.debug, "debug", skipFallback ) end
+      if version.custom then offsets =      Module.Resolver.applyModifier( offsets, release_profile.tools, "custom", skipFallback ) end
+      if version.isMSVC then offsets =      Module.Resolver.applyModifier( offsets, release_profile.msvc, "msvc", skipFallback ) end
+      if version.usesDouble then offsets =  Module.Resolver.applyModifier( offsets, release_profile.usesDouble, "usesDouble", skipFallback ) end
 
       return offsets
     end
 
   -- HELPERS END
 
-  function Module.Resolver.getStoredOffsetsFromVersion(major, minor, patch)
+  function Module.Resolver.getStoredOffsetsFromVersion(major, minor, patch, options)
+    options = options or {}
+
+    if options.bootstrap then
+      local majorTable = OffsetProfiles[major]
+      local minorTable = majorTable and majorTable[minor]
+      if not minorTable then
+        error("No bootstrap offsets for requested Godot version")
+      end
+      return Module.Resolver.applyDefaults({}, minorTable)
+    end
+
+    local custom = GDDEFS.CUSTOMVER
+    if options.custom ~= nil then custom = options.custom end
+    local isMSVC = GDDEFS.MSVC_OBJECT_LAYOUT
+    if options.isMSVC ~= nil then isMSVC = options.isMSVC end
+
     local version =
     {
       major = major,
@@ -1515,7 +1534,9 @@ function Module.install(GDD, sendDebugMessage)
       release = patch,
       x64 = GDDEFS._x64,
       debug = GDDEFS.DEBUGVER,
-      tools = GDDEFS.CUSTOMVER,
+      custom = custom,
+      isMSVC = isMSVC,
+      skipModifierFallback = options.skipModifierFallback == true,
       usesDouble = GDDEFS.USES_DOUBLE_REALT,
     }
     local offsets = Module.Resolver.getStoredOffsets(version)
