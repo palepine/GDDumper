@@ -507,10 +507,12 @@
       function GDAPI.printGDConfig()
         print
         (
-          ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X}]]):format(
+          ([[local config = {majorVersion = 0X%X,minorVersion = 0X%X,GDCustomver = %s,isMSVC = %s,useMSVCLayout = %s,GDDebugVer = %s,isMonoTarget = %s,useHardcoded = %s,offsetNodeChildren = 0X%X,offsetNodeStringName = 0X%X,offsetGDScriptInstance = 0X%X,offsetVariantVector = 0X%X,offsetVariantVectorSize = 0X%X,offsetGDScriptName = 0X%X,offsetFuncMap = 0X%X,offsetGDFunctionCode = 0X%X,offsetGDFunctionConst = 0X%X,offsetGDFunctionGlobals = 0X%X,offsetConstMap = 0X%X,offsetVariantMap = 0X%X}]]):format(
           (GDDEFS.MAJOR_VER or 0x0),
           (GDDEFS.MINOR_VER or 0x0),
           (tostring(GDDEFS.CUSTOMVER)),
+          (tostring(GDDEFS.IS_MSVC)),
+          (tostring(GDDEFS.MSVC_OBJECT_LAYOUT)),
           (tostring(GDDEFS.DEBUGVER)),
           (tostring(GDDEFS.MONO)),
           (tostring(false)),
@@ -1140,230 +1142,6 @@
       end
 
       local cAAUTF32StringTypeScript = '{$c}\n\nchar TypeName[] = "GD4 String";\nint ByteSize = 800;\nchar usesFloat = 0;\nchar usesString = 1;\nchar CallMethod = 1;\nunsigned short MaxStringSize = 800;\n\n#include <stdint.h>\n#include <stddef.h>\n\nstatic int is_valid_codepoint(uint32_t cp)\n{\n  if (cp > 0x10FFFF)\n  {\n    return 0;\n  }\n\n  if (cp >= 0xD800 && cp <= 0xDFFF)\n  {\n    return 0;\n  }\n\n  return 1;\n}\n\nstatic size_t utf32le_to_utf8(const uint32_t *input, char *output, size_t max_output)\n{\n  if (input == 0 || output == 0 || max_output == 0)\n  {\n    return 0;\n  }\n\n  size_t o = 0;\n\n  for (size_t i = 0; input[i] != 0; i++)\n  {\n    uint32_t cp = input[i];\n\n    if (!is_valid_codepoint(cp))\n    {\n      cp = 0xFFFD;\n    }\n\n    if (cp <= 0x7F)\n    {\n      if (o + 1 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)cp;\n    }\n    else if (cp <= 0x7FF)\n    {\n      if (o + 2 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)(0xC0 | (cp >> 6));\n      output[o++] = (char)(0x80 | (cp & 0x3F));\n    }\n    else if (cp <= 0xFFFF)\n    {\n      if (o + 3 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)(0xE0 | (cp >> 12));\n      output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));\n      output[o++] = (char)(0x80 | (cp & 0x3F));\n    }\n    else\n    {\n      if (o + 4 >= max_output)\n      {\n        break;\n      }\n\n      output[o++] = (char)(0xF0 | (cp >> 18));\n      output[o++] = (char)(0x80 | ((cp >> 12) & 0x3F));\n      output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));\n      output[o++] = (char)(0x80 | (cp & 0x3F));\n    }\n  }\n\n  output[o] = \'\\0\';\n  return o;\n}\n\nstatic size_t utf8_to_utf32le(const char *input, uint32_t *output, size_t max_output)\n{\n  if (input == 0 || output == 0 || max_output == 0)\n  {\n    return 0;\n  }\n\n  size_t i = 0;\n  const unsigned char *p = (const unsigned char *)input;\n\n  while (*p != 0 && i + 1 < max_output)\n  {\n    uint32_t cp = 0xFFFD;\n\n    if (*p < 0x80)\n    {\n      cp = *p;\n      p += 1;\n    }\n    else if (*p >= 0xC2 && *p < 0xE0)\n    {\n      unsigned char b1 = p[0];\n      unsigned char b2 = p[1];\n\n      if ((b2 & 0xC0) == 0x80)\n      {\n        cp = ((uint32_t)(b1 & 0x1F) << 6) | (uint32_t)(b2 & 0x3F);\n        p += 2;\n      }\n      else\n      {\n        p += 1;\n      }\n    }\n    else if (*p < 0xF0)\n    {\n      unsigned char b1 = p[0];\n      unsigned char b2 = p[1];\n      unsigned char b3 = p[2];\n\n      if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80)\n      {\n        cp = ((uint32_t)(b1 & 0x0F) << 12) | ((uint32_t)(b2 & 0x3F) << 6) | (uint32_t)(b3 & 0x3F);\n\n        if (!is_valid_codepoint(cp))\n        {\n          cp = 0xFFFD;\n        }\n\n        p += 3;\n      }\n      else\n      {\n        p += 1;\n      }\n    }\n    else if (*p < 0xF5)\n    {\n      unsigned char b1 = p[0];\n      unsigned char b2 = p[1];\n      unsigned char b3 = p[2];\n      unsigned char b4 = p[3];\n\n      if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80 && (b4 & 0xC0) == 0x80)\n      {\n        cp = ((uint32_t)(b1 & 0x07) << 18) | ((uint32_t)(b2 & 0x3F) << 12) | ((uint32_t)(b3 & 0x3F) << 6) | (uint32_t)(b4 & 0x3F);\n\n        if (!is_valid_codepoint(cp))\n        {\n          cp = 0xFFFD;\n        }\n\n        p += 4;\n      }\n      else\n      {\n        p += 1;\n      }\n    }\n    else\n    {\n      p += 1;\n    }\n\n    output[i++] = cp;\n  }\n\n  output[i] = 0;\n  return i;\n}\n\n__cdecl int ConvertRoutine(unsigned char *data, unsigned long long address, unsigned char *output)\n{\n  const uint32_t *gd_string = (const uint32_t *)data;\n\n  utf32le_to_utf8(gd_string, (char *)output, MaxStringSize);\n\n  return 1;\n}\n\n__cdecl void ConvertBackRoutine(unsigned char *input, unsigned long long address, unsigned char *output)\n{\n  const char *s = (const char *)input;\n\n  // theres an issue where a char like \'/\' would feak CE to wrap the str with brackets\n  if (s[0] == \'[\')\n  {\n    s++;\n  }\n\n  char cleaned[512];\n  size_t len = 0;\n\n  while (s[len] != 0 && s[len] != \']\' && len + 1 < sizeof(cleaned))\n  {\n    cleaned[len] = s[len];\n    len++;\n  }\n\n  // end bracket\n  cleaned[len] = 0;\n\n  uint32_t *gd_string = (uint32_t *)output;\n  size_t max_codepoints = ByteSize / 4;\n\n  utf8_to_utf32le(cleaned, gd_string, max_codepoints);\n}\n\n{$asm}'
-      --[[
-        {$c}
-
-        char TypeName[] = "GD4 String";
-        int ByteSize = 800;
-        char usesFloat = 0;
-        char usesString = 1;
-        char CallMethod = 1;
-        unsigned short MaxStringSize = 800;
-
-        #include <stdint.h>
-        #include <stddef.h>
-
-        static int is_valid_codepoint(uint32_t cp)
-        {
-          if (cp > 0x10FFFF)
-          {
-            return 0;
-          }
-
-          if (cp >= 0xD800 && cp <= 0xDFFF)
-          {
-            return 0;
-          }
-
-          return 1;
-        }
-
-        static size_t utf32le_to_utf8(const uint32_t *input, char *output, size_t max_output)
-        {
-          if (input == 0 || output == 0 || max_output == 0)
-          {
-            return 0;
-          }
-
-          size_t o = 0;
-
-          for (size_t i = 0; input[i] != 0; i++)
-          {
-            uint32_t cp = input[i];
-
-            if (!is_valid_codepoint(cp))
-            {
-              cp = 0xFFFD;
-            }
-
-            if (cp <= 0x7F)
-            {
-              if (o + 1 >= max_output)
-              {
-                break;
-              }
-
-              output[o++] = (char)cp;
-            }
-            else if (cp <= 0x7FF)
-            {
-              if (o + 2 >= max_output)
-              {
-                break;
-              }
-
-              output[o++] = (char)(0xC0 | (cp >> 6));
-              output[o++] = (char)(0x80 | (cp & 0x3F));
-            }
-            else if (cp <= 0xFFFF)
-            {
-              if (o + 3 >= max_output)
-              {
-                break;
-              }
-
-              output[o++] = (char)(0xE0 | (cp >> 12));
-              output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));
-              output[o++] = (char)(0x80 | (cp & 0x3F));
-            }
-            else
-            {
-              if (o + 4 >= max_output)
-              {
-                break;
-              }
-
-              output[o++] = (char)(0xF0 | (cp >> 18));
-              output[o++] = (char)(0x80 | ((cp >> 12) & 0x3F));
-              output[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));
-              output[o++] = (char)(0x80 | (cp & 0x3F));
-            }
-          }
-
-          output[o] = '\0';
-          return o;
-        }
-
-        static size_t utf8_to_utf32le(const char *input, uint32_t *output, size_t max_output)
-        {
-          if (input == 0 || output == 0 || max_output == 0)
-          {
-            return 0;
-          }
-
-          size_t i = 0;
-          const unsigned char *p = (const unsigned char *)input;
-
-          while (*p != 0 && i + 1 < max_output)
-          {
-            uint32_t cp = 0xFFFD;
-
-            if (*p < 0x80)
-            {
-              cp = *p;
-              p += 1;
-            }
-            else if (*p >= 0xC2 && *p < 0xE0)
-            {
-              unsigned char b1 = p[0];
-              unsigned char b2 = p[1];
-
-              if ((b2 & 0xC0) == 0x80)
-              {
-                cp = ((uint32_t)(b1 & 0x1F) << 6) | (uint32_t)(b2 & 0x3F);
-                p += 2;
-              }
-              else
-              {
-                p += 1;
-              }
-            }
-            else if (*p < 0xF0)
-            {
-              unsigned char b1 = p[0];
-              unsigned char b2 = p[1];
-              unsigned char b3 = p[2];
-
-              if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80)
-              {
-                cp = ((uint32_t)(b1 & 0x0F) << 12) | ((uint32_t)(b2 & 0x3F) << 6) | (uint32_t)(b3 & 0x3F);
-
-                if (!is_valid_codepoint(cp))
-                {
-                  cp = 0xFFFD;
-                }
-
-                p += 3;
-              }
-              else
-              {
-                p += 1;
-              }
-            }
-            else if (*p < 0xF5)
-            {
-              unsigned char b1 = p[0];
-              unsigned char b2 = p[1];
-              unsigned char b3 = p[2];
-              unsigned char b4 = p[3];
-
-              if ((b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80 && (b4 & 0xC0) == 0x80)
-              {
-                cp = ((uint32_t)(b1 & 0x07) << 18) | ((uint32_t)(b2 & 0x3F) << 12) | ((uint32_t)(b3 & 0x3F) << 6) | (uint32_t)(b4 & 0x3F);
-
-                if (!is_valid_codepoint(cp))
-                {
-                  cp = 0xFFFD;
-                }
-
-                p += 4;
-              }
-              else
-              {
-                p += 1;
-              }
-            }
-            else
-            {
-              p += 1;
-            }
-
-            output[i++] = cp;
-          }
-
-          output[i] = 0;
-          return i;
-        }
-
-        __cdecl int ConvertRoutine(unsigned char *data, unsigned long long address, unsigned char *output)
-        {
-          const uint32_t *gd_string = (const uint32_t *)data;
-
-          utf32le_to_utf8(gd_string, (char *)output, MaxStringSize);
-
-          return 1;
-        }
-
-        __cdecl void ConvertBackRoutine(unsigned char *input, unsigned long long address, unsigned char *output)
-        {
-          const char *s = (const char *)input;
-
-          // there's an issue where a char like '/' would feak CE to wrap the str with brackets
-          if (s[0] == '[')
-          {
-            s++;
-          }
-
-          char cleaned[512];
-          size_t len = 0;
-
-          while (s[len] != 0 && s[len] != ']' && len + 1 < sizeof(cleaned))
-          {
-            cleaned[len] = s[len];
-            len++;
-          }
-
-          // end bracket
-          cleaned[len] = 0;
-
-          uint32_t *gd_string = (uint32_t *)output;
-          size_t max_codepoints = ByteSize / 4;
-
-          utf8_to_utf32le(cleaned, gd_string, max_codepoints);
-        }
-
-        {$asm}
-      ]]
 
       if GDDEFS.MAJOR_VER >= 4 then
         if getCustomType("GD4 String") then
@@ -2970,8 +2748,9 @@
       GDDEFS.MONO = (exportTableStr):match("mono") and true or false
       GDDEFS.IS_STABLE_VER = (exportTableStr):match("stable") and true or false
       
-      -- GDDEFS.CUSTOMVER = GDD.Preinit.getIsCustomBuildVer()
-      GDDEFS.CUSTOMVER = GDD.Preinit.getIsMSVC()
+      GDDEFS.CUSTOMVER = ((GDDEFS.FULL_GDVERSION_STRING or ''):match("custom") ~= nil) or GDD.Preinit.getIsCustomBuildVer()
+      GDDEFS.IS_MSVC = GDD.Preinit.getIsMSVC()
+      GDDEFS.MSVC_OBJECT_LAYOUT = GDDEFS.IS_MSVC
 
       GDDEFS.USES_DOUBLE_REALT = exportTableStr:match("%.double%.") ~= nil
 
@@ -2986,7 +2765,7 @@
         GDDEFS.VERSION_STRING = major .. '.' .. minor
       end
 
-      MainForm.setCaption( (GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN") .. (GDDEFS.CUSTOMVER and " C" or '') .. (GDDEFS.DEBUGVER and " D" or '') .. (GDDEFS.MONO and " M" or '') )
+      MainForm.setCaption( (GDDEFS.FULL_GDVERSION_STRING or "GD VERSION UNKNOWN") .. (GDDEFS.CUSTOMVER and " C" or '') .. (GDDEFS.IS_MSVC and " MSVC" or '') .. (GDDEFS.DEBUGVER and " D" or '') .. (GDDEFS.MONO and " M" or '') )
     end
 
   -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// DEFINE
@@ -3034,12 +2813,144 @@
         GDDEFS.PATCH_VER = config.releaseVersion
         GDDEFS.DEBUGVER = config.GDDebugVer
         GDDEFS.CUSTOMVER = config.GDCustomver
+        if config.isMSVC == nil then
+          GDDEFS.IS_MSVC = GDD.Preinit.getIsMSVC()
+        else
+          GDDEFS.IS_MSVC = config.isMSVC == true
+        end
+        GDDEFS.MSVC_OBJECT_LAYOUT = GDDEFS.IS_MSVC
         GDDEFS.MONO = config.isMonoTarget and config.isMonoTarget or false
         GDDEFS.USES_DOUBLE_REALT = config.usesDoubleRealT
       else
         GDD.Preinit.defineVersion()
-        if isNotNullOrNil(config.GDCustomver) then GDDEFS.CUSTOMVER = config.GDCustomver end
+
+        if isNotNullOrNil(config.GDCustomver) then
+          GDDEFS.CUSTOMVER = config.GDCustomver
+        end
+
+        if isNotNullOrNil(config.isMSVC) then
+          GDDEFS.IS_MSVC = config.isMSVC
+          GDDEFS.MSVC_OBJECT_LAYOUT = config.isMSVC
+        end
+
       end
+    end
+
+    --- Resolve only vtable indices (SceneTree/root)
+    function GDD.Config.defineBootstrapOffsets(config)
+      config = config or {}
+      local target = GDD.Runtime.target
+      local offsets = {}
+      local ok, stored = pcall( getStoredOffsetsFromVersion, target.major, target.minor, target.patch, { bootstrap = true } )
+      if ok then
+        offsets = stored or {}
+      elseif config.vtGetClassNameIndex == nil then
+        error(stored)
+      end
+
+      GDDEFS.GET_TYPE_INDX = config.vtGetClassNameIndex or offsets.GET_TYPE_INDX
+      GDDEFS.CALLP_INDX = config.vtCallpIndex or offsets.CALLP_INDX
+      assert( GDDEFS.GET_TYPE_INDX ~= nil, 'vtGetClassNameIndex is required when no bootstrap profile exists for this Godot version' )
+    end
+
+    local function isPlausibleNodeName(name)
+      if type(name) ~= 'string' or name == '' or #name > 200 then return false end
+      if name == '??' or name == 'N??' or name == 'NaN_strname' then return false end
+      return name:find('[%z\1-\8\11\12\14-\31]') == nil
+    end
+
+    -- meh heuristic
+    local function scoreNodeLayoutUnsafe(nodeAddr, offsets)
+      if isNullOrNil(nodeAddr) or not offsets then return -1 end
+
+      local score = 0
+      local nameData = readPointer( nodeAddr + (offsets.VPObjStringName or 0) )
+
+      if isNotNullOrNil(nameData) and isValidPointer(nameData) then
+        local ok, name = pcall( GDD.Strings.getStringNameStr, nameData )
+        if ok and isPlausibleNodeName(name) then
+          score = score + 4
+          if name:lower() == 'root' then score = score + 2 end
+        end
+      end
+
+      local childrenOffset = offsets.VPChildren
+
+      if childrenOffset then
+        local childrenSize = readInteger( nodeAddr + childrenOffset - 0x8 )
+        local childrenAddr = readPointer( nodeAddr + childrenOffset )
+
+        if childrenSize ~= nil and childrenSize >= 0 and childrenSize < 0x10000 then
+          score = score + 1
+
+          if childrenSize == 0 then
+            if isNullOrNil(childrenAddr) or isValidPointer(childrenAddr) then score = score + 1 end
+          elseif isNotNullOrNil(childrenAddr) and isValidPointer(childrenAddr) then
+            score = score + 2
+            local firstChild = readPointer(childrenAddr)
+            if isNotNullOrNil(firstChild) and isVtable( getVtable(firstChild) ) then score = score + 2 end
+          end
+          
+        end
+
+      end
+
+      return score
+    end
+
+    local function scoreNodeLayout(nodeAddr, offsets)
+      local ok, score = pcall( scoreNodeLayoutUnsafe, nodeAddr, offsets )
+      if not ok then return -1 end
+      return score
+    end
+
+    --- infer object layout
+    function GDD.Config.resolveMSVCObjectLayout(config)
+      config = config or {}
+
+      if config.useMSVCLayout ~= nil then
+        GDDEFS.MSVC_OBJECT_LAYOUT = config.useMSVCLayout == true
+        return GDDEFS.MSVC_OBJECT_LAYOUT
+      end
+
+      local hint = GDDEFS.IS_MSVC == true
+      local target = GDD.Runtime.target
+      local rootAddr = readPointer('pRoot')
+
+      if not (bHardOffsets or config.useHardcoded) then
+        GDDEFS.MSVC_OBJECT_LAYOUT = hint
+        return hint
+      end
+
+      if target.major ~= 4 or not target.x64 or isNullOrNil(rootAddr) then
+        GDDEFS.MSVC_OBJECT_LAYOUT = hint
+        return hint
+      end
+
+      local baseOffsets = getStoredOffsetsFromVersion( target.major, target.minor, target.patch, { custom = target.custom, isMSVC = false, skipModifierFallback = true } )
+      local msvcOffsets = getStoredOffsetsFromVersion( target.major, target.minor, target.patch, { custom = target.custom, isMSVC = true, skipModifierFallback = true } )
+
+      local baseScore = scoreNodeLayout( rootAddr, baseOffsets )
+      local msvcScore = scoreNodeLayout( rootAddr, msvcOffsets )
+      local resolved = hint
+
+      if msvcScore >= 6 and msvcScore >= baseScore + 2 then
+        resolved = true
+      elseif baseScore >= 6 and baseScore >= msvcScore + 2 then
+        resolved = false
+      end
+
+      GDDEFS.MSVC_OBJECT_LAYOUT = resolved
+      GDD.Runtime.layoutDetection =
+      {
+        isMSVCHint = hint,
+        usesMSVCObjectLayout = resolved,
+        baseScore = baseScore,
+        msvcScore = msvcScore,
+      }
+
+      sendDebugMessage( ('[layout] MSVC hint=%s, base=%d, msvc=%d, selected=%s'):format( tostring(hint), baseScore, msvcScore, tostring(resolved) ) )
+      return resolved
     end
 
     --- initializes and assigns offsets
@@ -3049,7 +2960,7 @@
       -- AUTOMATIC START
       if (bHardOffsets or config.useHardcoded) then
         local target = GDD.Runtime.target
-        local offsets = getStoredOffsetsFromVersion(target.major, target.minor, target.patch)
+        local offsets = getStoredOffsetsFromVersion( target.major, target.minor, target.patch, { custom = target.custom, isMSVC = GDDEFS.MSVC_OBJECT_LAYOUT == true } )
         GDDEFS.GET_TYPE_INDX = offsets.GET_TYPE_INDX or GDDEFS.GET_TYPE_INDX
         GDDEFS.CALLP_INDX = offsets.CALLP_INDX or GDDEFS.CALLP_INDX
         GDDEFS.GDSCRIPT_RELOAD_INDX = offsets.GDScriptRealoadIndex or GDDEFS.GDSCRIPT_RELOAD_INDX
@@ -3086,21 +2997,25 @@
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or defaultVectorSizeOffset
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_CODE + 0x20)
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CONST + 0x10) -- there's a Vector of globalnames 0x10 after FUNC_CONST, i.e. 0x1A8, alternatively _globalnames_ptr at 0x2E0 which is the actual referenced array by the VM?
+          
           -- for Object vtable 4.0-4.4 [8] | 4.5 [9] | 4.6 [10]
-            if GDDEFS.MINOR_VER <= 4 then -- if config.vtGetClassNameIndex then GDDEFS.GET_TYPE_INDX = config.vtGetClassNameIndex end
+          if config.vtGetClassNameIndex ~= nil then
+            GDDEFS.GET_TYPE_INDX = config.vtGetClassNameIndex
+          elseif GDDEFS.MINOR_VER <= 4 then
               GDDEFS.GET_TYPE_INDX = 8
-            elseif GDDEFS.MINOR_VER == 5 then
-              GDDEFS.GET_TYPE_INDX = 9
-            elseif GDDEFS.MINOR_VER >= 6 then
-              GDDEFS.GET_TYPE_INDX = 10
-            end
+          elseif GDDEFS.MINOR_VER == 5 then
+            GDDEFS.GET_TYPE_INDX = 9
+          elseif GDDEFS.MINOR_VER >= 6 then
+            GDDEFS.GET_TYPE_INDX = 10
+          end
+
         elseif GDDEFS.MAJOR_VER <= 3 then
           GDDEFS.VAR_VECTOR = config.offsetVariantVector or 0x20
           GDDEFS.SIZE_VECTOR = config.offsetVariantVectorSize or 0x4
           GDDEFS.FUNC_GLOBNAMEPTR = config.offsetGDFunctionGlobals or (GDDEFS.FUNC_CODE - 0x20)
           GDDEFS.FUNC_CONST = config.offsetGDFunctionConst or (GDDEFS.FUNC_GLOBNAMEPTR - 0x10)
           -- for Object vtable 3.0-3.6 [6]
-          GDDEFS.GET_TYPE_INDX = 6
+          GDDEFS.GET_TYPE_INDX = config.vtGetClassNameIndex or 6
         else
           error("Unexpected version")
         end
@@ -6730,15 +6645,22 @@
       local structWalker = GDD.Modules.loadOptionalLocal(moduleSpecs.StructWalker)
       if structWalker then structWalker.install(GDD, sendDebugMessage) end
 
-      -- define version and offsets
+      -- more stable offsets
+      GDD.Config.defineBootstrapOffsets(config)
+
+      -- find SceneTree and Root
+      if GDD.Root.tryRegisterSceneTree() and GDD.Root.setSceneTreeRootOffset() then
+        registerSymbol('pRoot', '[pSceneTree]+oSTtoRoot', false)
+      end
+
+      -- compiler scan hint
+      -- then resolve a hardcoded offset profile
+      GDD.Config.resolveMSVCObjectLayout(config)
       GDD.Config.defineOffsets(config)
       gdOffsetsDefined = true
 
       -- register symbols for pointer resolution
       GDD.Config.registerSymbols()
-
-      -- try finding SceneTree and Viewport/Window
-      if GDD.Root.tryRegisterSceneTree() and GDD.Root.setSceneTreeRootOffset() then registerSymbol('pRoot', '[pSceneTree]+oSTtoRoot', false) end
 
       -- check if UTF32LE string type reged, otherwise define it
       GDD.Types.checkGDStringType()
