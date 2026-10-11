@@ -26,16 +26,15 @@ https://antumce.github.io/CE_LDoc/classes/CriticalSection.html
 
 function Module.install(GDD)
 
-  -- todo: watch visited dictionaries/arrays?
   local readUTFString = GDD.Strings.readUTFString
   local getGDTypeEnumFromName = GDD.Types.getGDTypeEnumFromName
   local getMainModuleInfo = GDD.Memory.getMainModuleInfo
   local getSectionBounds = GDD.Memory.getSectionBounds
-  local gd_getNodeNameFromScript = GDD.API.gd_getNodeNameFromScript
   local gd_recompileScript = GDD.API.gd_recompileScript
   local gd_revertScript = GDD.API.gd_revertScript
 
   local GDDEFS = GDD.Config.Defs
+  local RUNTIME = GDD.Runtime
   -- to avoid table access overhead
   local SCRIPT_INSTANCE = GDDEFS.GDSCRIPTINSTANCE
   local SCRIPTREF = GDDEFS.GDSCRIPT_REF
@@ -50,7 +49,6 @@ function Module.install(GDD)
   local DICTELEM_VALUE_VARIANT = GDDEFS.DICTELEM_VALUE_VARIANT
   local DICTELEM_PAIR_NEXT = GDDEFS.DICTELEM_PAIR_NEXT
 
-  local USES_DOUBLE_T = GDDEFS.SIZE_VECTOR
   local variantSize = GDDEFS.USES_DOUBLE_REALT and 0x28 or 0x18
   -- GDDEFS.SIZEOF_VARIANT = variantSize
 
@@ -64,16 +62,14 @@ function Module.install(GDD)
   local eCSScript = GDDEFS.SCRIPT_TYPES["CS"]
 
   local MONOUSED = GDDEFS.MONO
-  local MAJORVER = GDDEFS.MAJOR_VER
-  local MINORVER = GDDEFS.MINOR_VER
   local PTRSIZE = GDDEFS.PTRSIZE
-  local GET_TYPE_OFFSET = GDDEFS.GET_TYPE_INDX * PTRSIZE
 
   local DICT_SIZE = GDDEFS.DICT_SIZE
   local ARRAY_TOVECTOR = GDDEFS.ARRAY_TOVECTOR
 
   local MAIN_MODULE_INFO = getMainModuleInfo()
   local TEXT_SECTION_INFO = getSectionBounds(".text")
+  local ATTACHED_PROCESS_ID = getOpenedProcessID()
 
   -- Node monitor helper implementations
     local function isNullOrNil(toCheck)
@@ -101,73 +97,157 @@ function Module.install(GDD)
       end
     end
 
-    local function getVtable(addr)
-      return readPointer(addr)
-    end
-
     local function checkChildArray( childArray, size )
-      if size == nil or size == 0 then return false end -- if no children, we don't need it
+      if size == nil or size <= 0 then return false end -- if no children, we don't need it
       if childArray == nil or childArray == 0 then return false end
       local childElem = readPointer(childArray)
       if childElem == nil or childElem == 0 or not isVtable( readPointer(childElem) ) then return false end  -- check the 0th object for vtable
       return true
     end
 
+    -- select version handlers
+    local MonitorImplementations = {}
+
+    MonitorImplementations.modernHash = function()
+      return
+      {
+        readChildrenInfo = function(nodeAddr)
+          local childrenAddr = readPointer( nodeAddr + CHILDREN )
+          if childrenAddr == nil or childrenAddr == 0 then return nil, nil end
+          return childrenAddr, readInteger( nodeAddr + CHILDREN - CHILDREN_SIZE )
+        end,
+
+        readVariantObject = function(valueAddr)
+          return readPointer(valueAddr)
+        end,
+
+        getDictionaryHead = function(dictAddr)
+          return readPointer( dictAddr + DICT_HEAD )
+        end,
+
+        getNextDictionaryElement = function(mapElement)
+          return readPointer(mapElement) or 0
+        end,
+      }
+    end
+
+    MonitorImplementations.legacyTree = function()
+      return
+      {
+        readChildrenInfo = function(nodeAddr)
+          local childrenAddr = readPointer( nodeAddr + CHILDREN )
+          if childrenAddr == nil or childrenAddr == 0 then return nil, nil end
+          local size = readInteger( childrenAddr - CHILDREN_SIZE ) or 0
+          return childrenAddr, size
+        end,
+
+        readVariantObject = function(valueAddr)
+          local objAddr = readPointer(valueAddr)
+          if objAddr == nil or objAddr == 0 or not isVtable( readPointer(objAddr) ) then
+            local wrapperAddr = readPointer( valueAddr - PTRSIZE )
+            objAddr = wrapperAddr and readPointer(wrapperAddr) or nil
+          end
+          return objAddr
+        end,
+
+        getDictionaryHead = function(dictAddr)
+          local dictRoot = readPointer( dictAddr + DICT_LIST )
+          return readPointer( (dictRoot or 0) + DICT_HEAD )
+        end,
+
+        getNextDictionaryElement = function(mapElement)
+          return readPointer( mapElement + DICTELEM_PAIR_NEXT ) or 0
+        end,
+      }
+    end
+
+    local monitorFamily = RUNTIME and RUNTIME.capabilities and RUNTIME.capabilities.containerFamily
+    local implementationFactory = MonitorImplementations[monitorFamily]
+    assert( implementationFactory, 'node monitor implementation is unavailable for ' .. tostring(monitorFamily) )
+
+    local monitorImplementation = implementationFactory()
+    local readChildrenInfo = monitorImplementation.readChildrenInfo
+    local readVariantObject = monitorImplementation.readVariantObject
+    local getDictionaryHead = monitorImplementation.getDictionaryHead
+    local getNextDictionaryElement = monitorImplementation.getNextDictionaryElement
+
+    -- ownershop management
+    local serviceStateKey = "GDDumper.NodeMonitor.ServiceState"
+    local serviceState = package.loaded[serviceStateKey]
+    if type(serviceState) ~= "table" then
+      serviceState = { generation = 0, registeredSymbols = {} }
+      package.loaded[serviceStateKey] = serviceState
+    end
+    if type(serviceState.registeredSymbols) ~= "table" then serviceState.registeredSymbols = {} end
+    serviceState.generation = serviceState.generation + 1
+    local MONITOR_GENERATION = serviceState.generation
+
     local function checkIfCSScript( scriptNameAddr )
 
       if scriptNameAddr == nil or scriptNameAddr == 0 then return 0 end
 
       local gdScriptName = readUTFString(scriptNameAddr) -- todo: anything more efficient?
-      if  (gdScriptName):sub(-3) == '.cs' then return 2 end
+      if gdScriptName and gdScriptName:sub(-3) == '.cs' then return 2 end
       return 0
     end
 
+    local registeredSymbols = serviceState.registeredSymbols
+
     local function unregisterNodes()
-      if (not GD_REGISTERED_NODES) or next(GD_REGISTERED_NODES) == nil then return; end
-      for _, k in ipairs(GD_REGISTERED_NODES) do unregisterSymbol(k) end
-      for _, k in ipairs(GD_REGISTERED_NODES_ABS) do unregisterSymbol(k) end
+      for symbolName in pairs(registeredSymbols) do unregisterSymbol(symbolName) end
+      for symbolName in pairs(registeredSymbols) do registeredSymbols[symbolName] = nil end
       GD_REGISTERED_NODES = {}
       GD_REGISTERED_NODES_ABS = {}
     end
 
-    local function registerDumpedNodes()
-      if (not GD_DUMP_MONITOR_NODES) or next(GD_DUMP_MONITOR_NODES) == nil then return; end
-      unregisterNodes() -- unregister the current & freed nodes
-      for k, nodeAddr in pairs(GD_DUMP_MONITOR_NODES) do
-        table.insert(GD_REGISTERED_NODES, k)
-        registerSymbol(k, nodeAddr, true)
-      end
-      for k, nodeAddr in pairs(GD_DUMP_MONITOR_NODES_ABS) do
-        table.insert(GD_REGISTERED_NODES_ABS, k)
-        registerSymbol(k, nodeAddr, true)
-      end
-    end
+    local function reconcileDumpedNodes(nodes, nodesAbs)
+      local desiredSymbols = {}
+      local registeredNames = {}
+      local registeredAbsNames = {}
 
-    local function getRootNodeTable()
-      local viewport = readPointer("pRoot")
-      if viewport == nil or viewport == 0 then getCurrentThreadObject().terminate() return end
-      
-      local childrenAddr = readPointer( (viewport or 0) + CHILDREN)
-      if childrenAddr == nil or childrenAddr == 0 then getCurrentThreadObject().terminate() return end
-
-      local childrenSize;
-      if GDDEFS.MAJOR_VER >= 4 then
-        childrenSize = readInteger( viewport + CHILDREN - CHILDREN_SIZE) or 0
-      else
-        childrenSize = readInteger( childrenAddr - CHILDREN_SIZE ) or 0
+      for symbolName, nodeAddr in pairs(nodes) do
+        desiredSymbols[symbolName] = nodeAddr
+        registeredNames[#registeredNames + 1] = symbolName
+      end
+      for symbolName, nodeAddr in pairs(nodesAbs) do
+        desiredSymbols[symbolName] = nodeAddr
+        registeredAbsNames[#registeredAbsNames + 1] = symbolName
       end
 
-      if childrenSize == nil or childrenSize == 0 then getCurrentThreadObject().terminate() return end
-
-      local nodeTable = {}
-
-      for i = 0, (childrenSize - 1) do
-        local nodeAddr = readPointer(childrenAddr + i * PTRSIZE)
-        if nodeAddr ~= nil and nodeAddr ~= 0 then 
-          table.insert(nodeTable, nodeAddr)  
+      for symbolName, oldAddr in pairs(registeredSymbols) do
+        if desiredSymbols[symbolName] ~= oldAddr then
+          unregisterSymbol(symbolName)
+          registeredSymbols[symbolName] = nil
         end
       end
-      return nodeTable
+
+      for symbolName, nodeAddr in pairs(desiredSymbols) do
+        if registeredSymbols[symbolName] ~= nodeAddr then
+          registerSymbol(symbolName, nodeAddr, true)
+          registeredSymbols[symbolName] = nodeAddr
+        end
+      end
+
+      GD_REGISTERED_NODES = registeredNames
+      GD_REGISTERED_NODES_ABS = registeredAbsNames
+    end
+
+    local function getRootChildren()
+      local viewport = readPointer("pRoot")
+      if viewport == nil or viewport == 0 then return nil, 0 end
+
+      local childrenAddr, childrenSize = readChildrenInfo(viewport)
+      if childrenAddr == nil or childrenAddr == 0 or childrenSize == nil or childrenSize <= 0 then
+        return nil, 0
+      end
+
+      return childrenAddr, childrenSize
+    end
+
+    local function isAttachedProcessCurrent()
+      local processId = getOpenedProcessID()
+      return serviceState.generation == MONITOR_GENERATION
+        and processId ~= nil and processId ~= 0 and processId == ATTACHED_PROCESS_ID
     end
 
 
@@ -270,8 +350,9 @@ function Module.install(GDD)
         self.currNodeCount = 0
       end
 
-      function monitor:endRun(runDelta)
+      function monitor:endRun(runDelta, nodeCount)
         self.lastRunDelta = runDelta
+        self.currNodeCount = nodeCount or self.currNodeCount
         self.lastNodeCount = self.currNodeCount
 
         self:notifyRunFinished( { nodes = GD_DUMP_MONITOR_NODES or {}, nodesAbs = GD_DUMP_MONITOR_NODES_ABS or {}, } )
@@ -294,14 +375,16 @@ function Module.install(GDD)
 
     local function handleDictionaryForNodes(dictAddr, dumpContext)
       if dictAddr == nil or dictAddr == 0 or dumpContext:shouldStop() then return end
+      if not dumpContext:visitContainer(dictAddr) then return end
       local dictSize = readInteger( dictAddr + DICT_SIZE) -- TODO: size sanity checks?
-      if dictSize ~= nil and dictSize ~= 0 then
+      if dictSize ~= nil and dictSize > 0 then
         iterateDictionaryForNodes( dictAddr, dictSize, dumpContext )
       end
     end
 
     local function handleArrayForNodes(arrAddr, dumpContext)
       if arrAddr == nil or arrAddr == 0 or dumpContext:shouldStop() then return end
+      if not dumpContext:visitContainer(arrAddr) then return end
 
       local arrVectorAddr = readPointer( arrAddr + ARRAY_TOVECTOR )
       if arrVectorAddr == nil or arrVectorAddr == 0 then return; end
@@ -317,26 +400,18 @@ function Module.install(GDD)
 
     function iterateVecVarForNodes(vector, dumpContext)
       local vectorSize = readInteger( vector - SIZE_VECTOR )
-      if vectorSize == nil or vectorSize == 0 then return; end -- TODO: size sanity check?
+      if vectorSize == nil or vectorSize <= 0 then return; end
 
       for variantIndex = 0, vectorSize - 1 do
         -- if dumpContext:shouldStopPeriodic(variantIndex) then return end
-        if (variantIndex & BUDGET_CHECK_MASK) == 0 and (dumpContext.thread.Terminated or getTickCount() - dumpContext.startedAt > dumpContext.budgetMs) then return end
+        if (variantIndex & BUDGET_CHECK_MASK) == 0 and dumpContext:shouldStop(true) then return end
 
         local variantType = readInteger( vector + variantSize * variantIndex )
         local offsetToValue = variantSize*variantIndex + 0x8
 
         if variantType == eOBJECT then
           offsetToValue = variantSize*variantIndex + 0x10
-          local objAddr = readPointer( vector + offsetToValue )
-
-          if MAJORVER <= 3 then
-            -- for references
-            if not isVtable( readPointer( objAddr ) ) then
-              -- shift once w/o validation, check checkObjectOffset for context
-              objAddr = readPointer( readPointer( vector + offsetToValue - PTRSIZE ) )
-            end
-          end
+          local objAddr = readVariantObject(vector + offsetToValue)
 
           if objAddr ~= nil and objAddr ~= 0 then 
             handleObjectForNodes( objAddr, dumpContext )
@@ -356,6 +431,7 @@ function Module.install(GDD)
     local function iterateNodeChildrenForNodes(childrenAddr, size, dumpContext)
       if dumpContext:shouldStop() then return end
       for i = 0, (size - 1) do
+        if (i & BUDGET_CHECK_MASK) == 0 and dumpContext:shouldStop(true) then return end
         local childAddr = readPointer(childrenAddr + (i * PTRSIZE))
         processNodeForNodes(childAddr, dumpContext, true)
       end
@@ -388,34 +464,21 @@ function Module.install(GDD)
     function iterateDictionaryForNodes(dictAddr, dictSize, dumpContext)
       if dictAddr == nil or dictAddr == 0 or dumpContext:shouldStop() then return end
 
-      local dictRoot = dictAddr
-      if GDDEFS.MAJOR_VER <= 3 then
-        dictRoot = readPointer( dictAddr + DICT_LIST)
-      end
-
-      local mapElement = readPointer( (dictRoot or 0) + DICT_HEAD)
+      local mapElement = getDictionaryHead(dictAddr)
       if mapElement == nil or mapElement == 0 then return end
 
       local iteration = 0
-      repeat
+      while mapElement ~= 0 and iteration < dictSize do
         -- if dumpContext:shouldStopPeriodic(iteration) then return end
         -- inlined
-        if (iteration & BUDGET_CHECK_MASK) == 0 and (dumpContext.thread.Terminated or getTickCount() - dumpContext.startedAt > dumpContext.budgetMs) then return end
+        if (iteration & BUDGET_CHECK_MASK) == 0 and dumpContext:shouldStop(true) then return end
 
         local variantType = readInteger( mapElement + DICTELEM_VALUE_VARIANT)
         local offsetToValue = DICTELEM_VALUE_VARIANT + 0x8
 
         if variantType == eOBJECT then
           offsetToValue = offsetToValue + 0x8
-          local objAddr = readPointer( mapElement + offsetToValue )
-
-          if MAJORVER <= 3 then
-            -- for references
-            if not isVtable( readPointer( objAddr ) ) then
-              -- shift once w/o validation, check checkObjectOffset for context
-              objAddr = readPointer( readPointer( mapElement + offsetToValue - PTRSIZE ) )
-            end
-          end
+          local objAddr = readVariantObject(mapElement + offsetToValue)
 
           if objAddr ~= nil and objAddr ~= 0 then
             handleObjectForNodes( objAddr, dumpContext )
@@ -430,47 +493,65 @@ function Module.install(GDD)
           handleArrayForNodes( arrAddr, dumpContext )
         end
 
-        -- getDictElemPairNext
-        if MAJORVER >= 4 then
-          mapElement = readPointer(mapElement) or 0 -- at 0x0
-        else
-          mapElement = readPointer( mapElement + DICTELEM_PAIR_NEXT ) or 0
-        end
+        mapElement = getNextDictionaryElement(mapElement)
         
         iteration = iteration + 1
 
-      until (mapElement == 0)
+      end
     end
 
   -- Monitor Thread
 
-    local function nodeMonitorThread(thr)
-      thr.Name = "GD Monitor Thread"
-      thr.freeOnTerminate(false) -- we do it ourselves
+    local function getScriptLookupNames(scriptNameAddr)
+      local scriptPath = readUTFString(scriptNameAddr)
+      if scriptPath == nil or scriptPath == '' then return nil, nil end
+
+      local normalizedPath = scriptPath:gsub('\\', '/')
+      local stablePath = normalizedPath:match('^(.-%.tscn)::') or normalizedPath
+      local isSceneScript = stablePath ~= normalizedPath or stablePath:lower():match('%.tscn$') ~= nil
+      local shortName = stablePath:match('([^/]+)$')
+      if shortName == nil then return nil, nil end
+
+      local resourcePath = stablePath:gsub('^res://', '')
+      if not isSceneScript then
+        shortName = shortName:gsub('%.[^.]+$', '')
+        resourcePath = resourcePath:gsub('%.[^.]+$', '')
+      end
+
+      return shortName, resourcePath:gsub('/', '.')
+    end
+
+    local function nodeMonitorPass(thr)
       local dumpContext =
         {
           startedAt = getTickCount(),
-          dumped = {}, -- only nodes with GDScript
+          dumpedNodes = {}, -- only nodes with GDScript
+          dumpedScriptNames = {},
           visited = {}, -- every encountered node
+          visitedContainers = {},
           budgetMs = GDDEFS.Monitor.runBudget,
           thread = thr,
+          budgetCheckCounter = 0,
+          nodeCount = 0,
         }
+      dumpContext.deadline = dumpContext.startedAt + dumpContext.budgetMs
+
+      function dumpContext:visitContainer(addr)
+        if self.visitedContainers[addr] then return false end
+        self.visitedContainers[addr] = true
+        return true
+      end
 
       function dumpContext:VisitNode(addr, isTreeNode)
         if addr == nil or addr == 0 then return false end
 
         local visitState = self.visited[addr]
         if visitState == VISIT_COMPLETE or (visitState == VISIT_REJECTED and not isTreeNode) then return false end
-        if visitState == nil then GDDEFS.Monitor:nodeCountInc() end -- how many objects we have seen
+        if visitState == nil then self.nodeCount = self.nodeCount + 1 end
 
         local childrenAddr, size
         if isTreeNode then -- scene tree roots & child array entries have to be considered regardless
-          childrenAddr = readPointer( addr + CHILDREN )
-          if MAJORVER >= 4 then
-            size = readInteger( addr + CHILDREN - CHILDREN_SIZE )
-          else
-            size = readInteger( (childrenAddr or 0) - CHILDREN_SIZE ) or 0
-          end
+          childrenAddr, size = readChildrenInfo(addr)
         end
 
         local scriptInstanceAddr = readPointer( addr + SCRIPT_INSTANCE )
@@ -491,53 +572,63 @@ function Module.install(GDD)
         local gdScriptNameAddr = readPointer( scriptAddr + GDSCRIPTNAME )
 
         if not isTreeNode then
-          childrenAddr = readPointer( addr + CHILDREN )
-          if MAJORVER >= 4 then
-            size = readInteger( addr + CHILDREN - CHILDREN_SIZE )
-          else
-            size = readInteger( (childrenAddr or 0) - CHILDREN_SIZE ) or 0
-          end
+          childrenAddr, size = readChildrenInfo(addr)
         end
 
         self.visited[addr] = VISIT_COMPLETE
 
         if gdScriptNameAddr ~= nil and gdScriptNameAddr ~= 0 then
-          table.insert(self.dumped, addr)
+          local index = #self.dumpedNodes + 1
+          self.dumpedNodes[index] = addr
+          self.dumpedScriptNames[index] = gdScriptNameAddr
         end
 
         return true, scriptInstanceAddr, vectorAddr, scriptAddr, gdScriptNameAddr, childrenAddr, size
       end
 
-      function dumpContext:shouldStop()
-        return self.thread.Terminated or (getTickCount() - self.startedAt) > self.budgetMs
+      function dumpContext:shouldStop(forceBudgetCheck)
+        if self.thread.Terminated then return true end
+
+        self.budgetCheckCounter = self.budgetCheckCounter + 1
+        if not forceBudgetCheck and (self.budgetCheckCounter & BUDGET_CHECK_MASK) ~= 0 then
+          return false
+        end
+
+        return getTickCount() > self.deadline
       end
 
       function dumpContext:shouldStopPeriodic(iteration)
-        return (iteration & 0x3F) == 0 and self:shouldStop()
+        return (iteration & BUDGET_CHECK_MASK) == 0 and self:shouldStop(true)
       end
 
-      local function cloneArrayAsMap(tabl)
+      local function cloneArrayAsMap(nodes, scriptNames)
         local result = {} -- { name : addr }
         local resultAbs = {} -- { name : addr }
-        for i, val in ipairs(tabl) do
-          local scriptName, longName = gd_getNodeNameFromScript(val, true)
+        for i, nodeAddr in ipairs(nodes) do
+          local scriptName, longName = getScriptLookupNames(scriptNames[i])
           if scriptName and scriptName ~= 'N??' and longName and longName ~= '' then
-            result[scriptName] = val
-            resultAbs[longName] = val
+            result[scriptName] = nodeAddr
+            resultAbs[longName] = nodeAddr
           end
         end
         return result, resultAbs
       end
 
-      local mainNodeDict = getRootNodeTable()
-      if mainNodeDict == nil or mainNodeDict == 0 then return end
-
-      for _, value in ipairs(mainNodeDict) do
-        processNodeForNodes(value, dumpContext, true)
+      local rootChildren, rootChildrenSize = getRootChildren()
+      if rootChildren ~= nil then
+        for index = 0, rootChildrenSize - 1 do
+          if (index & BUDGET_CHECK_MASK) == 0 and dumpContext:shouldStop(true) then break end
+          local nodeAddr = readPointer(rootChildren + index * PTRSIZE)
+          processNodeForNodes(nodeAddr, dumpContext, true)
+        end
       end
 
-      GD_DUMP_MONITOR_NODES, GD_DUMP_MONITOR_NODES_ABS = cloneArrayAsMap(dumpContext.dumped)
-      registerDumpedNodes()
+      local nodes, nodesAbs = cloneArrayAsMap(dumpContext.dumpedNodes, dumpContext.dumpedScriptNames)
+      return nodes, nodesAbs, dumpContext.nodeCount
+    end
+
+    local function monitorErrorHandler(err)
+      return debug.traceback(tostring(err), 2)
     end
 
     function nodeMonitorService(thr)
@@ -547,25 +638,53 @@ function Module.install(GDD)
       GD_REGISTERED_NODES = {};
       GD_REGISTERED_NODES_ABS = {};
 
-      while not thr.Terminated do
+      local startupCleanupOk, startupCleanupError = pcall(reconcileDumpedNodes, {}, {})
+      if not startupCleanupOk then
+        print( "GD Node Monitor startup cleanup failed: " .. tostring(startupCleanupError) )
+      end
+
+      while not thr.Terminated and isAttachedProcessCurrent() do
 
         GDDEFS.Monitor:startRun()
 
         local startedAt = getTickCount()
-        local gd_currNodeMonitorThread = createThread(nodeMonitorThread)
-        gd_currNodeMonitorThread.waitfor()
-        gd_currNodeMonitorThread.terminate()
-        gd_currNodeMonitorThread.destroy() -- free the thread...
+        local ok, nodes, nodesAbs, nodeCount = xpcall(nodeMonitorPass, monitorErrorHandler, thr)
 
-        GDDEFS.Monitor:endRun( getTickCount()-startedAt or 0 )
+        -- no publish/notify from a pass crossing detach/reattach/etc
+        if thr.Terminated or not isAttachedProcessCurrent() then break end
 
-        sleep( GDDEFS.Monitor:getCD() )
-        if #enumModules() == 0 and not thr.Terminated then  -- if we aren't attached, kill this thread
-          -- if gd_currNodeMonitorThread and not gd_currNodeMonitorThread.Terminated then gd_currNodeMonitorThread.terminate() end
-          thr.terminate()
-          return
+        if ok then
+          GD_DUMP_MONITOR_NODES = nodes or {}
+          GD_DUMP_MONITOR_NODES_ABS = nodesAbs or {}
+
+          local publishOk, publishError = pcall( reconcileDumpedNodes, GD_DUMP_MONITOR_NODES, GD_DUMP_MONITOR_NODES_ABS )
+          if not publishOk then
+            ok = false
+            nodes = publishError
+          end
         end
 
+        if not ok then
+          print("GD Node Monitor run failed; retrying next poll:\n" .. tostring(nodes))
+          GD_DUMP_MONITOR_NODES = {}
+          GD_DUMP_MONITOR_NODES_ABS = {}
+          local clearOk, clearError = pcall( reconcileDumpedNodes, {}, {} )
+          if not clearOk then print("GD Node Monitor symbol cleanup failed: " .. tostring(clearError)) end
+          nodeCount = 0
+        end
+
+        GDDEFS.Monitor:endRun( getTickCount() - startedAt, nodeCount )
+
+        sleep( GDDEFS.Monitor:getCD() )
+      end
+
+      -- service no longer owns symbol cleanup
+      if serviceState.generation == MONITOR_GENERATION then
+        GD_DUMP_MONITOR_NODES = {}
+        GD_DUMP_MONITOR_NODES_ABS = {}
+        local cleanupOk, cleanupError = pcall(unregisterNodes)
+        if not cleanupOk then print( "GD Node Monitor final cleanup failed: " .. tostring(cleanupError) ) end
+        if monitor.MonitorThread == thr then monitor.MonitorThread = nil end
       end
     end
 
