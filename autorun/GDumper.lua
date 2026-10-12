@@ -45,6 +45,7 @@
       Objects = {},
       Script = {},
       Functions = {},
+      Patching = {},
       Constants = {},
       Dictionary = {},
       Array = {},
@@ -89,6 +90,18 @@
       moduleSpecs.FunctionDisassembler,
       moduleSpecs.NodeMonitor,
     }
+
+  local sharedResources = package.loaded['GDDumper.resources']
+  if type(sharedResources) ~= 'table' then
+    sharedResources = {}
+    package.loaded['GDDumper.resources'] = sharedResources
+  end
+  sharedResources.functionPatches = sharedResources.functionPatches or
+  {
+    processId = nil,
+    nextId = 1,
+    active = {},
+  }
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// LOCAL HELPERS
 
@@ -4957,22 +4970,269 @@
       return GDD.Containers.findMapEntryByName(headElement, funcName, GDD.Containers.getFunctionMapName, GDD.Containers.getFunctionMapLookupResult, GDD.Emitters.advanceFunctionMapElement)
     end
 
-    --- patch a function's code with the bytes starting at an arbitrary pos
-    ---@param funcObjAddr number
-    ---@param patchToBytes table
-    ---@param startPos number @0-based position to start patching from
-    function GDAPI.gd_patchFunction( funcObjAddr, patchToBytes, startPos  )
-      assert(type(funcObjAddr) == 'number', "Func addr has to be a number, instead got: " .. type(funcObjAddr))
-      assert(type(patchToBytes) == 'table', "Patch Bytes have to be a table, instead got: " .. type(patchToBytes))
+    -- ///---///--///---///--///---///--///--///---///--///---///--///---///--/// FUNC PATCHING
 
-      local position = startPos or 0x0
-      local funcCode = GDD.Functions.getCodeAddress(funcObjAddr)
-      if isNullOrNil(funcCode) then error("function code is invalid") end
+    --- Return process-local reversible function-patch registry
+    --- Detached process patches are discareded
+    function GDD.Patching.registry()
+      local registry = sharedResources.functionPatches
+      local processId = getOpenedProcessID()
 
-      for _, opcode in ipairs(patchToBytes) do
-        writeInteger( funcCode + position*4, opcode )
-        position=position+1
+      if registry.processId ~= processId then
+        registry.processId = processId
+        registry.nextId = 1
+        registry.active = {}
       end
+
+      return registry
+    end
+
+    --- Validate and copy a sequence of opcodes
+    ---@param opcodes table
+    ---@return table
+    function GDD.Patching.validateOpcodes(opcodes)
+      if type(opcodes) ~= 'table' or #opcodes == 0 then error('Patch opcodes must be a non-empty array', 2) end
+
+      local validated = {}
+      for index, opcode in ipairs(opcodes) do
+        if type(opcode) ~= 'number' or opcode % 1 ~= 0 or opcode < -0x80000000 or opcode > 0xFFFFFFFF then
+          error( ('Patch opcode %d is not a 32-bit integer'):format(index), 2 )
+        end
+        validated[index] = opcode & 0xFFFFFFFF
+      end
+
+      if #validated ~= #opcodes then error('Patch opcodes must be a dense array', 2) end
+      return validated
+    end
+
+    --- Read func opcode range
+    function GDD.Patching.readRange(address, opcodeCount)
+      assert( type(address) == 'number' and address ~= 0, 'Opcode range address must be non-zero' )
+      assert( type(opcodeCount) == 'number' and opcodeCount % 1 == 0 and opcodeCount > 0, 'Opcode count must be a positive integer' )
+
+      local opcodes = {}
+      for index = 1, opcodeCount do
+        local opcode = readInteger( address + (index - 1) * 4 )
+        if opcode == nil then error('Function bytecode range is unreadable', 2) end
+        opcodes[index] = opcode & 0xFFFFFFFF
+      end
+      return opcodes
+    end
+
+    function GDD.Patching.rangeEquals(address, expected)
+      assert(type(address) == 'number' and address ~= 0, 'Opcode range address must be non-zero')
+      local validated = GDD.Patching.validateOpcodes(expected)
+
+      for index, expectedOpcode in ipairs(validated) do
+        local opcode = readInteger( address + (index - 1) * 4 )
+        if opcode == nil then error('Function bytecode range is unreadable', 2) end
+        if (opcode & 0xFFFFFFFF) ~= expectedOpcode then return false end
+      end
+      return true
+    end
+
+    --- Write opcode range
+    function GDD.Patching.writeRange(address, opcodes)
+      assert(type(address) == 'number' and address ~= 0, 'Opcode range address must be non-zero')
+      local validated = GDD.Patching.validateOpcodes(opcodes)
+
+      for index, opcode in ipairs(validated) do
+        writeInteger( address + (index - 1) * 4, opcode )
+      end
+      if not GDD.Patching.rangeEquals(address, validated) then error('Function opcode write verification failed', 2) end
+      return true
+    end
+
+    local function patchRangesOverlap(leftAddress, leftCount, rightAddress, rightCount)
+      local leftSize = leftCount * 4
+      local rightSize = rightCount * 4
+      return leftAddress < rightAddress + rightSize and rightAddress < leftAddress + leftSize
+    end
+
+    function GDD.Patching.getFunctionMetadata(funcObjAddr)
+      assert(type(funcObjAddr) == 'number' and funcObjAddr ~= 0, 'Function address must be non-zero')
+      local codeAddress = GDD.Functions.getCodeAddress(funcObjAddr)
+      if isNullOrNil(codeAddress) then error('Function code is invalid', 2) end
+
+      local codeSize = readInteger(codeAddress - GDDEFS.SIZE_VECTOR)
+      if type(codeSize) ~= 'number' or codeSize % 1 ~= 0 or codeSize <= 0 then error('Function code vector size is invalid', 2) end
+
+      return
+      {
+        address = funcObjAddr,
+        codeAddress = codeAddress,
+        codeSize = codeSize,
+      }
+    end
+
+    function GDD.Patching.findOverlap(codeAddress, opcodeOffset, opcodeCount)
+      assert( type(codeAddress) == 'number' and codeAddress ~= 0, 'Function code address must be non-zero' )
+      assert( type(opcodeOffset) == 'number' and opcodeOffset % 1 == 0 and opcodeOffset >= 0, 'Patch offset must be a non-negative opcode index' )
+      assert( type(opcodeCount) == 'number' and opcodeCount % 1 == 0 and opcodeCount > 0, 'Patch opcode count must be a positive integer' )
+
+      local patchAddress = codeAddress + opcodeOffset * 4
+      for _, patch in pairs( GDD.Patching.registry().active ) do
+        if patch.active and patchRangesOverlap( patchAddress, opcodeCount, patch.address, patch.size ) then
+          return patch
+        end
+      end
+      return nil
+    end
+
+    function GDD.Patching.apply(metadata, patchOpcodes, opcodeOffset)
+      if type(metadata) ~= 'table' then error('Function metadata is required', 2) end
+      if type(metadata.address) ~= 'number' 
+         or metadata.address == 0
+         or type(metadata.codeAddress) ~= 'number'
+         or metadata.codeAddress == 0
+         or type(metadata.codeSize) ~= 'number'
+         or metadata.codeSize % 1 ~= 0
+         or metadata.codeSize <= 0
+      then
+        error('Function metadata is invalid', 2)
+      end
+
+      local validated = GDD.Patching.validateOpcodes(patchOpcodes)
+
+      opcodeOffset = opcodeOffset or 0
+      if type(opcodeOffset) ~= 'number' or opcodeOffset % 1 ~= 0 or opcodeOffset < 0 then error('Patch offset must be a non-negative opcode index', 2) end
+      if opcodeOffset + #validated > metadata.codeSize then error('Patch exceeds the function code vector size', 2) end
+
+      local conflictingPatch = GDD.Patching.findOverlap( metadata.codeAddress, opcodeOffset, #validated )
+      if conflictingPatch then error(('Patch overlaps active patch #%d'):format(conflictingPatch.id), 2) end
+
+      local patchAddress = metadata.codeAddress + opcodeOffset * 4
+      local originalOpcodes = GDD.Patching.readRange( patchAddress, #validated )
+
+      local patched, patchError = pcall(GDD.Patching.writeRange, patchAddress, validated)
+      if not patched then
+        local rolledBack, rollbackError = pcall(GDD.Patching.writeRange, patchAddress, originalOpcodes)
+        if not rolledBack then error( ('Function patch failed (%s); rollback also failed (%s)'):format( tostring(patchError), tostring(rollbackError) ), 2 )
+        end
+        error('Function patch failed; original opcodes were restored: ' .. tostring(patchError), 2)
+      end
+
+      return
+      {
+        functionAddress = metadata.address,
+        codeAddress = metadata.codeAddress,
+        codeSize = metadata.codeSize,
+        address = patchAddress,
+        offset = opcodeOffset,
+        size = #validated,
+        originalOpcodes = originalOpcodes,
+        patchedOpcodes = validated,
+        active = true,
+      }
+    end
+
+    function GDD.Patching.restore(patch, force)
+      if type(patch) ~= 'table'
+         or type(patch.functionAddress) ~= 'number'
+         or type(patch.codeAddress) ~= 'number'
+         or type(patch.address) ~= 'number'
+         or type(patch.originalOpcodes) ~= 'table'
+         or #patch.originalOpcodes == 0
+         or type(patch.patchedOpcodes) ~= 'table'
+         or #patch.patchedOpcodes ~= #patch.originalOpcodes
+         or patch.size ~= #patch.originalOpcodes
+         or type(patch.active) ~= 'boolean'
+      then
+        error('Invalid function patch handle', 2)
+      end
+      if force ~= nil and type(force) ~= 'boolean' then error('Force option must be boolean', 2) end
+
+      if patch.active == false then return true end
+
+      if not force then
+
+        if GDD.Functions.getCodeAddress(patch.functionAddress) ~= patch.codeAddress then
+          error('Function code vector moved after patching; pass force=true to restore the captured address', 2)
+        end
+
+        if not GDD.Patching.rangeEquals(patch.address, patch.patchedOpcodes or {}) then
+          error('Patched function code changed after patching; pass force=true to overwrite it', 2)
+        end
+
+      end
+
+      GDD.Patching.writeRange(patch.address, patch.originalOpcodes)
+
+      patch.active = false
+      return true
+    end
+
+    --- Patch opcodes, return handle
+    ---@param funcObjAddr number
+    ---@param patchOpcodes table
+    ---@param startPos number|nil @ zero-based opcode index
+    ---@return table
+    function GDAPI.gd_patchFunction(funcObjAddr, patchOpcodes, startPos)
+      assert(type(funcObjAddr) == 'number' and funcObjAddr ~= 0, 'Function address must be non-zero')
+
+      local metadata = GDD.Patching.getFunctionMetadata(funcObjAddr)
+      local patch = GDD.Patching.apply( metadata, patchOpcodes, startPos )
+
+      local registry = GDD.Patching.registry()
+      patch.id = registry.nextId
+      patch.processId = registry.processId
+      registry.nextId = registry.nextId + 1
+      registry.active[patch.id] = patch
+      return patch
+    end
+
+    --- Replace 1st opcode with OPCODE_END
+    ---@param funcObjAddr number
+    ---@return table
+    function GDAPI.gd_nopFunction(funcObjAddr)
+      assert(type(funcObjAddr) == 'number' and funcObjAddr ~= 0, 'Function address must be non-zero')
+
+      local endOpcode = GDFunc and GDFunc.FUNC_OPCODE_END
+      if type(endOpcode) ~= 'number' then error('OPCODE_END is unavailable for the active version profile', 2) end
+
+      return GDAPI.gd_patchFunction( funcObjAddr, { endOpcode }, 0 )
+    end
+
+    function GDAPI.gd_restoreFunctionPatch(patch, options)
+      if type(patch) ~= 'table' then error('Function patch handle is required', 2) end
+      if options ~= nil and type(options) ~= 'table' then error('Restore options must be a table', 2) end
+
+      local registry = GDD.Patching.registry()
+
+      if patch.processId ~= registry.processId then error('Function patch belongs to another process', 2) end
+      if not patch.id or registry.active[patch.id] ~= patch then error('Function patch is not owned by this dumper instance', 2) end
+
+      GDD.Patching.restore( patch, options and options.force == true )
+
+      registry.active[ patch.id ] = nil
+      return true
+    end
+
+    function GDAPI.gd_restoreAllFunctionPatches(options)
+      if options ~= nil and type(options) ~= 'table' then error('Restore options must be a table', 2) end
+
+      local registry = GDD.Patching.registry()
+      local patches = {}
+      for _, patch in pairs(registry.active) do patches[#patches + 1] = patch end
+      table.sort( patches, function(left, right) return left.id > right.id end )
+
+      local restoredCount = 0
+      for _, patch in ipairs(patches) do
+        GDAPI.gd_restoreFunctionPatch( patch, options )
+        restoredCount = restoredCount + 1
+      end
+      return restoredCount
+    end
+
+    function GDAPI.gd_getFunctionPatches(funcObjAddr)
+      if funcObjAddr ~= nil then assert(type(funcObjAddr) == 'number' and funcObjAddr ~= 0, 'Function address must be non-zero') end
+
+      local patches = {}
+      for _, patch in pairs(GDD.Patching.registry().active) do
+        if funcObjAddr == nil or patch.functionAddress == funcObjAddr then patches[#patches + 1] = patch end
+      end
+      table.sort( patches, function(left, right) return left.id < right.id end )
+      return patches
     end
 
     --- returns a function constant value ptr and its CE type
@@ -6785,6 +7045,10 @@
   gd_callp = GDAPI.gd_callp
   gd_callFunctionFromNode = GDAPI.gd_callFunctionFromNode
   gd_patchFunction = GDAPI.gd_patchFunction
+  gd_nopFunction = GDAPI.gd_nopFunction
+  gd_restoreFunctionPatch = GDAPI.gd_restoreFunctionPatch
+  gd_restoreAllFunctionPatches = GDAPI.gd_restoreAllFunctionPatches
+  gd_getFunctionPatches = GDAPI.gd_getFunctionPatches
   gd_getFunctionFromNode = GDAPI.gd_getFunctionFromNode
   gd_getNodeConstPtr = GDAPI.getNodeConstPtr
   gd_getFunctionConstPtr = GDAPI.gd_getFunctionConstPtr
