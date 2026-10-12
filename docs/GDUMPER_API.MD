@@ -123,7 +123,7 @@ For the moment being, the doc isn't complete and features only most useful funct
   ```
 
 - `gd_run_subscribePatchFunction( gdScriptName, funcName, patchOpcodes, startPos, memrec )`
-> patch a function as soon as the Node Monitor finds a node using the requested script. `startPos` is a zero-based opcode index. It returns the subscriber ID and a state table whose `patch` is a handle to undo the patch.
+> patch a function as soon as the Node Monitor finds a node using the requested script. `startPos` is a zero-based opcode index. Returns the subscriber ID and deferred patch handle for `gd_restoreFunctionPatch`
 
   > Notes:
   >1) The subscription auto-removes after the func is found and patched
@@ -132,8 +132,8 @@ For the moment being, the doc isn't complete and features only most useful funct
   ```lua
   local subId, state = gd_run_subscribePatchFunction( 'scripts.player', '_physics_process', { 0x01 }, 0 )
 
-  -- after subscription fired
-  gd_restoreFunctionPatch( state.patch )
+  -- restore after it fired or cancel while it is still pending
+  gd_restoreFunctionPatch( state )
   ```
 
 - `gd_run_subscribeNopFunction( gdScriptName, funcName, memrec )`
