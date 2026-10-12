@@ -848,8 +848,11 @@ function Module.install(GDD)
     local subId
     local state =
       {
+        kind = 'functionPatchSubscription',
+        processId = GDD.Patching.registry().processId,
         subscriberId = nil,
         completed = false,
+        cancelled = false,
         nodeAddress = nil,
         functionAddress = nil,
         patch = nil,
@@ -857,11 +860,13 @@ function Module.install(GDD)
 
     subId = GDDEFS.Monitor:onRunFinished( subName,
       function(event)
+        if state.cancelled then return end
         local nodeAddr = findNodeByScriptName( event, gdScriptName )
         if nodeAddr == nil or nodeAddr == 0 then return end
 
         local funcAddr = gd_getFunctionFromNode( nodeAddr, funcName )
         if funcAddr == nil or funcAddr == 0 then return end
+        if state.cancelled then return end
 
         local patch = patcher(funcAddr)
         state.nodeAddress = nodeAddr
@@ -884,6 +889,12 @@ function Module.install(GDD)
     )
 
     state.subscriberId = subId
+    state.cancel = function()
+      if state.completed or state.cancelled then return false end
+      state.cancelled = true
+      local removed = GDDEFS.Monitor:offRunFinished(subId)
+      return removed
+    end
     return subId, state
   end
 

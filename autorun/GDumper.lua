@@ -5292,6 +5292,22 @@
 
       local registry = GDD.Patching.registry()
 
+      --  deferred handle/cancel pending
+      if patch.kind == 'functionPatchSubscription' then
+        if patch.processId ~= registry.processId then error('Function patch subscription belongs to another process', 2) end
+
+        if type(patch.patch) == 'table' then
+          patch = patch.patch
+        elseif patch.cancelled then
+          return true
+        elseif not patch.completed and type(patch.cancel) == 'function' then
+          patch.cancel()
+          return true
+        else
+          error('Function patch subscription has no patch handle', 2)
+        end
+      end
+
       if patch.processId ~= registry.processId then error('Function patch belongs to another process', 2) end
       if not patch.id or registry.active[patch.id] ~= patch then error('Function patch is not owned by this dumper instance', 2) end
 
