@@ -122,6 +122,27 @@ For the moment being, the doc isn't complete and features only most useful funct
   gd_run_subscribeRevertScript('scripts.player')
   ```
 
+- `gd_run_subscribePatchFunction( gdScriptName, funcName, patchOpcodes, startPos, memrec )`
+> patch a function as soon as the Node Monitor finds a node using the requested script. `startPos` is a zero-based opcode index. It returns the subscriber ID and a state table whose `patch` is a handle to undo the patch.
+
+  > Notes:
+  >1) The subscription auto-removes after the func is found and patched
+  >2) If a memrec is passed, it is activated after patching
+
+  ```lua
+  local subId, state = gd_run_subscribePatchFunction( 'scripts.player', '_physics_process', { 0x01 }, 0 )
+
+  -- after subscription fired
+  gd_restoreFunctionPatch( state.patch )
+  ```
+
+- `gd_run_subscribeNopFunction( gdScriptName, funcName, memrec )`
+> patch the function to return on entry as soon as the function is available. Similar to `gd_run_subscribePatchFunction`
+
+  ```lua
+  local subId, state = gd_run_subscribeNopFunction( 'scripts.player', '_process' )
+  ```
+
 ## Script
 
 - `gd_patchFunction( funcObjAddr, patchOpcodes, startPos )`
