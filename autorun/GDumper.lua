@@ -1285,7 +1285,7 @@
       local function registerType()
         local customType = getCustomType(typeName)
         if not customType then
-          customType = registerCustomTypeLua( typeName, 8, function(...) return sharedResources.variantNumberBytesToValue(...) end, function(...) return sharedResources.variantNumberValueToBytes(...) end, false, true )
+          customType = registerCustomTypeLua( typeName, 8, sharedResources.variantNumberBytesToValue, sharedResources.variantNumberValueToBytes, false, true )
         end
 
         assert( customType, 'Failed to register ' .. typeName )
@@ -7160,6 +7160,8 @@
   gd_run_subscribeRegisterNodeSelectively = nil -- GDNodeMonitor.lua
   gd_run_subscribeRecompileScript = nil -- GDNodeMonitor.lua
   gd_run_subscribeRevertScript = nil -- GDNodeMonitor.lua
+  gd_run_subscribePatchFunction = nil -- GDNodeMonitor.lua
+  gd_run_subscribeNopFunction = nil -- GDNodeMonitor.lua
   gd_run_getSubscriberID = nil -- GDNodeMonitor.lua
   gd_monitor_pause = nil -- GDNodeMonitor.lua
   gd_monitor_resume = nil -- GDNodeMonitor.lua

@@ -32,6 +32,10 @@ function Module.install(GDD)
   local getSectionBounds = GDD.Memory.getSectionBounds
   local gd_recompileScript = GDD.API.gd_recompileScript
   local gd_revertScript = GDD.API.gd_revertScript
+  local gd_getFunctionFromNode = GDD.API.gd_getFunctionFromNode
+  local gd_patchFunction = GDD.API.gd_patchFunction
+  local gd_nopFunction = GDD.API.gd_nopFunction
+  local validatePatchOpcodes = GDD.Patching.validateOpcodes
 
   local GDDEFS = GDD.Config.Defs
   local RUNTIME = GDD.Runtime
@@ -833,6 +837,71 @@ function Module.install(GDD)
     end)
 
     return subId
+  end
+
+  local function subscribeFunctionPatch(gdScriptName, funcName, patcher, memrec)
+    if type(gdScriptName) ~= 'string' or gdScriptName == '' then error('gdscript name expected') end
+    if type(funcName) ~= 'string' or funcName == '' then error('function name expected') end
+    if type(patcher) ~= 'function' then error('function patcher expected') end
+
+    local subName = 'patch_' .. gdScriptName .. ':' .. funcName
+    local subId
+    local state =
+      {
+        subscriberId = nil,
+        completed = false,
+        nodeAddress = nil,
+        functionAddress = nil,
+        patch = nil,
+      }
+
+    subId = GDDEFS.Monitor:onRunFinished( subName,
+      function(event)
+        local nodeAddr = findNodeByScriptName( event, gdScriptName )
+        if nodeAddr == nil or nodeAddr == 0 then return end
+
+        local funcAddr = gd_getFunctionFromNode( nodeAddr, funcName )
+        if funcAddr == nil or funcAddr == 0 then return end
+
+        local patch = patcher(funcAddr)
+        state.nodeAddress = nodeAddr
+        state.functionAddress = funcAddr
+        state.patch = patch
+        state.completed = true
+
+        -- remove observer
+        GDDEFS.Monitor:offRunFinished( subId )
+
+        if memrec ~= nil and memrec.getClassName and memrec.getClassName() == 'TMemoryRecord' then
+          synchronize(
+            function()
+              if memrec.IsAddressGroupHeader then memrec.Address = string.format('%X', funcAddr) end
+              memrec.Active = true
+            end
+          )
+        end
+      end
+    )
+
+    state.subscriberId = subId
+    return subId, state
+  end
+
+  function gd_run_subscribePatchFunction(gdScriptName, funcName, patchOpcodes, startPos, memrec)
+    local validatedOpcodes = validatePatchOpcodes(patchOpcodes)
+    if startPos ~= nil and (type(startPos) ~= 'number' or startPos % 1 ~= 0 or startPos < 0) then
+      error('Patch offset must be a non-negative opcode index')
+    end
+
+    return subscribeFunctionPatch(gdScriptName, funcName,
+      function(funcAddr)
+        return gd_patchFunction(funcAddr, validatedOpcodes, startPos)
+      end, memrec
+    )
+  end
+
+  function gd_run_subscribeNopFunction(gdScriptName, funcName, memrec)
+    return subscribeFunctionPatch(gdScriptName, funcName, gd_nopFunction, memrec)
   end
 
   return
