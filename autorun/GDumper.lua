@@ -102,6 +102,7 @@
     nextId = 1,
     active = {},
   }
+  sharedResources.customTypes = sharedResources.customTypes or {}
 
 -- ///---///--///---///--///---///--///--///---///--///---///--///---///--///--///--/// LOCAL HELPERS
 
@@ -1201,6 +1202,98 @@
       else
         GDDEFS.GD4_STRING_EXISTS = false
       end
+    end
+
+    --- Register CE type for Variant numeric
+    function GDD.Types.checkGDVariantNumberType()
+      local typeName = 'GD Variant Number'
+
+      local function bytesToPackedString(b1, b2, b3, b4, b5, b6, b7, b8)
+        return string.char( b1 or 0, b2 or 0, b3 or 0, b4 or 0, b5 or 0, b6 or 0, b7 or 0, b8 or 0 )
+      end
+
+      local function packedStringToBytes(packed)
+        local bytes = {}
+        for index = 1, #packed do bytes[index] = packed:byte(index) end
+        return bytes
+      end
+
+      local function getNumericVariantKind(valueAddress)
+        if type(valueAddress) ~= 'number' or valueAddress == 0 then return nil, 'Variant value address is unavailable' end
+
+        local typeEnum = readInteger( valueAddress - 0x8 )
+        if typeEnum == nil then return nil, 'Variant type enum is unreadable' end
+
+        local kind = GDD.Types.getGDTypeName(typeEnum)
+        if kind ~= 'INT' and kind ~= 'FLOAT' then
+          return nil, ('Variant type %s is not supported by %s'):format( tostring(kind), typeName )
+        end
+        return kind
+      end
+
+      local function variantNumberBytesToValue(b1, b2, b3, b4, b5, b6, b7, b8, valueAddress)
+        local kind, kindError = getNumericVariantKind(valueAddress)
+        if not kind then return '<' .. kindError .. '>' end
+
+        local packed = bytesToPackedString( b1, b2, b3, b4, b5, b6, b7, b8 )
+        if kind == 'INT' then
+          local integer = string.unpack('<i8', packed)
+          return 'INT: ' .. tostring(integer)
+        end
+        local number = string.unpack('<d', packed)
+        return 'FLOAT: ' .. ('%.17g'):format(number)
+      end
+
+      local function parseEditedValue(value, valueAddress)
+        local text = tostring(value)
+        text = text:match('^%s*%[(.*)%]%s*$') or text
+
+        local explicitKind, payload = text:match('^%s*([%a]+)%s*:%s*(.-)%s*$')
+        if explicitKind then explicitKind = explicitKind:upper() else payload = text:match('^%s*(.-)%s*$') end
+        if explicitKind and explicitKind ~= 'INT' and explicitKind ~= 'FLOAT' then
+          error('Expected INT: or FLOAT: prefix', 3)
+        end
+
+        local runtimeKind, kindError = getNumericVariantKind(valueAddress)
+        local kind = runtimeKind or explicitKind
+        if not kind then error(kindError .. '; keep an INT:/FLOAT: prefix when editing', 3) end
+        if runtimeKind and explicitKind and runtimeKind ~= explicitKind then
+          error( ('Variant changed from %s to %s before the edit was applied'):format( explicitKind, runtimeKind ), 3 )
+        end
+
+        return kind, payload
+      end
+
+      local function variantNumberValueToBytes(value, valueAddress)
+        local kind, payload = parseEditedValue(value, valueAddress)
+
+        if kind == 'INT' then
+          local parsed = tonumber(payload)
+          local integer = parsed and math.tointeger(parsed) or nil
+          if integer == nil then error('INT Variant value must be a signed 64-bit integer', 2) end
+          return packedStringToBytes( string.pack('<i8', integer) )
+        end
+
+        local number = tonumber(payload)
+        if number == nil then error('FLOAT Variant value must be numeric', 2) end
+        return packedStringToBytes(string.pack('<d', number))
+      end
+
+      sharedResources.variantNumberBytesToValue = variantNumberBytesToValue
+      sharedResources.variantNumberValueToBytes = variantNumberValueToBytes
+
+      local function registerType()
+        local customType = getCustomType(typeName)
+        if not customType then
+          customType = registerCustomTypeLua( typeName, 8, function(...) return sharedResources.variantNumberBytesToValue(...) end, function(...) return sharedResources.variantNumberValueToBytes(...) end, false, true )
+        end
+
+        assert( customType, 'Failed to register ' .. typeName )
+        sharedResources.customTypes.VariantNumber = customType
+        GDDEFS.GD_VARIANT_NUMBER_EXISTS = true
+      end
+
+      if inMainThread() then registerType() else synchronize(registerType) end
     end
 
     function GDD.Types.getObjectMeta(objAddr)
@@ -6985,6 +7078,7 @@
 
       -- check if UTF32LE string type reged, otherwise define it
       GDD.Types.checkGDStringType()
+      GDD.Types.checkGDVariantNumberType()
 
       -- disable show on print
       GDD.Utils.disablePrintPopup()
