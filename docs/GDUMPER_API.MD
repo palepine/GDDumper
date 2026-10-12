@@ -124,15 +124,31 @@ For the moment being, the doc isn't complete and features only most useful funct
 
 ## Script
 
-- `gd_patchFunction( funcObjAddr, patchToBytes, startPos )`
-> patches the function's bytecode to the bytes passed
+- `gd_patchFunction( funcObjAddr, patchOpcodes, startPos )`
+> patch function opcodes and return a patch handle to undo the patch. `startPos` is a 0-based opcode index
+
   ```lua
-  local toPatchBytes = { 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF }
-  local originalBytes = { 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF }
-  local funcAddr = gd_getFunctionFromNode( gd_getDumpedNode('Glogal'), '_process' )
-  gd_patchFunction( funcAddr , toPatchBytes ) -- startPos would default to 0
-  -- gd_patchFunction( funcAddr , originalBytes ) -- restore the bytes
+  local funcAddr = gd_getFunctionFromNode( gd_getDumpedNode('Global'), '_process' )
+  local patch = gd_patchFunction( funcAddr, { 0xDEADBEEF }, 0 )
+
+  gd_restoreFunctionPatch(patch) -- restore
   ```
+
+- `gd_nopFunction( funcObjAddr )`
+> patch the function to return on entry, returns a patch handle for reversal.
+
+  ```lua
+  local patch = gd_nopFunction(funcAddr)
+  ```
+
+- `gd_restoreFunctionPatch( patch, options )`
+> restore a patch via a handle. Restoration normally refuses overwriting code changed after patching; `{ force = true }` changes behavior
+
+- `gd_restoreAllFunctionPatches( options )`
+> restore all patches.
+
+- `gd_getFunctionPatches( funcObjAddr )`
+> return active patch handles for 1 function.
 
 - `gd_getFunctionFromNode( nodeAddr, funcName )`
 > gets the func from the respective node via its name (example above)
