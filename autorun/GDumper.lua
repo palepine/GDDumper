@@ -1209,56 +1209,59 @@
       local typeName = 'GDNum'
 
       local function getNumericVariantKind(valueAddress)
-        if type(valueAddress) ~= 'number' or valueAddress == 0 then return nil, 'Variant value address is unavailable' end
+        -- if type(valueAddress) ~= 'number' or valueAddress == 0 then return nil, 'Variant value address is unavailable' end
+        if type(valueAddress) ~= 'number' or valueAddress == 0 then return nil end
 
         local typeEnum = readInteger( valueAddress - 0x8 )
-        if typeEnum == nil then return nil, 'Variant type enum is unreadable' end
+        -- if typeEnum == nil then return nil, 'Variant type enum is unreadable' end
+        if typeEnum == nil then return nil end
 
-        local kind = GDD.Types.getGDTypeName(typeEnum)
+        local kind = GDD.Types.getGDTypeName( typeEnum )
 
-        if kind ~= 'INT' and kind ~= 'FLOAT' then
-          return nil, ('Variant type %s is not supported by %s'):format( tostring(kind), typeName )
-        end
+        -- if kind ~= 'INT' and kind ~= 'FLOAT' then return nil, ('Variant type %s is not supported by %s'):format( tostring(kind), typeName ) end
+        if kind ~= 'INT' and kind ~= 'FLOAT' then return nil end
 
         return kind
       end
 
       local function variantNumberBytesToValue(_, _, _, _, _, _, _, _, valueAddress)
-        local kind, kindError = getNumericVariantKind(valueAddress)
-        if not kind then error(kindError, 2) end
+        local kind = getNumericVariantKind(valueAddress)
+        if not kind then return -67676767 end
 
         if kind == 'INT' then
           local integer = readInteger( valueAddress, true )
-          if integer == nil then error('INT Variant value is unreadable', 2) end
+          if integer == nil then return -67676767 end
+
           return integer
         end
 
         local number = readDouble(valueAddress)
-        if number == nil then error('FLOAT Variant value is unreadable', 2) end
+        if number == nil then return -67676767 end
+
         return number
       end
 
       local function variantNumberValueToBytes(value, valueAddress)
-        local kind, kindError = getNumericVariantKind(valueAddress)
-        if not kind then error(kindError, 2) end
+        local kind = getNumericVariantKind(valueAddress)
+        if not kind then error('Variant value address not read') end
 
         local number = tonumber(value)
-        if number == nil then error('Variant value must be numeric', 2) end
+        if number == nil then error('Value not converted to lnum') end
 
         if kind == 'INT' then
           local integer = math.tointeger(number)
-          if integer == nil or integer < -0x80000000 or integer > 0x7FFFFFFF then error('INT Variant value must be a signed 32-bit integer', 2) end
+          if integer == nil or integer < -0x80000000 or integer > 0x7FFFFFFF then error('INT: value must be signed 32-bit int') end
           if not writeInteger( valueAddress, integer ) then
-            error(('Failed to write INT Variant at %X'):format(valueAddress), 2)
+            error(('INT not written at %X'):format(valueAddress))
           end
 
         elseif not writeDouble( valueAddress, number ) then
-          error(('Failed to write FLOAT Variant at %X'):format(valueAddress), 2)
+          error(('FLOAT not written at %X'):format(valueAddress))
         end
 
         -- still expecting to return the bytes
         local bytes = readBytes( valueAddress, 8, true )
-        if type(bytes) ~= 'table' then error('Written Variant value is unreadable', 2) end
+        if type(bytes) ~= 'table' then error('Written bytes unreadable') end
         return table.unpack( bytes )
       end
 
