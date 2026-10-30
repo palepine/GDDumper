@@ -1243,7 +1243,7 @@
 
       local function variantNumberValueToBytes(value, valueAddress)
         local kind = getNumericVariantKind(valueAddress)
-        if not kind then error('Variant value address not read') end
+        if not kind then return end -- error('Variant value address not read')
 
         local number = tonumber(value)
         if number == nil then error('Value not converted to lnum') end
