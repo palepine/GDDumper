@@ -1250,18 +1250,18 @@
 
         if kind == 'INT' then
           local integer = math.tointeger(number)
-          if integer == nil or integer < -0x80000000 or integer > 0x7FFFFFFF then error('INT: value must be signed 32-bit int') end
+          if integer == nil or integer < -0x80000000 or integer > 0x7FFFFFFF then return end
           if not writeInteger( valueAddress, integer ) then
-            error(('INT not written at %X'):format(valueAddress))
+            return
           end
 
         elseif not writeDouble( valueAddress, number ) then
-          error(('FLOAT not written at %X'):format(valueAddress))
+          return
         end
 
         -- still expecting to return the bytes
         local bytes = readBytes( valueAddress, 8, true )
-        if type(bytes) ~= 'table' then error('Written bytes unreadable') end
+        if type(bytes) ~= 'table' then return end
         return table.unpack( bytes )
       end
 
